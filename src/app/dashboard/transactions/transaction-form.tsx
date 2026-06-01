@@ -5,6 +5,7 @@ import {
   createManualTransactionAction,
   createTransferTransactionAction,
 } from './actions'
+import { CategoryPicker } from './category-picker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,17 +23,15 @@ export type TransactionFormAccount = {
 export type TransactionFormCategory = {
   id: string
   name: string
+  category_type: string
   reporting_type: string
+  parent_category_id: string | null
 }
 
 type TransactionFormProps = {
   accounts: TransactionFormAccount[]
   categories: TransactionFormCategory[]
   defaultDate: string
-}
-
-function formatValue(value: string) {
-  return value.replaceAll('_', ' ')
 }
 
 function formatAccountLabel(account: TransactionFormAccount) {
@@ -43,25 +42,6 @@ function formatAccountLabel(account: TransactionFormAccount) {
   ]
     .filter(Boolean)
     .join(' · ')
-}
-
-function formatCategoryLabel(category: TransactionFormCategory) {
-  return `${category.name} · ${formatValue(category.reporting_type)}`
-}
-
-function isCompatibleCategory(
-  transactionType: TransactionType,
-  category: TransactionFormCategory
-) {
-  if (transactionType === 'income') {
-    return category.reporting_type === 'income'
-  }
-
-  if (transactionType === 'expense') {
-    return ['expense', 'debt_interest'].includes(category.reporting_type)
-  }
-
-  return false
 }
 
 export function TransactionForm({
@@ -78,8 +58,10 @@ export function TransactionForm({
 
   const compatibleCategories = useMemo(
     () =>
-      categories.filter((category) =>
-        isCompatibleCategory(transactionType, category)
+      categories.filter(
+        (category) =>
+          transactionType !== 'transfer' &&
+          category.category_type === transactionType
       ),
     [categories, transactionType]
   )
@@ -89,7 +71,7 @@ export function TransactionForm({
     : createManualTransactionAction
   const canSubmit = isTransfer
     ? accounts.length >= 2
-    : compatibleCategories.length > 0
+    : compatibleCategories.length > 0 && Boolean(categoryId)
 
   function handleTransactionTypeChange(value: TransactionType) {
     setTransactionType(value)
@@ -224,33 +206,12 @@ export function TransactionForm({
             </select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="category_id">Category</Label>
-            <select
-              id="category_id"
-              name="category_id"
-              required
-              value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              disabled={!compatibleCategories.length}
-            >
-              <option value="" disabled>
-                Select category
-              </option>
-              {compatibleCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {formatCategoryLabel(category)}
-                </option>
-              ))}
-            </select>
-
-            {!compatibleCategories.length ? (
-              <p className="text-sm text-muted-foreground">
-                No compatible categories available for this transaction type.
-              </p>
-            ) : null}
-          </div>
+          <CategoryPicker
+            key={transactionType}
+            categories={compatibleCategories}
+            transactionType={transactionType}
+            onCategoryChange={setCategoryId}
+          />
         </>
       )}
 

@@ -105,6 +105,27 @@ export async function createManualTransactionAction(formData: FormData) {
     redirect('/onboarding')
   }
 
+  const { data: category, error: categoryError } = await supabase
+    .from('categories')
+    .select('id, category_type')
+    .eq('id', categoryId)
+    .eq('household_id', profile.default_household_id)
+    .eq('is_archived', false)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (categoryError || !category) {
+    redirectWithError('Select an active category for this household.')
+  }
+
+  if (category.category_type !== transactionType) {
+    redirectWithError(
+      transactionType === 'income'
+        ? 'Income transactions require an income category.'
+        : 'Expense transactions require an expense category.'
+    )
+  }
+
   const { error: transactionError } = await supabase.rpc(
     'create_manual_transaction',
     {
