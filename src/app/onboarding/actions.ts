@@ -71,6 +71,19 @@ export async function createHouseholdAction(formData: FormData) {
     throw new Error(memberError.message)
   }
 
+  const { error: defaultCategoriesError } = await supabase.rpc(
+    'create_default_categories_for_household',
+    {
+      p_household_id: household.id,
+    }
+  )
+
+  if (defaultCategoriesError) {
+    throw new Error(
+      `Could not create default categories: ${defaultCategoriesError.message}`
+    )
+  }
+
   const { error: updateProfileError } = await supabase
     .from('profiles')
     .update({
