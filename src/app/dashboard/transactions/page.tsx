@@ -43,12 +43,41 @@ type Transaction = {
   source: string
 }
 
+type TransactionEntry = {
+  transaction_id: string
+  account_id: string
+  amount_account_currency: number | string
+  currency_code: string
+}
+
+type TransactionAllocation = {
+  transaction_id: string
+  category_id: string
+}
+
+type AccountLookup = {
+  id: string
+  name: string
+}
+
+type CategoryLookup = {
+  id: string
+  name: string
+}
+
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
 }
 
 function formatValue(value: string) {
   return value.replaceAll('_', ' ')
+}
+
+function formatCurrency(value: number | string, currencyCode: string) {
+  return new Intl.NumberFormat('en-CA', {
+    style: 'currency',
+    currency: currencyCode,
+  }).format(Number(value))
 }
 
 export default async function TransactionsPage({
@@ -124,6 +153,84 @@ export default async function TransactionsPage({
     throw new Error('Could not load transactions.')
   }
 
+  const transactionIds = (transactions ?? []).map((transaction) => transaction.id)
+
+  let transactionEntries: TransactionEntry[] = []
+  let transactionAllocations: TransactionAllocation[] = []
+  let accountLookupRows: AccountLookup[] = []
+  let categoryLookupRows: CategoryLookup[] = []
+  let transactionDetailsError = false
+
+  if (transactionIds.length) {
+    const { data: entries, error: entriesError } = await supabase
+      .from('transaction_entries')
+      .select(
+        'transaction_id, account_id, amount_account_currency, currency_code'
+      )
+      .eq('household_id', household.id)
+      .in('transaction_id', transactionIds)
+
+    const { data: allocations, error: allocationsError } = await supabase
+      .from('transaction_allocations')
+      .select('transaction_id, category_id')
+      .eq('household_id', household.id)
+      .in('transaction_id', transactionIds)
+
+    transactionDetailsError = Boolean(entriesError || allocationsError)
+
+    transactionEntries = (entries ?? []) as TransactionEntry[]
+    transactionAllocations = (allocations ?? []) as TransactionAllocation[]
+
+    const accountIds = Array.from(
+      new Set(transactionEntries.map((entry) => entry.account_id))
+    )
+    const categoryIds = Array.from(
+      new Set(
+        transactionAllocations.map((allocation) => allocation.category_id)
+      )
+    )
+
+    if (accountIds.length) {
+      const { data: accountRows, error: accountRowsError } = await supabase
+        .from('accounts')
+        .select('id, name')
+        .eq('household_id', household.id)
+        .in('id', accountIds)
+
+      transactionDetailsError =
+        transactionDetailsError || Boolean(accountRowsError)
+      accountLookupRows = (accountRows ?? []) as AccountLookup[]
+    }
+
+    if (categoryIds.length) {
+      const { data: categoryRows, error: categoryRowsError } = await supabase
+        .from('categories')
+        .select('id, name')
+        .eq('household_id', household.id)
+        .in('id', categoryIds)
+
+      transactionDetailsError =
+        transactionDetailsError || Boolean(categoryRowsError)
+      categoryLookupRows = (categoryRows ?? []) as CategoryLookup[]
+    }
+  }
+
+  const entriesByTransactionId = new Map(
+    transactionEntries.map((entry) => [entry.transaction_id, entry])
+  )
+  const allocationsByTransactionId = new Map(
+    transactionAllocations.map((allocation) => [
+      allocation.transaction_id,
+      allocation,
+    ])
+  )
+  const accountNamesById = new Map(
+    accountLookupRows.map((account) => [account.id, account.name])
+  )
+  const categoryNamesById = new Map(
+    categoryLookupRows.map((category) => [category.id, category.name])
+  )
+
   const activeAccounts = (accounts ?? []) as Account[]
   const activeCategories = (categories ?? []) as Category[]
   const recentTransactions = (transactions ?? []) as Transaction[]
@@ -160,37 +267,90 @@ export default async function TransactionsPage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {recentTransactions.length ? (
+            {transactionDetailsError ? (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                Could not load transaction details.
+              </p>
+            ) : recentTransactions.length ? (
               <div className="divide-y rounded-lg border">
-                {recentTransactions.map((transaction) => (
-                  <div
-                    key={transaction.id}
-                    className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="font-medium">
-                          {transaction.description || 'Transaction'}
-                        </h2>
-                        <Badge variant="secondary">
-                          {formatValue(transaction.transaction_type)}
-                        </Badge>
-                        <Badge variant="outline">
-                          {formatValue(transaction.status)}
-                        </Badge>
+                {recentTransactions.map((transaction) => {
+                  const entry = entriesByTransactionId.get(transaction.id)
+                  const allocation = allocationsByTransactionId.get(
+                    transaction.id
+                  )
+                  const accountName = entry
+                    ? accountNamesById.get(entry.account_id) ??
+                      'Unknown account'
+                    : 'Unknown account'
+                  const categoryName = allocation
+                    ? categoryNamesById.get(allocation.category_id) ??
+                      'Unknown category'
+                    : 'Unknown category'
+
+                  return (
+                    <div key={transaction.id} className="space-y-3 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="font-medium">
+                              {transaction.description || 'Transaction'}
+                            </h2>
+                            <Badge variant="secondary">
+                              {formatValue(transaction.transaction_type)}
+                            </Badge>
+                            <Badge variant="outline">
+                              {formatValue(transaction.status)}
+                            </Badge>
+                          </div>
+
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                            <span>{transaction.transaction_date}</span>
+                            <span>{formatValue(transaction.source)}</span>
+                          </div>
+                        </div>
+
+                        {entry ? (
+                          <p className="text-right font-medium">
+                            {formatCurrency(
+                              entry.amount_account_currency,
+                              entry.currency_code
+                            )}
+                          </p>
+                        ) : null}
                       </div>
 
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                        <span>{transaction.transaction_date}</span>
-                        <span>{formatValue(transaction.source)}</span>
+                      <div className="grid gap-3 text-sm sm:grid-cols-3">
+                        <div className="rounded-lg bg-muted/40 p-3">
+                          <p className="text-xs text-muted-foreground">
+                            Account
+                          </p>
+                          <p className="mt-1 font-medium">{accountName}</p>
+                        </div>
+
+                        <div className="rounded-lg bg-muted/40 p-3">
+                          <p className="text-xs text-muted-foreground">
+                            Category
+                          </p>
+                          <p className="mt-1 font-medium">{categoryName}</p>
+                        </div>
+
+                        <div className="rounded-lg bg-muted/40 p-3">
+                          <p className="text-xs text-muted-foreground">
+                            Currency
+                          </p>
+                          <p className="mt-1 font-medium">
+                            {entry?.currency_code ?? 'Unknown'}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                No transactions yet.
+                No transactions yet. Create your first income or expense
+                transaction.
               </p>
             )}
           </CardContent>
