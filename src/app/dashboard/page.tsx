@@ -1,6 +1,12 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -34,10 +40,16 @@ export default async function DashboardPage() {
   }
 
   return (
-    <main className="p-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
+      <div>
+        <p className="text-sm text-muted-foreground">{household.name}</p>
+        <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>{household.name}</CardTitle>
+          <CardTitle>Household</CardTitle>
+          <CardDescription>Your active household settings.</CardDescription>
         </CardHeader>
 
         <CardContent>
@@ -45,9 +57,7 @@ export default async function DashboardPage() {
             Base currency: {household.base_currency}
           </p>
 
-          <p className="mt-4">
-            Auth + Profile + Household is working.
-          </p>
+          <p className="mt-4">Accounts and categories are ready.</p>
         </CardContent>
       </Card>
     </main>
