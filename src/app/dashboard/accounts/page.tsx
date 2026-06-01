@@ -28,15 +28,19 @@ type AccountsPageProps = {
   }>
 }
 
-type Account = {
-  id: string
-  name: string
+type AccountBalance = {
+  account_id: string
+  account_name: string
   account_type: string
   account_class: string
   currency_code: string
-  institution_name: string | null
-  last_four: string | null
   include_in_net_worth: boolean
+  posted_balance_account_currency: number | string
+  pending_balance_account_currency: number | string
+  projected_balance_account_currency: number | string
+  posted_balance_base_currency: number | string
+  pending_balance_base_currency: number | string
+  projected_balance_base_currency: number | string
 }
 
 type Currency = {
@@ -57,6 +61,13 @@ const accountTypes = [
 
 function formatAccountType(accountType: string) {
   return accountType.replaceAll('_', ' ')
+}
+
+function formatCurrency(value: number | string, currencyCode: string) {
+  return new Intl.NumberFormat('en-CA', {
+    style: 'currency',
+    currency: currencyCode,
+  }).format(Number(value))
 }
 
 export default async function AccountsPage({ searchParams }: AccountsPageProps) {
@@ -103,19 +114,10 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     throw new Error('Could not load active currencies.')
   }
 
-  const { data: accounts, error: accountsError } = await supabase
-    .from('accounts')
-    .select(
-      'id, name, account_type, account_class, currency_code, institution_name, last_four, include_in_net_worth'
-    )
-    .eq('household_id', household.id)
-    .eq('is_archived', false)
-    .order('sort_order', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: true })
-
-  if (accountsError) {
-    throw new Error('Could not load accounts.')
-  }
+  const { data: accountBalances, error: accountBalancesError } =
+    await supabase.rpc('get_account_balances', {
+      p_household_id: household.id,
+    })
 
   const activeCurrencies = (currencies ?? []) as Currency[]
   const defaultCurrency =
@@ -152,42 +154,84 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {accounts?.length ? (
+            {accountBalancesError ? (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                Could not load account balances.
+              </p>
+            ) : accountBalances?.length ? (
               <div className="divide-y rounded-lg border">
-                {(accounts as Account[]).map((account) => (
+                {(accountBalances as AccountBalance[]).map((account) => (
                   <div
-                    key={account.id}
-                    className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                    key={account.account_id}
+                    className="space-y-4 p-4"
                   >
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="font-medium">{account.name}</h2>
-                        <Badge variant="secondary">
-                          {formatAccountType(account.account_type)}
-                        </Badge>
-                        <Badge variant="outline">{account.account_class}</Badge>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="font-medium">
+                            {account.account_name}
+                          </h2>
+                          <Badge variant="secondary">
+                            {formatAccountType(account.account_type)}
+                          </Badge>
+                          <Badge variant="outline">
+                            {account.account_class}
+                          </Badge>
+                        </div>
+
+                        <p className="text-sm text-muted-foreground">
+                          {account.currency_code}
+                        </p>
                       </div>
 
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                        <span>{account.currency_code}</span>
-                        {account.institution_name ? (
-                          <span>{account.institution_name}</span>
-                        ) : null}
-                        {account.last_four ? (
-                          <span>Ending {account.last_four}</span>
-                        ) : null}
-                      </div>
+                      <Badge
+                        variant={
+                          account.include_in_net_worth ? 'default' : 'outline'
+                        }
+                      >
+                        {account.include_in_net_worth
+                          ? 'Net worth'
+                          : 'Excluded'}
+                      </Badge>
                     </div>
 
-                    <Badge
-                      variant={
-                        account.include_in_net_worth ? 'default' : 'outline'
-                      }
-                    >
-                      {account.include_in_net_worth
-                        ? 'Net worth'
-                        : 'Excluded'}
-                    </Badge>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-lg bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">
+                          Posted balance
+                        </p>
+                        <p className="mt-1 font-medium">
+                          {formatCurrency(
+                            account.posted_balance_account_currency,
+                            account.currency_code
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">
+                          Pending
+                        </p>
+                        <p className="mt-1 font-medium">
+                          {formatCurrency(
+                            account.pending_balance_account_currency,
+                            account.currency_code
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">
+                          Projected
+                        </p>
+                        <p className="mt-1 font-medium">
+                          {formatCurrency(
+                            account.projected_balance_account_currency,
+                            account.currency_code
+                          )}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
