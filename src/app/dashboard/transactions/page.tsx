@@ -33,7 +33,9 @@ type Account = {
 type Category = {
   id: string
   name: string
+  category_type: string
   reporting_type: string
+  parent_category_id: string | null
 }
 
 type Transaction = {
@@ -65,6 +67,7 @@ type AccountLookup = {
 type CategoryLookup = {
   id: string
   name: string
+  parent_category_id: string | null
 }
 
 function todayIsoDate() {
@@ -80,6 +83,17 @@ function formatCurrency(value: number | string, currencyCode: string) {
     style: 'currency',
     currency: currencyCode,
   }).format(Number(value))
+}
+
+function getCategoryPath(
+  category: { name: string; parent_category_id: string | null },
+  categoriesById: Map<string, { name: string }>
+) {
+  const parentName = category.parent_category_id
+    ? categoriesById.get(category.parent_category_id)?.name
+    : null
+
+  return parentName ? `${parentName} / ${category.name}` : category.name
 }
 
 export default async function TransactionsPage({
@@ -133,11 +147,12 @@ export default async function TransactionsPage({
 
   const { data: categories, error: categoriesError } = await supabase
     .from('categories')
-    .select('id, name, reporting_type')
+    .select('id, name, category_type, reporting_type, parent_category_id')
     .eq('household_id', household.id)
     .eq('is_archived', false)
     .is('deleted_at', null)
-    .in('reporting_type', ['income', 'expense', 'debt_interest'])
+    .in('category_type', ['income', 'expense'])
+    .order('parent_category_id', { ascending: true, nullsFirst: true })
     .order('name', { ascending: true })
 
   if (categoriesError) {
@@ -208,9 +223,8 @@ export default async function TransactionsPage({
     if (categoryIds.length) {
       const { data: categoryRows, error: categoryRowsError } = await supabase
         .from('categories')
-        .select('id, name')
+        .select('id, name, parent_category_id')
         .eq('household_id', household.id)
-        .in('id', categoryIds)
 
       transactionDetailsError =
         transactionDetailsError || Boolean(categoryRowsError)
@@ -238,8 +252,14 @@ export default async function TransactionsPage({
   const accountNamesById = new Map(
     accountLookupRows.map((account) => [account.id, account.name])
   )
+  const categoryLookupRowsById = new Map(
+    categoryLookupRows.map((category) => [category.id, category])
+  )
   const categoryNamesById = new Map(
-    categoryLookupRows.map((category) => [category.id, category.name])
+    categoryLookupRows.map((category) => [
+      category.id,
+      getCategoryPath(category, categoryLookupRowsById),
+    ])
   )
 
   const activeAccounts = (accounts ?? []) as Account[]
