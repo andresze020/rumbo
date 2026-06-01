@@ -20,6 +20,10 @@ function redirectWithError(message: string): never {
   redirect(`/dashboard/accounts?error=${encodeURIComponent(message)}`)
 }
 
+function redirectWithInfo(message: string): never {
+  redirect(`/dashboard/accounts?info=${encodeURIComponent(message)}`)
+}
+
 function isAccountType(value: string): value is AccountType {
   return ACCOUNT_TYPES.includes(value as AccountType)
 }
@@ -114,4 +118,96 @@ export async function createAccountAction(formData: FormData) {
 
   revalidatePath('/dashboard/accounts')
   redirect('/dashboard/accounts?created=1')
+}
+
+export async function setOpeningBalanceAction(formData: FormData) {
+  const accountId = String(formData.get('account_id') ?? '').trim()
+  const openingBalanceDate = String(
+    formData.get('opening_balance_date') ?? ''
+  ).trim()
+  const amountText = String(
+    formData.get('opening_balance_amount') ?? ''
+  ).trim()
+  const amount = Number(amountText)
+  const exchangeRateToBase = Number(
+    String(formData.get('exchange_rate_to_base') ?? '1').trim()
+  )
+  const notes = String(formData.get('notes') ?? '').trim()
+
+  if (!accountId) {
+    redirectWithError('Account is required.')
+  }
+
+  if (!amountText || amount === 0) {
+    revalidatePath('/dashboard/accounts')
+    revalidatePath('/dashboard')
+    redirectWithInfo('No opening balance was created because the account starts at 0.')
+  }
+
+  if (!Number.isFinite(amount)) {
+    redirectWithError('Opening balance amount must be a valid number.')
+  }
+
+  if (!openingBalanceDate) {
+    redirectWithError('Opening balance date is required.')
+  }
+
+  if (!Number.isFinite(exchangeRateToBase) || exchangeRateToBase <= 0) {
+    redirectWithError('Exchange rate must be greater than 0.')
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    redirect('/login')
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('default_household_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    redirectWithError('Could not load your household.')
+  }
+
+  if (!profile?.default_household_id) {
+    redirect('/onboarding')
+  }
+
+  const { error: openingBalanceError } = await supabase.rpc(
+    'create_opening_balance',
+    {
+      p_household_id: profile.default_household_id,
+      p_account_id: accountId,
+      p_opening_balance_amount: amount,
+      p_opening_balance_date: openingBalanceDate,
+      p_exchange_rate_to_base: exchangeRateToBase,
+      p_notes: notes || null,
+    }
+  )
+
+  if (openingBalanceError) {
+    redirectWithError(
+      openingBalanceError.message.includes(
+        'Opening balance already exists for this account'
+      )
+        ? 'Opening balance already exists for this account.'
+        : openingBalanceError.message.includes(
+              'Opening balance amount cannot be 0'
+            )
+          ? 'Leave the opening balance blank or enter 0 when the account starts at zero.'
+        : 'Could not set the opening balance. Please check the form and try again.'
+    )
+  }
+
+  revalidatePath('/dashboard/accounts')
+  revalidatePath('/dashboard')
+  redirect('/dashboard/accounts?openingBalanceSet=1')
 }

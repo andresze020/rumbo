@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createAccountAction } from './actions'
+import { createAccountAction, setOpeningBalanceAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,8 @@ import { Textarea } from '@/components/ui/textarea'
 type AccountsPageProps = {
   searchParams: Promise<{
     created?: string
+    openingBalanceSet?: string
+    info?: string
     error?: string
   }>
 }
@@ -49,6 +51,15 @@ type Currency = {
   symbol: string | null
 }
 
+type AccountMetadata = {
+  id: string
+  opening_balance_date: string
+}
+
+type OpeningBalanceEntry = {
+  account_id: string
+}
+
 const accountTypes = [
   { value: 'cash', label: 'Cash' },
   { value: 'checking', label: 'Checking' },
@@ -70,10 +81,16 @@ function formatCurrency(value: number | string, currencyCode: string) {
   }).format(Number(value))
 }
 
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 export default async function AccountsPage({ searchParams }: AccountsPageProps) {
   const params = await searchParams
   const errorMessage = typeof params.error === 'string' ? params.error : null
+  const infoMessage = typeof params.info === 'string' ? params.info : null
   const created = params.created === '1'
+  const openingBalanceSet = params.openingBalanceSet === '1'
   const supabase = await createClient()
 
   const {
@@ -119,6 +136,34 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       p_household_id: household.id,
     })
 
+  const { data: accountMetadata, error: accountMetadataError } = await supabase
+    .from('accounts')
+    .select('id, opening_balance_date')
+    .eq('household_id', household.id)
+    .eq('is_archived', false)
+    .is('deleted_at', null)
+
+  const { data: openingBalanceEntries, error: openingBalanceEntriesError } =
+    await supabase
+      .from('transaction_entries')
+      .select('account_id, transactions!inner(transaction_type, deleted_at, status)')
+      .eq('household_id', household.id)
+      .eq('transactions.transaction_type', 'opening_balance')
+      .is('transactions.deleted_at', null)
+      .in('transactions.status', ['pending', 'posted'])
+
+  const accountMetadataById = new Map(
+    ((accountMetadata ?? []) as AccountMetadata[]).map((account) => [
+      account.id,
+      account,
+    ])
+  )
+  const accountsWithOpeningBalance = new Set(
+    ((openingBalanceEntries ?? []) as OpeningBalanceEntry[]).map(
+      (entry) => entry.account_id
+    )
+  )
+
   const activeCurrencies = (currencies ?? []) as Currency[]
   const defaultCurrency =
     activeCurrencies.find((currency) => currency.code === household.base_currency)
@@ -145,6 +190,18 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
         </div>
       ) : null}
 
+      {infoMessage ? (
+        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+          {infoMessage}
+        </div>
+      ) : null}
+
+      {openingBalanceSet ? (
+        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+          Opening balance set.
+        </div>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <Card>
           <CardHeader>
@@ -154,86 +211,191 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {accountBalancesError ? (
+            {accountBalancesError ||
+            accountMetadataError ||
+            openingBalanceEntriesError ? (
               <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
                 Could not load account balances.
               </p>
             ) : accountBalances?.length ? (
               <div className="divide-y rounded-lg border">
-                {(accountBalances as AccountBalance[]).map((account) => (
-                  <div
-                    key={account.account_id}
-                    className="space-y-4 p-4"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="font-medium">
-                            {account.account_name}
-                          </h2>
-                          <Badge variant="secondary">
-                            {formatAccountType(account.account_type)}
-                          </Badge>
-                          <Badge variant="outline">
-                            {account.account_class}
-                          </Badge>
+                {(accountBalances as AccountBalance[]).map((account) => {
+                  const hasOpeningBalance = accountsWithOpeningBalance.has(
+                    account.account_id
+                  )
+                  const openingBalanceDate =
+                    accountMetadataById.get(account.account_id)
+                      ?.opening_balance_date ?? todayIsoDate()
+
+                  return (
+                    <div key={account.account_id} className="space-y-4 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="font-medium">
+                              {account.account_name}
+                            </h2>
+                            <Badge variant="secondary">
+                              {formatAccountType(account.account_type)}
+                            </Badge>
+                            <Badge variant="outline">
+                              {account.account_class}
+                            </Badge>
+                            {hasOpeningBalance ? (
+                              <Badge variant="outline">
+                                Opening balance set
+                              </Badge>
+                            ) : null}
+                          </div>
+
+                          <p className="text-sm text-muted-foreground">
+                            {account.currency_code}
+                          </p>
                         </div>
 
-                        <p className="text-sm text-muted-foreground">
-                          {account.currency_code}
-                        </p>
+                        <Badge
+                          variant={
+                            account.include_in_net_worth
+                              ? 'default'
+                              : 'outline'
+                          }
+                        >
+                          {account.include_in_net_worth
+                            ? 'Net worth'
+                            : 'Excluded'}
+                        </Badge>
                       </div>
 
-                      <Badge
-                        variant={
-                          account.include_in_net_worth ? 'default' : 'outline'
-                        }
-                      >
-                        {account.include_in_net_worth
-                          ? 'Net worth'
-                          : 'Excluded'}
-                      </Badge>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-lg bg-muted/40 p-3">
+                          <p className="text-xs text-muted-foreground">
+                            Posted balance
+                          </p>
+                          <p className="mt-1 font-medium">
+                            {formatCurrency(
+                              account.posted_balance_account_currency,
+                              account.currency_code
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="rounded-lg bg-muted/40 p-3">
+                          <p className="text-xs text-muted-foreground">
+                            Pending
+                          </p>
+                          <p className="mt-1 font-medium">
+                            {formatCurrency(
+                              account.pending_balance_account_currency,
+                              account.currency_code
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="rounded-lg bg-muted/40 p-3">
+                          <p className="text-xs text-muted-foreground">
+                            Projected
+                          </p>
+                          <p className="mt-1 font-medium">
+                            {formatCurrency(
+                              account.projected_balance_account_currency,
+                              account.currency_code
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      {!hasOpeningBalance ? (
+                        <form
+                          action={setOpeningBalanceAction}
+                          className="space-y-3 rounded-lg border p-3"
+                        >
+                          <input
+                            type="hidden"
+                            name="account_id"
+                            value={account.account_id}
+                          />
+
+                          <div>
+                            <h3 className="text-sm font-medium">
+                              Set opening balance
+                            </h3>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              Leave blank or enter 0 if this account starts at
+                              zero.
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              For credit cards or debts, you can enter the owed
+                              amount as positive or negative; it will be stored
+                              as a liability.
+                            </p>
+                          </div>
+
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="space-y-2">
+                              <Label
+                                htmlFor={`opening_balance_amount_${account.account_id}`}
+                              >
+                                Amount
+                              </Label>
+                              <Input
+                                id={`opening_balance_amount_${account.account_id}`}
+                                name="opening_balance_amount"
+                                type="number"
+                                step="0.01"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label
+                                htmlFor={`opening_balance_date_${account.account_id}`}
+                              >
+                                Date
+                              </Label>
+                              <Input
+                                id={`opening_balance_date_${account.account_id}`}
+                                name="opening_balance_date"
+                                type="date"
+                                defaultValue={openingBalanceDate}
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label
+                                htmlFor={`exchange_rate_to_base_${account.account_id}`}
+                              >
+                                Exchange rate
+                              </Label>
+                              <Input
+                                id={`exchange_rate_to_base_${account.account_id}`}
+                                name="exchange_rate_to_base"
+                                type="number"
+                                min="0.00000001"
+                                step="0.00000001"
+                                defaultValue="1"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor={`notes_${account.account_id}`}>
+                              Notes
+                            </Label>
+                            <Textarea
+                              id={`notes_${account.account_id}`}
+                              name="notes"
+                            />
+                          </div>
+
+                          <Button type="submit" variant="outline">
+                            Set opening balance
+                          </Button>
+                        </form>
+                      ) : null}
                     </div>
-
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-lg bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">
-                          Posted balance
-                        </p>
-                        <p className="mt-1 font-medium">
-                          {formatCurrency(
-                            account.posted_balance_account_currency,
-                            account.currency_code
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="rounded-lg bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">
-                          Pending
-                        </p>
-                        <p className="mt-1 font-medium">
-                          {formatCurrency(
-                            account.pending_balance_account_currency,
-                            account.currency_code
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="rounded-lg bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">
-                          Projected
-                        </p>
-                        <p className="mt-1 font-medium">
-                          {formatCurrency(
-                            account.projected_balance_account_currency,
-                            account.currency_code
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
