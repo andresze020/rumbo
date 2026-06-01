@@ -215,9 +215,17 @@ export default async function TransactionsPage({
     }
   }
 
-  const entriesByTransactionId = new Map(
-    transactionEntries.map((entry) => [entry.transaction_id, entry])
-  )
+  const entriesByTransactionId = new Map<string, TransactionEntry[]>()
+
+  for (const entry of transactionEntries) {
+    const existingEntries = entriesByTransactionId.get(entry.transaction_id)
+
+    if (existingEntries) {
+      existingEntries.push(entry)
+    } else {
+      entriesByTransactionId.set(entry.transaction_id, [entry])
+    }
+  }
   const allocationsByTransactionId = new Map(
     transactionAllocations.map((allocation) => [
       allocation.transaction_id,
@@ -235,7 +243,8 @@ export default async function TransactionsPage({
   const activeCategories = (categories ?? []) as Category[]
   const recentTransactions = (transactions ?? []) as Transaction[]
   const canCreateTransaction =
-    activeAccounts.length > 0 && activeCategories.length > 0
+    activeAccounts.length > 0 &&
+    (activeCategories.length > 0 || activeAccounts.length >= 2)
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
@@ -276,23 +285,61 @@ export default async function TransactionsPage({
                 {recentTransactions.map((transaction) => {
                   const isOpeningBalance =
                     transaction.transaction_type === 'opening_balance'
-                  const entry = entriesByTransactionId.get(transaction.id)
+                  const isTransfer =
+                    transaction.transaction_type === 'transfer'
+                  const entries = entriesByTransactionId.get(transaction.id) ?? []
+                  const entry = entries[0]
+                  const transferOutEntry =
+                    entries.find(
+                      (transactionEntry) =>
+                        Number(transactionEntry.amount_account_currency) < 0
+                    ) ?? entry
+                  const transferInEntry =
+                    entries.find(
+                      (transactionEntry) =>
+                        Number(transactionEntry.amount_account_currency) > 0
+                    ) ??
+                    entries.find(
+                      (transactionEntry) =>
+                        transactionEntry !== transferOutEntry
+                    )
                   const allocation = allocationsByTransactionId.get(
                     transaction.id
                   )
-                  const transactionLabel = isOpeningBalance
-                    ? 'Opening balance'
-                    : transaction.description || 'Transaction'
-                  const accountName = entry
-                    ? accountNamesById.get(entry.account_id) ??
+                  const transferFromAccountName = transferOutEntry
+                    ? accountNamesById.get(transferOutEntry.account_id) ??
                       'Unknown account'
                     : 'Unknown account'
-                  const categoryName = isOpeningBalance
-                    ? 'Not categorized'
-                    : allocation
-                      ? categoryNamesById.get(allocation.category_id) ??
-                        'Unknown category'
-                      : 'Unknown category'
+                  const transferToAccountName = transferInEntry
+                    ? accountNamesById.get(transferInEntry.account_id) ??
+                      'Unknown account'
+                    : 'Unknown account'
+                  const transactionLabel = isOpeningBalance
+                    ? 'Opening balance'
+                    : isTransfer
+                      ? `Transfer: ${transferFromAccountName} to ${transferToAccountName}`
+                      : transaction.description || 'Transaction'
+                  const accountName = isTransfer
+                    ? `${transferFromAccountName} to ${transferToAccountName}`
+                    : entry
+                      ? accountNamesById.get(entry.account_id) ??
+                        'Unknown account'
+                      : 'Unknown account'
+                  const categoryName = isTransfer
+                    ? 'Transfer'
+                    : isOpeningBalance
+                      ? 'Not categorized'
+                      : allocation
+                        ? categoryNamesById.get(allocation.category_id) ??
+                          'Unknown category'
+                        : 'Unknown category'
+                  const amountEntry = isTransfer
+                    ? transferInEntry ?? transferOutEntry
+                    : entry
+                  const displayAmount =
+                    isTransfer && amountEntry
+                      ? Math.abs(Number(amountEntry.amount_account_currency))
+                      : amountEntry?.amount_account_currency
 
                   return (
                     <div key={transaction.id} className="space-y-3 p-4">
@@ -303,7 +350,9 @@ export default async function TransactionsPage({
                             <Badge variant="secondary">
                               {isOpeningBalance
                                 ? 'Opening balance'
-                                : formatValue(transaction.transaction_type)}
+                                : isTransfer
+                                  ? 'Transfer'
+                                  : formatValue(transaction.transaction_type)}
                             </Badge>
                             <Badge variant="outline">
                               {formatValue(transaction.status)}
@@ -316,11 +365,11 @@ export default async function TransactionsPage({
                           </div>
                         </div>
 
-                        {entry ? (
+                        {amountEntry && displayAmount !== undefined ? (
                           <p className="text-right font-medium">
                             {formatCurrency(
-                              entry.amount_account_currency,
-                              entry.currency_code
+                              displayAmount,
+                              amountEntry.currency_code
                             )}
                           </p>
                         ) : null}
@@ -346,7 +395,7 @@ export default async function TransactionsPage({
                             Currency
                           </p>
                           <p className="mt-1 font-medium">
-                            {entry?.currency_code ?? 'Unknown'}
+                            {amountEntry?.currency_code ?? 'Unknown'}
                           </p>
                         </div>
                       </div>
@@ -356,8 +405,8 @@ export default async function TransactionsPage({
               </div>
             ) : (
               <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                No transactions yet. Create your first income or expense
-                transaction.
+                No transactions yet. Create your first income, expense, or
+                transfer transaction.
               </p>
             )}
           </CardContent>
@@ -367,7 +416,7 @@ export default async function TransactionsPage({
           <CardHeader>
             <CardTitle>Create transaction</CardTitle>
             <CardDescription>
-              Add a manual income or expense transaction.
+              Add a manual income, expense, or transfer transaction.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -379,7 +428,7 @@ export default async function TransactionsPage({
 
             {!activeCategories.length ? (
               <p className="mt-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                Create categories first.
+                Create categories first for income and expense transactions.
               </p>
             ) : null}
 

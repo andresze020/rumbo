@@ -1,13 +1,16 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { createManualTransactionAction } from './actions'
+import {
+  createManualTransactionAction,
+  createTransferTransactionAction,
+} from './actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
-type TransactionType = 'income' | 'expense'
+type TransactionType = 'income' | 'expense' | 'transfer'
 
 export type TransactionFormAccount = {
   id: string
@@ -54,7 +57,11 @@ function isCompatibleCategory(
     return category.reporting_type === 'income'
   }
 
-  return ['expense', 'debt_interest'].includes(category.reporting_type)
+  if (transactionType === 'expense') {
+    return ['expense', 'debt_interest'].includes(category.reporting_type)
+  }
+
+  return false
 }
 
 export function TransactionForm({
@@ -64,6 +71,9 @@ export function TransactionForm({
 }: TransactionFormProps) {
   const [transactionType, setTransactionType] =
     useState<TransactionType>('expense')
+  const [accountId, setAccountId] = useState('')
+  const [fromAccountId, setFromAccountId] = useState('')
+  const [toAccountId, setToAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
 
   const compatibleCategories = useMemo(
@@ -73,14 +83,24 @@ export function TransactionForm({
       ),
     [categories, transactionType]
   )
+  const isTransfer = transactionType === 'transfer'
+  const submitAction = isTransfer
+    ? createTransferTransactionAction
+    : createManualTransactionAction
+  const canSubmit = isTransfer
+    ? accounts.length >= 2
+    : compatibleCategories.length > 0
 
   function handleTransactionTypeChange(value: TransactionType) {
     setTransactionType(value)
+    setAccountId('')
+    setFromAccountId('')
+    setToAccountId('')
     setCategoryId('')
   }
 
   return (
-    <form action={createManualTransactionAction} className="space-y-4">
+    <form action={submitAction} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="transaction_type">Type</Label>
         <select
@@ -94,6 +114,7 @@ export function TransactionForm({
         >
           <option value="expense">Expense</option>
           <option value="income">Income</option>
+          <option value="transfer">Transfer</option>
         </select>
       </div>
 
@@ -108,53 +129,130 @@ export function TransactionForm({
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="account_id">Account</Label>
-        <select
-          id="account_id"
-          name="account_id"
-          required
-          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          defaultValue=""
-        >
-          <option value="" disabled>
-            Select account
-          </option>
-          {accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {formatAccountLabel(account)}
-            </option>
-          ))}
-        </select>
-      </div>
+      {isTransfer ? (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="from_account_id">From account</Label>
+            <select
+              id="from_account_id"
+              name="from_account_id"
+              required
+              value={fromAccountId}
+              onChange={(event) => {
+                const nextAccountId = event.target.value
+                setFromAccountId(nextAccountId)
 
-      <div className="space-y-2">
-        <Label htmlFor="category_id">Category</Label>
-        <select
-          id="category_id"
-          name="category_id"
-          required
-          value={categoryId}
-          onChange={(event) => setCategoryId(event.target.value)}
-          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          disabled={!compatibleCategories.length}
-        >
-          <option value="" disabled>
-            Select category
-          </option>
-          {compatibleCategories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {formatCategoryLabel(category)}
-            </option>
-          ))}
-        </select>
+                if (nextAccountId === toAccountId) {
+                  setToAccountId('')
+                }
+              }}
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="" disabled>
+                Select source
+              </option>
+              {accounts.map((account) => (
+                <option
+                  key={account.id}
+                  value={account.id}
+                  disabled={account.id === toAccountId}
+                >
+                  {formatAccountLabel(account)}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {!compatibleCategories.length ? (
-          <p className="text-sm text-muted-foreground">
-            No compatible categories available for this transaction type.
-          </p>
-        ) : null}
-      </div>
+          <div className="space-y-2">
+            <Label htmlFor="to_account_id">To account</Label>
+            <select
+              id="to_account_id"
+              name="to_account_id"
+              required
+              value={toAccountId}
+              onChange={(event) => {
+                const nextAccountId = event.target.value
+                setToAccountId(nextAccountId)
+
+                if (nextAccountId === fromAccountId) {
+                  setFromAccountId('')
+                }
+              }}
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="" disabled>
+                Select destination
+              </option>
+              {accounts.map((account) => (
+                <option
+                  key={account.id}
+                  value={account.id}
+                  disabled={account.id === fromAccountId}
+                >
+                  {formatAccountLabel(account)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {accounts.length < 2 ? (
+            <p className="text-sm text-muted-foreground">
+              Create at least two accounts to transfer between them.
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="account_id">Account</Label>
+            <select
+              id="account_id"
+              name="account_id"
+              required
+              value={accountId}
+              onChange={(event) => setAccountId(event.target.value)}
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="" disabled>
+                Select account
+              </option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {formatAccountLabel(account)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="category_id">Category</Label>
+            <select
+              id="category_id"
+              name="category_id"
+              required
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              disabled={!compatibleCategories.length}
+            >
+              <option value="" disabled>
+                Select category
+              </option>
+              {compatibleCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {formatCategoryLabel(category)}
+                </option>
+              ))}
+            </select>
+
+            {!compatibleCategories.length ? (
+              <p className="text-sm text-muted-foreground">
+                No compatible categories available for this transaction type.
+              </p>
+            ) : null}
+          </div>
+        </>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="amount">Amount</Label>
@@ -173,10 +271,12 @@ export function TransactionForm({
         <Input id="description" name="description" />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="merchant_name">Merchant</Label>
-        <Input id="merchant_name" name="merchant_name" />
-      </div>
+      {!isTransfer ? (
+        <div className="space-y-2">
+          <Label htmlFor="merchant_name">Merchant</Label>
+          <Input id="merchant_name" name="merchant_name" />
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <Label htmlFor="notes">Notes</Label>
@@ -196,25 +296,23 @@ export function TransactionForm({
         </select>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="exchange_rate_to_base">Exchange rate to base</Label>
-        <Input
-          id="exchange_rate_to_base"
-          name="exchange_rate_to_base"
-          type="number"
-          min="0.00000001"
-          step="0.00000001"
-          defaultValue="1"
-          required
-        />
-      </div>
+      {!isTransfer ? (
+        <div className="space-y-2">
+          <Label htmlFor="exchange_rate_to_base">Exchange rate to base</Label>
+          <Input
+            id="exchange_rate_to_base"
+            name="exchange_rate_to_base"
+            type="number"
+            min="0.00000001"
+            step="0.00000001"
+            defaultValue="1"
+            required
+          />
+        </div>
+      ) : null}
 
-      <Button
-        type="submit"
-        className="w-full"
-        disabled={!compatibleCategories.length}
-      >
-        Create transaction
+      <Button type="submit" className="w-full" disabled={!canSubmit}>
+        {isTransfer ? 'Create transfer' : 'Create transaction'}
       </Button>
     </form>
   )
