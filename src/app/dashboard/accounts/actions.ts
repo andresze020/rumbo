@@ -14,7 +14,10 @@ const ACCOUNT_TYPES = [
   'other',
 ] as const
 
+const ACCOUNT_CLASSES = ['asset', 'liability'] as const
+
 type AccountType = (typeof ACCOUNT_TYPES)[number]
+type AccountClass = (typeof ACCOUNT_CLASSES)[number]
 
 function redirectWithError(message: string): never {
   redirect(`/dashboard/accounts?error=${encodeURIComponent(message)}`)
@@ -28,10 +31,65 @@ function isAccountType(value: string): value is AccountType {
   return ACCOUNT_TYPES.includes(value as AccountType)
 }
 
+function isAccountClass(value: string): value is AccountClass {
+  return ACCOUNT_CLASSES.includes(value as AccountClass)
+}
+
 function getAccountClass(accountType: AccountType) {
   return accountType === 'credit_card' || accountType === 'debt'
     ? 'liability'
     : 'asset'
+}
+
+function parseNullableInteger(value: FormDataEntryValue | null) {
+  const text = String(value ?? '').trim()
+
+  if (!text) {
+    return null
+  }
+
+  const numberValue = Number(text)
+
+  return Number.isInteger(numberValue) ? numberValue : undefined
+}
+
+async function getAuthenticatedHousehold() {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    redirect('/login')
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('default_household_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    redirectWithError('Could not load your household.')
+  }
+
+  if (!profile?.default_household_id) {
+    redirect('/onboarding')
+  }
+
+  return {
+    supabase,
+    userId: user.id,
+    householdId: profile.default_household_id as string,
+  }
+}
+
+function revalidateAccountSurfaces() {
+  revalidatePath('/dashboard/accounts')
+  revalidatePath('/dashboard/transactions')
+  revalidatePath('/dashboard')
 }
 
 export async function createAccountAction(formData: FormData) {
@@ -61,30 +119,7 @@ export async function createAccountAction(formData: FormData) {
     redirectWithError('Last four must be 1 to 4 digits.')
   }
 
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
-  if (userError || !user) {
-    redirect('/login')
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('default_household_id')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (profileError) {
-    redirectWithError('Could not load your household.')
-  }
-
-  if (!profile?.default_household_id) {
-    redirect('/onboarding')
-  }
+  const { supabase, userId, householdId } = await getAuthenticatedHousehold()
 
   const { data: currency, error: currencyError } = await supabase
     .from('currencies')
@@ -98,7 +133,7 @@ export async function createAccountAction(formData: FormData) {
   }
 
   const { error: insertError } = await supabase.from('accounts').insert({
-    household_id: profile.default_household_id,
+    household_id: householdId,
     name,
     account_type: accountType,
     account_class: getAccountClass(accountType),
@@ -107,7 +142,7 @@ export async function createAccountAction(formData: FormData) {
     last_four: lastFour || null,
     notes: notes || null,
     include_in_net_worth: includeInNetWorth,
-    created_by: user.id,
+    created_by: userId,
   })
 
   if (insertError) {
@@ -118,6 +153,138 @@ export async function createAccountAction(formData: FormData) {
 
   revalidatePath('/dashboard/accounts')
   redirect('/dashboard/accounts?created=1')
+}
+
+export async function updateAccountAction(formData: FormData) {
+  const accountId = String(formData.get('account_id') ?? '').trim()
+  const name = String(formData.get('name') ?? '').trim()
+  const accountType = String(formData.get('account_type') ?? '').trim()
+  const accountClass = String(formData.get('account_class') ?? '').trim()
+  const institutionName = String(formData.get('institution_name') ?? '').trim()
+  const lastFour = String(formData.get('last_four') ?? '').trim()
+  const color = String(formData.get('color') ?? '').trim()
+  const icon = String(formData.get('icon') ?? '').trim()
+  const notes = String(formData.get('notes') ?? '').trim()
+  const includeInNetWorth = formData.get('include_in_net_worth') !== null
+  const sortOrder = parseNullableInteger(formData.get('sort_order'))
+  const showArchived = String(formData.get('show_archived') ?? '') === 'true'
+  const redirectPath = showArchived
+    ? '/dashboard/accounts?showArchived=true&updated=1'
+    : '/dashboard/accounts?updated=1'
+
+  if (!accountId) {
+    redirectWithError('Account is required.')
+  }
+
+  if (!name) {
+    redirectWithError('Account name is required.')
+  }
+
+  if (!isAccountType(accountType)) {
+    redirectWithError('Select a valid account type.')
+  }
+
+  if (!isAccountClass(accountClass)) {
+    redirectWithError('Select a valid account class.')
+  }
+
+  if (lastFour && !/^[0-9]{1,4}$/.test(lastFour)) {
+    redirectWithError('Last four must be 1 to 4 digits.')
+  }
+
+  if (sortOrder === undefined) {
+    redirectWithError('Sort order must be a whole number.')
+  }
+
+  const { supabase, userId, householdId } = await getAuthenticatedHousehold()
+
+  const { data: account, error: accountError } = await supabase
+    .from('accounts')
+    .select('id')
+    .eq('id', accountId)
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (accountError || !account) {
+    redirectWithError('Account was not found for this household.')
+  }
+
+  const { error: updateError } = await supabase
+    .from('accounts')
+    .update({
+      name,
+      account_type: accountType,
+      account_class: accountClass,
+      institution_name: institutionName || null,
+      last_four: lastFour || null,
+      color: color || null,
+      icon: icon || null,
+      include_in_net_worth: includeInNetWorth,
+      sort_order: sortOrder,
+      notes: notes || null,
+      updated_by: userId,
+    })
+    .eq('id', accountId)
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+
+  if (updateError) {
+    redirectWithError(
+      'Could not update the account. Please check the form and try again.'
+    )
+  }
+
+  revalidateAccountSurfaces()
+  redirect(redirectPath)
+}
+
+export async function archiveAccountAction(formData: FormData) {
+  const accountId = String(formData.get('account_id') ?? '').trim()
+  const isArchived = String(formData.get('is_archived') ?? '') === 'true'
+  const showArchived = String(formData.get('show_archived') ?? '') === 'true'
+  const redirectPath = showArchived
+    ? `/dashboard/accounts?showArchived=true&${isArchived ? 'archived' : 'unarchived'}=1`
+    : `/dashboard/accounts?${isArchived ? 'archived' : 'unarchived'}=1`
+
+  if (!accountId) {
+    redirectWithError('Account is required.')
+  }
+
+  const { supabase, userId, householdId } = await getAuthenticatedHousehold()
+
+  const { data: account, error: accountError } = await supabase
+    .from('accounts')
+    .select('id')
+    .eq('id', accountId)
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (accountError || !account) {
+    redirectWithError('Account was not found for this household.')
+  }
+
+  const { error: updateError } = await supabase
+    .from('accounts')
+    .update({
+      is_archived: isArchived,
+      updated_by: userId,
+    })
+    .eq('id', accountId)
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+
+  if (updateError) {
+    redirectWithError(
+      isArchived
+        ? 'Could not archive the account.'
+        : 'Could not unarchive the account.'
+    )
+  }
+
+  revalidateAccountSurfaces()
+  redirect(redirectPath)
 }
 
 export async function setOpeningBalanceAction(formData: FormData) {
@@ -156,35 +323,12 @@ export async function setOpeningBalanceAction(formData: FormData) {
     redirectWithError('Exchange rate must be greater than 0.')
   }
 
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
-  if (userError || !user) {
-    redirect('/login')
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('default_household_id')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (profileError) {
-    redirectWithError('Could not load your household.')
-  }
-
-  if (!profile?.default_household_id) {
-    redirect('/onboarding')
-  }
+  const { supabase, householdId } = await getAuthenticatedHousehold()
 
   const { error: openingBalanceError } = await supabase.rpc(
     'create_opening_balance',
     {
-      p_household_id: profile.default_household_id,
+      p_household_id: householdId,
       p_account_id: accountId,
       p_opening_balance_amount: amount,
       p_opening_balance_date: openingBalanceDate,
