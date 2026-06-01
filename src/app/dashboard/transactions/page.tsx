@@ -274,29 +274,36 @@ export default async function TransactionsPage({
             ) : recentTransactions.length ? (
               <div className="divide-y rounded-lg border">
                 {recentTransactions.map((transaction) => {
+                  const isOpeningBalance =
+                    transaction.transaction_type === 'opening_balance'
                   const entry = entriesByTransactionId.get(transaction.id)
                   const allocation = allocationsByTransactionId.get(
                     transaction.id
                   )
+                  const transactionLabel = isOpeningBalance
+                    ? 'Opening balance'
+                    : transaction.description || 'Transaction'
                   const accountName = entry
                     ? accountNamesById.get(entry.account_id) ??
                       'Unknown account'
                     : 'Unknown account'
-                  const categoryName = allocation
-                    ? categoryNamesById.get(allocation.category_id) ??
-                      'Unknown category'
-                    : 'Unknown category'
+                  const categoryName = isOpeningBalance
+                    ? 'Not categorized'
+                    : allocation
+                      ? categoryNamesById.get(allocation.category_id) ??
+                        'Unknown category'
+                      : 'Unknown category'
 
                   return (
                     <div key={transaction.id} className="space-y-3 p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="font-medium">
-                              {transaction.description || 'Transaction'}
-                            </h2>
+                            <h2 className="font-medium">{transactionLabel}</h2>
                             <Badge variant="secondary">
-                              {formatValue(transaction.transaction_type)}
+                              {isOpeningBalance
+                                ? 'Opening balance'
+                                : formatValue(transaction.transaction_type)}
                             </Badge>
                             <Badge variant="outline">
                               {formatValue(transaction.status)}
