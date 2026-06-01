@@ -4,6 +4,7 @@ import {
   type TransactionFormAccount,
   type TransactionFormCategory,
 } from './transaction-form'
+import { VoidTransactionForm } from './void-transaction-form'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -18,6 +19,7 @@ type TransactionsPageProps = {
   searchParams: Promise<{
     created?: string
     error?: string
+    voided?: string
   }>
 }
 
@@ -86,6 +88,7 @@ export default async function TransactionsPage({
   const params = await searchParams
   const errorMessage = typeof params.error === 'string' ? params.error : null
   const created = params.created === '1'
+  const voided = params.voided === '1'
   const supabase = await createClient()
 
   const {
@@ -267,6 +270,12 @@ export default async function TransactionsPage({
         </div>
       ) : null}
 
+      {voided ? (
+        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+          Transaction voided.
+        </div>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <Card>
           <CardHeader>
@@ -287,6 +296,10 @@ export default async function TransactionsPage({
                     transaction.transaction_type === 'opening_balance'
                   const isTransfer =
                     transaction.transaction_type === 'transfer'
+                  const isVoided = transaction.status === 'voided'
+                  const canVoid = !['voided', 'deleted_soft'].includes(
+                    transaction.status
+                  )
                   const entries = entriesByTransactionId.get(transaction.id) ?? []
                   const entry = entries[0]
                   const transferOutEntry =
@@ -342,7 +355,10 @@ export default async function TransactionsPage({
                       : amountEntry?.amount_account_currency
 
                   return (
-                    <div key={transaction.id} className="space-y-3 p-4">
+                    <div
+                      key={transaction.id}
+                      className={`space-y-3 p-4 ${isVoided ? 'bg-muted/30 text-muted-foreground' : ''}`}
+                    >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
@@ -365,14 +381,22 @@ export default async function TransactionsPage({
                           </div>
                         </div>
 
-                        {amountEntry && displayAmount !== undefined ? (
-                          <p className="text-right font-medium">
-                            {formatCurrency(
-                              displayAmount,
-                              amountEntry.currency_code
-                            )}
-                          </p>
-                        ) : null}
+                        <div className="space-y-3 sm:min-w-32 sm:text-right">
+                          {amountEntry && displayAmount !== undefined ? (
+                            <p className="font-medium">
+                              {formatCurrency(
+                                displayAmount,
+                                amountEntry.currency_code
+                              )}
+                            </p>
+                          ) : null}
+
+                          {canVoid ? (
+                            <VoidTransactionForm
+                              transactionId={transaction.id}
+                            />
+                          ) : null}
+                        </div>
                       </div>
 
                       <div className="grid gap-3 text-sm sm:grid-cols-3">
