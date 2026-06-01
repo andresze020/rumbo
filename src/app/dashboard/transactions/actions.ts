@@ -14,6 +14,25 @@ function redirectWithError(message: string): never {
   redirect(`/dashboard/transactions?error=${encodeURIComponent(message)}`)
 }
 
+function redirectWithTransactionError(message: string, returnTo?: string): never {
+  redirect(addQueryParam(returnTo, 'error', message))
+}
+
+function redirectWithTransactionInfo(name: string, returnTo?: string): never {
+  redirect(addQueryParam(returnTo, name, '1'))
+}
+
+function addQueryParam(returnTo: string | undefined, name: string, value: string) {
+  const safeReturnTo = returnTo?.startsWith('/dashboard/transactions')
+    ? returnTo
+    : '/dashboard/transactions'
+  const url = new URL(safeReturnTo, 'http://localhost')
+
+  url.searchParams.set(name, value)
+
+  return `${url.pathname}?${url.searchParams.toString()}`
+}
+
 function isTransactionType(value: string): value is TransactionType {
   return TRANSACTION_TYPES.includes(value as TransactionType)
 }
@@ -238,6 +257,98 @@ export async function createTransferTransactionAction(formData: FormData) {
   revalidatePath('/dashboard/accounts')
   revalidatePath('/dashboard')
   redirect('/dashboard/transactions?created=1')
+}
+
+export async function updateManualTransactionAction(formData: FormData) {
+  const transactionId = String(formData.get('transaction_id') ?? '').trim()
+  const transactionDate = String(formData.get('transaction_date') ?? '').trim()
+  const accountId = String(formData.get('account_id') ?? '').trim()
+  const categoryId = String(formData.get('category_id') ?? '').trim()
+  const amount = parsePositiveNumber(formData.get('amount'))
+  const description = String(formData.get('description') ?? '').trim()
+  const merchantName = String(formData.get('merchant_name') ?? '').trim()
+  const notes = String(formData.get('notes') ?? '').trim()
+  const status = String(formData.get('status') ?? '').trim()
+  const returnTo = String(formData.get('return_to') ?? '').trim()
+
+  if (!transactionId) {
+    redirectWithTransactionError('Transaction id is required.', returnTo)
+  }
+
+  if (!transactionDate) {
+    redirectWithTransactionError('Transaction date is required.', returnTo)
+  }
+
+  if (!accountId) {
+    redirectWithTransactionError('Select an account.', returnTo)
+  }
+
+  if (!categoryId) {
+    redirectWithTransactionError('Select a category.', returnTo)
+  }
+
+  if (amount === null) {
+    redirectWithTransactionError('Amount must be greater than 0.', returnTo)
+  }
+
+  if (!isStatus(status)) {
+    redirectWithTransactionError('Select posted or pending status.', returnTo)
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    redirect('/login')
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('default_household_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    redirectWithTransactionError('Could not load your household.', returnTo)
+  }
+
+  if (!profile?.default_household_id) {
+    redirect('/onboarding')
+  }
+
+  const { error: transactionError } = await supabase.rpc(
+    'update_manual_transaction',
+    {
+      p_transaction_id: transactionId,
+      p_account_id: accountId,
+      p_category_id: categoryId,
+      p_amount: amount,
+      p_transaction_date: transactionDate,
+      p_description: description || null,
+      p_merchant_name: merchantName || null,
+      p_notes: notes || null,
+      p_status: status,
+    }
+  )
+
+  if (transactionError) {
+    redirectWithTransactionError(
+      cleanRpcError(
+        transactionError.message,
+        'Could not update the transaction. Please check the form and try again.'
+      ),
+      returnTo
+    )
+  }
+
+  revalidatePath('/dashboard/transactions')
+  revalidatePath('/dashboard/accounts')
+  revalidatePath('/dashboard')
+  redirectWithTransactionInfo('updated', returnTo)
 }
 
 export async function voidTransactionAction(formData: FormData) {
