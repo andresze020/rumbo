@@ -218,3 +218,42 @@ export async function createTransferTransactionAction(formData: FormData) {
   revalidatePath('/dashboard')
   redirect('/dashboard/transactions?created=1')
 }
+
+export async function voidTransactionAction(formData: FormData) {
+  const transactionId = String(formData.get('transaction_id') ?? '').trim()
+  const voidReason = String(formData.get('void_reason') ?? '').trim()
+
+  if (!transactionId) {
+    redirectWithError('Transaction id is required.')
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    redirect('/login')
+  }
+
+  const { error: transactionError } = await supabase.rpc('void_transaction', {
+    p_transaction_id: transactionId,
+    p_void_reason: voidReason || null,
+  })
+
+  if (transactionError) {
+    redirectWithError(
+      cleanRpcError(
+        transactionError.message,
+        'Could not void the transaction. Please try again.'
+      )
+    )
+  }
+
+  revalidatePath('/dashboard/transactions')
+  revalidatePath('/dashboard/accounts')
+  revalidatePath('/dashboard')
+  redirect('/dashboard/transactions?voided=1')
+}
