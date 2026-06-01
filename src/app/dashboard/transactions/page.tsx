@@ -5,6 +5,7 @@ import {
   type TransactionFormAccount,
   type TransactionFormCategory,
 } from './transaction-form'
+import { TransactionEditForm } from './transaction-edit-form'
 import { VoidTransactionForm } from './void-transaction-form'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -24,6 +25,7 @@ type TransactionsPageProps = {
     created?: string
     error?: string
     voided?: string
+    updated?: string
     month?: string
     type?: string
     status?: string
@@ -143,6 +145,48 @@ function getAccountLabel(account: Account) {
     .join(' · ')
 }
 
+function buildReturnTo({
+  month,
+  type,
+  status,
+  accountId,
+  categoryId,
+  search,
+}: {
+  month: string
+  type: string
+  status: string
+  accountId: string
+  categoryId: string
+  search: string
+}) {
+  const params = new URLSearchParams()
+
+  params.set('month', month)
+
+  if (type !== 'all') {
+    params.set('type', type)
+  }
+
+  if (status !== 'all') {
+    params.set('status', status)
+  }
+
+  if (accountId !== 'all') {
+    params.set('account_id', accountId)
+  }
+
+  if (categoryId !== 'all') {
+    params.set('category_id', categoryId)
+  }
+
+  if (search) {
+    params.set('search', search)
+  }
+
+  return `/dashboard/transactions?${params.toString()}`
+}
+
 export default async function TransactionsPage({
   searchParams,
 }: TransactionsPageProps) {
@@ -150,6 +194,7 @@ export default async function TransactionsPage({
   const errorMessage = typeof params.error === 'string' ? params.error : null
   const created = params.created === '1'
   const voided = params.voided === '1'
+  const updated = params.updated === '1'
   const selectedMonth = normalizeMonth(params.month)
   const selectedType = normalizeOption(params.type, [
     'income',
@@ -170,6 +215,14 @@ export default async function TransactionsPage({
     typeof params.category_id === 'string' ? params.category_id : 'all'
   const searchText = typeof params.search === 'string' ? params.search.trim() : ''
   const monthRange = getMonthRange(selectedMonth)
+  const returnTo = buildReturnTo({
+    month: selectedMonth,
+    type: selectedType,
+    status: selectedStatus,
+    accountId: selectedAccountId,
+    categoryId: selectedCategoryId,
+    search: searchText,
+  })
   const supabase = await createClient()
 
   const {
@@ -405,6 +458,12 @@ export default async function TransactionsPage({
         </div>
       ) : null}
 
+      {updated ? (
+        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+          Transaction updated.
+        </div>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Filters</CardTitle>
@@ -563,6 +622,13 @@ export default async function TransactionsPage({
                   const allocation = allocationsByTransactionId.get(
                     transaction.id
                   )
+                  const canEdit =
+                    transaction.source === 'manual' &&
+                    (transaction.transaction_type === 'income' ||
+                      transaction.transaction_type === 'expense') &&
+                    (transaction.status === 'posted' ||
+                      transaction.status === 'pending') &&
+                    Boolean(entry && allocation)
                   const transferFromAccountName = transferOutEntry
                     ? accountNamesById.get(transferOutEntry.account_id) ??
                       'Unknown account'
@@ -667,6 +733,27 @@ export default async function TransactionsPage({
                           </p>
                         </div>
                       </div>
+
+                      {canEdit && entry && allocation ? (
+                        <TransactionEditForm
+                          transactionId={transaction.id}
+                          transactionType={
+                            transaction.transaction_type as 'income' | 'expense'
+                          }
+                          transactionDate={transaction.transaction_date}
+                          accountId={entry.account_id}
+                          categoryId={allocation.category_id}
+                          amount={Math.abs(
+                            Number(entry.amount_account_currency)
+                          )}
+                          description={transaction.description ?? ''}
+                          notes={transaction.notes ?? ''}
+                          status={transaction.status}
+                          accounts={activeAccounts}
+                          categories={activeCategories}
+                          returnTo={returnTo}
+                        />
+                      ) : null}
                     </div>
                   )
                 })}

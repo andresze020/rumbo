@@ -16,15 +16,24 @@ type CategoryPickerProps = {
   categories: CategoryPickerCategory[]
   transactionType: TransactionType
   onCategoryChange: (categoryId: string) => void
+  defaultCategoryId?: string
 }
 
 export function CategoryPicker({
   categories,
   transactionType,
   onCategoryChange,
+  defaultCategoryId,
 }: CategoryPickerProps) {
-  const [parentCategoryId, setParentCategoryId] = useState('')
-  const [subcategoryId, setSubcategoryId] = useState('')
+  const defaultCategory = defaultCategoryId
+    ? categories.find((category) => category.id === defaultCategoryId)
+    : null
+  const [parentCategoryId, setParentCategoryId] = useState(
+    defaultCategory?.parent_category_id ?? defaultCategory?.id ?? ''
+  )
+  const [subcategoryId, setSubcategoryId] = useState(
+    defaultCategory?.parent_category_id ? defaultCategory.id : ''
+  )
 
   const parentCategories = useMemo(
     () =>
