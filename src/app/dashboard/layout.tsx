@@ -5,6 +5,7 @@ const dashboardLinks = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/dashboard/accounts', label: 'Accounts' },
   { href: '/dashboard/categories', label: 'Categories' },
+  { href: '/dashboard/transactions', label: 'Transactions' },
 ]
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
