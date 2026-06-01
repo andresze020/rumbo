@@ -640,10 +640,10 @@ export default async function TransactionsPage({
                   const transactionLabel = isOpeningBalance
                     ? 'Opening balance'
                     : isTransfer
-                      ? `Transfer: ${transferFromAccountName} to ${transferToAccountName}`
+                      ? `Transfer: ${transferFromAccountName} -> ${transferToAccountName}`
                       : transaction.description || 'Transaction'
                   const accountName = isTransfer
-                    ? `${transferFromAccountName} to ${transferToAccountName}`
+                    ? `${transferFromAccountName} -> ${transferToAccountName}`
                     : entry
                       ? accountNamesById.get(entry.account_id) ??
                         'Unknown account'
