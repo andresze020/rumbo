@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import {
   TransactionForm,
   type TransactionFormAccount,
@@ -13,6 +14,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/server'
 
 type TransactionsPageProps = {
@@ -20,6 +24,12 @@ type TransactionsPageProps = {
     created?: string
     error?: string
     voided?: string
+    month?: string
+    type?: string
+    status?: string
+    account_id?: string
+    category_id?: string
+    search?: string
   }>
 }
 
@@ -28,6 +38,7 @@ type Account = {
   name: string
   currency_code: string
   institution_name: string | null
+  is_archived: boolean
 }
 
 type Category = {
@@ -36,6 +47,7 @@ type Category = {
   category_type: string
   reporting_type: string
   parent_category_id: string | null
+  is_archived: boolean
 }
 
 type Transaction = {
@@ -44,6 +56,7 @@ type Transaction = {
   transaction_type: string
   status: string
   description: string | null
+  notes: string | null
   source: string
 }
 
@@ -74,6 +87,29 @@ function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function currentMonth() {
+  return todayIsoDate().slice(0, 7)
+}
+
+function normalizeMonth(value: string | undefined) {
+  return value && /^\d{4}-\d{2}$/.test(value) ? value : currentMonth()
+}
+
+function getMonthRange(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  const startDate = new Date(Date.UTC(year, monthNumber - 1, 1))
+  const endDate = new Date(Date.UTC(year, monthNumber, 1))
+
+  return {
+    start: startDate.toISOString().slice(0, 10),
+    end: endDate.toISOString().slice(0, 10),
+  }
+}
+
+function normalizeOption(value: string | undefined, allowedValues: string[]) {
+  return value && allowedValues.includes(value) ? value : 'all'
+}
+
 function formatValue(value: string) {
   return value.replaceAll('_', ' ')
 }
@@ -96,6 +132,17 @@ function getCategoryPath(
   return parentName ? `${parentName} / ${category.name}` : category.name
 }
 
+function getAccountLabel(account: Account) {
+  return [
+    account.name,
+    account.institution_name || null,
+    account.currency_code,
+    account.is_archived ? 'archived' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 export default async function TransactionsPage({
   searchParams,
 }: TransactionsPageProps) {
@@ -103,6 +150,26 @@ export default async function TransactionsPage({
   const errorMessage = typeof params.error === 'string' ? params.error : null
   const created = params.created === '1'
   const voided = params.voided === '1'
+  const selectedMonth = normalizeMonth(params.month)
+  const selectedType = normalizeOption(params.type, [
+    'income',
+    'expense',
+    'transfer',
+    'opening_balance',
+    'debt_payment',
+    'adjustment',
+  ])
+  const selectedStatus = normalizeOption(params.status, [
+    'posted',
+    'pending',
+    'voided',
+  ])
+  const selectedAccountId =
+    typeof params.account_id === 'string' ? params.account_id : 'all'
+  const selectedCategoryId =
+    typeof params.category_id === 'string' ? params.category_id : 'all'
+  const searchText = typeof params.search === 'string' ? params.search.trim() : ''
+  const monthRange = getMonthRange(selectedMonth)
   const supabase = await createClient()
 
   const {
@@ -135,9 +202,8 @@ export default async function TransactionsPage({
 
   const { data: accounts, error: accountsError } = await supabase
     .from('accounts')
-    .select('id, name, currency_code, institution_name')
+    .select('id, name, currency_code, institution_name, is_archived')
     .eq('household_id', household.id)
-    .eq('is_archived', false)
     .is('deleted_at', null)
     .order('name', { ascending: true })
 
@@ -147,11 +213,9 @@ export default async function TransactionsPage({
 
   const { data: categories, error: categoriesError } = await supabase
     .from('categories')
-    .select('id, name, category_type, reporting_type, parent_category_id')
+    .select('id, name, category_type, reporting_type, parent_category_id, is_archived')
     .eq('household_id', household.id)
-    .eq('is_archived', false)
     .is('deleted_at', null)
-    .in('category_type', ['income', 'expense'])
     .order('parent_category_id', { ascending: true, nullsFirst: true })
     .order('name', { ascending: true })
 
@@ -159,13 +223,34 @@ export default async function TransactionsPage({
     throw new Error('Could not load categories.')
   }
 
-  const { data: transactions, error: transactionsError } = await supabase
+  let transactionsQuery = supabase
     .from('transactions')
-    .select('id, transaction_date, transaction_type, status, description, source')
+    .select('id, transaction_date, transaction_type, status, description, notes, source')
     .eq('household_id', household.id)
+    .gte('transaction_date', monthRange.start)
+    .lt('transaction_date', monthRange.end)
+    .is('deleted_at', null)
     .order('transaction_date', { ascending: false })
     .order('created_at', { ascending: false })
-    .limit(20)
+
+  if (selectedType !== 'all') {
+    transactionsQuery = transactionsQuery.eq('transaction_type', selectedType)
+  }
+
+  if (selectedStatus !== 'all') {
+    transactionsQuery = transactionsQuery.eq('status', selectedStatus)
+  }
+
+  if (searchText) {
+    const escapedSearchText = searchText.replaceAll('%', '\\%').replaceAll('_', '\\_')
+
+    transactionsQuery = transactionsQuery.or(
+      `description.ilike.%${escapedSearchText}%,notes.ilike.%${escapedSearchText}%`
+    )
+  }
+
+  const { data: transactions, error: transactionsError } =
+    await transactionsQuery
 
   if (transactionsError) {
     throw new Error('Could not load transactions.')
@@ -262,9 +347,33 @@ export default async function TransactionsPage({
     ])
   )
 
-  const activeAccounts = (accounts ?? []) as Account[]
-  const activeCategories = (categories ?? []) as Category[]
-  const recentTransactions = (transactions ?? []) as Transaction[]
+  const allAccounts = (accounts ?? []) as Account[]
+  const allCategories = (categories ?? []) as Category[]
+  const categoryOptionsById = new Map(
+    allCategories.map((category) => [category.id, category])
+  )
+  const filteredTransactions = ((transactions ?? []) as Transaction[]).filter(
+    (transaction) => {
+      const entries = entriesByTransactionId.get(transaction.id) ?? []
+      const allocation = allocationsByTransactionId.get(transaction.id)
+      const matchesAccount =
+        selectedAccountId === 'all' ||
+        entries.some((entry) => entry.account_id === selectedAccountId)
+      const matchesCategory =
+        selectedCategoryId === 'all' ||
+        allocation?.category_id === selectedCategoryId
+
+      return matchesAccount && matchesCategory
+    }
+  )
+
+  const activeAccounts = allAccounts.filter((account) => !account.is_archived)
+  const activeCategories = allCategories.filter(
+    (category) =>
+      !category.is_archived &&
+      (category.category_type === 'income' || category.category_type === 'expense')
+  )
+  const recentTransactions = filteredTransactions
   const canCreateTransaction =
     activeAccounts.length > 0 &&
     (activeCategories.length > 0 || activeAccounts.length >= 2)
@@ -295,6 +404,121 @@ export default async function TransactionsPage({
           Transaction voided.
         </div>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Filters</CardTitle>
+          <CardDescription>
+            Narrow the transaction list by month, type, status, account,
+            category, or text.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            method="get"
+            action="/dashboard/transactions"
+            className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="month">Month</Label>
+              <Input
+                id="month"
+                name="month"
+                type="month"
+                defaultValue={selectedMonth}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="type">Type</Label>
+              <select
+                id="type"
+                name="type"
+                defaultValue={selectedType}
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="all">All types</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+                <option value="transfer">Transfer</option>
+                <option value="opening_balance">Opening balance</option>
+                <option value="debt_payment">Debt payment</option>
+                <option value="adjustment">Adjustment</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="status">Status</Label>
+              <select
+                id="status"
+                name="status"
+                defaultValue={selectedStatus}
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="all">All statuses</option>
+                <option value="posted">Posted</option>
+                <option value="pending">Pending</option>
+                <option value="voided">Voided</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="account_id">Account</Label>
+              <select
+                id="account_id"
+                name="account_id"
+                defaultValue={selectedAccountId}
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="all">All accounts</option>
+                {allAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {getAccountLabel(account)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="category_id">Category</Label>
+              <select
+                id="category_id"
+                name="category_id"
+                defaultValue={selectedCategoryId}
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="all">All categories</option>
+                {allCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {getCategoryPath(category, categoryOptionsById)}
+                    {category.is_archived ? ' · archived' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="search">Search</Label>
+              <Input
+                id="search"
+                name="search"
+                defaultValue={searchText}
+                placeholder="Description or notes"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
+              <Button type="submit">Apply filters</Button>
+              <Link
+                href="/dashboard/transactions"
+                className="inline-flex h-8 items-center justify-center rounded-lg border border-border px-2.5 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                Clear filters
+              </Link>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <Card>
