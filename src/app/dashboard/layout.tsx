@@ -7,6 +7,7 @@ const dashboardLinks = [
   { href: '/dashboard/categories', label: 'Categories' },
   { href: '/dashboard/transactions', label: 'Transactions' },
   { href: '/dashboard/transactions/import', label: 'Import CSV' },
+  { href: '/dashboard/export', label: 'Export' },
   { href: '/dashboard/budgets', label: 'Budgets' },
   { href: '/dashboard/debts', label: 'Debts' },
   { href: '/dashboard/net-worth', label: 'Net Worth' },
