@@ -202,6 +202,11 @@ export async function createCategoryAction(formData: FormData) {
     formData.get('parent_category_id') ?? ''
   ).trim()
   const parentCategoryId = parentCategoryIdText || null
+  const color = String(formData.get('color') ?? '').trim()
+  const icon = String(formData.get('icon') ?? '').trim()
+  const excludeFromBudget = formData.get('exclude_from_budget') !== null
+  const excludeFromReports = formData.get('exclude_from_reports') !== null
+  const sortOrder = parseNullableInteger(formData.get('sort_order'))
 
   if (!name) {
     redirectWithError('Category name is required.')
@@ -219,6 +224,10 @@ export async function createCategoryAction(formData: FormData) {
     redirectWithError(
       'The reporting type is not compatible with the category type.'
     )
+  }
+
+  if (sortOrder === undefined) {
+    redirectWithError('Sort order must be a whole number.')
   }
 
   const { supabase, userId, householdId } = await getAuthenticatedHousehold()
@@ -249,8 +258,11 @@ export async function createCategoryAction(formData: FormData) {
     category_type: categoryType,
     reporting_type: reportingType,
     parent_category_id: parentCategoryId,
-    exclude_from_budget: false,
-    exclude_from_reports: false,
+    exclude_from_budget: excludeFromBudget,
+    exclude_from_reports: excludeFromReports,
+    color: color || null,
+    icon: icon || null,
+    sort_order: sortOrder,
     created_by: userId,
   })
 
@@ -260,7 +272,7 @@ export async function createCategoryAction(formData: FormData) {
     )
   }
 
-  revalidatePath('/dashboard/categories')
+  revalidateCategorySurfaces()
   redirect('/dashboard/categories?created=1')
 }
 
