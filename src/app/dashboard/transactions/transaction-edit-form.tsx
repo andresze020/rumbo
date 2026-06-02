@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import Link from 'next/link'
 import { updateManualTransactionAction } from './actions'
 import { CategoryPicker } from './category-picker'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -31,6 +31,7 @@ type TransactionEditFormProps = {
   accountId: string
   categoryId: string
   amount: number
+  cancelHref: string
   description: string
   notes: string
   status: string
@@ -56,6 +57,7 @@ export function TransactionEditForm({
   accountId,
   categoryId,
   amount,
+  cancelHref,
   description,
   notes,
   status,
@@ -63,23 +65,8 @@ export function TransactionEditForm({
   categories,
   returnTo,
 }: TransactionEditFormProps) {
-  const [isEditing, setIsEditing] = useState(false)
-
-  if (!isEditing) {
-    return (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => setIsEditing(true)}
-      >
-        Edit
-      </Button>
-    )
-  }
-
   return (
-    <form action={updateManualTransactionAction} className="space-y-3 rounded-lg border p-3 text-left">
+    <form action={updateManualTransactionAction} className="space-y-4">
       <input type="hidden" name="transaction_id" value={transactionId} />
       <input type="hidden" name="return_to" value={returnTo} />
       <input type="hidden" name="merchant_name" value="" />
@@ -168,14 +155,13 @@ export function TransactionEditForm({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit">Save changes</Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => setIsEditing(false)}
+        <Button type="submit">Save transaction</Button>
+        <Link
+          href={cancelHref}
+          className={buttonVariants({ variant: 'outline' })}
         >
           Cancel
-        </Button>
+        </Link>
       </div>
     </form>
   )
