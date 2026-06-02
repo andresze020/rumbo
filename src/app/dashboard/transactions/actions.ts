@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { cleanSupabaseActionError as cleanRpcError } from '@/lib/supabase/errors'
 
 const TRANSACTION_TYPES = ['income', 'expense'] as const
 const STATUSES = ['posted', 'pending'] as const
@@ -49,12 +50,6 @@ function parsePositiveNumber(value: FormDataEntryValue | null) {
   }
 
   return numberValue
-}
-
-function cleanRpcError(message: string | undefined, fallback: string) {
-  const cleaned = message?.replace(/^ERROR:\s*/i, '').trim()
-
-  return cleaned || fallback
 }
 
 export async function createManualTransactionAction(formData: FormData) {

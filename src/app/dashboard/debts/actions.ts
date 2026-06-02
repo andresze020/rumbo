@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { cleanSupabaseActionError as cleanRpcError } from '@/lib/supabase/errors'
 
 const DEBT_ACCOUNT_TYPES = ['debt', 'credit_card'] as const
 const INTEREST_RATE_PERIODS = ['monthly', 'annual'] as const
@@ -78,12 +79,6 @@ function parseNullableDueDay(value: FormDataEntryValue | null) {
   }
 
   return numberValue
-}
-
-function cleanRpcError(message: string | undefined, fallback: string) {
-  const cleaned = message?.replace(/^ERROR:\s*/i, '').trim()
-
-  return cleaned || fallback
 }
 
 async function getAuthenticatedHousehold() {

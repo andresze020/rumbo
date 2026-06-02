@@ -40,7 +40,7 @@ export async function createHouseholdAction(formData: FormData) {
   )
 
   if (profileError) {
-    throw new Error(profileError.message)
+    throw new Error('Could not prepare your profile. Please try again.')
   }
 
   const { data: household, error: householdError } = await supabase
@@ -54,7 +54,7 @@ export async function createHouseholdAction(formData: FormData) {
     .single()
 
   if (householdError) {
-    throw new Error(householdError.message)
+    throw new Error('Could not create your household. Please try again.')
   }
 
   const { error: memberError } = await supabase
@@ -68,7 +68,7 @@ export async function createHouseholdAction(formData: FormData) {
     })
 
   if (memberError) {
-    throw new Error(memberError.message)
+    throw new Error('Could not finish household setup. Please try again.')
   }
 
   const { error: defaultCategoriesError } = await supabase.rpc(
@@ -79,9 +79,7 @@ export async function createHouseholdAction(formData: FormData) {
   )
 
   if (defaultCategoriesError) {
-    throw new Error(
-      `Could not create default categories: ${defaultCategoriesError.message}`
-    )
+    throw new Error('Could not finish household setup. Please try again.')
   }
 
   const { error: updateProfileError } = await supabase
@@ -92,7 +90,7 @@ export async function createHouseholdAction(formData: FormData) {
     .eq('id', user.id)
 
   if (updateProfileError) {
-    throw new Error(updateProfileError.message)
+    throw new Error('Could not finish household setup. Please try again.')
   }
 
   redirect('/dashboard')
