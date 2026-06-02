@@ -2,7 +2,9 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
-import { buttonVariants } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Card,
   CardContent,
@@ -53,8 +55,19 @@ type MonthlyExpenseCategory = {
   transaction_count: number | string
 }
 
+type CategoryLookup = {
+  id: string
+  name: string
+  parent_category_id: string | null
+  is_archived: boolean
+}
+
 function currentMonthParam() {
-  return new Date().toISOString().slice(0, 7)
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+
+  return `${year}-${month}`
 }
 
 function parseDashboardMonth(month: string | undefined) {
@@ -96,6 +109,35 @@ function formatPercent(value: number | string | null) {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   }).format(Number(value))
+}
+
+function formatMonthLabel(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  const monthDate = new Date(year, monthNumber - 1, 1)
+
+  return new Intl.DateTimeFormat('en-CA', {
+    month: 'long',
+    year: 'numeric',
+  }).format(monthDate)
+}
+
+function getCategoryPath(
+  category: {
+    category_id: string
+    category_name: string
+    parent_category_id: string | null
+  },
+  categoriesById: Map<string, CategoryLookup>
+) {
+  const categoryRow = categoriesById.get(category.category_id)
+  const parentId = categoryRow?.parent_category_id ?? category.parent_category_id
+  const parentName = parentId ? categoriesById.get(parentId)?.name : null
+  const categoryName = categoryRow?.name ?? category.category_name
+
+  return {
+    name: parentName ? `${parentName} / ${categoryName}` : categoryName,
+    isArchived: categoryRow?.is_archived ?? false,
+  }
 }
 
 export default async function DashboardPage({
@@ -151,15 +193,31 @@ export default async function DashboardPage({
       p_month: selectedMonthDate,
     })
 
+  const { data: categoryLookupRows, error: categoryLookupError } =
+    await supabase
+      .from('categories')
+      .select('id, name, parent_category_id, is_archived')
+      .eq('household_id', household.id)
+      .is('deleted_at', null)
+
   const balances = (accountBalances ?? []) as AccountBalance[]
   const monthlySummary =
     ((monthlySummaryRows ?? [])[0] as MonthlyDashboardSummary | undefined) ??
     null
   const expenseCategories = (expenseCategoryRows ??
     []) as MonthlyExpenseCategory[]
+  const categoriesById = new Map(
+    ((categoryLookupRows ?? []) as CategoryLookup[]).map((category) => [
+      category.id,
+      category,
+    ])
+  )
   const dashboardCurrency =
     monthlySummary?.base_currency ?? household.base_currency
   const monthlyExpenses = Number(monthlySummary?.monthly_expenses ?? 0)
+  const hasMonthlyActivity =
+    Number(monthlySummary?.income_transaction_count ?? 0) > 0 ||
+    Number(monthlySummary?.expense_transaction_count ?? 0) > 0
   const includedBalances = balances.filter(
     (account) => account.include_in_net_worth
   )
@@ -244,6 +302,17 @@ export default async function DashboardPage({
       description: 'Savings divided by income',
     },
   ]
+  const largestExpenseCategory = expenseCategories.reduce(
+    (largest, category) =>
+      Number(category.amount_base_currency) >
+      Number(largest?.amount_base_currency ?? 0)
+        ? category
+        : largest,
+    null as MonthlyExpenseCategory | null
+  )
+  const largestExpenseAmount = Number(
+    largestExpenseCategory?.amount_base_currency ?? 0
+  )
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
@@ -253,24 +322,24 @@ export default async function DashboardPage({
           <h1 className="text-2xl font-semibold tracking-normal">
             Dashboard
           </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {formatMonthLabel(selectedMonth)}
+          </p>
         </div>
 
         <form action="/dashboard" className="flex items-end gap-2">
-          <label className="grid gap-1 text-sm">
-            <span className="text-muted-foreground">Month</span>
-            <input
+          <div className="grid gap-1">
+            <Label htmlFor="month">Month</Label>
+            <Input
+              id="month"
               type="month"
               name="month"
               defaultValue={selectedMonth}
-              className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
-          </label>
-          <button
-            type="submit"
-            className={buttonVariants({ variant: 'outline' })}
-          >
+          </div>
+          <Button type="submit" variant="outline">
             View
-          </button>
+          </Button>
         </form>
       </div>
 
@@ -283,6 +352,12 @@ export default async function DashboardPage({
       {monthlySummaryError || expenseCategoriesError ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           Could not load monthly dashboard metrics.
+        </div>
+      ) : null}
+
+      {categoryLookupError ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          Could not load category names.
         </div>
       ) : null}
 
@@ -302,6 +377,12 @@ export default async function DashboardPage({
             ))}
           </div>
 
+          {!hasMonthlyActivity ? (
+            <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+              No posted income or expense activity for this month.
+            </p>
+          ) : null}
+
           <Card>
             <CardHeader>
               <CardTitle>Expenses by category</CardTitle>
@@ -316,30 +397,52 @@ export default async function DashboardPage({
                     const amount = Number(category.amount_base_currency)
                     const percentOfExpenses =
                       monthlyExpenses > 0 ? amount / monthlyExpenses : null
+                    const barPercent =
+                      largestExpenseAmount > 0
+                        ? Math.round((amount / largestExpenseAmount) * 100)
+                        : 0
+                    const categoryPath = getCategoryPath(
+                      category,
+                      categoriesById
+                    )
 
                     return (
                       <div
                         key={category.category_id}
-                        className="grid gap-2 p-4 sm:grid-cols-[1fr_auto_auto]"
+                        className="grid gap-3 p-4 sm:grid-cols-[1fr_auto]"
                       >
-                        <div>
-                          <p className="font-medium">
-                            {category.category_name}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {Number(category.transaction_count)} transactions
-                          </p>
+                        <div className="min-w-0 space-y-2">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium">
+                                {categoryPath.name}
+                              </p>
+                              {categoryPath.isArchived ? (
+                                <Badge variant="outline">archived</Badge>
+                              ) : null}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {Number(category.transaction_count)} transactions
+                            </p>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-lg bg-muted">
+                            <div
+                              className="h-full rounded-lg bg-primary"
+                              style={{ width: `${barPercent}%` }}
+                            />
+                          </div>
                         </div>
 
-                        <p className="font-medium sm:text-right">
-                          {formatCurrency(amount, dashboardCurrency)}
-                        </p>
-
-                        <p className="text-sm text-muted-foreground sm:text-right">
-                          {percentOfExpenses === null
-                            ? 'N/A'
-                            : formatPercent(percentOfExpenses)}
-                        </p>
+                        <div className="space-y-1 sm:text-right">
+                          <p className="font-medium">
+                            {formatCurrency(amount, dashboardCurrency)}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {percentOfExpenses === null
+                              ? 'N/A'
+                              : formatPercent(percentOfExpenses)}
+                          </p>
+                        </div>
                       </div>
                     )
                   })}
