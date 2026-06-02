@@ -3,15 +3,10 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { cleanSupabaseActionError as cleanRpcError } from '@/lib/supabase/errors'
 
 function redirectWithError(message: string): never {
   redirect(`/dashboard/transactions/import?error=${encodeURIComponent(message)}`)
-}
-
-function cleanRpcError(message: string | undefined, fallback: string) {
-  const cleaned = message?.replace(/^ERROR:\s*/i, '').trim()
-
-  return cleaned || fallback
 }
 
 async function getAuthenticatedHousehold() {

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { cleanSupabaseActionError as cleanRpcError } from '@/lib/supabase/errors'
 
 function normalizeMonth(value: FormDataEntryValue | null) {
   const month = String(value ?? '').trim()
@@ -38,12 +39,6 @@ function redirectWithError(message: string, month: string | null): never {
   const safeMonth = month ?? new Date().toISOString().slice(0, 7)
 
   redirect(budgetPath(safeMonth, { error: message }))
-}
-
-function cleanRpcError(message: string | undefined, fallback: string) {
-  const cleaned = message?.replace(/^ERROR:\s*/i, '').trim()
-
-  return cleaned || fallback
 }
 
 async function getAuthenticatedHousehold() {

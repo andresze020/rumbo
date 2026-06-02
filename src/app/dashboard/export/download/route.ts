@@ -132,7 +132,7 @@ async function fetchAllRows<T>(
     const { data, error } = await makeQuery(from, to)
 
     if (error) {
-      throw new Error(error.message ?? 'Could not load export data.')
+      throw new Error('Could not load export data.')
     }
 
     const page = data ?? []

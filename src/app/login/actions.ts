@@ -19,7 +19,7 @@ export async function signInAction(formData: FormData) {
   })
 
   if (error) {
-    throw new Error(error.message)
+    throw new Error('Could not sign in with those credentials.')
   }
 
   redirect('/dashboard')
@@ -47,7 +47,7 @@ export async function signUpAction(formData: FormData) {
   })
 
   if (error) {
-    throw new Error(error.message)
+    throw new Error('Could not create the account. Please try again.')
   }
 
   redirect('/onboarding')
