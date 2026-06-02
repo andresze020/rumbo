@@ -434,11 +434,20 @@ export default async function TransactionsPage({
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
-      <div>
-        <p className="text-sm text-muted-foreground">{household.name}</p>
-        <h1 className="text-2xl font-semibold tracking-normal">
-          Transactions
-        </h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">{household.name}</p>
+          <h1 className="text-2xl font-semibold tracking-normal">
+            Transactions
+          </h1>
+        </div>
+
+        <Link
+          href="/dashboard/transactions/import"
+          className="inline-flex h-8 items-center justify-center rounded-lg border border-border px-2.5 text-sm font-medium transition-colors hover:bg-muted"
+        >
+          Import CSV
+        </Link>
       </div>
 
       {errorMessage ? (
