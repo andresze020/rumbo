@@ -1,8 +1,9 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
 import { updateTransferTransactionAction } from './actions'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -20,6 +21,7 @@ type TransferEditFormProps = {
   fromAccountId: string
   toAccountId: string
   amount: number
+  cancelHref: string
   description: string
   notes: string
   status: string
@@ -43,13 +45,13 @@ export function TransferEditForm({
   fromAccountId,
   toAccountId,
   amount,
+  cancelHref,
   description,
   notes,
   status,
   accounts,
   returnTo,
 }: TransferEditFormProps) {
-  const [isEditing, setIsEditing] = useState(false)
   const [selectedFromAccountId, setSelectedFromAccountId] =
     useState(fromAccountId)
   const [selectedToAccountId, setSelectedToAccountId] = useState(toAccountId)
@@ -69,21 +71,8 @@ export function TransferEditForm({
       !isCrossCurrencyTransfer
   )
 
-  if (!isEditing) {
-    return (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => setIsEditing(true)}
-      >
-        Edit transfer
-      </Button>
-    )
-  }
-
   return (
-    <form action={updateTransferTransactionAction} className="space-y-3 rounded-lg border p-3 text-left">
+    <form action={updateTransferTransactionAction} className="space-y-4">
       <input type="hidden" name="transaction_id" value={transactionId} />
       <input type="hidden" name="return_to" value={returnTo} />
 
@@ -224,13 +213,12 @@ export function TransferEditForm({
         <Button type="submit" disabled={!canSubmit}>
           Save transfer
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => setIsEditing(false)}
+        <Link
+          href={cancelHref}
+          className={buttonVariants({ variant: 'outline' })}
         >
           Cancel
-        </Button>
+        </Link>
       </div>
     </form>
   )

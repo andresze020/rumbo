@@ -1,12 +1,13 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import {
   createManualTransactionAction,
   createTransferTransactionAction,
 } from './actions'
 import { CategoryPicker } from './category-picker'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -30,6 +31,7 @@ export type TransactionFormCategory = {
 
 type TransactionFormProps = {
   accounts: TransactionFormAccount[]
+  cancelHref: string
   categories: TransactionFormCategory[]
   defaultDate: string
 }
@@ -46,6 +48,7 @@ function formatAccountLabel(account: TransactionFormAccount) {
 
 export function TransactionForm({
   accounts,
+  cancelHref,
   categories,
   defaultDate,
 }: TransactionFormProps) {
@@ -288,9 +291,17 @@ export function TransactionForm({
         </div>
       ) : null}
 
-      <Button type="submit" className="w-full" disabled={!canSubmit}>
-        {isTransfer ? 'Create transfer' : 'Create transaction'}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={!canSubmit}>
+          {isTransfer ? 'Create transfer' : 'Create transaction'}
+        </Button>
+        <Link
+          href={cancelHref}
+          className={buttonVariants({ variant: 'outline' })}
+        >
+          Cancel
+        </Link>
+      </div>
     </form>
   )
 }

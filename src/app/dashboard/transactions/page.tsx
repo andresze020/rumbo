@@ -9,6 +9,7 @@ import { TransactionEditForm } from './transaction-edit-form'
 import { TransferEditForm } from './transfer-edit-form'
 import { VoidTransactionForm } from './void-transaction-form'
 import { Badge } from '@/components/ui/badge'
+import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -16,7 +17,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
@@ -34,6 +34,8 @@ type TransactionsPageProps = {
     account_id?: string
     category_id?: string
     search?: string
+    mode?: string
+    edit?: string
   }>
 }
 
@@ -62,6 +64,7 @@ type Transaction = {
   description: string | null
   notes: string | null
   source: string
+  void_reason: string | null
 }
 
 type TransactionEntry = {
@@ -85,6 +88,40 @@ type CategoryLookup = {
   id: string
   name: string
   parent_category_id: string | null
+}
+
+type TransactionFilters = {
+  accountId: string
+  categoryId: string
+  month: string
+  search: string
+  status: string
+  type: string
+}
+
+type TransactionRow = {
+  accountName: string
+  allocation?: TransactionAllocation
+  amountEntry?: TransactionEntry
+  canEdit: boolean
+  canEditTransfer: boolean
+  canVoid: boolean
+  categoryName: string
+  displayAmount?: number | string
+  entry?: TransactionEntry
+  entries: TransactionEntry[]
+  isBalanceMovement: boolean
+  isDebtPayment: boolean
+  isImported: boolean
+  isOpeningBalance: boolean
+  isTransfer: boolean
+  isVoided: boolean
+  title: string
+  transaction: Transaction
+  transferFromAccountName: string
+  transferInEntry?: TransactionEntry
+  transferOutEntry?: TransactionEntry
+  transferToAccountName: string
 }
 
 function todayIsoDate() {
@@ -115,7 +152,9 @@ function normalizeOption(value: string | undefined, allowedValues: string[]) {
 }
 
 function formatValue(value: string) {
-  return value.replaceAll('_', ' ')
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
 function formatCurrency(value: number | string, currencyCode: string) {
@@ -147,43 +186,47 @@ function getAccountLabel(account: Account) {
     .join(' · ')
 }
 
-function buildReturnTo({
-  month,
-  type,
-  status,
-  accountId,
-  categoryId,
-  search,
-}: {
-  month: string
-  type: string
-  status: string
-  accountId: string
-  categoryId: string
-  search: string
-}) {
+function getSourceLabel(source: string) {
+  return source === 'csv_import' ? 'CSV import' : formatValue(source)
+}
+
+function transactionsPath(
+  filters: TransactionFilters,
+  panel?: {
+    edit?: string
+    mode?: 'create'
+  }
+) {
   const params = new URLSearchParams()
 
-  params.set('month', month)
+  params.set('month', filters.month)
 
-  if (type !== 'all') {
-    params.set('type', type)
+  if (filters.type !== 'all') {
+    params.set('type', filters.type)
   }
 
-  if (status !== 'all') {
-    params.set('status', status)
+  if (filters.status !== 'all') {
+    params.set('status', filters.status)
   }
 
-  if (accountId !== 'all') {
-    params.set('account_id', accountId)
+  if (filters.accountId !== 'all') {
+    params.set('account_id', filters.accountId)
   }
 
-  if (categoryId !== 'all') {
-    params.set('category_id', categoryId)
+  if (filters.categoryId !== 'all') {
+    params.set('category_id', filters.categoryId)
   }
 
-  if (search) {
-    params.set('search', search)
+  if (filters.search) {
+    params.set('search', filters.search)
+  }
+
+  if (panel?.mode) {
+    params.set('mode', panel.mode)
+  }
+
+  if (panel?.edit) {
+    params.set('edit', panel.edit)
   }
 
   return `/dashboard/transactions?${params.toString()}`
@@ -216,6 +259,14 @@ export default async function TransactionsPage({
   const selectedCategoryId =
     typeof params.category_id === 'string' ? params.category_id : 'all'
   const searchText = typeof params.search === 'string' ? params.search.trim() : ''
+  const filters: TransactionFilters = {
+    accountId: selectedAccountId,
+    categoryId: selectedCategoryId,
+    month: selectedMonth,
+    search: searchText,
+    status: selectedStatus,
+    type: selectedType,
+  }
   const hasActiveFilters =
     params.month !== undefined ||
     selectedType !== 'all' ||
@@ -223,15 +274,11 @@ export default async function TransactionsPage({
     selectedAccountId !== 'all' ||
     selectedCategoryId !== 'all' ||
     searchText.length > 0
+  const isCreating = params.mode === 'create'
+  const editTransactionId =
+    typeof params.edit === 'string' && !isCreating ? params.edit : null
   const monthRange = getMonthRange(selectedMonth)
-  const returnTo = buildReturnTo({
-    month: selectedMonth,
-    type: selectedType,
-    status: selectedStatus,
-    accountId: selectedAccountId,
-    categoryId: selectedCategoryId,
-    search: searchText,
-  })
+  const returnTo = transactionsPath(filters)
   const supabase = await createClient()
 
   const {
@@ -275,7 +322,9 @@ export default async function TransactionsPage({
 
   const { data: categories, error: categoriesError } = await supabase
     .from('categories')
-    .select('id, name, category_type, reporting_type, parent_category_id, is_archived')
+    .select(
+      'id, name, category_type, reporting_type, parent_category_id, is_archived'
+    )
     .eq('household_id', household.id)
     .is('deleted_at', null)
     .order('parent_category_id', { ascending: true, nullsFirst: true })
@@ -287,7 +336,9 @@ export default async function TransactionsPage({
 
   let transactionsQuery = supabase
     .from('transactions')
-    .select('id, transaction_date, transaction_type, status, description, notes, source')
+    .select(
+      'id, transaction_date, transaction_type, status, description, notes, source, void_reason'
+    )
     .eq('household_id', household.id)
     .gte('transaction_date', monthRange.start)
     .lt('transaction_date', monthRange.end)
@@ -304,7 +355,9 @@ export default async function TransactionsPage({
   }
 
   if (searchText) {
-    const escapedSearchText = searchText.replaceAll('%', '\\%').replaceAll('_', '\\_')
+    const escapedSearchText = searchText
+      .replaceAll('%', '\\%')
+      .replaceAll('_', '\\_')
 
     transactionsQuery = transactionsQuery.or(
       `description.ilike.%${escapedSearchText}%,notes.ilike.%${escapedSearchText}%`
@@ -318,7 +371,9 @@ export default async function TransactionsPage({
     throw new Error('Could not load transactions.')
   }
 
-  const transactionIds = (transactions ?? []).map((transaction) => transaction.id)
+  const transactionIds = (transactions ?? []).map(
+    (transaction) => transaction.id
+  )
 
   let transactionEntries: TransactionEntry[] = []
   let transactionAllocations: TransactionAllocation[] = []
@@ -390,15 +445,19 @@ export default async function TransactionsPage({
       entriesByTransactionId.set(entry.transaction_id, [entry])
     }
   }
+
   const allocationsByTransactionId = new Map(
     transactionAllocations.map((allocation) => [
       allocation.transaction_id,
       allocation,
     ])
   )
-  const accountNamesById = new Map(
-    accountLookupRows.map((account) => [account.id, account.name])
-  )
+  const allAccounts = (accounts ?? []) as Account[]
+  const allCategories = (categories ?? []) as Category[]
+  const accountNamesById = new Map([
+    ...allAccounts.map((account) => [account.id, account.name] as const),
+    ...accountLookupRows.map((account) => [account.id, account.name] as const),
+  ])
   const categoryLookupRowsById = new Map(
     categoryLookupRows.map((category) => [category.id, category])
   )
@@ -408,11 +467,15 @@ export default async function TransactionsPage({
       getCategoryPath(category, categoryLookupRowsById),
     ])
   )
-
-  const allAccounts = (accounts ?? []) as Account[]
-  const allCategories = (categories ?? []) as Category[]
   const categoryOptionsById = new Map(
     allCategories.map((category) => [category.id, category])
+  )
+  const activeAccounts = allAccounts.filter((account) => !account.is_archived)
+  const activeCategories = allCategories.filter(
+    (category) =>
+      !category.is_archived &&
+      (category.category_type === 'income' ||
+        category.category_type === 'expense')
   )
   const filteredTransactions = ((transactions ?? []) as Transaction[]).filter(
     (transaction) => {
@@ -429,33 +492,175 @@ export default async function TransactionsPage({
     }
   )
 
-  const activeAccounts = allAccounts.filter((account) => !account.is_archived)
-  const activeCategories = allCategories.filter(
-    (category) =>
-      !category.is_archived &&
-      (category.category_type === 'income' || category.category_type === 'expense')
+  function buildTransactionRow(transaction: Transaction): TransactionRow {
+    const isOpeningBalance =
+      transaction.transaction_type === 'opening_balance'
+    const isTransfer = transaction.transaction_type === 'transfer'
+    const isDebtPayment = transaction.transaction_type === 'debt_payment'
+    const isBalanceMovement = isTransfer || isDebtPayment
+    const isVoided = transaction.status === 'voided'
+    const entries = entriesByTransactionId.get(transaction.id) ?? []
+    const entry = entries[0]
+    const transferOutEntry =
+      entries.find(
+        (transactionEntry) =>
+          Number(transactionEntry.amount_account_currency) < 0
+      ) ?? entry
+    const transferInEntry =
+      entries.find(
+        (transactionEntry) =>
+          Number(transactionEntry.amount_account_currency) > 0
+      ) ??
+      entries.find(
+        (transactionEntry) => transactionEntry !== transferOutEntry
+      )
+    const allocation = allocationsByTransactionId.get(transaction.id)
+    const canEdit =
+      transaction.source === 'manual' &&
+      (transaction.transaction_type === 'income' ||
+        transaction.transaction_type === 'expense') &&
+      (transaction.status === 'posted' || transaction.status === 'pending') &&
+      Boolean(entry && allocation)
+    const canEditTransfer =
+      transaction.source === 'manual' &&
+      transaction.transaction_type === 'transfer' &&
+      (transaction.status === 'posted' || transaction.status === 'pending') &&
+      Boolean(
+        transferOutEntry &&
+          transferInEntry &&
+          activeAccounts.some(
+            (account) => account.id === transferOutEntry.account_id
+          ) &&
+          activeAccounts.some(
+            (account) => account.id === transferInEntry.account_id
+          )
+      )
+    const transferFromAccountName = transferOutEntry
+      ? accountNamesById.get(transferOutEntry.account_id) ?? 'Unknown account'
+      : 'Unknown account'
+    const transferToAccountName = transferInEntry
+      ? accountNamesById.get(transferInEntry.account_id) ?? 'Unknown account'
+      : 'Unknown account'
+    const title = isOpeningBalance
+      ? 'Opening balance'
+      : isTransfer
+        ? `Transfer: ${transferFromAccountName} -> ${transferToAccountName}`
+        : isDebtPayment
+          ? transaction.description ||
+            `Debt payment: ${transferFromAccountName} -> ${transferToAccountName}`
+          : transaction.description || 'Transaction'
+    const accountName = isBalanceMovement
+      ? `${transferFromAccountName} -> ${transferToAccountName}`
+      : entry
+        ? accountNamesById.get(entry.account_id) ?? 'Unknown account'
+        : 'Unknown account'
+    const categoryName = isTransfer
+      ? 'Transfer'
+      : isOpeningBalance
+        ? 'Opening balance'
+        : isDebtPayment
+          ? 'Debt principal'
+          : allocation
+            ? categoryNamesById.get(allocation.category_id) ??
+              'Unknown category'
+            : 'Not categorized'
+    const amountEntry = isBalanceMovement
+      ? transferInEntry ?? transferOutEntry
+      : entry
+    const displayAmount =
+      isBalanceMovement && amountEntry
+        ? Math.abs(Number(amountEntry.amount_account_currency))
+        : amountEntry?.amount_account_currency
+
+    return {
+      accountName,
+      allocation,
+      amountEntry,
+      canEdit,
+      canEditTransfer,
+      canVoid: !['voided', 'deleted_soft'].includes(transaction.status),
+      categoryName,
+      displayAmount,
+      entry,
+      entries,
+      isBalanceMovement,
+      isDebtPayment,
+      isImported: transaction.source === 'csv_import',
+      isOpeningBalance,
+      isTransfer,
+      isVoided,
+      title,
+      transaction,
+      transferFromAccountName,
+      transferInEntry,
+      transferOutEntry,
+      transferToAccountName,
+    }
+  }
+
+  const transactionRows = filteredTransactions.map(buildTransactionRow)
+  const selectedEditRow = transactionRows.find(
+    (row) => row.transaction.id === editTransactionId
   )
-  const recentTransactions = filteredTransactions
+  const visibleCount = transactionRows.length
+  const pendingCount = transactionRows.filter(
+    (row) => row.transaction.status === 'pending'
+  ).length
+  const voidedCount = transactionRows.filter((row) => row.isVoided).length
+  const importedCount = transactionRows.filter((row) => row.isImported).length
   const canCreateTransaction =
     activeAccounts.length > 0 &&
     (activeCategories.length > 0 || activeAccounts.length >= 2)
+  const summaryCards = [
+    {
+      label: 'Visible',
+      value: String(visibleCount),
+      description: selectedMonth,
+    },
+    {
+      label: 'Pending',
+      value: String(pendingCount),
+      description: 'Awaiting posting',
+    },
+    {
+      label: 'Voided',
+      value: String(voidedCount),
+      description: 'Excluded by existing rules',
+    },
+    {
+      label: 'Imported',
+      value: String(importedCount),
+      description: 'CSV source',
+    },
+  ]
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{household.name}</p>
           <h1 className="text-2xl font-semibold tracking-normal">
             Transactions
           </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Review and manage household transactions.
+          </p>
         </div>
 
-        <Link
-          href="/dashboard/transactions/import"
-          className="inline-flex h-8 items-center justify-center rounded-lg border border-border px-2.5 text-sm font-medium transition-colors hover:bg-muted"
-        >
-          Import CSV
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={transactionsPath(filters, { mode: 'create' })}
+            className={buttonVariants()}
+          >
+            Add transaction
+          </Link>
+          <Link
+            href="/dashboard/transactions/import"
+            className={buttonVariants({ variant: 'outline' })}
+          >
+            Import CSV
+          </Link>
+        </div>
       </div>
 
       {errorMessage ? (
@@ -486,8 +691,7 @@ export default async function TransactionsPage({
         <CardHeader>
           <CardTitle>Filters</CardTitle>
           <CardDescription>
-            Narrow the transaction list by month, type, status, account,
-            category, or text.
+            Narrow the list without leaving the transactions workflow.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -568,7 +772,7 @@ export default async function TransactionsPage({
                 {allCategories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {getCategoryPath(category, categoryOptionsById)}
-                    {category.is_archived ? ' · archived' : ''}
+                    {category.is_archived ? ' - archived' : ''}
                   </option>
                 ))}
               </select>
@@ -588,7 +792,7 @@ export default async function TransactionsPage({
               <Button type="submit">Apply filters</Button>
               <Link
                 href="/dashboard/transactions"
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-border px-2.5 text-sm font-medium transition-colors hover:bg-muted"
+                className={buttonVariants({ variant: 'outline' })}
               >
                 Clear filters
               </Link>
@@ -597,255 +801,24 @@ export default async function TransactionsPage({
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {summaryCards.map((card) => (
+          <Card key={card.label}>
+            <CardHeader>
+              <CardTitle>{card.label}</CardTitle>
+              <CardDescription>{card.description}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xl font-semibold">{card.value}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {isCreating ? (
         <Card>
           <CardHeader>
-            <CardTitle>Recent transactions</CardTitle>
-            <CardDescription>
-              Latest manual household activity.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {transactionDetailsError ? (
-              <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-                Could not load transaction details.
-              </p>
-            ) : recentTransactions.length ? (
-              <div className="divide-y rounded-lg border">
-                {recentTransactions.map((transaction) => {
-                  const isOpeningBalance =
-                    transaction.transaction_type === 'opening_balance'
-                  const isTransfer =
-                    transaction.transaction_type === 'transfer'
-                  const isDebtPayment =
-                    transaction.transaction_type === 'debt_payment'
-                  const isBalanceMovement = isTransfer || isDebtPayment
-                  const isVoided = transaction.status === 'voided'
-                  const canVoid = !['voided', 'deleted_soft'].includes(
-                    transaction.status
-                  )
-                  const entries = entriesByTransactionId.get(transaction.id) ?? []
-                  const entry = entries[0]
-                  const transferOutEntry =
-                    entries.find(
-                      (transactionEntry) =>
-                        Number(transactionEntry.amount_account_currency) < 0
-                    ) ?? entry
-                  const transferInEntry =
-                    entries.find(
-                      (transactionEntry) =>
-                        Number(transactionEntry.amount_account_currency) > 0
-                    ) ??
-                    entries.find(
-                      (transactionEntry) =>
-                        transactionEntry !== transferOutEntry
-                    )
-                  const allocation = allocationsByTransactionId.get(
-                    transaction.id
-                  )
-                  const canEdit =
-                    transaction.source === 'manual' &&
-                    (transaction.transaction_type === 'income' ||
-                      transaction.transaction_type === 'expense') &&
-                    (transaction.status === 'posted' ||
-                      transaction.status === 'pending') &&
-                    Boolean(entry && allocation)
-                  const canEditTransfer =
-                    transaction.source === 'manual' &&
-                    transaction.transaction_type === 'transfer' &&
-                    (transaction.status === 'posted' ||
-                      transaction.status === 'pending') &&
-                    Boolean(
-                      transferOutEntry &&
-                        transferInEntry &&
-                        activeAccounts.some(
-                          (account) =>
-                            account.id === transferOutEntry.account_id
-                        ) &&
-                        activeAccounts.some(
-                          (account) =>
-                            account.id === transferInEntry.account_id
-                        )
-                    )
-                  const transferFromAccountName = transferOutEntry
-                    ? accountNamesById.get(transferOutEntry.account_id) ??
-                      'Unknown account'
-                    : 'Unknown account'
-                  const transferToAccountName = transferInEntry
-                    ? accountNamesById.get(transferInEntry.account_id) ??
-                      'Unknown account'
-                    : 'Unknown account'
-                  const transactionLabel = isOpeningBalance
-                    ? 'Opening balance'
-                    : isTransfer
-                      ? `Transfer: ${transferFromAccountName} -> ${transferToAccountName}`
-                      : isDebtPayment
-                        ? transaction.description ||
-                          `Debt payment: ${transferFromAccountName} -> ${transferToAccountName}`
-                        : transaction.description || 'Transaction'
-                  const accountName = isBalanceMovement
-                    ? `${transferFromAccountName} -> ${transferToAccountName}`
-                    : entry
-                      ? accountNamesById.get(entry.account_id) ??
-                        'Unknown account'
-                      : 'Unknown account'
-                  const categoryName = isTransfer
-                    ? 'Transfer'
-                    : isOpeningBalance
-                      ? 'Not categorized'
-                      : isDebtPayment
-                        ? 'Debt principal'
-                        : allocation
-                          ? categoryNamesById.get(allocation.category_id) ??
-                            'Unknown category'
-                          : 'Unknown category'
-                  const amountEntry = isBalanceMovement
-                    ? transferInEntry ?? transferOutEntry
-                    : entry
-                  const displayAmount =
-                    isBalanceMovement && amountEntry
-                      ? Math.abs(Number(amountEntry.amount_account_currency))
-                      : amountEntry?.amount_account_currency
-
-                  return (
-                    <div
-                      key={transaction.id}
-                      className={`space-y-3 p-4 ${isVoided ? 'bg-muted/30 text-muted-foreground' : ''}`}
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="font-medium">{transactionLabel}</h2>
-                            <Badge variant="secondary">
-                              {isOpeningBalance
-                                ? 'Opening balance'
-                                : isTransfer
-                                  ? 'Transfer'
-                                  : isDebtPayment
-                                    ? 'Debt payment'
-                                    : formatValue(transaction.transaction_type)}
-                            </Badge>
-                            <Badge variant="outline">
-                              {formatValue(transaction.status)}
-                            </Badge>
-                          </div>
-
-                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                            <span>{transaction.transaction_date}</span>
-                            <span>{formatValue(transaction.source)}</span>
-                          </div>
-                        </div>
-
-                        <div className="space-y-3 sm:min-w-32 sm:text-right">
-                          {amountEntry && displayAmount !== undefined ? (
-                            <p className="font-medium">
-                              {formatCurrency(
-                                displayAmount,
-                                amountEntry.currency_code
-                              )}
-                            </p>
-                          ) : null}
-
-                          {canVoid ? (
-                            <VoidTransactionForm
-                              transactionId={transaction.id}
-                            />
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="grid gap-3 text-sm sm:grid-cols-3">
-                        <div className="rounded-lg bg-muted/40 p-3">
-                          <p className="text-xs text-muted-foreground">
-                            Account
-                          </p>
-                          <p className="mt-1 font-medium">{accountName}</p>
-                        </div>
-
-                        <div className="rounded-lg bg-muted/40 p-3">
-                          <p className="text-xs text-muted-foreground">
-                            Category
-                          </p>
-                          <p className="mt-1 font-medium">{categoryName}</p>
-                        </div>
-
-                        <div className="rounded-lg bg-muted/40 p-3">
-                          <p className="text-xs text-muted-foreground">
-                            Currency
-                          </p>
-                          <p className="mt-1 font-medium">
-                            {amountEntry?.currency_code ?? 'Unknown'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {canEdit && entry && allocation ? (
-                        <TransactionEditForm
-                          transactionId={transaction.id}
-                          transactionType={
-                            transaction.transaction_type as 'income' | 'expense'
-                          }
-                          transactionDate={transaction.transaction_date}
-                          accountId={entry.account_id}
-                          categoryId={allocation.category_id}
-                          amount={Math.abs(
-                            Number(entry.amount_account_currency)
-                          )}
-                          description={transaction.description ?? ''}
-                          notes={transaction.notes ?? ''}
-                          status={transaction.status}
-                          accounts={activeAccounts}
-                          categories={activeCategories}
-                          returnTo={returnTo}
-                        />
-                      ) : null}
-
-                      {canEditTransfer &&
-                      transferOutEntry &&
-                      transferInEntry ? (
-                        <TransferEditForm
-                          transactionId={transaction.id}
-                          transactionDate={transaction.transaction_date}
-                          fromAccountId={transferOutEntry.account_id}
-                          toAccountId={transferInEntry.account_id}
-                          amount={Math.abs(
-                            Number(transferInEntry.amount_account_currency)
-                          )}
-                          description={transaction.description ?? ''}
-                          notes={transaction.notes ?? ''}
-                          status={transaction.status}
-                          accounts={activeAccounts}
-                          returnTo={returnTo}
-                        />
-                      ) : null}
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <EmptyState
-                title={
-                  hasActiveFilters
-                    ? 'No transactions match these filters'
-                    : 'No transactions yet'
-                }
-                description={
-                  hasActiveFilters
-                    ? 'Clear filters or choose another month to see more household activity.'
-                    : 'Create your first income, expense, or transfer transaction once accounts and categories are ready.'
-                }
-                actionHref={
-                  hasActiveFilters ? '/dashboard/transactions' : undefined
-                }
-                actionLabel={hasActiveFilters ? 'Clear filters' : undefined}
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Create transaction</CardTitle>
+            <CardTitle>Add transaction</CardTitle>
             <CardDescription>
               Add a manual income, expense, or transfer transaction.
             </CardDescription>
@@ -866,13 +839,225 @@ export default async function TransactionsPage({
             {canCreateTransaction ? (
               <TransactionForm
                 accounts={activeAccounts as TransactionFormAccount[]}
+                cancelHref={returnTo}
                 categories={activeCategories as TransactionFormCategory[]}
                 defaultDate={todayIsoDate()}
               />
             ) : null}
           </CardContent>
         </Card>
-      </div>
+      ) : null}
+
+      {selectedEditRow ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {selectedEditRow.canEditTransfer
+                ? 'Edit transfer'
+                : 'Edit transaction'}
+            </CardTitle>
+            <CardDescription>
+              Update {selectedEditRow.title}. Existing safe edit rules still
+              apply.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {selectedEditRow.canEdit &&
+            selectedEditRow.entry &&
+            selectedEditRow.allocation ? (
+              <TransactionEditForm
+                transactionId={selectedEditRow.transaction.id}
+                transactionType={
+                  selectedEditRow.transaction.transaction_type as
+                    | 'income'
+                    | 'expense'
+                }
+                transactionDate={selectedEditRow.transaction.transaction_date}
+                accountId={selectedEditRow.entry.account_id}
+                categoryId={selectedEditRow.allocation.category_id}
+                amount={Math.abs(
+                  Number(selectedEditRow.entry.amount_account_currency)
+                )}
+                cancelHref={returnTo}
+                description={selectedEditRow.transaction.description ?? ''}
+                notes={selectedEditRow.transaction.notes ?? ''}
+                status={selectedEditRow.transaction.status}
+                accounts={activeAccounts}
+                categories={activeCategories}
+                returnTo={returnTo}
+              />
+            ) : null}
+
+            {selectedEditRow.canEditTransfer &&
+            selectedEditRow.transferOutEntry &&
+            selectedEditRow.transferInEntry ? (
+              <TransferEditForm
+                transactionId={selectedEditRow.transaction.id}
+                transactionDate={selectedEditRow.transaction.transaction_date}
+                fromAccountId={selectedEditRow.transferOutEntry.account_id}
+                toAccountId={selectedEditRow.transferInEntry.account_id}
+                amount={Math.abs(
+                  Number(
+                    selectedEditRow.transferInEntry.amount_account_currency
+                  )
+                )}
+                cancelHref={returnTo}
+                description={selectedEditRow.transaction.description ?? ''}
+                notes={selectedEditRow.transaction.notes ?? ''}
+                status={selectedEditRow.transaction.status}
+                accounts={activeAccounts}
+                returnTo={returnTo}
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>Transaction list</CardTitle>
+              <CardDescription>
+                Manual, imported, transfer, debt, and opening-balance activity.
+              </CardDescription>
+            </div>
+
+            <Link
+              href={transactionsPath(filters, { mode: 'create' })}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Add transaction
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {transactionDetailsError ? (
+            <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+              Could not load transaction details.
+            </p>
+          ) : transactionRows.length ? (
+            <div className="divide-y rounded-lg border">
+              {transactionRows.map((row) => (
+                <div
+                  key={row.transaction.id}
+                  className={`space-y-4 p-4 ${
+                    row.isVoided ? 'bg-muted/30 text-muted-foreground' : ''
+                  }`}
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-medium">{row.title}</h2>
+                        <Badge variant="secondary">
+                          {row.isOpeningBalance
+                            ? 'Opening balance'
+                            : row.isTransfer
+                              ? 'Transfer'
+                              : row.isDebtPayment
+                                ? 'Debt payment'
+                                : formatValue(row.transaction.transaction_type)}
+                        </Badge>
+                        <Badge variant="outline">
+                          {formatValue(row.transaction.status)}
+                        </Badge>
+                        {row.isImported ? (
+                          <Badge variant="outline">Imported</Badge>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                        <span>{row.transaction.transaction_date}</span>
+                        <span>{getSourceLabel(row.transaction.source)}</span>
+                        {row.transaction.void_reason ? (
+                          <span>Void reason: {row.transaction.void_reason}</span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 lg:min-w-40 lg:text-right">
+                      {row.amountEntry && row.displayAmount !== undefined ? (
+                        <p className="text-lg font-semibold">
+                          {formatCurrency(
+                            row.displayAmount,
+                            row.amountEntry.currency_code
+                          )}
+                        </p>
+                      ) : null}
+
+                      <div className="flex flex-wrap gap-2 lg:justify-end">
+                        {row.canEdit || row.canEditTransfer ? (
+                          <Link
+                            href={transactionsPath(filters, {
+                              edit: row.transaction.id,
+                            })}
+                            className={buttonVariants({
+                              variant: 'outline',
+                              size: 'sm',
+                            })}
+                          >
+                            Edit
+                          </Link>
+                        ) : null}
+
+                        {row.canVoid ? (
+                          <VoidTransactionForm
+                            transactionId={row.transaction.id}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 text-sm sm:grid-cols-3">
+                    <div className="rounded-lg bg-muted/40 p-3">
+                      <p className="text-xs text-muted-foreground">Account</p>
+                      <p className="mt-1 font-medium">{row.accountName}</p>
+                    </div>
+
+                    <div className="rounded-lg bg-muted/40 p-3">
+                      <p className="text-xs text-muted-foreground">Category</p>
+                      <p className="mt-1 font-medium">{row.categoryName}</p>
+                    </div>
+
+                    <div className="rounded-lg bg-muted/40 p-3">
+                      <p className="text-xs text-muted-foreground">Currency</p>
+                      <p className="mt-1 font-medium">
+                        {row.amountEntry?.currency_code ?? 'Unknown'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {row.transaction.notes ? (
+                    <p className="text-sm text-muted-foreground">
+                      {row.transaction.notes}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title={
+                hasActiveFilters
+                  ? 'No transactions found for these filters'
+                  : 'No transactions yet'
+              }
+              description={
+                hasActiveFilters
+                  ? 'Clear filters or choose another month to see more household activity.'
+                  : 'Add a transaction or import a CSV once accounts and categories are ready.'
+              }
+              actionHref={
+                hasActiveFilters
+                  ? '/dashboard/transactions'
+                  : transactionsPath(filters, { mode: 'create' })
+              }
+              actionLabel={hasActiveFilters ? 'Clear filters' : 'Add transaction'}
+            />
+          )}
+        </CardContent>
+      </Card>
     </main>
   )
 }
