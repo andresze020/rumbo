@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { EmptyState } from '@/components/empty-state'
 
 type CategoriesPageProps = {
   searchParams: Promise<{
@@ -186,7 +187,7 @@ export default async function CategoriesPage({
   )
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <div>
         <p className="text-sm text-muted-foreground">{household.name}</p>
         <h1 className="text-2xl font-semibold tracking-normal">Categories</h1>
@@ -536,11 +537,20 @@ export default async function CategoriesPage({
                 ))}
               </div>
             ) : (
-              <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                {showArchived
-                  ? 'No archived categories yet.'
-                  : 'No active categories yet.'}
-              </p>
+              <EmptyState
+                title={
+                  showArchived
+                    ? 'No archived categories yet'
+                    : 'No active categories yet'
+                }
+                description={
+                  showArchived
+                    ? 'Archived categories will appear here after you archive one.'
+                    : 'Create an income or expense category so transactions, budgets, and reports have somewhere to land.'
+                }
+                actionHref={showArchived ? '/dashboard/categories' : undefined}
+                actionLabel={showArchived ? 'Show active categories' : undefined}
+              />
             )}
           </CardContent>
         </Card>

@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { EmptyState } from '@/components/empty-state'
 import { createClient } from '@/lib/supabase/server'
 
 type NetWorthPageProps = {
@@ -174,11 +175,7 @@ function AccountList({
   emptyMessage: string
 }) {
   if (!accounts.length) {
-    return (
-      <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-        {emptyMessage}
-      </p>
-    )
+    return <EmptyState title="Nothing to show yet" description={emptyMessage} />
   }
 
   return (
@@ -336,7 +333,7 @@ export default async function NetWorthPage({
   ]
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{household.name}</p>

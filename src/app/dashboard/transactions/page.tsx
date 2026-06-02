@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { EmptyState } from '@/components/empty-state'
 import { createClient } from '@/lib/supabase/server'
 
 type TransactionsPageProps = {
@@ -215,6 +216,13 @@ export default async function TransactionsPage({
   const selectedCategoryId =
     typeof params.category_id === 'string' ? params.category_id : 'all'
   const searchText = typeof params.search === 'string' ? params.search.trim() : ''
+  const hasActiveFilters =
+    params.month !== undefined ||
+    selectedType !== 'all' ||
+    selectedStatus !== 'all' ||
+    selectedAccountId !== 'all' ||
+    selectedCategoryId !== 'all' ||
+    searchText.length > 0
   const monthRange = getMonthRange(selectedMonth)
   const returnTo = buildReturnTo({
     month: selectedMonth,
@@ -433,7 +441,7 @@ export default async function TransactionsPage({
     (activeCategories.length > 0 || activeAccounts.length >= 2)
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{household.name}</p>
@@ -815,10 +823,22 @@ export default async function TransactionsPage({
                 })}
               </div>
             ) : (
-              <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                No transactions yet. Create your first income, expense, or
-                transfer transaction.
-              </p>
+              <EmptyState
+                title={
+                  hasActiveFilters
+                    ? 'No transactions match these filters'
+                    : 'No transactions yet'
+                }
+                description={
+                  hasActiveFilters
+                    ? 'Clear filters or choose another month to see more household activity.'
+                    : 'Create your first income, expense, or transfer transaction once accounts and categories are ready.'
+                }
+                actionHref={
+                  hasActiveFilters ? '/dashboard/transactions' : undefined
+                }
+                actionLabel={hasActiveFilters ? 'Clear filters' : undefined}
+              />
             )}
           </CardContent>
         </Card>

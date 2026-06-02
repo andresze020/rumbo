@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { EmptyState } from '@/components/empty-state'
 
 type AccountsPageProps = {
   searchParams: Promise<{
@@ -307,7 +308,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     'CAD'
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <div>
         <p className="text-sm text-muted-foreground">{household.name}</p>
         <h1 className="text-2xl font-semibold tracking-normal">Accounts</h1>
@@ -769,11 +770,20 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                 })}
               </div>
             ) : (
-              <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                {showArchived
-                  ? 'No archived accounts yet.'
-                  : 'No active accounts yet.'}
-              </p>
+              <EmptyState
+                title={
+                  showArchived
+                    ? 'No archived accounts yet'
+                    : 'No active accounts yet'
+                }
+                description={
+                  showArchived
+                    ? 'Archived accounts will appear here after you archive one.'
+                    : 'Create your first cash, bank, credit card, debt, or investment account to start tracking balances.'
+                }
+                actionHref={showArchived ? '/dashboard/accounts' : undefined}
+                actionLabel={showArchived ? 'Show active accounts' : undefined}
+              />
             )}
           </CardContent>
         </Card>
