@@ -609,6 +609,9 @@ export default async function TransactionsPage({
                     transaction.transaction_type === 'opening_balance'
                   const isTransfer =
                     transaction.transaction_type === 'transfer'
+                  const isDebtPayment =
+                    transaction.transaction_type === 'debt_payment'
+                  const isBalanceMovement = isTransfer || isDebtPayment
                   const isVoided = transaction.status === 'voided'
                   const canVoid = !['voided', 'deleted_soft'].includes(
                     transaction.status
@@ -668,8 +671,11 @@ export default async function TransactionsPage({
                     ? 'Opening balance'
                     : isTransfer
                       ? `Transfer: ${transferFromAccountName} -> ${transferToAccountName}`
-                      : transaction.description || 'Transaction'
-                  const accountName = isTransfer
+                      : isDebtPayment
+                        ? transaction.description ||
+                          `Debt payment: ${transferFromAccountName} -> ${transferToAccountName}`
+                        : transaction.description || 'Transaction'
+                  const accountName = isBalanceMovement
                     ? `${transferFromAccountName} -> ${transferToAccountName}`
                     : entry
                       ? accountNamesById.get(entry.account_id) ??
@@ -679,15 +685,17 @@ export default async function TransactionsPage({
                     ? 'Transfer'
                     : isOpeningBalance
                       ? 'Not categorized'
-                      : allocation
-                        ? categoryNamesById.get(allocation.category_id) ??
-                          'Unknown category'
-                        : 'Unknown category'
-                  const amountEntry = isTransfer
+                      : isDebtPayment
+                        ? 'Debt principal'
+                        : allocation
+                          ? categoryNamesById.get(allocation.category_id) ??
+                            'Unknown category'
+                          : 'Unknown category'
+                  const amountEntry = isBalanceMovement
                     ? transferInEntry ?? transferOutEntry
                     : entry
                   const displayAmount =
-                    isTransfer && amountEntry
+                    isBalanceMovement && amountEntry
                       ? Math.abs(Number(amountEntry.amount_account_currency))
                       : amountEntry?.amount_account_currency
 
@@ -705,7 +713,9 @@ export default async function TransactionsPage({
                                 ? 'Opening balance'
                                 : isTransfer
                                   ? 'Transfer'
-                                  : formatValue(transaction.transaction_type)}
+                                  : isDebtPayment
+                                    ? 'Debt payment'
+                                    : formatValue(transaction.transaction_type)}
                             </Badge>
                             <Badge variant="outline">
                               {formatValue(transaction.status)}

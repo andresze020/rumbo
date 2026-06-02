@@ -362,20 +362,36 @@ export default async function DashboardPage({
           </p>
         </div>
 
-        <form action="/dashboard" className="flex items-end gap-2">
-          <div className="grid gap-1">
-            <Label htmlFor="month">Month</Label>
-            <Input
-              id="month"
-              type="month"
-              name="month"
-              defaultValue={selectedMonth}
-            />
+        <div className="flex flex-col gap-2 sm:items-end">
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/dashboard/debts"
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              Debts
+            </Link>
+            <Link
+              href={`/dashboard/net-worth?month=${selectedMonth}`}
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              Net worth
+            </Link>
           </div>
-          <Button type="submit" variant="outline">
-            View
-          </Button>
-        </form>
+          <form action="/dashboard" className="flex items-end gap-2">
+            <div className="grid gap-1">
+              <Label htmlFor="month">Month</Label>
+              <Input
+                id="month"
+                type="month"
+                name="month"
+                defaultValue={selectedMonth}
+              />
+            </div>
+            <Button type="submit" variant="outline">
+              View
+            </Button>
+          </form>
+        </div>
       </div>
 
       {accountBalancesError ? (
