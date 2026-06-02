@@ -20,6 +20,7 @@ type AccountBalance = {
   account_class: string
   currency_code: string
   include_in_net_worth: boolean
+  is_archived: boolean
   posted_balance_account_currency: number | string
   pending_balance_account_currency: number | string
   projected_balance_account_currency: number | string
@@ -121,6 +122,12 @@ function formatMonthLabel(month: string) {
   }).format(monthDate)
 }
 
+function getMonthEndDate(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number)
+
+  return new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10)
+}
+
 function getCategoryPath(
   category: {
     category_id: string
@@ -146,6 +153,7 @@ export default async function DashboardPage({
   const params = await searchParams
   const selectedMonth = parseDashboardMonth(params.month)
   const selectedMonthDate = `${selectedMonth}-01`
+  const selectedMonthEndDate = getMonthEndDate(selectedMonth)
   const supabase = await createClient()
 
   const {
@@ -179,6 +187,7 @@ export default async function DashboardPage({
   const { data: accountBalances, error: accountBalancesError } =
     await supabase.rpc('get_account_balances', {
       p_household_id: household.id,
+      p_as_of_date: selectedMonthEndDate,
     })
 
   const { data: monthlySummaryRows, error: monthlySummaryError } =
@@ -250,22 +259,22 @@ export default async function DashboardPage({
     {
       label: 'Total assets',
       value: totalAssets,
-      description: 'Posted asset balances',
+      description: 'Posted asset balances at month end',
     },
     {
       label: 'Total liabilities',
       value: totalLiabilities,
-      description: 'Posted liability balances',
+      description: 'Posted liability balances at month end',
     },
     {
       label: 'Net worth',
       value: netWorth,
-      description: 'Posted included balances',
+      description: 'Posted included balances at month end',
     },
     {
       label: 'Projected net worth',
       value: projectedNetWorth,
-      description: 'Posted plus pending',
+      description: 'Posted plus pending at month end',
     },
   ]
   const monthlyCards = [
@@ -498,7 +507,7 @@ export default async function DashboardPage({
             <CardHeader>
               <CardTitle>Accounts summary</CardTitle>
               <CardDescription>
-                Posted and projected balances by account.
+                Posted and projected balances by account at month end.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -517,6 +526,9 @@ export default async function DashboardPage({
                           <Badge variant="outline">
                             {account.account_class}
                           </Badge>
+                          {account.is_archived ? (
+                            <Badge variant="outline">archived</Badge>
+                          ) : null}
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {account.currency_code}
