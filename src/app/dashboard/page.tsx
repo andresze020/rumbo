@@ -20,6 +20,7 @@ type AccountBalance = {
   account_class: string
   currency_code: string
   include_in_net_worth: boolean
+  is_archived: boolean
   posted_balance_account_currency: number | string
   pending_balance_account_currency: number | string
   projected_balance_account_currency: number | string
@@ -91,12 +92,20 @@ function formatCurrency(value: number, currencyCode: string) {
   }).format(value)
 }
 
-function formatAccountCurrency(value: number | string, currencyCode: string) {
-  return formatCurrency(Number(value), currencyCode)
-}
-
 function formatValue(value: string) {
   return value.replaceAll('_', ' ')
+}
+
+function formatTransactionCount(count: number, descriptor = 'transaction') {
+  return `${count} ${descriptor}${count === 1 ? '' : 's'}`
+}
+
+function getDisplayAccountBalance(account: AccountBalance, value: number | string) {
+  const numericValue = Number(value)
+
+  return account.account_class === 'liability'
+    ? Math.abs(numericValue)
+    : numericValue
 }
 
 function formatPercent(value: number | string | null) {
@@ -119,6 +128,12 @@ function formatMonthLabel(month: string) {
     month: 'long',
     year: 'numeric',
   }).format(monthDate)
+}
+
+function getMonthEndDate(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number)
+
+  return new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10)
 }
 
 function getCategoryPath(
@@ -146,6 +161,7 @@ export default async function DashboardPage({
   const params = await searchParams
   const selectedMonth = parseDashboardMonth(params.month)
   const selectedMonthDate = `${selectedMonth}-01`
+  const selectedMonthEndDate = getMonthEndDate(selectedMonth)
   const supabase = await createClient()
 
   const {
@@ -179,6 +195,7 @@ export default async function DashboardPage({
   const { data: accountBalances, error: accountBalancesError } =
     await supabase.rpc('get_account_balances', {
       p_household_id: household.id,
+      p_as_of_date: selectedMonthEndDate,
     })
 
   const { data: monthlySummaryRows, error: monthlySummaryError } =
@@ -228,44 +245,56 @@ export default async function DashboardPage({
         total + Number(account.posted_balance_base_currency),
       0
     )
-  const totalLiabilities = Math.abs(
-    includedBalances
-      .filter((account) => account.account_class === 'liability')
-      .reduce(
-        (total, account) =>
-          total + Number(account.posted_balance_base_currency),
-        0
-      )
+  const totalLiabilities = includedBalances
+    .filter((account) => account.account_class === 'liability')
+    .reduce(
+      (total, account) =>
+        total + Math.abs(Number(account.posted_balance_base_currency)),
+      0
+    )
+  const projectedAssets = includedBalances
+    .filter((account) => account.account_class === 'asset')
+    .reduce(
+      (total, account) =>
+        total + Number(account.projected_balance_base_currency),
+      0
+    )
+  const projectedLiabilities = includedBalances
+    .filter((account) => account.account_class === 'liability')
+    .reduce(
+      (total, account) =>
+        total + Math.abs(Number(account.projected_balance_base_currency)),
+      0
+    )
+  const netWorth = totalAssets - totalLiabilities
+  const projectedNetWorth = projectedAssets - projectedLiabilities
+  const incomeTransactionCount = Number(
+    monthlySummary?.income_transaction_count ?? 0
   )
-  const netWorth = includedBalances.reduce(
-    (total, account) => total + Number(account.posted_balance_base_currency),
-    0
-  )
-  const projectedNetWorth = includedBalances.reduce(
-    (total, account) => total + Number(account.projected_balance_base_currency),
-    0
+  const expenseTransactionCount = Number(
+    monthlySummary?.expense_transaction_count ?? 0
   )
 
   const summaryCards = [
     {
       label: 'Total assets',
       value: totalAssets,
-      description: 'Posted asset balances',
+      description: 'Posted asset balances at month end',
     },
     {
       label: 'Total liabilities',
       value: totalLiabilities,
-      description: 'Posted liability balances',
+      description: 'Posted liability balances at month end',
     },
     {
       label: 'Net worth',
       value: netWorth,
-      description: 'Posted included balances',
+      description: 'Posted included balances at month end',
     },
     {
       label: 'Projected net worth',
       value: projectedNetWorth,
-      description: 'Posted plus pending',
+      description: 'Posted plus pending at month end',
     },
   ]
   const monthlyCards = [
@@ -274,7 +303,10 @@ export default async function DashboardPage({
       value: monthlySummary
         ? formatCurrency(Number(monthlySummary.monthly_income), dashboardCurrency)
         : formatCurrency(0, dashboardCurrency),
-      description: `${Number(monthlySummary?.income_transaction_count ?? 0)} posted income transactions`,
+      description: formatTransactionCount(
+        incomeTransactionCount,
+        'posted income transaction'
+      ),
     },
     {
       label: 'Monthly expenses',
@@ -284,7 +316,10 @@ export default async function DashboardPage({
             dashboardCurrency
           )
         : formatCurrency(0, dashboardCurrency),
-      description: `${Number(monthlySummary?.expense_transaction_count ?? 0)} posted expense transactions`,
+      description: formatTransactionCount(
+        expenseTransactionCount,
+        'posted expense transaction'
+      ),
     },
     {
       label: 'Monthly savings',
@@ -422,7 +457,9 @@ export default async function DashboardPage({
                               ) : null}
                             </div>
                             <p className="text-sm text-muted-foreground">
-                              {Number(category.transaction_count)} transactions
+                              {formatTransactionCount(
+                                Number(category.transaction_count)
+                              )}
                             </p>
                           </div>
                           <div className="h-2 overflow-hidden rounded-lg bg-muted">
@@ -498,7 +535,7 @@ export default async function DashboardPage({
             <CardHeader>
               <CardTitle>Accounts summary</CardTitle>
               <CardDescription>
-                Posted and projected balances by account.
+                Posted and projected balances by account at month end.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -517,6 +554,9 @@ export default async function DashboardPage({
                           <Badge variant="outline">
                             {account.account_class}
                           </Badge>
+                          {account.is_archived ? (
+                            <Badge variant="outline">archived</Badge>
+                          ) : null}
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {account.currency_code}
@@ -527,11 +567,16 @@ export default async function DashboardPage({
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="rounded-lg bg-muted/40 p-3">
                         <p className="text-xs text-muted-foreground">
-                          Posted balance
+                          {account.account_class === 'liability'
+                            ? 'Posted outstanding balance'
+                            : 'Posted balance'}
                         </p>
                         <p className="mt-1 font-medium">
-                          {formatAccountCurrency(
-                            account.posted_balance_account_currency,
+                          {formatCurrency(
+                            getDisplayAccountBalance(
+                              account,
+                              account.posted_balance_account_currency
+                            ),
                             account.currency_code
                           )}
                         </p>
@@ -539,11 +584,16 @@ export default async function DashboardPage({
 
                       <div className="rounded-lg bg-muted/40 p-3">
                         <p className="text-xs text-muted-foreground">
-                          Projected balance
+                          {account.account_class === 'liability'
+                            ? 'Projected outstanding balance'
+                            : 'Projected balance'}
                         </p>
                         <p className="mt-1 font-medium">
-                          {formatAccountCurrency(
-                            account.projected_balance_account_currency,
+                          {formatCurrency(
+                            getDisplayAccountBalance(
+                              account,
+                              account.projected_balance_account_currency
+                            ),
                             account.currency_code
                           )}
                         </p>
