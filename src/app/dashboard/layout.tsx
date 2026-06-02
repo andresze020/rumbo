@@ -8,6 +8,8 @@ const dashboardLinks = [
   { href: '/dashboard/transactions', label: 'Transactions' },
   { href: '/dashboard/transactions/import', label: 'Import CSV' },
   { href: '/dashboard/budgets', label: 'Budgets' },
+  { href: '/dashboard/debts', label: 'Debts' },
+  { href: '/dashboard/net-worth', label: 'Net Worth' },
 ]
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
