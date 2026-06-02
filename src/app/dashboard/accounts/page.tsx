@@ -8,7 +8,7 @@ import {
 } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -18,13 +18,6 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/empty-state'
 
@@ -36,6 +29,9 @@ type AccountsPageProps = {
     unarchived?: string
     openingBalanceSet?: string
     showArchived?: string
+    mode?: string
+    edit?: string
+    openingBalance?: string
     info?: string
     error?: string
   }>
@@ -59,7 +55,6 @@ type AccountBalance = {
 type Currency = {
   code: string
   name: string
-  symbol: string | null
 }
 
 type AccountMetadata = {
@@ -77,6 +72,12 @@ type AccountMetadata = {
   include_in_net_worth: boolean
   sort_order: number | null
   notes: string | null
+}
+
+type AccountRow = {
+  balance: AccountBalance
+  hasOpeningBalance: boolean
+  metadata: AccountMetadata
 }
 
 type OpeningBalanceEntry = {
@@ -105,6 +106,48 @@ const accountTypes = [
   { value: 'investment', label: 'Investment' },
   { value: 'other', label: 'Other' },
 ]
+
+const accountClasses = [
+  { value: 'asset', label: 'Asset' },
+  { value: 'liability', label: 'Liability' },
+]
+
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+
+function accountsPath({
+  showArchived,
+  mode,
+  edit,
+  openingBalance,
+}: {
+  showArchived?: boolean
+  mode?: 'create'
+  edit?: string
+  openingBalance?: string
+} = {}) {
+  const params = new URLSearchParams()
+
+  if (showArchived) {
+    params.set('showArchived', 'true')
+  }
+
+  if (mode) {
+    params.set('mode', mode)
+  }
+
+  if (edit) {
+    params.set('edit', edit)
+  }
+
+  if (openingBalance) {
+    params.set('openingBalance', openingBalance)
+  }
+
+  const queryString = params.toString()
+
+  return `/dashboard/accounts${queryString ? `?${queryString}` : ''}`
+}
 
 function formatAccountType(accountType: string) {
   return accountType.replaceAll('_', ' ')
@@ -176,6 +219,350 @@ function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function sumIncludedBase(rows: AccountRow[], accountClass: string) {
+  return rows
+    .filter(
+      (row) =>
+        row.metadata.include_in_net_worth &&
+        row.metadata.account_class === accountClass
+    )
+    .reduce(
+      (total, row) =>
+        total + Math.abs(Number(row.balance.posted_balance_base_currency)),
+      0
+    )
+}
+
+function CreateAccountForm({
+  activeCurrencies,
+  defaultCurrency,
+  showArchived,
+}: {
+  activeCurrencies: Currency[]
+  defaultCurrency: string
+  showArchived: boolean
+}) {
+  return (
+    <form action={createAccountAction} className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="name">Name</Label>
+          <Input id="name" name="name" required />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="account_type">Type</Label>
+          <select
+            id="account_type"
+            name="account_type"
+            defaultValue="checking"
+            className={selectClassName}
+          >
+            {accountTypes.map((accountType) => (
+              <option key={accountType.value} value={accountType.value}>
+                {accountType.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="currency_code">Currency</Label>
+          <select
+            id="currency_code"
+            name="currency_code"
+            defaultValue={defaultCurrency}
+            className={selectClassName}
+          >
+            {activeCurrencies.map((currency) => (
+              <option key={currency.code} value={currency.code}>
+                {currency.code} - {currency.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="institution_name">Institution</Label>
+          <Input id="institution_name" name="institution_name" />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="last_four">Last four</Label>
+          <Input
+            id="last_four"
+            name="last_four"
+            inputMode="numeric"
+            maxLength={4}
+            pattern="[0-9]{1,4}"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="notes">Notes</Label>
+        <Textarea id="notes" name="notes" />
+      </div>
+
+      <Label className="items-start gap-3 rounded-lg border p-3">
+        <input
+          type="checkbox"
+          name="include_in_net_worth"
+          defaultChecked
+          className="mt-0.5 size-4"
+        />
+        <span className="space-y-1">
+          <span className="block">Include in net worth</span>
+          <span className="block text-sm font-normal text-muted-foreground">
+            Counts this account in household totals.
+          </span>
+        </span>
+      </Label>
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit">Create account</Button>
+        <Link
+          href={accountsPath({ showArchived })}
+          className={buttonVariants({ variant: 'outline' })}
+        >
+          Cancel
+        </Link>
+      </div>
+    </form>
+  )
+}
+
+function EditAccountForm({
+  row,
+  showArchived,
+}: {
+  row: AccountRow
+  showArchived: boolean
+}) {
+  const account = row.metadata
+
+  return (
+    <form action={updateAccountAction} className="space-y-4">
+      <input type="hidden" name="account_id" value={account.id} />
+      <input
+        type="hidden"
+        name="show_archived"
+        value={showArchived ? 'true' : 'false'}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`name_${account.id}`}>Name</Label>
+          <Input
+            id={`name_${account.id}`}
+            name="name"
+            defaultValue={account.name}
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`institution_${account.id}`}>Institution</Label>
+          <Input
+            id={`institution_${account.id}`}
+            name="institution_name"
+            defaultValue={account.institution_name ?? ''}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`account_type_${account.id}`}>Type</Label>
+          <select
+            id={`account_type_${account.id}`}
+            name="account_type"
+            defaultValue={account.account_type}
+            className={selectClassName}
+          >
+            {accountTypes.map((accountType) => (
+              <option key={accountType.value} value={accountType.value}>
+                {accountType.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`account_class_${account.id}`}>Class</Label>
+          <select
+            id={`account_class_${account.id}`}
+            name="account_class"
+            defaultValue={account.account_class}
+            className={selectClassName}
+          >
+            {accountClasses.map((accountClass) => (
+              <option key={accountClass.value} value={accountClass.value}>
+                {accountClass.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`last_four_${account.id}`}>Last four</Label>
+          <Input
+            id={`last_four_${account.id}`}
+            name="last_four"
+            inputMode="numeric"
+            maxLength={4}
+            pattern="[0-9]{1,4}"
+            defaultValue={account.last_four ?? ''}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`sort_order_${account.id}`}>Sort order</Label>
+          <Input
+            id={`sort_order_${account.id}`}
+            name="sort_order"
+            type="number"
+            step="1"
+            defaultValue={account.sort_order ?? ''}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`color_${account.id}`}>Color</Label>
+          <Input
+            id={`color_${account.id}`}
+            name="color"
+            defaultValue={account.color ?? ''}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`icon_${account.id}`}>Icon</Label>
+          <Input
+            id={`icon_${account.id}`}
+            name="icon"
+            defaultValue={account.icon ?? ''}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor={`account_notes_${account.id}`}>Notes</Label>
+        <Textarea
+          id={`account_notes_${account.id}`}
+          name="notes"
+          defaultValue={account.notes ?? ''}
+        />
+      </div>
+
+      <Label className="items-start gap-3 rounded-lg border p-3">
+        <input
+          type="checkbox"
+          name="include_in_net_worth"
+          defaultChecked={account.include_in_net_worth}
+          className="mt-0.5 size-4"
+        />
+        <span className="space-y-1">
+          <span className="block">Include in net worth</span>
+          <span className="block text-sm font-normal text-muted-foreground">
+            Currency and balances stay controlled by the ledger.
+          </span>
+        </span>
+      </Label>
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit">Save account</Button>
+        <Link
+          href={accountsPath({ showArchived })}
+          className={buttonVariants({ variant: 'outline' })}
+        >
+          Cancel
+        </Link>
+      </div>
+    </form>
+  )
+}
+
+function OpeningBalanceForm({
+  row,
+  showArchived,
+}: {
+  row: AccountRow
+  showArchived: boolean
+}) {
+  const account = row.metadata
+
+  return (
+    <form action={setOpeningBalanceAction} className="space-y-4">
+      <input type="hidden" name="account_id" value={account.id} />
+
+      <div>
+        <h3 className="text-sm font-medium">Set opening balance</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Leave blank or enter 0 if this account starts at zero.
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          For credit cards or debts, you can enter the owed amount as positive
+          or negative; it will be stored as a liability.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="space-y-2">
+          <Label htmlFor={`opening_balance_amount_${account.id}`}>Amount</Label>
+          <Input
+            id={`opening_balance_amount_${account.id}`}
+            name="opening_balance_amount"
+            type="number"
+            step="0.01"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`opening_balance_date_${account.id}`}>Date</Label>
+          <Input
+            id={`opening_balance_date_${account.id}`}
+            name="opening_balance_date"
+            type="date"
+            defaultValue={account.opening_balance_date ?? todayIsoDate()}
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`exchange_rate_to_base_${account.id}`}>
+            Exchange rate
+          </Label>
+          <Input
+            id={`exchange_rate_to_base_${account.id}`}
+            name="exchange_rate_to_base"
+            type="number"
+            min="0.00000001"
+            step="0.00000001"
+            defaultValue="1"
+            required
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor={`opening_notes_${account.id}`}>Notes</Label>
+        <Textarea id={`opening_notes_${account.id}`} name="notes" />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" variant="outline">
+          Set opening balance
+        </Button>
+        <Link
+          href={accountsPath({ showArchived })}
+          className={buttonVariants({ variant: 'outline' })}
+        >
+          Cancel
+        </Link>
+      </div>
+    </form>
+  )
+}
+
 export default async function AccountsPage({ searchParams }: AccountsPageProps) {
   const params = await searchParams
   const errorMessage = typeof params.error === 'string' ? params.error : null
@@ -186,6 +573,10 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const unarchived = params.unarchived === '1'
   const openingBalanceSet = params.openingBalanceSet === '1'
   const showArchived = params.showArchived === 'true'
+  const isCreating = params.mode === 'create'
+  const editAccountId = typeof params.edit === 'string' ? params.edit : null
+  const openingBalanceAccountId =
+    typeof params.openingBalance === 'string' ? params.openingBalance : null
   const supabase = await createClient()
 
   const {
@@ -218,7 +609,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
 
   const { data: currencies, error: currenciesError } = await supabase
     .from('currencies')
-    .select('code, name, symbol')
+    .select('code, name')
     .eq('is_active', true)
     .order('code', { ascending: true })
 
@@ -237,46 +628,42 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       'id, name, account_type, account_class, currency_code, institution_name, last_four, color, icon, opening_balance_date, is_archived, include_in_net_worth, sort_order, notes'
     )
     .eq('household_id', household.id)
-    .eq('is_archived', showArchived)
     .is('deleted_at', null)
+    .order('is_archived', { ascending: true })
     .order('sort_order', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true })
 
   const { data: openingBalanceEntries, error: openingBalanceEntriesError } =
     await supabase
       .from('transaction_entries')
-      .select('account_id, transactions!inner(transaction_type, deleted_at, status)')
+      .select(
+        'account_id, transactions!inner(transaction_type, deleted_at, status)'
+      )
       .eq('household_id', household.id)
       .eq('transactions.transaction_type', 'opening_balance')
       .is('transactions.deleted_at', null)
       .in('transactions.status', ['pending', 'posted'])
 
-  const displayAccounts = (accountMetadata ?? []) as AccountMetadata[]
-  const displayAccountIds = displayAccounts.map((account) => account.id)
-  let displayAccountEntries: TransactionEntryBalance[] = []
-  let displayAccountEntriesError = false
+  const allAccounts = (accountMetadata ?? []) as AccountMetadata[]
+  const accountIds = allAccounts.map((account) => account.id)
+  let accountEntries: TransactionEntryBalance[] = []
+  let accountEntriesError = false
 
-  if (displayAccountIds.length) {
+  if (accountIds.length) {
     const { data: entries, error: entriesError } = await supabase
       .from('transaction_entries')
       .select(
         'account_id, amount_account_currency, amount_base_currency, transactions!inner(status, deleted_at)'
       )
       .eq('household_id', household.id)
-      .in('account_id', displayAccountIds)
+      .in('account_id', accountIds)
       .is('transactions.deleted_at', null)
       .in('transactions.status', ['posted', 'pending'])
 
-    displayAccountEntries = (entries ?? []) as unknown as TransactionEntryBalance[]
-    displayAccountEntriesError = Boolean(entriesError)
+    accountEntries = (entries ?? []) as unknown as TransactionEntryBalance[]
+    accountEntriesError = Boolean(entriesError)
   }
 
-  const accountMetadataById = new Map(
-    displayAccounts.map((account) => [
-      account.id,
-      account,
-    ])
-  )
   const accountBalancesById = new Map(
     ((accountBalances ?? []) as AccountBalance[]).map((balance) => [
       balance.account_id,
@@ -285,33 +672,107 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   )
   const accountEntriesById = new Map<string, TransactionEntryBalance[]>()
 
-  for (const entry of displayAccountEntries) {
-    const accountEntries = accountEntriesById.get(entry.account_id)
+  for (const entry of accountEntries) {
+    const entries = accountEntriesById.get(entry.account_id)
 
-    if (accountEntries) {
-      accountEntries.push(entry)
+    if (entries) {
+      entries.push(entry)
     } else {
       accountEntriesById.set(entry.account_id, [entry])
     }
   }
+
   const accountsWithOpeningBalance = new Set(
     ((openingBalanceEntries ?? []) as OpeningBalanceEntry[]).map(
       (entry) => entry.account_id
     )
   )
-
+  const accountRows: AccountRow[] = allAccounts.map((metadata) => ({
+    metadata,
+    balance:
+      accountBalancesById.get(metadata.id) ??
+      deriveBalance(metadata, accountEntriesById.get(metadata.id) ?? []),
+    hasOpeningBalance: accountsWithOpeningBalance.has(metadata.id),
+  }))
+  const activeRows = accountRows.filter((row) => !row.metadata.is_archived)
+  const archivedRows = accountRows.filter((row) => row.metadata.is_archived)
+  const displayRows = showArchived ? archivedRows : activeRows
+  const selectedEditRow = displayRows.find(
+    (row) => row.metadata.id === editAccountId
+  )
+  const selectedOpeningBalanceRow = displayRows.find(
+    (row) =>
+      row.metadata.id === openingBalanceAccountId &&
+      !row.metadata.is_archived &&
+      !row.hasOpeningBalance
+  )
   const activeCurrencies = (currencies ?? []) as Currency[]
   const defaultCurrency =
     activeCurrencies.find((currency) => currency.code === household.base_currency)
       ?.code ??
     activeCurrencies[0]?.code ??
     'CAD'
+  const includedAccountCount = activeRows.filter(
+    (row) => row.metadata.include_in_net_worth
+  ).length
+  const totalAssets = sumIncludedBase(activeRows, 'asset')
+  const totalLiabilities = sumIncludedBase(activeRows, 'liability')
+  const netWorthImpact = totalAssets - totalLiabilities
+  const hasLoadError =
+    accountBalancesError ||
+    accountMetadataError ||
+    openingBalanceEntriesError ||
+    accountEntriesError
+  const summaryCards = [
+    {
+      label: 'Total assets',
+      value: formatCurrency(totalAssets, household.base_currency),
+      description: 'Included active asset accounts',
+    },
+    {
+      label: 'Total liabilities',
+      value: formatCurrency(totalLiabilities, household.base_currency),
+      description: 'Included active liability accounts',
+    },
+    {
+      label: 'Net worth impact',
+      value: formatCurrency(netWorthImpact, household.base_currency),
+      description: `${includedAccountCount} included accounts`,
+    },
+    {
+      label: showArchived ? 'Archived accounts' : 'Active accounts',
+      value: String(showArchived ? archivedRows.length : activeRows.length),
+      description: showArchived
+        ? `${activeRows.length} active accounts`
+        : `${archivedRows.length} archived accounts`,
+    },
+  ]
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <div>
-        <p className="text-sm text-muted-foreground">{household.name}</p>
-        <h1 className="text-2xl font-semibold tracking-normal">Accounts</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">{household.name}</p>
+          <h1 className="text-2xl font-semibold tracking-normal">Accounts</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage household accounts and balances.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={accountsPath({ showArchived, mode: 'create' })}
+            className={buttonVariants()}
+          >
+            Create account
+          </Link>
+          <Link
+            href={accountsPath({ showArchived: !showArchived })}
+            className={buttonVariants({ variant: 'outline' })}
+          >
+            {showArchived ? 'Hide archived' : 'Show archived'}
+          </Link>
+        </div>
       </div>
 
       {errorMessage ? (
@@ -340,7 +801,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
 
       {unarchived ? (
         <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          Account unarchived.
+          Account restored.
         </div>
       ) : null}
 
@@ -356,308 +817,238 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {summaryCards.map((card) => (
+          <Card key={card.label}>
+            <CardHeader>
+              <CardTitle>{card.label}</CardTitle>
+              <CardDescription>{card.description}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xl font-semibold">{card.value}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {isCreating ? (
         <Card>
           <CardHeader>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <CardTitle>
-                  {showArchived ? 'Archived accounts' : 'Active accounts'}
-                </CardTitle>
-                <CardDescription>
-                  {showArchived
-                    ? 'Archived accounts remain available for history.'
-                    : 'Accounts connected to your active household.'}
-                </CardDescription>
-              </div>
-
-              <Link
-                href={
-                  showArchived
-                    ? '/dashboard/accounts'
-                    : '/dashboard/accounts?showArchived=true'
-                }
-                className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border px-2.5 text-sm font-medium transition-colors hover:bg-muted"
-              >
-                {showArchived ? 'Show active' : 'Show archived'}
-              </Link>
-            </div>
+            <CardTitle>Create account</CardTitle>
+            <CardDescription>Add a basic household account.</CardDescription>
           </CardHeader>
           <CardContent>
-            {accountBalancesError ||
-            accountMetadataError ||
-            openingBalanceEntriesError ||
-            displayAccountEntriesError ? (
-              <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-                Could not load account balances.
-              </p>
-            ) : displayAccounts.length ? (
-              <div className="divide-y rounded-lg border">
-                {displayAccounts.map((accountMetadata) => {
-                  const account =
-                    accountBalancesById.get(accountMetadata.id) ??
-                    deriveBalance(
-                      accountMetadata,
-                      accountEntriesById.get(accountMetadata.id) ?? []
-                    )
-                  const hasOpeningBalance = accountsWithOpeningBalance.has(
-                    account.account_id
-                  )
-                  const openingBalanceDate =
-                    accountMetadataById.get(account.account_id)
-                      ?.opening_balance_date ?? todayIsoDate()
+            <CreateAccountForm
+              activeCurrencies={activeCurrencies}
+              defaultCurrency={defaultCurrency}
+              showArchived={showArchived}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
-                  return (
-                    <div
-                      key={account.account_id}
-                      className={`space-y-4 p-4 ${accountMetadata.is_archived ? 'bg-muted/30 text-muted-foreground' : ''}`}
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="font-medium">
-                              {account.account_name}
-                            </h2>
-                            <Badge variant="secondary">
-                              {formatAccountType(account.account_type)}
-                            </Badge>
+      {selectedEditRow ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Edit account</CardTitle>
+            <CardDescription>
+              Update metadata for {selectedEditRow.metadata.name}. Balances stay
+              controlled by ledger entries.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EditAccountForm row={selectedEditRow} showArchived={showArchived} />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {selectedOpeningBalanceRow ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Opening balance</CardTitle>
+            <CardDescription>
+              Set the starting ledger balance for{' '}
+              {selectedOpeningBalanceRow.metadata.name}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <OpeningBalanceForm
+              row={selectedOpeningBalanceRow}
+              showArchived={showArchived}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>
+                {showArchived ? 'Archived accounts' : 'Active accounts'}
+              </CardTitle>
+              <CardDescription>
+                {showArchived
+                  ? 'Archived accounts remain available for history.'
+                  : 'Accounts connected to your active household.'}
+              </CardDescription>
+            </div>
+
+            <Link
+              href={accountsPath({ showArchived: !showArchived })}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              {showArchived ? 'Hide archived' : 'Show archived'}
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {hasLoadError ? (
+            <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+              Could not load account balances.
+            </p>
+          ) : displayRows.length ? (
+            <div className="divide-y rounded-lg border">
+              {displayRows.map((row) => {
+                const { balance, metadata } = row
+
+                return (
+                  <div
+                    key={metadata.id}
+                    className={`space-y-4 p-4 ${
+                      metadata.is_archived
+                        ? 'bg-muted/30 text-muted-foreground'
+                        : ''
+                    }`}
+                  >
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="font-medium">{metadata.name}</h2>
+                          <Badge variant="secondary">
+                            {formatAccountType(metadata.account_type)}
+                          </Badge>
+                          <Badge variant="outline">
+                            {metadata.account_class}
+                          </Badge>
+                          <Badge variant="outline">
+                            {metadata.currency_code}
+                          </Badge>
+                          {metadata.is_archived ? (
+                            <Badge variant="outline">Archived</Badge>
+                          ) : null}
+                          {row.hasOpeningBalance ? (
                             <Badge variant="outline">
-                              {account.account_class}
+                              Opening balance set
                             </Badge>
-                            {accountMetadata.is_archived ? (
-                              <Badge variant="outline">Archived</Badge>
-                            ) : null}
-                            {hasOpeningBalance ? (
-                              <Badge variant="outline">
-                                Opening balance set
-                              </Badge>
-                            ) : null}
-                          </div>
-
-                          <p className="text-sm text-muted-foreground">
-                            {account.currency_code}
-                          </p>
+                          ) : null}
                         </div>
 
-                        <Badge
-                          variant={
-                            account.include_in_net_worth
-                              ? 'default'
-                              : 'outline'
-                          }
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                          {metadata.institution_name ? (
+                            <span>{metadata.institution_name}</span>
+                          ) : null}
+                          {metadata.last_four ? (
+                            <span>**** {metadata.last_four}</span>
+                          ) : null}
+                          <span>
+                            {metadata.include_in_net_worth
+                              ? 'Included in net worth'
+                              : 'Excluded from net worth'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1 md:text-right">
+                        <p className="text-lg font-semibold">
+                          {formatCurrency(
+                            balance.posted_balance_account_currency,
+                            metadata.currency_code
+                          )}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          posted balance
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-lg bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">
+                          Posted
+                        </p>
+                        <p className="mt-1 font-medium">
+                          {formatCurrency(
+                            balance.posted_balance_account_currency,
+                            metadata.currency_code
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">
+                          Pending
+                        </p>
+                        <p className="mt-1 font-medium">
+                          {formatCurrency(
+                            balance.pending_balance_account_currency,
+                            metadata.currency_code
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">
+                          Projected
+                        </p>
+                        <p className="mt-1 font-medium">
+                          {formatCurrency(
+                            balance.projected_balance_account_currency,
+                            metadata.currency_code
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        href={accountsPath({
+                          showArchived,
+                          edit: metadata.id,
+                        })}
+                        className={buttonVariants({
+                          variant: 'outline',
+                          size: 'sm',
+                        })}
+                      >
+                        Edit
+                      </Link>
+
+                      {!metadata.is_archived && !row.hasOpeningBalance ? (
+                        <Link
+                          href={accountsPath({
+                            showArchived,
+                            openingBalance: metadata.id,
+                          })}
+                          className={buttonVariants({
+                            variant: 'outline',
+                            size: 'sm',
+                          })}
                         >
-                          {account.include_in_net_worth
-                            ? 'Net worth'
-                            : 'Excluded'}
-                        </Badge>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-lg bg-muted/40 p-3">
-                          <p className="text-xs text-muted-foreground">
-                            Posted balance
-                          </p>
-                          <p className="mt-1 font-medium">
-                            {formatCurrency(
-                              account.posted_balance_account_currency,
-                              account.currency_code
-                            )}
-                          </p>
-                        </div>
-
-                        <div className="rounded-lg bg-muted/40 p-3">
-                          <p className="text-xs text-muted-foreground">
-                            Pending
-                          </p>
-                          <p className="mt-1 font-medium">
-                            {formatCurrency(
-                              account.pending_balance_account_currency,
-                              account.currency_code
-                            )}
-                          </p>
-                        </div>
-
-                        <div className="rounded-lg bg-muted/40 p-3">
-                          <p className="text-xs text-muted-foreground">
-                            Projected
-                          </p>
-                          <p className="mt-1 font-medium">
-                            {formatCurrency(
-                              account.projected_balance_account_currency,
-                              account.currency_code
-                            )}
-                          </p>
-                        </div>
-                      </div>
-
-                      <form action={updateAccountAction} className="space-y-3 rounded-lg border p-3">
-                        <input
-                          type="hidden"
-                          name="account_id"
-                          value={account.account_id}
-                        />
-                        <input
-                          type="hidden"
-                          name="show_archived"
-                          value={showArchived ? 'true' : 'false'}
-                        />
-
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label htmlFor={`name_${account.account_id}`}>
-                              Name
-                            </Label>
-                            <Input
-                              id={`name_${account.account_id}`}
-                              name="name"
-                              defaultValue={accountMetadata.name}
-                              required
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`institution_${account.account_id}`}>
-                              Institution
-                            </Label>
-                            <Input
-                              id={`institution_${account.account_id}`}
-                              name="institution_name"
-                              defaultValue={accountMetadata.institution_name ?? ''}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`account_type_${account.account_id}`}>
-                              Type
-                            </Label>
-                            <select
-                              id={`account_type_${account.account_id}`}
-                              name="account_type"
-                              defaultValue={accountMetadata.account_type}
-                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                            >
-                              {accountTypes.map((accountType) => (
-                                <option
-                                  key={accountType.value}
-                                  value={accountType.value}
-                                >
-                                  {accountType.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`account_class_${account.account_id}`}>
-                              Class
-                            </Label>
-                            <select
-                              id={`account_class_${account.account_id}`}
-                              name="account_class"
-                              defaultValue={accountMetadata.account_class}
-                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                            >
-                              <option value="asset">Asset</option>
-                              <option value="liability">Liability</option>
-                            </select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`last_four_${account.account_id}`}>
-                              Last four
-                            </Label>
-                            <Input
-                              id={`last_four_${account.account_id}`}
-                              name="last_four"
-                              inputMode="numeric"
-                              maxLength={4}
-                              pattern="[0-9]{1,4}"
-                              defaultValue={accountMetadata.last_four ?? ''}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`sort_order_${account.account_id}`}>
-                              Sort order
-                            </Label>
-                            <Input
-                              id={`sort_order_${account.account_id}`}
-                              name="sort_order"
-                              type="number"
-                              step="1"
-                              defaultValue={accountMetadata.sort_order ?? ''}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`color_${account.account_id}`}>
-                              Color
-                            </Label>
-                            <Input
-                              id={`color_${account.account_id}`}
-                              name="color"
-                              defaultValue={accountMetadata.color ?? ''}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`icon_${account.account_id}`}>
-                              Icon
-                            </Label>
-                            <Input
-                              id={`icon_${account.account_id}`}
-                              name="icon"
-                              defaultValue={accountMetadata.icon ?? ''}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor={`account_notes_${account.account_id}`}>
-                            Notes
-                          </Label>
-                          <Textarea
-                            id={`account_notes_${account.account_id}`}
-                            name="notes"
-                            defaultValue={accountMetadata.notes ?? ''}
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <Label className="items-start gap-3 rounded-lg border p-3">
-                            <input
-                              type="checkbox"
-                              name="include_in_net_worth"
-                              defaultChecked={
-                                accountMetadata.include_in_net_worth
-                              }
-                              className="mt-0.5 size-4"
-                            />
-                            <span className="space-y-1">
-                              <span className="block">
-                                Include in net worth
-                              </span>
-                              <span className="block text-sm font-normal text-muted-foreground">
-                                Currency and balances are controlled by the
-                                ledger.
-                              </span>
-                            </span>
-                          </Label>
-
-                          <Button type="submit">Save account</Button>
-                        </div>
-                      </form>
+                          Set opening balance
+                        </Link>
+                      ) : null}
 
                       <form action={archiveAccountAction}>
                         <input
                           type="hidden"
                           name="account_id"
-                          value={account.account_id}
+                          value={metadata.id}
                         />
                         <input
                           type="hidden"
                           name="is_archived"
-                          value={accountMetadata.is_archived ? 'false' : 'true'}
+                          value={metadata.is_archived ? 'false' : 'true'}
                         />
                         <input
                           type="hidden"
@@ -666,218 +1057,43 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                         />
                         <Button
                           type="submit"
+                          size="sm"
                           variant={
-                            accountMetadata.is_archived ? 'outline' : 'secondary'
+                            metadata.is_archived ? 'outline' : 'secondary'
                           }
                         >
-                          {accountMetadata.is_archived
-                            ? 'Unarchive account'
+                          {metadata.is_archived
+                            ? 'Restore account'
                             : 'Archive account'}
                         </Button>
                       </form>
-
-                      {!accountMetadata.is_archived && !hasOpeningBalance ? (
-                        <form
-                          action={setOpeningBalanceAction}
-                          className="space-y-3 rounded-lg border p-3"
-                        >
-                          <input
-                            type="hidden"
-                            name="account_id"
-                            value={account.account_id}
-                          />
-
-                          <div>
-                            <h3 className="text-sm font-medium">
-                              Set opening balance
-                            </h3>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              Leave blank or enter 0 if this account starts at
-                              zero.
-                            </p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              For credit cards or debts, you can enter the owed
-                              amount as positive or negative; it will be stored
-                              as a liability.
-                            </p>
-                          </div>
-
-                          <div className="grid gap-3 sm:grid-cols-3">
-                            <div className="space-y-2">
-                              <Label
-                                htmlFor={`opening_balance_amount_${account.account_id}`}
-                              >
-                                Amount
-                              </Label>
-                              <Input
-                                id={`opening_balance_amount_${account.account_id}`}
-                                name="opening_balance_amount"
-                                type="number"
-                                step="0.01"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label
-                                htmlFor={`opening_balance_date_${account.account_id}`}
-                              >
-                                Date
-                              </Label>
-                              <Input
-                                id={`opening_balance_date_${account.account_id}`}
-                                name="opening_balance_date"
-                                type="date"
-                                defaultValue={openingBalanceDate}
-                                required
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label
-                                htmlFor={`exchange_rate_to_base_${account.account_id}`}
-                              >
-                                Exchange rate
-                              </Label>
-                              <Input
-                                id={`exchange_rate_to_base_${account.account_id}`}
-                                name="exchange_rate_to_base"
-                                type="number"
-                                min="0.00000001"
-                                step="0.00000001"
-                                defaultValue="1"
-                                required
-                              />
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`notes_${account.account_id}`}>
-                              Notes
-                            </Label>
-                            <Textarea
-                              id={`notes_${account.account_id}`}
-                              name="notes"
-                            />
-                          </div>
-
-                          <Button type="submit" variant="outline">
-                            Set opening balance
-                          </Button>
-                        </form>
-                      ) : null}
                     </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <EmptyState
-                title={
-                  showArchived
-                    ? 'No archived accounts yet'
-                    : 'No active accounts yet'
-                }
-                description={
-                  showArchived
-                    ? 'Archived accounts will appear here after you archive one.'
-                    : 'Create your first cash, bank, credit card, debt, or investment account to start tracking balances.'
-                }
-                actionHref={showArchived ? '/dashboard/accounts' : undefined}
-                actionLabel={showArchived ? 'Show active accounts' : undefined}
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Create account</CardTitle>
-            <CardDescription>Add a basic household account.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={createAccountAction} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" name="name" required />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="account_type">Type</Label>
-                <Select name="account_type" defaultValue="checking">
-                  <SelectTrigger id="account_type" className="w-full">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accountTypes.map((accountType) => (
-                      <SelectItem
-                        key={accountType.value}
-                        value={accountType.value}
-                      >
-                        {accountType.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="currency_code">Currency</Label>
-                <Select name="currency_code" defaultValue={defaultCurrency}>
-                  <SelectTrigger id="currency_code" className="w-full">
-                    <SelectValue placeholder="Select currency" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activeCurrencies.map((currency) => (
-                      <SelectItem key={currency.code} value={currency.code}>
-                        {currency.code} - {currency.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="institution_name">Institution</Label>
-                <Input id="institution_name" name="institution_name" />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="last_four">Last four</Label>
-                <Input
-                  id="last_four"
-                  name="last_four"
-                  inputMode="numeric"
-                  maxLength={4}
-                  pattern="[0-9]{1,4}"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea id="notes" name="notes" />
-              </div>
-
-              <Label className="items-start gap-3 rounded-lg border p-3">
-                <input
-                  type="checkbox"
-                  name="include_in_net_worth"
-                  defaultChecked
-                  className="mt-0.5 size-4"
-                />
-                <span className="space-y-1">
-                  <span className="block">Include in net worth</span>
-                  <span className="block text-sm font-normal text-muted-foreground">
-                    Counts this account in household totals later.
-                  </span>
-                </span>
-              </Label>
-
-              <Button type="submit" className="w-full">
-                Create account
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              title={
+                showArchived
+                  ? 'No archived accounts yet'
+                  : 'No active accounts yet'
+              }
+              description={
+                showArchived
+                  ? 'Archived accounts will appear here after you archive one.'
+                  : 'Create your first account to start tracking balances.'
+              }
+              actionHref={
+                showArchived
+                  ? accountsPath({ showArchived: false })
+                  : accountsPath({ showArchived, mode: 'create' })
+              }
+              actionLabel={showArchived ? 'Hide archived' : 'Create account'}
+            />
+          )}
+        </CardContent>
+      </Card>
     </main>
   )
 }
