@@ -6,6 +6,7 @@ import {
   type TransactionFormCategory,
 } from './transaction-form'
 import { TransactionEditForm } from './transaction-edit-form'
+import { TransferEditForm } from './transfer-edit-form'
 import { VoidTransactionForm } from './void-transaction-form'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -629,6 +630,23 @@ export default async function TransactionsPage({
                     (transaction.status === 'posted' ||
                       transaction.status === 'pending') &&
                     Boolean(entry && allocation)
+                  const canEditTransfer =
+                    transaction.source === 'manual' &&
+                    transaction.transaction_type === 'transfer' &&
+                    (transaction.status === 'posted' ||
+                      transaction.status === 'pending') &&
+                    Boolean(
+                      transferOutEntry &&
+                        transferInEntry &&
+                        activeAccounts.some(
+                          (account) =>
+                            account.id === transferOutEntry.account_id
+                        ) &&
+                        activeAccounts.some(
+                          (account) =>
+                            account.id === transferInEntry.account_id
+                        )
+                    )
                   const transferFromAccountName = transferOutEntry
                     ? accountNamesById.get(transferOutEntry.account_id) ??
                       'Unknown account'
@@ -640,10 +658,10 @@ export default async function TransactionsPage({
                   const transactionLabel = isOpeningBalance
                     ? 'Opening balance'
                     : isTransfer
-                      ? `Transfer: ${transferFromAccountName} to ${transferToAccountName}`
+                      ? `Transfer: ${transferFromAccountName} -> ${transferToAccountName}`
                       : transaction.description || 'Transaction'
                   const accountName = isTransfer
-                    ? `${transferFromAccountName} to ${transferToAccountName}`
+                    ? `${transferFromAccountName} -> ${transferToAccountName}`
                     : entry
                       ? accountNamesById.get(entry.account_id) ??
                         'Unknown account'
@@ -751,6 +769,25 @@ export default async function TransactionsPage({
                           status={transaction.status}
                           accounts={activeAccounts}
                           categories={activeCategories}
+                          returnTo={returnTo}
+                        />
+                      ) : null}
+
+                      {canEditTransfer &&
+                      transferOutEntry &&
+                      transferInEntry ? (
+                        <TransferEditForm
+                          transactionId={transaction.id}
+                          transactionDate={transaction.transaction_date}
+                          fromAccountId={transferOutEntry.account_id}
+                          toAccountId={transferInEntry.account_id}
+                          amount={Math.abs(
+                            Number(transferInEntry.amount_account_currency)
+                          )}
+                          description={transaction.description ?? ''}
+                          notes={transaction.notes ?? ''}
+                          status={transaction.status}
+                          accounts={activeAccounts}
                           returnTo={returnTo}
                         />
                       ) : null}

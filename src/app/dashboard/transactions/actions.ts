@@ -351,6 +351,103 @@ export async function updateManualTransactionAction(formData: FormData) {
   redirectWithTransactionInfo('updated', returnTo)
 }
 
+export async function updateTransferTransactionAction(formData: FormData) {
+  const transactionId = String(formData.get('transaction_id') ?? '').trim()
+  const fromAccountId = String(formData.get('from_account_id') ?? '').trim()
+  const toAccountId = String(formData.get('to_account_id') ?? '').trim()
+  const amount = parsePositiveNumber(formData.get('amount'))
+  const transactionDate = String(formData.get('transaction_date') ?? '').trim()
+  const description = String(formData.get('description') ?? '').trim()
+  const notes = String(formData.get('notes') ?? '').trim()
+  const status = String(formData.get('status') ?? '').trim()
+  const returnTo = String(formData.get('return_to') ?? '').trim()
+
+  if (!transactionId) {
+    redirectWithTransactionError('Transaction id is required.', returnTo)
+  }
+
+  if (!fromAccountId) {
+    redirectWithTransactionError('Select the source account.', returnTo)
+  }
+
+  if (!toAccountId) {
+    redirectWithTransactionError('Select the destination account.', returnTo)
+  }
+
+  if (fromAccountId === toAccountId) {
+    redirectWithTransactionError(
+      'Source and destination accounts must be different.',
+      returnTo
+    )
+  }
+
+  if (amount === null) {
+    redirectWithTransactionError('Amount must be greater than 0.', returnTo)
+  }
+
+  if (!transactionDate) {
+    redirectWithTransactionError('Transaction date is required.', returnTo)
+  }
+
+  if (!isStatus(status)) {
+    redirectWithTransactionError('Select posted or pending status.', returnTo)
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    redirect('/login')
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('default_household_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    redirectWithTransactionError('Could not load your household.', returnTo)
+  }
+
+  if (!profile?.default_household_id) {
+    redirect('/onboarding')
+  }
+
+  const { error: transactionError } = await supabase.rpc(
+    'update_transfer_transaction',
+    {
+      p_transaction_id: transactionId,
+      p_from_account_id: fromAccountId,
+      p_to_account_id: toAccountId,
+      p_amount: amount,
+      p_transaction_date: transactionDate,
+      p_description: description || null,
+      p_notes: notes || null,
+      p_status: status,
+    }
+  )
+
+  if (transactionError) {
+    redirectWithTransactionError(
+      cleanRpcError(
+        transactionError.message,
+        'Could not update the transfer. Please check the form and try again.'
+      ),
+      returnTo
+    )
+  }
+
+  revalidatePath('/dashboard/transactions')
+  revalidatePath('/dashboard/accounts')
+  revalidatePath('/dashboard')
+  redirectWithTransactionInfo('updated', returnTo)
+}
+
 export async function voidTransactionAction(formData: FormData) {
   const transactionId = String(formData.get('transaction_id') ?? '').trim()
   const voidReason = String(formData.get('void_reason') ?? '').trim()
