@@ -3,12 +3,16 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
+function redirectWithLoginError(message: string): never {
+  redirect(`/login?error=${encodeURIComponent(message)}`)
+}
+
 export async function signInAction(formData: FormData) {
   const email = String(formData.get('email') ?? '').trim()
   const password = String(formData.get('password') ?? '')
 
   if (!email || !password) {
-    throw new Error('Email and password are required')
+    redirectWithLoginError('Email and password are required.')
   }
 
   const supabase = await createClient()
@@ -19,7 +23,7 @@ export async function signInAction(formData: FormData) {
   })
 
   if (error) {
-    throw new Error('Could not sign in with those credentials.')
+    redirectWithLoginError('Could not sign in with those credentials.')
   }
 
   redirect('/dashboard')
@@ -31,7 +35,7 @@ export async function signUpAction(formData: FormData) {
   const displayName = String(formData.get('displayName') ?? '').trim()
 
   if (!email || !password) {
-    throw new Error('Email and password are required')
+    redirectWithLoginError('Email and password are required.')
   }
 
   const supabase = await createClient()
@@ -47,7 +51,7 @@ export async function signUpAction(formData: FormData) {
   })
 
   if (error) {
-    throw new Error('Could not create the account. Please try again.')
+    redirectWithLoginError('Could not create the account. Please try again.')
   }
 
   redirect('/onboarding')

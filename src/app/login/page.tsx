@@ -7,7 +7,19 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 
-export default async function LoginPage() {
+type LoginPageProps = {
+  searchParams: Promise<{
+    error?: string | string[]
+  }>
+}
+
+function getSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = await searchParams
+  const errorMessage = getSearchParam(params.error)
   const supabase = await createClient()
 
   const {
@@ -26,6 +38,15 @@ export default async function LoginPage() {
         </CardHeader>
 
         <CardContent className="space-y-6">
+          {errorMessage ? (
+            <div
+              role="alert"
+              className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {errorMessage}
+            </div>
+          ) : null}
+
           <form action={signInAction} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="signin-email">Email</Label>
