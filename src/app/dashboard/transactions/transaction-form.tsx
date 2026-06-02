@@ -66,11 +66,21 @@ export function TransactionForm({
     [categories, transactionType]
   )
   const isTransfer = transactionType === 'transfer'
+  const selectedFromAccount = accounts.find(
+    (account) => account.id === fromAccountId
+  )
+  const selectedToAccount = accounts.find((account) => account.id === toAccountId)
+  const isCrossCurrencyTransfer =
+    Boolean(selectedFromAccount && selectedToAccount) &&
+    selectedFromAccount?.currency_code !== selectedToAccount?.currency_code
   const submitAction = isTransfer
     ? createTransferTransactionAction
     : createManualTransactionAction
   const canSubmit = isTransfer
-    ? accounts.length >= 2
+    ? accounts.length >= 2 &&
+      Boolean(fromAccountId) &&
+      Boolean(toAccountId) &&
+      !isCrossCurrencyTransfer
     : compatibleCategories.length > 0 && Boolean(categoryId)
 
   function handleTransactionTypeChange(value: TransactionType) {
@@ -180,6 +190,12 @@ export function TransactionForm({
           {accounts.length < 2 ? (
             <p className="text-sm text-muted-foreground">
               Create at least two accounts to transfer between them.
+            </p>
+          ) : null}
+
+          {isCrossCurrencyTransfer ? (
+            <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              Cross-currency transfers are not supported yet.
             </p>
           ) : null}
         </>
