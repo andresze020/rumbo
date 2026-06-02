@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { EmptyState } from '@/components/empty-state'
 import { parseCsv, guessCsvMapping } from '@/lib/imports/csv-parser'
 import { buildValidatedRows } from '@/lib/imports/csv-validation'
 import type {
@@ -174,7 +175,7 @@ export function CsvImportClient({
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{householdName}</p>
@@ -263,6 +264,13 @@ export function CsvImportClient({
           ) : null}
         </CardContent>
       </Card>
+
+      {!headers.length ? (
+        <EmptyState
+          title="No CSV preview yet"
+          description="Choose a CSV file with a header row to unlock column mapping, validation, and import confirmation."
+        />
+      ) : null}
 
       {headers.length ? (
         <Card>

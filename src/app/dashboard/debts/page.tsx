@@ -17,6 +17,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { EmptyState } from '@/components/empty-state'
 import { createClient } from '@/lib/supabase/server'
 
 type DebtsPageProps = {
@@ -272,7 +273,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
     currenciesError || debtsError || accountsError || balancesError
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{household.name}</p>
@@ -881,11 +882,10 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
               })}
             </div>
           ) : (
-            <div className="rounded-lg border border-dashed p-6">
-              <p className="text-sm text-muted-foreground">
-                No debts have been created yet.
-              </p>
-            </div>
+            <EmptyState
+              title="No debts yet"
+              description="Create or link a liability account to track current balances, minimum payments, due days, and debt payments."
+            />
           )}
         </CardContent>
       </Card>
