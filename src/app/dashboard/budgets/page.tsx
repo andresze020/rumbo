@@ -492,30 +492,17 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
             </Button>
           </form>
 
-          {!budgetError && budget ? (
-            <div className="flex flex-wrap gap-2 sm:justify-end">
-              {categoryOptions.length ? (
-                <Link
-                  href={budgetsPath({ month: selectedMonth, mode: 'addLine' })}
-                  className={buttonVariants()}
-                >
-                  Add budget line
-                </Link>
-              ) : null}
-
-              {hasPreviousBudget ? (
-                <form action={copyPreviousMonthBudgetAction}>
-                  <input type="hidden" name="month" value={selectedMonth} />
-                  <SubmitButton
-                    type="submit"
-                    variant="secondary"
-                    pendingText="Copying lines"
-                  >
-                    Copy previous month
-                  </SubmitButton>
-                </form>
-              ) : null}
-            </div>
+          {!budgetError && budget && hasPreviousBudget ? (
+            <form action={copyPreviousMonthBudgetAction}>
+              <input type="hidden" name="month" value={selectedMonth} />
+              <SubmitButton
+                type="submit"
+                variant="secondary"
+                pendingText="Copying lines"
+              >
+                Copy previous month
+              </SubmitButton>
+            </form>
           ) : null}
         </div>
       </div>
@@ -656,9 +643,19 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                     Planned amounts compared with posted expense actuals.
                   </CardDescription>
                 </div>
-                <Badge variant="outline">
-                  {formatValue(budget.budget_status)}
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">
+                    {formatValue(budget.budget_status)}
+                  </Badge>
+                  {categoryOptions.length ? (
+                    <Link
+                      href={budgetsPath({ month: selectedMonth, mode: 'addLine' })}
+                      className={buttonVariants({ size: 'sm' })}
+                    >
+                      Add budget line
+                    </Link>
+                  ) : null}
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -787,16 +784,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
               ) : (
                 <EmptyState
                   title="This budget has no lines yet"
-                  description="Add an expense category to start planning this month."
-                  actionHref={
-                    categoryOptions.length
-                      ? budgetsPath({
-                          month: selectedMonth,
-                          mode: 'addLine',
-                        })
-                      : undefined
-                  }
-                  actionLabel={categoryOptions.length ? 'Add budget line' : undefined}
+                  description="Use the Add budget line button above to start planning this month."
                 />
               )}
             </CardContent>
