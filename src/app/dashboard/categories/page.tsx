@@ -7,7 +7,7 @@ import {
 } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -18,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
+import { SubmitButton } from '@/components/submit-button'
 
 type CategoriesPageProps = {
   searchParams: Promise<{
@@ -432,9 +433,12 @@ function CategoryForm({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit">
+        <SubmitButton
+          type="submit"
+          pendingText={mode === 'create' ? 'Creating category' : 'Saving category'}
+        >
           {mode === 'create' ? 'Create category' : 'Save category'}
-        </Button>
+        </SubmitButton>
         <Link
           href={cancelHref}
           className={buttonVariants({ variant: 'outline' })}
@@ -554,13 +558,16 @@ function CategoryListItem({
               name="show_archived"
               value={showArchived ? 'true' : 'false'}
             />
-            <Button
+            <SubmitButton
               type="submit"
               size="sm"
               variant={category.is_archived ? 'outline' : 'secondary'}
+              pendingText={
+                category.is_archived ? 'Restoring' : 'Archiving'
+              }
             >
               {category.is_archived ? 'Restore category' : 'Archive category'}
-            </Button>
+            </SubmitButton>
           </form>
         </div>
       </div>

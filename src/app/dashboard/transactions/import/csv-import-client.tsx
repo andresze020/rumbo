@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { createCsvImportAction } from './actions'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -15,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
+import { SubmitButton } from '@/components/submit-button'
 import { parseCsv, guessCsvMapping } from '@/lib/imports/csv-parser'
 import { buildValidatedRows } from '@/lib/imports/csv-validation'
 import type {
@@ -451,12 +451,13 @@ export function CsvImportClient({
               />
               <input type="hidden" name="rows_json" value={rowsJson} />
 
-              <Button
+              <SubmitButton
                 type="submit"
                 disabled={!canImport || !accounts.length || !categories.length}
+                pendingText="Importing rows"
               >
                 Import valid rows
-              </Button>
+              </SubmitButton>
 
               {!canImport ? (
                 <p className="text-sm text-muted-foreground">

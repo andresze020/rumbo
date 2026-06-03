@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { updateManualTransactionAction } from './actions'
 import { CategoryPicker } from './category-picker'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { SubmitButton } from '@/components/submit-button'
 
 type TransactionType = 'income' | 'expense'
 
@@ -155,7 +156,9 @@ export function TransactionEditForm({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit">Save transaction</Button>
+        <SubmitButton type="submit" pendingText="Saving transaction">
+          Save transaction
+        </SubmitButton>
         <Link
           href={cancelHref}
           className={buttonVariants({ variant: 'outline' })}
