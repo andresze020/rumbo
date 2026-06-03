@@ -220,7 +220,7 @@ function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
 }
 
-function sumIncludedBase(rows: AccountRow[], accountClass: string) {
+function sumIncludedSignedBase(rows: AccountRow[], accountClass: string) {
   return rows
     .filter(
       (row) =>
@@ -229,9 +229,23 @@ function sumIncludedBase(rows: AccountRow[], accountClass: string) {
     )
     .reduce(
       (total, row) =>
-        total + Math.abs(Number(row.balance.posted_balance_base_currency)),
+        total + Number(row.balance.posted_balance_base_currency),
       0
     )
+}
+
+function sumIncludedDisplayedLiabilities(rows: AccountRow[]) {
+  return rows
+    .filter(
+      (row) =>
+        row.metadata.include_in_net_worth &&
+        row.metadata.account_class === 'liability'
+    )
+    .reduce((total, row) => {
+      const signedBalance = Number(row.balance.posted_balance_base_currency)
+
+      return total + Math.max(0, -signedBalance)
+    }, 0)
 }
 
 function CreateAccountForm({
@@ -724,9 +738,10 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const includedAccountCount = activeRows.filter(
     (row) => row.metadata.include_in_net_worth
   ).length
-  const totalAssets = sumIncludedBase(activeRows, 'asset')
-  const totalLiabilities = sumIncludedBase(activeRows, 'liability')
-  const netWorthImpact = totalAssets - totalLiabilities
+  const totalAssets = sumIncludedSignedBase(activeRows, 'asset')
+  const signedLiabilities = sumIncludedSignedBase(activeRows, 'liability')
+  const totalLiabilities = sumIncludedDisplayedLiabilities(activeRows)
+  const netWorthImpact = totalAssets + signedLiabilities
   const hasLoadError =
     accountBalancesError ||
     accountMetadataError ||
@@ -903,12 +918,6 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
               </CardDescription>
             </div>
 
-            <Link
-              href={accountsPath({ showArchived: !showArchived })}
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              {showArchived ? 'Hide archived' : 'Show archived'}
-            </Link>
           </div>
         </CardHeader>
         <CardContent>
@@ -1098,10 +1107,10 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
               }
               actionHref={
                 showArchived
-                  ? accountsPath({ showArchived: false })
+                  ? undefined
                   : accountsPath({ showArchived, mode: 'create' })
               }
-              actionLabel={showArchived ? 'Hide archived' : 'Create account'}
+              actionLabel={showArchived ? undefined : 'Create account'}
             />
           )}
         </CardContent>

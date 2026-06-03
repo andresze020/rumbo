@@ -62,6 +62,7 @@ type Transaction = {
   transaction_type: string
   status: string
   description: string | null
+  merchant_name: string | null
   notes: string | null
   source: string
   void_reason: string | null
@@ -337,7 +338,7 @@ export default async function TransactionsPage({
   let transactionsQuery = supabase
     .from('transactions')
     .select(
-      'id, transaction_date, transaction_type, status, description, notes, source, void_reason'
+      'id, transaction_date, transaction_type, status, description, merchant_name, notes, source, void_reason'
     )
     .eq('household_id', household.id)
     .gte('transaction_date', monthRange.start)
@@ -360,7 +361,7 @@ export default async function TransactionsPage({
       .replaceAll('_', '\\_')
 
     transactionsQuery = transactionsQuery.or(
-      `description.ilike.%${escapedSearchText}%,notes.ilike.%${escapedSearchText}%`
+      `description.ilike.%${escapedSearchText}%,merchant_name.ilike.%${escapedSearchText}%,notes.ilike.%${escapedSearchText}%`
     )
   }
 
@@ -880,6 +881,7 @@ export default async function TransactionsPage({
                 )}
                 cancelHref={returnTo}
                 description={selectedEditRow.transaction.description ?? ''}
+                merchantName={selectedEditRow.transaction.merchant_name ?? ''}
                 notes={selectedEditRow.transaction.notes ?? ''}
                 status={selectedEditRow.transaction.status}
                 accounts={activeAccounts}
@@ -969,6 +971,9 @@ export default async function TransactionsPage({
                       <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
                         <span>{row.transaction.transaction_date}</span>
                         <span>{getSourceLabel(row.transaction.source)}</span>
+                        {row.transaction.merchant_name ? (
+                          <span>Merchant: {row.transaction.merchant_name}</span>
+                        ) : null}
                         {row.transaction.void_reason ? (
                           <span>Void reason: {row.transaction.void_reason}</span>
                         ) : null}

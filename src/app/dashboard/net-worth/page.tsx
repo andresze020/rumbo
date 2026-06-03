@@ -118,8 +118,14 @@ function getDisplayBalance(account: AccountBalance, value: number | string) {
   const numericValue = Number(value)
 
   return account.account_class === 'liability'
-    ? Math.abs(numericValue)
+    ? Math.max(0, -numericValue)
     : numericValue
+}
+
+function getDisplayedLiabilityBalance(value: number | string) {
+  const numericValue = Number(value)
+
+  return Math.max(0, -numericValue)
 }
 
 function summarizeBalances(balances: AccountBalance[]): NetWorthSummary {
@@ -137,7 +143,15 @@ function summarizeBalances(balances: AccountBalance[]): NetWorthSummary {
     .filter((account) => account.account_class === 'liability')
     .reduce(
       (total, account) =>
-        total + Math.abs(Number(account.posted_balance_base_currency)),
+        total +
+        getDisplayedLiabilityBalance(account.posted_balance_base_currency),
+      0
+    )
+  const signedLiabilities = includedBalances
+    .filter((account) => account.account_class === 'liability')
+    .reduce(
+      (total, account) =>
+        total + Number(account.posted_balance_base_currency),
       0
     )
   const projectedAssets = includedBalances
@@ -151,17 +165,25 @@ function summarizeBalances(balances: AccountBalance[]): NetWorthSummary {
     .filter((account) => account.account_class === 'liability')
     .reduce(
       (total, account) =>
-        total + Math.abs(Number(account.projected_balance_base_currency)),
+        total +
+        getDisplayedLiabilityBalance(account.projected_balance_base_currency),
+      0
+    )
+  const signedProjectedLiabilities = includedBalances
+    .filter((account) => account.account_class === 'liability')
+    .reduce(
+      (total, account) =>
+        total + Number(account.projected_balance_base_currency),
       0
     )
 
   return {
     totalAssets,
     totalLiabilities,
-    netWorth: totalAssets - totalLiabilities,
+    netWorth: totalAssets + signedLiabilities,
     projectedAssets,
     projectedLiabilities,
-    projectedNetWorth: projectedAssets - projectedLiabilities,
+    projectedNetWorth: projectedAssets + signedProjectedLiabilities,
   }
 }
 
