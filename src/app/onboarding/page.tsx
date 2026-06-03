@@ -1,7 +1,13 @@
 import { redirect } from 'next/navigation'
 import { createHouseholdAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
@@ -35,10 +41,13 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4 sm:p-6">
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/8 via-background to-background p-4 sm:p-6">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Create your household</CardTitle>
+          <CardDescription>
+            Set up your household name and base currency to get started.
+          </CardDescription>
         </CardHeader>
 
         <CardContent>

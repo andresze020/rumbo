@@ -18,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
+import { MetricCard } from '@/components/metric-card'
 import { SubmitButton } from '@/components/submit-button'
 import { createClient } from '@/lib/supabase/server'
 
@@ -151,10 +152,6 @@ function formatPercent(value: number | null) {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   }).format(value)
-}
-
-function formatValue(value: string) {
-  return value.replaceAll('_', ' ')
 }
 
 function formatTransactionCount(count: number) {
@@ -584,15 +581,12 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {summaryCards.map((summary) => (
-              <Card key={summary.label}>
-                <CardHeader>
-                  <CardTitle>{summary.label}</CardTitle>
-                  <CardDescription>{summary.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-xl font-semibold">{summary.value}</p>
-                </CardContent>
-              </Card>
+              <MetricCard
+                key={summary.label}
+                label={summary.label}
+                value={summary.value}
+                description={summary.description}
+              />
             ))}
           </div>
 
@@ -643,19 +637,14 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                     Planned amounts compared with posted expense actuals.
                   </CardDescription>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">
-                    {formatValue(budget.budget_status)}
-                  </Badge>
-                  {categoryOptions.length ? (
-                    <Link
-                      href={budgetsPath({ month: selectedMonth, mode: 'addLine' })}
-                      className={buttonVariants({ size: 'sm' })}
-                    >
-                      Add budget line
-                    </Link>
-                  ) : null}
-                </div>
+                {categoryOptions.length ? (
+                  <Link
+                    href={budgetsPath({ month: selectedMonth, mode: 'addLine' })}
+                    className={buttonVariants({ size: 'sm' })}
+                  >
+                    Add budget line
+                  </Link>
+                ) : null}
               </div>
             </CardHeader>
             <CardContent>
@@ -675,20 +664,31 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                       ? getCategoryPath(category, categoriesById)
                       : line.category_name || 'Unknown category'
 
+                    const barWidth =
+                      linePercent !== null
+                        ? Math.min(Math.round(linePercent * 100), 100)
+                        : 0
+                    const barColor =
+                      status.variant === 'destructive'
+                        ? 'bg-destructive'
+                        : status.variant === 'secondary'
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500'
+
                     return (
-                      <div key={line.line_id} className="space-y-4 p-4">
+                      <div key={line.line_id} className="space-y-4 p-4 transition-colors hover:bg-muted/20">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div className="space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <h2 className="font-medium">{categoryName}</h2>
                               {line.category_is_archived ? (
-                                <Badge variant="outline">archived</Badge>
+                                <Badge variant="outline">Archived</Badge>
                               ) : null}
                               {line.category_exclude_from_budget ? (
-                                <Badge variant="outline">excluded</Badge>
+                                <Badge variant="outline">Excluded from budget</Badge>
                               ) : null}
                               {line.category_exclude_from_reports ? (
-                                <Badge variant="outline">no reports</Badge>
+                                <Badge variant="outline">No reports</Badge>
                               ) : null}
                               <Badge variant={status.variant}>
                                 {status.label}
@@ -738,6 +738,24 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                               </SubmitButton>
                             </form>
                           </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>
+                              {formatCurrency(actualAmount, budgetCurrency)} spent
+                            </span>
+                            <span>{formatPercent(linePercent)}</span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={`h-full rounded-full transition-all ${barColor}`}
+                              style={{ width: `${barWidth}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            of {formatCurrency(plannedAmount, budgetCurrency)} planned
+                          </p>
                         </div>
 
                         <div className="grid gap-3 sm:grid-cols-4">

@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { MetricCard } from '@/components/metric-card'
 
 type AccountBalance = {
   account_id: string
@@ -93,7 +94,9 @@ function formatCurrency(value: number, currencyCode: string) {
 }
 
 function formatValue(value: string) {
-  return value.replaceAll('_', ' ')
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
 function formatTransactionCount(count: number, descriptor = 'transaction') {
@@ -430,15 +433,12 @@ export default async function DashboardPage({
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {monthlyCards.map((summary) => (
-              <Card key={summary.label}>
-                <CardHeader>
-                  <CardTitle>{summary.label}</CardTitle>
-                  <CardDescription>{summary.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-xl font-semibold">{summary.value}</p>
-                </CardContent>
-              </Card>
+              <MetricCard
+                key={summary.label}
+                label={summary.label}
+                value={summary.value}
+                description={summary.description}
+              />
             ))}
           </div>
 
@@ -483,7 +483,7 @@ export default async function DashboardPage({
                                 {categoryPath.name}
                               </p>
                               {categoryPath.isArchived ? (
-                                <Badge variant="outline">archived</Badge>
+                                <Badge variant="outline">Archived</Badge>
                               ) : null}
                             </div>
                             <p className="text-sm text-muted-foreground">
@@ -547,17 +547,12 @@ export default async function DashboardPage({
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {summaryCards.map((summary) => (
-              <Card key={summary.label}>
-                <CardHeader>
-                  <CardTitle>{summary.label}</CardTitle>
-                  <CardDescription>{summary.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-xl font-semibold">
-                    {formatCurrency(summary.value, household.base_currency)}
-                  </p>
-                </CardContent>
-              </Card>
+              <MetricCard
+                key={summary.label}
+                label={summary.label}
+                value={formatCurrency(summary.value, household.base_currency)}
+                description={summary.description}
+              />
             ))}
           </div>
 
@@ -582,10 +577,10 @@ export default async function DashboardPage({
                             {formatValue(account.account_type)}
                           </Badge>
                           <Badge variant="outline">
-                            {account.account_class}
+                            {formatValue(account.account_class)}
                           </Badge>
                           {account.is_archived ? (
-                            <Badge variant="outline">archived</Badge>
+                            <Badge variant="outline">Archived</Badge>
                           ) : null}
                         </div>
                         <p className="text-sm text-muted-foreground">

@@ -1,7 +1,13 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { signInAction, signUpAction } from './actions'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
@@ -31,10 +37,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4 sm:p-6">
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/8 via-background to-background p-4 sm:p-6">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>App Finanzas</CardTitle>
+          <CardDescription>
+            Sign in to manage your household finances.
+          </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-6">

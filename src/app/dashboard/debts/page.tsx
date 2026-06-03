@@ -18,6 +18,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/empty-state'
+import { MetricCard } from '@/components/metric-card'
+import { StatusBadge } from '@/components/status-badge'
 import { SubmitButton } from '@/components/submit-button'
 import { createClient } from '@/lib/supabase/server'
 
@@ -373,15 +375,12 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {statusCards.map((card) => (
-          <Card key={card.label}>
-            <CardHeader>
-              <CardTitle>{card.label}</CardTitle>
-              <CardDescription>{card.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-semibold">{card.value}</p>
-            </CardContent>
-          </Card>
+          <MetricCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            description={card.description}
+          />
         ))}
       </div>
 
@@ -905,23 +904,17 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                 return (
                   <div
                     key={debt.id}
-                    className={`space-y-3 p-4 ${
+                    className={`space-y-3 p-4 transition-colors ${
                       debt.status === 'inactive'
                         ? 'bg-muted/30 text-muted-foreground'
-                        : ''
+                        : 'hover:bg-muted/20'
                     }`}
                   >
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="font-medium">{debt.name}</h2>
-                          <Badge
-                            variant={
-                              debt.status === 'active' ? 'default' : 'outline'
-                            }
-                          >
-                            {debt.status}
-                          </Badge>
+                          <StatusBadge status={debt.status} />
                           {account?.include_in_net_worth ? (
                             <Badge variant="secondary">Net worth</Badge>
                           ) : (

@@ -18,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
+import { MetricCard } from '@/components/metric-card'
 import { SubmitButton } from '@/components/submit-button'
 
 type CategoriesPageProps = {
@@ -386,8 +387,12 @@ function CategoryForm({
           <Input
             id={`color_${mode}`}
             name="color"
+            placeholder="#3b82f6"
             defaultValue={category?.color ?? ''}
           />
+          <p className="text-xs text-muted-foreground">
+            Any CSS color — hex, rgb, oklch, etc.
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -395,8 +400,12 @@ function CategoryForm({
           <Input
             id={`icon_${mode}`}
             name="icon"
+            placeholder="e.g. 🛒 🍽️ 🚗 🏠"
             defaultValue={category?.icon ?? ''}
           />
+          <p className="text-xs text-muted-foreground">
+            Paste any emoji — shown next to the category name.
+          </p>
         </div>
       </div>
 
@@ -486,7 +495,7 @@ function CategoryListItem({
               />
             ) : null}
             {category.icon ? (
-              <span className="text-sm text-muted-foreground">
+              <span className="text-base leading-none" aria-hidden="true">
                 {category.icon}
               </span>
             ) : null}
@@ -790,15 +799,12 @@ export default async function CategoriesPage({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {summaryCards.map((card) => (
-          <Card key={card.label}>
-            <CardHeader>
-              <CardTitle>{card.label}</CardTitle>
-              <CardDescription>{card.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-semibold">{card.value}</p>
-            </CardContent>
-          </Card>
+          <MetricCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            description={card.description}
+          />
         ))}
       </div>
 

@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/empty-state'
+import { MetricCard } from '@/components/metric-card'
 import { SubmitButton } from '@/components/submit-button'
 
 type AccountsPageProps = {
@@ -150,8 +151,10 @@ function accountsPath({
   return `/dashboard/accounts${queryString ? `?${queryString}` : ''}`
 }
 
-function formatAccountType(accountType: string) {
-  return accountType.replaceAll('_', ' ')
+function formatLabel(value: string) {
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
 function formatCurrency(value: number | string, currencyCode: string) {
@@ -447,8 +450,12 @@ function EditAccountForm({
           <Input
             id={`color_${account.id}`}
             name="color"
+            placeholder="#3b82f6"
             defaultValue={account.color ?? ''}
           />
+          <p className="text-xs text-muted-foreground">
+            Any CSS color — hex, rgb, oklch, etc.
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -456,8 +463,12 @@ function EditAccountForm({
           <Input
             id={`icon_${account.id}`}
             name="icon"
+            placeholder="e.g. 💰 💳 🏦 📈"
             defaultValue={account.icon ?? ''}
           />
+          <p className="text-xs text-muted-foreground">
+            Paste any emoji — shown next to the account name.
+          </p>
         </div>
       </div>
 
@@ -843,15 +854,12 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {summaryCards.map((card) => (
-          <Card key={card.label}>
-            <CardHeader>
-              <CardTitle>{card.label}</CardTitle>
-              <CardDescription>{card.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-semibold">{card.value}</p>
-            </CardContent>
-          </Card>
+          <MetricCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            description={card.description}
+          />
         ))}
       </div>
 
@@ -942,12 +950,24 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
+                          {metadata.color ? (
+                            <span
+                              className="size-3 shrink-0 rounded-full border"
+                              style={{ backgroundColor: metadata.color }}
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                          {metadata.icon ? (
+                            <span className="text-base leading-none" aria-hidden="true">
+                              {metadata.icon}
+                            </span>
+                          ) : null}
                           <h2 className="font-medium">{metadata.name}</h2>
                           <Badge variant="secondary">
-                            {formatAccountType(metadata.account_type)}
+                            {formatLabel(metadata.account_type)}
                           </Badge>
                           <Badge variant="outline">
-                            {metadata.account_class}
+                            {formatLabel(metadata.account_class)}
                           </Badge>
                           <Badge variant="outline">
                             {metadata.currency_code}
@@ -956,9 +976,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                             <Badge variant="outline">Archived</Badge>
                           ) : null}
                           {row.hasOpeningBalance ? (
-                            <Badge variant="outline">
-                              Opening balance set
-                            </Badge>
+                            <Badge variant="outline">Opening balance set</Badge>
                           ) : null}
                         </div>
 

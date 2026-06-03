@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { createCsvImportAction } from './actions'
 import { Badge } from '@/components/ui/badge'
+import { buttonVariants } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -189,7 +190,7 @@ export function CsvImportClient({
 
         <Link
           href="/dashboard/transactions"
-          className="inline-flex h-8 items-center justify-center rounded-lg border border-border px-2.5 text-sm font-medium transition-colors hover:bg-muted"
+          className={buttonVariants({ variant: 'outline', size: 'sm' })}
         >
           Back to transactions
         </Link>

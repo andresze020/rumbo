@@ -12,6 +12,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
+import { MetricCard } from '@/components/metric-card'
 import { createClient } from '@/lib/supabase/server'
 
 type NetWorthPageProps = {
@@ -111,7 +112,9 @@ function formatCurrency(value: number | string, currencyCode: string) {
 }
 
 function formatValue(value: string) {
-  return value.replaceAll('_', ' ')
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
 function getDisplayBalance(account: AccountBalance, value: number | string) {
@@ -215,14 +218,14 @@ function AccountList({
               <Badge variant="secondary">
                 {formatValue(account.account_type)}
               </Badge>
-              <Badge variant="outline">{account.account_class}</Badge>
+              <Badge variant="outline">{formatValue(account.account_class)}</Badge>
               <Badge
                 variant={account.include_in_net_worth ? 'default' : 'outline'}
               >
                 {account.include_in_net_worth ? 'Included' : 'Excluded'}
               </Badge>
               {account.is_archived ? (
-                <Badge variant="outline">archived</Badge>
+                <Badge variant="outline">Archived</Badge>
               ) : null}
             </div>
             <p className="text-sm text-muted-foreground">
@@ -408,17 +411,12 @@ export default async function NetWorthPage({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {summaryCards.map((card) => (
-          <Card key={card.label}>
-            <CardHeader>
-              <CardTitle>{card.label}</CardTitle>
-              <CardDescription>{card.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-semibold">
-                {formatCurrency(card.value, household.base_currency)}
-              </p>
-            </CardContent>
-          </Card>
+          <MetricCard
+            key={card.label}
+            label={card.label}
+            value={formatCurrency(card.value, household.base_currency)}
+            description={card.description}
+          />
         ))}
       </div>
 

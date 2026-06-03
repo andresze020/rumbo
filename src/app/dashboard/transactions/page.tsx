@@ -20,6 +20,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
+import { MetricCard } from '@/components/metric-card'
+import { StatusBadge } from '@/components/status-badge'
 import { createClient } from '@/lib/supabase/server'
 
 type TransactionsPageProps = {
@@ -804,15 +806,12 @@ export default async function TransactionsPage({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {summaryCards.map((card) => (
-          <Card key={card.label}>
-            <CardHeader>
-              <CardTitle>{card.label}</CardTitle>
-              <CardDescription>{card.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-semibold">{card.value}</p>
-            </CardContent>
-          </Card>
+          <MetricCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            description={card.description}
+          />
         ))}
       </div>
 
@@ -943,8 +942,10 @@ export default async function TransactionsPage({
               {transactionRows.map((row) => (
                 <div
                   key={row.transaction.id}
-                  className={`space-y-4 p-4 ${
-                    row.isVoided ? 'bg-muted/30 text-muted-foreground' : ''
+                  className={`space-y-4 p-4 transition-colors ${
+                    row.isVoided
+                      ? 'bg-muted/30 text-muted-foreground'
+                      : 'hover:bg-muted/20'
                   }`}
                 >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -960,9 +961,7 @@ export default async function TransactionsPage({
                                 ? 'Debt payment'
                                 : formatValue(row.transaction.transaction_type)}
                         </Badge>
-                        <Badge variant="outline">
-                          {formatValue(row.transaction.status)}
-                        </Badge>
+                        <StatusBadge status={row.transaction.status} />
                         {row.isImported ? (
                           <Badge variant="outline">Imported</Badge>
                         ) : null}
@@ -982,7 +981,13 @@ export default async function TransactionsPage({
 
                     <div className="space-y-3 lg:min-w-40 lg:text-right">
                       {row.amountEntry && row.displayAmount !== undefined ? (
-                        <p className="text-lg font-semibold">
+                        <p
+                          className={`text-lg font-semibold tabular-nums ${
+                            row.transaction.transaction_type === 'income'
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : ''
+                          }`}
+                        >
                           {formatCurrency(
                             row.displayAmount,
                             row.amountEntry.currency_code
