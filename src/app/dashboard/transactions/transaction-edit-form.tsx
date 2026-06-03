@@ -34,6 +34,7 @@ type TransactionEditFormProps = {
   amount: number
   cancelHref: string
   description: string
+  merchantName: string
   notes: string
   status: string
   accounts: EditAccount[]
@@ -60,6 +61,7 @@ export function TransactionEditForm({
   amount,
   cancelHref,
   description,
+  merchantName,
   notes,
   status,
   accounts,
@@ -70,7 +72,6 @@ export function TransactionEditForm({
     <form action={updateManualTransactionAction} className="space-y-4">
       <input type="hidden" name="transaction_id" value={transactionId} />
       <input type="hidden" name="return_to" value={returnTo} />
-      <input type="hidden" name="merchant_name" value="" />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-2">
@@ -143,6 +144,15 @@ export function TransactionEditForm({
           id={`edit_description_${transactionId}`}
           name="description"
           defaultValue={description}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor={`edit_merchant_${transactionId}`}>Merchant</Label>
+        <Input
+          id={`edit_merchant_${transactionId}`}
+          name="merchant_name"
+          defaultValue={merchantName}
         />
       </div>
 

@@ -9,6 +9,13 @@ function redirectWithError(message: string): never {
   redirect(`/dashboard/transactions/import?error=${encodeURIComponent(message)}`)
 }
 
+type ImportedRow = {
+  created_transaction_id: string | null
+  mapped_data: {
+    merchant_name?: unknown
+  } | null
+}
+
 async function getAuthenticatedHousehold() {
   const supabase = await createClient()
 
@@ -84,6 +91,46 @@ export async function createCsvImportAction(formData: FormData) {
     redirectWithError(
       cleanRpcError(error.message, 'Could not import the CSV transactions.')
     )
+  }
+
+  const { data: importedRows, error: importedRowsError } = await supabase
+    .from('import_rows')
+    .select('created_transaction_id, mapped_data')
+    .eq('household_id', householdId)
+    .eq('import_batch_id', batchId)
+    .eq('validation_status', 'imported')
+    .not('created_transaction_id', 'is', null)
+
+  if (importedRowsError) {
+    redirectWithError('CSV imported, but merchant names could not be saved.')
+  }
+
+  const merchantUpdates = ((importedRows ?? []) as ImportedRow[])
+    .map((row) => {
+      const merchantName =
+        typeof row.mapped_data?.merchant_name === 'string'
+          ? row.mapped_data.merchant_name.trim()
+          : ''
+
+      return {
+        transactionId: row.created_transaction_id,
+        merchantName,
+      }
+    })
+    .filter((row) => row.transactionId && row.merchantName)
+
+  const merchantUpdateResults = await Promise.all(
+    merchantUpdates.map((row) =>
+      supabase
+        .from('transactions')
+        .update({ merchant_name: row.merchantName })
+        .eq('household_id', householdId)
+        .eq('id', row.transactionId)
+    )
+  )
+
+  if (merchantUpdateResults.some((result) => result.error)) {
+    redirectWithError('CSV imported, but merchant names could not be saved.')
   }
 
   revalidatePath('/dashboard/transactions')

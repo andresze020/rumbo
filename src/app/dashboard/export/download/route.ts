@@ -25,6 +25,7 @@ type Transaction = {
   status: string
   source: string
   description: string | null
+  merchant_name: string | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -226,7 +227,7 @@ async function buildTransactionsCsv({
     supabase
       .from('transactions')
       .select(
-        'id, transaction_date, transaction_type, status, source, description, notes, created_at, updated_at, voided_at, void_reason, import_batch_id, import_row_id'
+        'id, transaction_date, transaction_type, status, source, description, merchant_name, notes, created_at, updated_at, voided_at, void_reason, import_batch_id, import_row_id'
       )
       .eq('household_id', household.id)
       .is('deleted_at', null)
@@ -343,7 +344,7 @@ async function buildTransactionsCsv({
     { header: 'status', value: (row) => row.transaction.status },
     { header: 'source', value: (row) => row.transaction.source },
     { header: 'description', value: (row) => row.transaction.description },
-    { header: 'merchant_name', value: () => null },
+    { header: 'merchant_name', value: (row) => row.transaction.merchant_name },
     { header: 'notes', value: (row) => row.transaction.notes },
     { header: 'entry_id', value: (row) => row.entry?.id },
     { header: 'entry_type', value: (row) => row.entry?.entry_type },

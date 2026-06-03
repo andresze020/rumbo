@@ -113,7 +113,7 @@ function getDebtBalance(
 ) {
   const balance = balancesByAccountId.get(debt.account_id)
 
-  return Math.abs(Number(balance?.posted_balance_account_currency ?? 0))
+  return Math.max(0, -Number(balance?.posted_balance_account_currency ?? 0))
 }
 
 function getBaseDebtBalance(
@@ -122,7 +122,7 @@ function getBaseDebtBalance(
 ) {
   const balance = balancesByAccountId.get(debt.account_id)
 
-  return Math.abs(Number(balance?.posted_balance_base_currency ?? 0))
+  return Math.max(0, -Number(balance?.posted_balance_base_currency ?? 0))
 }
 
 function getPaydownPercent(debt: Debt, balance: number) {
@@ -519,6 +519,8 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                         assetAccount.currency_code === account.currency_code
                     )
                   : []
+                const canRegisterPayment =
+                  currentBalance > 0 && sourceAccounts.length > 0
 
                 return (
                   <div
@@ -825,6 +827,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                                 name="payment_amount"
                                 type="number"
                                 min="0.01"
+                                max={currentBalance || undefined}
                                 step="0.01"
                                 required
                               />
@@ -882,10 +885,17 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
 
                           <SubmitButton
                             type="submit"
+                            disabled={!canRegisterPayment}
                             pendingText="Registering payment"
                           >
                             Register payment
                           </SubmitButton>
+                          {!canRegisterPayment ? (
+                            <p className="text-sm text-muted-foreground">
+                              Payments require an outstanding balance and a
+                              matching active asset account.
+                            </p>
+                          ) : null}
                         </form>
                       ) : null}
                     </div>

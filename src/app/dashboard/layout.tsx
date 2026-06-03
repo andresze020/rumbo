@@ -19,7 +19,7 @@ const dashboardLinks = [
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen">
-      <header className="border-b">
+      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3 sm:px-6">
           <div className="hidden items-center justify-between gap-4 lg:flex">
             <nav className="flex flex-wrap gap-2">

@@ -104,8 +104,14 @@ function getDisplayAccountBalance(account: AccountBalance, value: number | strin
   const numericValue = Number(value)
 
   return account.account_class === 'liability'
-    ? Math.abs(numericValue)
+    ? Math.max(0, -numericValue)
     : numericValue
+}
+
+function getDisplayedLiabilityBalance(value: number | string) {
+  const numericValue = Number(value)
+
+  return Math.max(0, -numericValue)
 }
 
 function formatPercent(value: number | string | null) {
@@ -249,7 +255,15 @@ export default async function DashboardPage({
     .filter((account) => account.account_class === 'liability')
     .reduce(
       (total, account) =>
-        total + Math.abs(Number(account.posted_balance_base_currency)),
+        total +
+        getDisplayedLiabilityBalance(account.posted_balance_base_currency),
+      0
+    )
+  const signedLiabilities = includedBalances
+    .filter((account) => account.account_class === 'liability')
+    .reduce(
+      (total, account) =>
+        total + Number(account.posted_balance_base_currency),
       0
     )
   const projectedAssets = includedBalances
@@ -259,15 +273,15 @@ export default async function DashboardPage({
         total + Number(account.projected_balance_base_currency),
       0
     )
-  const projectedLiabilities = includedBalances
+  const signedProjectedLiabilities = includedBalances
     .filter((account) => account.account_class === 'liability')
     .reduce(
       (total, account) =>
-        total + Math.abs(Number(account.projected_balance_base_currency)),
+        total + Number(account.projected_balance_base_currency),
       0
     )
-  const netWorth = totalAssets - totalLiabilities
-  const projectedNetWorth = projectedAssets - projectedLiabilities
+  const netWorth = totalAssets + signedLiabilities
+  const projectedNetWorth = projectedAssets + signedProjectedLiabilities
   const incomeTransactionCount = Number(
     monthlySummary?.income_transaction_count ?? 0
   )
