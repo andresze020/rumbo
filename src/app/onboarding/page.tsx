@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation'
 import { createHouseholdAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { SubmitButton } from '@/components/submit-button'
 import {
   Select,
   SelectContent,
@@ -67,9 +67,13 @@ export default async function OnboardingPage() {
               </Select>
             </div>
 
-            <Button type="submit" className="w-full">
+            <SubmitButton
+              type="submit"
+              className="w-full"
+              pendingText="Creating household"
+            >
               Create household
-            </Button>
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>

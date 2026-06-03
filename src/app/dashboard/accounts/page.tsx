@@ -8,7 +8,7 @@ import {
 } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/empty-state'
+import { SubmitButton } from '@/components/submit-button'
 
 type AccountsPageProps = {
   searchParams: Promise<{
@@ -320,7 +321,9 @@ function CreateAccountForm({
       </Label>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit">Create account</Button>
+        <SubmitButton type="submit" pendingText="Creating account">
+          Create account
+        </SubmitButton>
         <Link
           href={accountsPath({ showArchived })}
           className={buttonVariants({ variant: 'outline' })}
@@ -469,7 +472,9 @@ function EditAccountForm({
       </Label>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit">Save account</Button>
+        <SubmitButton type="submit" pendingText="Saving account">
+          Save account
+        </SubmitButton>
         <Link
           href={accountsPath({ showArchived })}
           className={buttonVariants({ variant: 'outline' })}
@@ -549,9 +554,13 @@ function OpeningBalanceForm({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" variant="outline">
+        <SubmitButton
+          type="submit"
+          variant="outline"
+          pendingText="Setting balance"
+        >
           Set opening balance
-        </Button>
+        </SubmitButton>
         <Link
           href={accountsPath({ showArchived })}
           className={buttonVariants({ variant: 'outline' })}
@@ -1055,17 +1064,20 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                           name="show_archived"
                           value={showArchived ? 'true' : 'false'}
                         />
-                        <Button
+                        <SubmitButton
                           type="submit"
                           size="sm"
                           variant={
                             metadata.is_archived ? 'outline' : 'secondary'
                           }
+                          pendingText={
+                            metadata.is_archived ? 'Restoring' : 'Archiving'
+                          }
                         >
                           {metadata.is_archived
                             ? 'Restore account'
                             : 'Archive account'}
-                        </Button>
+                        </SubmitButton>
                       </form>
                     </div>
                   </div>

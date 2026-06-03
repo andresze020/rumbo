@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { voidTransactionAction } from './actions'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { SubmitButton } from '@/components/submit-button'
 
 type VoidTransactionFormProps = {
   transactionId: string
@@ -38,9 +39,14 @@ export function VoidTransactionForm({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" variant="outline" size="sm">
+        <SubmitButton
+          type="submit"
+          variant="outline"
+          size="sm"
+          pendingText="Voiding"
+        >
           Void
-        </Button>
+        </SubmitButton>
         <Button
           type="button"
           variant="ghost"

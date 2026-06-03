@@ -6,7 +6,7 @@ import {
   updateDebtAction,
 } from './actions'
 import { Badge } from '@/components/ui/badge'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/empty-state'
+import { SubmitButton } from '@/components/submit-button'
 import { createClient } from '@/lib/supabase/server'
 
 type DebtsPageProps = {
@@ -491,7 +492,9 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
               <Textarea id="notes" name="notes" />
             </div>
 
-            <Button type="submit">Create debt</Button>
+            <SubmitButton type="submit" pendingText="Creating debt">
+              Create debt
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>
@@ -773,9 +776,13 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                           />
                         </div>
 
-                        <Button type="submit" variant="outline">
+                        <SubmitButton
+                          type="submit"
+                          variant="outline"
+                          pendingText="Saving debt"
+                        >
                           Save debt
-                        </Button>
+                        </SubmitButton>
                       </form>
 
                       {debt.status === 'active' ? (
@@ -873,7 +880,12 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                             />
                           </div>
 
-                          <Button type="submit">Register payment</Button>
+                          <SubmitButton
+                            type="submit"
+                            pendingText="Registering payment"
+                          >
+                            Register payment
+                          </SubmitButton>
                         </form>
                       ) : null}
                     </div>

@@ -377,7 +377,7 @@ export default async function DashboardPage({
               Net worth
             </Link>
           </div>
-          <form action="/dashboard" className="flex items-end gap-2">
+          <form action="/dashboard" className="flex flex-wrap items-end gap-2">
             <div className="grid gap-1">
               <Label htmlFor="month">Month</Label>
               <Input

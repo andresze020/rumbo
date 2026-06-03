@@ -352,7 +352,10 @@ export default async function NetWorthPage({
           >
             Debts
           </Link>
-          <form action="/dashboard/net-worth" className="flex items-end gap-2">
+          <form
+            action="/dashboard/net-worth"
+            className="flex flex-wrap items-end gap-2"
+          >
             <div className="grid gap-1">
               <Label htmlFor="month">Month</Label>
               <Input

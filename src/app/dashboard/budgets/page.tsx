@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { SubmitButton } from '@/components/submit-button'
 import { createClient } from '@/lib/supabase/server'
 
 type BudgetsPageProps = {
@@ -252,7 +253,10 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
         </div>
 
         <div className="flex flex-col gap-2 sm:items-end">
-          <form action="/dashboard/budgets" className="flex items-end gap-2">
+          <form
+            action="/dashboard/budgets"
+            className="flex flex-wrap items-end gap-2"
+          >
             <div className="grid gap-1">
               <Label htmlFor="month">Month</Label>
               <Input
@@ -269,9 +273,13 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
 
           <form action={copyPreviousMonthBudgetAction}>
             <input type="hidden" name="month" value={selectedMonth} />
-            <Button type="submit" variant="secondary">
+            <SubmitButton
+              type="submit"
+              variant="secondary"
+              pendingText="Copying lines"
+            >
               Copy previous month
-            </Button>
+            </SubmitButton>
           </form>
         </div>
       </div>
@@ -325,7 +333,9 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
           <CardContent>
             <form action={createBudgetAction}>
               <input type="hidden" name="month" value={selectedMonth} />
-              <Button type="submit">Create budget</Button>
+              <SubmitButton type="submit" pendingText="Creating budget">
+                Create budget
+              </SubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -422,9 +432,13 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                                 name="line_id"
                                 value={line.line_id ?? ''}
                               />
-                              <Button type="submit" variant="outline">
+                              <SubmitButton
+                                type="submit"
+                                variant="outline"
+                                pendingText="Removing"
+                              >
                                 Remove
-                              </Button>
+                              </SubmitButton>
                             </form>
                           </div>
 
@@ -499,7 +513,12 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                                   defaultValue={plannedAmount}
                                 />
                               </div>
-                              <Button type="submit">Save amount</Button>
+                              <SubmitButton
+                                type="submit"
+                                pendingText="Saving amount"
+                              >
+                                Save amount
+                              </SubmitButton>
                             </form>
                           ) : null}
                         </div>
@@ -571,9 +590,13 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                       />
                     </div>
 
-                    <Button type="submit" className="w-full">
+                    <SubmitButton
+                      type="submit"
+                      className="w-full"
+                      pendingText="Adding line"
+                    >
                       Add line
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : (
                   <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">

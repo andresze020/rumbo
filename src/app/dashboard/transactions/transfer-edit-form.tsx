@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { updateTransferTransactionAction } from './actions'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { SubmitButton } from '@/components/submit-button'
 
 type TransferAccount = {
   id: string
@@ -210,9 +211,13 @@ export function TransferEditForm({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={!canSubmit}>
+        <SubmitButton
+          type="submit"
+          disabled={!canSubmit}
+          pendingText="Saving transfer"
+        >
           Save transfer
-        </Button>
+        </SubmitButton>
         <Link
           href={cancelHref}
           className={buttonVariants({ variant: 'outline' })}

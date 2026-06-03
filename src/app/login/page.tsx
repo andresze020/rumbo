@@ -1,11 +1,11 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { signInAction, signUpAction } from './actions'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { SubmitButton } from '@/components/submit-button'
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -69,9 +69,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               />
             </div>
 
-            <Button type="submit" className="w-full">
+            <SubmitButton
+              type="submit"
+              className="w-full"
+              pendingText="Signing in"
+            >
               Sign in
-            </Button>
+            </SubmitButton>
           </form>
 
           <Separator />
@@ -107,9 +111,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               />
             </div>
 
-            <Button type="submit" variant="outline" className="w-full">
+            <SubmitButton
+              type="submit"
+              variant="outline"
+              className="w-full"
+              pendingText="Creating account"
+            >
               Create account
-            </Button>
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>

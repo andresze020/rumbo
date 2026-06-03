@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { LogOut, Menu } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { SubmitButton } from '@/components/submit-button'
 import { signOutAction } from './session-actions'
 
 const dashboardLinks = [
@@ -35,10 +35,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </nav>
 
             <form action={signOutAction} className="shrink-0">
-              <Button type="submit" variant="outline" size="sm">
+              <SubmitButton
+                type="submit"
+                variant="outline"
+                size="sm"
+                pendingText="Signing out"
+              >
                 <LogOut aria-hidden="true" />
                 Sign out
-              </Button>
+              </SubmitButton>
             </form>
           </div>
 
@@ -64,15 +69,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </nav>
 
             <form action={signOutAction} className="mt-3">
-              <Button
+              <SubmitButton
                 type="submit"
                 variant="outline"
                 size="sm"
                 className="w-full"
+                pendingText="Signing out"
               >
                 <LogOut aria-hidden="true" />
                 Sign out
-              </Button>
+              </SubmitButton>
             </form>
           </details>
         </div>

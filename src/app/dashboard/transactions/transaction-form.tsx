@@ -7,10 +7,11 @@ import {
   createTransferTransactionAction,
 } from './actions'
 import { CategoryPicker } from './category-picker'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { SubmitButton } from '@/components/submit-button'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
 
@@ -292,9 +293,13 @@ export function TransactionForm({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={!canSubmit}>
+        <SubmitButton
+          type="submit"
+          disabled={!canSubmit}
+          pendingText={isTransfer ? 'Creating transfer' : 'Creating transaction'}
+        >
           {isTransfer ? 'Create transfer' : 'Create transaction'}
-        </Button>
+        </SubmitButton>
         <Link
           href={cancelHref}
           className={buttonVariants({ variant: 'outline' })}
