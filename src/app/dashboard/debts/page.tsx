@@ -27,6 +27,9 @@ type DebtsPageProps = {
     updated?: string
     paid?: string
     error?: string
+    mode?: string
+    edit?: string
+    pay?: string
   }>
 }
 
@@ -75,6 +78,23 @@ type Debt = {
 
 const selectClassName =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+
+function debtsPath({
+  mode,
+  edit,
+  pay,
+}: {
+  mode?: 'create'
+  edit?: string
+  pay?: string
+} = {}) {
+  const params = new URLSearchParams()
+  if (mode) params.set('mode', mode)
+  if (edit) params.set('edit', edit)
+  if (pay) params.set('pay', pay)
+  const qs = params.toString()
+  return `/dashboard/debts${qs ? `?${qs}` : ''}`
+}
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
@@ -145,6 +165,9 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
   const updated = params.updated === '1'
   const paid = params.paid === '1'
   const errorMessage = typeof params.error === 'string' ? params.error : null
+  const isCreating = params.mode === 'create'
+  const editDebtId = typeof params.edit === 'string' ? params.edit : null
+  const payDebtId = typeof params.pay === 'string' ? params.pay : null
   const supabase = await createClient()
 
   const {
@@ -273,6 +296,24 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
   const hasLoadError =
     currenciesError || debtsError || accountsError || balancesError
 
+  const selectedEditDebt = editDebtId
+    ? (debtRows.find((d) => d.id === editDebtId) ?? null)
+    : null
+  const selectedPayDebt = payDebtId
+    ? (debtRows.find((d) => d.id === payDebtId) ?? null)
+    : null
+  const selectedPayAccount = selectedPayDebt
+    ? accountsById.get(selectedPayDebt.account_id)
+    : null
+  const selectedPayBalance = selectedPayDebt
+    ? getDebtBalance(selectedPayDebt, balancesByAccountId)
+    : 0
+  const selectedPaySourceAccounts = selectedPayAccount
+    ? activeAssetAccounts.filter(
+        (a) => a.currency_code === selectedPayAccount.currency_code
+      )
+    : []
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -284,12 +325,20 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
           </p>
         </div>
 
-        <Link
-          href="/dashboard/net-worth"
-          className={buttonVariants({ variant: 'outline' })}
-        >
-          Net worth
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={debtsPath({ mode: 'create' })}
+            className={buttonVariants()}
+          >
+            Create debt
+          </Link>
+          <Link
+            href="/dashboard/net-worth"
+            className={buttonVariants({ variant: 'outline' })}
+          >
+            Net worth
+          </Link>
+        </div>
       </div>
 
       {errorMessage ? (
@@ -336,168 +385,495 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
         ))}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Create debt</CardTitle>
-          <CardDescription>
-            Add debt metadata and create or link a liability account.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={createDebtAction} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">Debt name</Label>
-                <Input id="name" name="name" required />
+      {isCreating ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Create debt</CardTitle>
+            <CardDescription>
+              Add a debt record and create or link a liability account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form action={createDebtAction} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Debt name</Label>
+                  <Input id="name" name="name" required />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="lender_name">Lender</Label>
+                  <Input id="lender_name" name="lender_name" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="existing_account_id">
+                    Existing liability account
+                  </Label>
+                  <select
+                    id="existing_account_id"
+                    name="existing_account_id"
+                    className={selectClassName}
+                    defaultValue=""
+                  >
+                    <option value="">Create new account</option>
+                    {linkableLiabilityAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name} · {formatValue(account.account_type)} ·{' '}
+                        {account.currency_code}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="account_type">New account type</Label>
+                  <select
+                    id="account_type"
+                    name="account_type"
+                    className={selectClassName}
+                    defaultValue="debt"
+                  >
+                    <option value="debt">Debt</option>
+                    <option value="credit_card">Credit card</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="currency_code">Currency</Label>
+                  <select
+                    id="currency_code"
+                    name="currency_code"
+                    className={selectClassName}
+                    defaultValue={defaultCurrency}
+                  >
+                    {currencyOptions.map((currency) => (
+                      <option key={currency.code} value={currency.code}>
+                        {currency.code} · {currency.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="opening_balance_amount">
+                    Current outstanding balance
+                  </Label>
+                  <Input
+                    id="opening_balance_amount"
+                    name="opening_balance_amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    defaultValue="0"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The amount you currently owe. This creates the opening
+                    liability balance.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="opening_balance_date">Balance date</Label>
+                  <Input
+                    id="opening_balance_date"
+                    name="opening_balance_date"
+                    type="date"
+                    defaultValue={todayIsoDate()}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="original_principal">Original principal</Label>
+                  <Input
+                    id="original_principal"
+                    name="original_principal"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional. The original amount borrowed, used for reference
+                    and progress tracking.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="interest_rate">Interest rate (%)</Label>
+                  <Input
+                    id="interest_rate"
+                    name="interest_rate"
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="interest_rate_period">Interest period</Label>
+                  <select
+                    id="interest_rate_period"
+                    name="interest_rate_period"
+                    className={selectClassName}
+                    defaultValue=""
+                  >
+                    <option value="">Not set</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="annual">Annual</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="minimum_payment">Minimum payment</Label>
+                  <Input
+                    id="minimum_payment"
+                    name="minimum_payment"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="payment_due_day">Due day</Label>
+                  <Input
+                    id="payment_due_day"
+                    name="payment_due_day"
+                    type="number"
+                    min="1"
+                    max="31"
+                    step="1"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="lender_name">Lender</Label>
-                <Input id="lender_name" name="lender_name" />
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea id="notes" name="notes" />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="existing_account_id">
-                  Existing liability account
-                </Label>
-                <select
-                  id="existing_account_id"
-                  name="existing_account_id"
-                  className={selectClassName}
-                  defaultValue=""
+              <div className="flex flex-wrap gap-2">
+                <SubmitButton type="submit" pendingText="Creating debt">
+                  Create debt
+                </SubmitButton>
+                <Link
+                  href={debtsPath()}
+                  className={buttonVariants({ variant: 'outline' })}
                 >
-                  <option value="">Create new account</option>
-                  {linkableLiabilityAccounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name} · {formatValue(account.account_type)} ·{' '}
-                      {account.currency_code}
-                    </option>
-                  ))}
-                </select>
+                  Cancel
+                </Link>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {selectedEditDebt ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Edit debt</CardTitle>
+            <CardDescription>
+              Update metadata for {selectedEditDebt.name}. The current balance
+              comes from ledger entries and cannot be edited here.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form action={updateDebtAction} className="space-y-4">
+              <input type="hidden" name="debt_id" value={selectedEditDebt.id} />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="edit_name">Name</Label>
+                  <Input
+                    id="edit_name"
+                    name="name"
+                    defaultValue={selectedEditDebt.name}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_status">Status</Label>
+                  <select
+                    id="edit_status"
+                    name="status"
+                    defaultValue={selectedEditDebt.status}
+                    className={selectClassName}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_lender_name">Lender</Label>
+                  <Input
+                    id="edit_lender_name"
+                    name="lender_name"
+                    defaultValue={selectedEditDebt.lender_name ?? ''}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_original_principal">
+                    Original principal
+                  </Label>
+                  <Input
+                    id="edit_original_principal"
+                    name="original_principal"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    defaultValue={nullableNumber(
+                      selectedEditDebt.original_principal
+                    )}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional. The original amount borrowed, for reference and
+                    progress tracking.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_interest_rate">Interest rate (%)</Label>
+                  <Input
+                    id="edit_interest_rate"
+                    name="interest_rate"
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    defaultValue={nullableNumber(selectedEditDebt.interest_rate)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_interest_rate_period">
+                    Interest period
+                  </Label>
+                  <select
+                    id="edit_interest_rate_period"
+                    name="interest_rate_period"
+                    defaultValue={selectedEditDebt.interest_rate_period ?? ''}
+                    className={selectClassName}
+                  >
+                    <option value="">Not set</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="annual">Annual</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_minimum_payment">Minimum payment</Label>
+                  <Input
+                    id="edit_minimum_payment"
+                    name="minimum_payment"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    defaultValue={nullableNumber(
+                      selectedEditDebt.minimum_payment
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_payment_due_day">Due day</Label>
+                  <Input
+                    id="edit_payment_due_day"
+                    name="payment_due_day"
+                    type="number"
+                    min="1"
+                    max="31"
+                    step="1"
+                    defaultValue={nullableNumber(selectedEditDebt.payment_due_day)}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="account_type">New account type</Label>
-                <select
-                  id="account_type"
-                  name="account_type"
-                  className={selectClassName}
-                  defaultValue="debt"
+                <Label htmlFor="edit_notes">Notes</Label>
+                <Textarea
+                  id="edit_notes"
+                  name="notes"
+                  defaultValue={selectedEditDebt.notes ?? ''}
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <SubmitButton
+                  type="submit"
+                  variant="outline"
+                  pendingText="Saving debt"
                 >
-                  <option value="debt">Debt</option>
-                  <option value="credit_card">Credit card</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="currency_code">Currency</Label>
-                <select
-                  id="currency_code"
-                  name="currency_code"
-                  className={selectClassName}
-                  defaultValue={defaultCurrency}
+                  Save debt
+                </SubmitButton>
+                <Link
+                  href={debtsPath()}
+                  className={buttonVariants({ variant: 'outline' })}
                 >
-                  {currencyOptions.map((currency) => (
-                    <option key={currency.code} value={currency.code}>
-                      {currency.code} · {currency.name}
-                    </option>
-                  ))}
-                </select>
+                  Cancel
+                </Link>
               </div>
+            </form>
+          </CardContent>
+        </Card>
+      ) : null}
 
-              <div className="space-y-2">
-                <Label htmlFor="opening_balance_amount">Current balance</Label>
-                <Input
-                  id="opening_balance_amount"
-                  name="opening_balance_amount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  defaultValue="0"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="opening_balance_date">Balance date</Label>
-                <Input
-                  id="opening_balance_date"
-                  name="opening_balance_date"
-                  type="date"
-                  defaultValue={todayIsoDate()}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="original_principal">Original principal</Label>
-                <Input
-                  id="original_principal"
-                  name="original_principal"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="interest_rate">Interest rate</Label>
-                <Input
-                  id="interest_rate"
-                  name="interest_rate"
-                  type="number"
-                  min="0"
-                  step="0.0001"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="interest_rate_period">Interest period</Label>
-                <select
-                  id="interest_rate_period"
-                  name="interest_rate_period"
-                  className={selectClassName}
-                  defaultValue=""
+      {selectedPayDebt ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Register payment</CardTitle>
+            <CardDescription>
+              Record a principal payment for {selectedPayDebt.name}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {selectedPaySourceAccounts.length === 0 ? (
+              <EmptyState
+                title="No source accounts available"
+                description="Create an asset account before registering a payment."
+                actionHref={debtsPath()}
+                actionLabel="Back to debts"
+              />
+            ) : selectedPayBalance <= 0 ? (
+              <div className="space-y-4">
+                <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  This debt is fully paid off. No outstanding balance to pay.
+                </p>
+                <Link
+                  href={debtsPath()}
+                  className={buttonVariants({ variant: 'outline' })}
                 >
-                  <option value="">Not set</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="annual">Annual</option>
-                </select>
+                  Back to debts
+                </Link>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="minimum_payment">Minimum payment</Label>
-                <Input
-                  id="minimum_payment"
-                  name="minimum_payment"
-                  type="number"
-                  min="0"
-                  step="0.01"
+            ) : (
+              <form action={createDebtPaymentAction} className="space-y-4">
+                <input
+                  type="hidden"
+                  name="debt_id"
+                  value={selectedPayDebt.id}
                 />
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="payment_due_day">Due day</Label>
-                <Input
-                  id="payment_due_day"
-                  name="payment_due_day"
-                  type="number"
-                  min="1"
-                  max="31"
-                  step="1"
-                />
-              </div>
-            </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Current outstanding balance
+                  </p>
+                  <p className="mt-1 text-base font-semibold">
+                    {formatCurrency(
+                      selectedPayBalance,
+                      selectedPayAccount?.currency_code ??
+                        household.base_currency
+                    )}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Principal payments reduce this balance and do not count as
+                    expenses.
+                  </p>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea id="notes" name="notes" />
-            </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="pay_source_account_id">
+                      Source account
+                    </Label>
+                    <select
+                      id="pay_source_account_id"
+                      name="source_account_id"
+                      className={selectClassName}
+                      required
+                    >
+                      <option value="">Select account</option>
+                      {selectedPaySourceAccounts.map((sourceAccount) => (
+                        <option key={sourceAccount.id} value={sourceAccount.id}>
+                          {sourceAccount.name} · {sourceAccount.currency_code}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-            <SubmitButton type="submit" pendingText="Creating debt">
-              Create debt
-            </SubmitButton>
-          </form>
-        </CardContent>
-      </Card>
+                  <div className="space-y-2">
+                    <Label htmlFor="pay_payment_amount">
+                      Principal payment amount
+                    </Label>
+                    <Input
+                      id="pay_payment_amount"
+                      name="payment_amount"
+                      type="number"
+                      min="0.01"
+                      max={selectedPayBalance || undefined}
+                      step="0.01"
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Cannot exceed the current outstanding balance of{' '}
+                      {formatCurrency(
+                        selectedPayBalance,
+                        selectedPayAccount?.currency_code ??
+                          household.base_currency
+                      )}
+                      .
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="pay_payment_date">Payment date</Label>
+                    <Input
+                      id="pay_payment_date"
+                      name="payment_date"
+                      type="date"
+                      defaultValue={todayIsoDate()}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="pay_status">Status</Label>
+                    <select
+                      id="pay_status"
+                      name="status"
+                      defaultValue="posted"
+                      className={selectClassName}
+                    >
+                      <option value="posted">Posted</option>
+                      <option value="pending">Pending</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="pay_description">Description</Label>
+                  <Input
+                    id="pay_description"
+                    name="description"
+                    defaultValue={`Debt payment: ${selectedPayDebt.name}`}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="pay_notes">Notes</Label>
+                  <Textarea id="pay_notes" name="notes" />
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <SubmitButton
+                    type="submit"
+                    pendingText="Registering payment"
+                  >
+                    Register payment
+                  </SubmitButton>
+                  <Link
+                    href={debtsPath()}
+                    className={buttonVariants({ variant: 'outline' })}
+                  >
+                    Cancel
+                  </Link>
+                </div>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -520,19 +896,23 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                     )
                   : []
                 const canRegisterPayment =
-                  currentBalance > 0 && sourceAccounts.length > 0
+                  debt.status === 'active' &&
+                  currentBalance > 0 &&
+                  sourceAccounts.length > 0
+                const isBeingEdited = editDebtId === debt.id
+                const isBeingPaid = payDebtId === debt.id
 
                 return (
                   <div
                     key={debt.id}
-                    className={`space-y-4 p-4 ${
+                    className={`space-y-3 p-4 ${
                       debt.status === 'inactive'
                         ? 'bg-muted/30 text-muted-foreground'
                         : ''
                     }`}
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="space-y-1">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="font-medium">{debt.name}</h2>
                           <Badge
@@ -548,13 +928,19 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                             <Badge variant="outline">Excluded</Badge>
                           )}
                         </div>
+                        {debt.lender_name ? (
+                          <p className="text-sm text-muted-foreground">
+                            {debt.lender_name}
+                          </p>
+                        ) : null}
                         <p className="text-sm text-muted-foreground">
                           {account?.name ?? 'Missing account'} ·{' '}
+                          {formatValue(account?.account_type ?? 'debt')} ·{' '}
                           {account?.currency_code ?? household.base_currency}
                         </p>
                       </div>
 
-                      <div className="space-y-1 sm:text-right">
+                      <div className="space-y-0.5 sm:text-right">
                         <p className="text-xl font-semibold">
                           {formatCurrency(
                             currentBalance,
@@ -567,12 +953,12 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                       </div>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                      <div className="rounded-lg bg-muted/40 p-3">
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="rounded-lg bg-muted/40 p-2.5">
                         <p className="text-xs text-muted-foreground">
                           Original principal
                         </p>
-                        <p className="mt-1 font-medium">
+                        <p className="mt-0.5 text-sm font-medium">
                           {debt.original_principal
                             ? formatCurrency(
                                 debt.original_principal,
@@ -582,21 +968,21 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                             : 'Not set'}
                         </p>
                       </div>
-                      <div className="rounded-lg bg-muted/40 p-3">
+                      <div className="rounded-lg bg-muted/40 p-2.5">
                         <p className="text-xs text-muted-foreground">
                           Interest
                         </p>
-                        <p className="mt-1 font-medium">
+                        <p className="mt-0.5 text-sm font-medium">
                           {debt.interest_rate
                             ? `${debt.interest_rate}% ${debt.interest_rate_period ?? ''}`.trim()
                             : 'Not set'}
                         </p>
                       </div>
-                      <div className="rounded-lg bg-muted/40 p-3">
+                      <div className="rounded-lg bg-muted/40 p-2.5">
                         <p className="text-xs text-muted-foreground">
                           Minimum payment
                         </p>
-                        <p className="mt-1 font-medium">
+                        <p className="mt-0.5 text-sm font-medium">
                           {debt.minimum_payment
                             ? formatCurrency(
                                 debt.minimum_payment,
@@ -606,16 +992,16 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                             : 'Not set'}
                         </p>
                       </div>
-                      <div className="rounded-lg bg-muted/40 p-3">
+                      <div className="rounded-lg bg-muted/40 p-2.5">
                         <p className="text-xs text-muted-foreground">Due day</p>
-                        <p className="mt-1 font-medium">
+                        <p className="mt-0.5 text-sm font-medium">
                           {formatDueDay(debt.payment_due_day)}
                         </p>
                       </div>
                     </div>
 
                     {paydownPercent !== null ? (
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">
                             Principal paid down
@@ -635,268 +1021,40 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                       </div>
                     ) : null}
 
-                    {debt.lender_name || debt.notes ? (
-                      <div className="rounded-lg bg-muted/40 p-3 text-sm">
-                        {debt.lender_name ? (
-                          <p>
-                            <span className="text-muted-foreground">
-                              Lender:{' '}
-                            </span>
-                            {debt.lender_name}
-                          </p>
-                        ) : null}
-                        {debt.notes ? <p className="mt-1">{debt.notes}</p> : null}
-                      </div>
+                    {debt.notes ? (
+                      <p className="text-sm text-muted-foreground">
+                        {debt.notes}
+                      </p>
                     ) : null}
 
-                    <div className="grid gap-4 lg:grid-cols-2">
-                      <form
-                        action={updateDebtAction}
-                        className="space-y-3 rounded-lg border p-3"
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <Link
+                        href={debtsPath({ edit: debt.id })}
+                        className={buttonVariants({
+                          variant: isBeingEdited ? 'default' : 'outline',
+                          size: 'sm',
+                        })}
                       >
-                        <input type="hidden" name="debt_id" value={debt.id} />
-
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label htmlFor={`name_${debt.id}`}>Name</Label>
-                            <Input
-                              id={`name_${debt.id}`}
-                              name="name"
-                              defaultValue={debt.name}
-                              required
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`status_${debt.id}`}>Status</Label>
-                            <select
-                              id={`status_${debt.id}`}
-                              name="status"
-                              defaultValue={debt.status}
-                              className={selectClassName}
-                            >
-                              <option value="active">Active</option>
-                              <option value="inactive">Inactive</option>
-                            </select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`lender_name_${debt.id}`}>
-                              Lender
-                            </Label>
-                            <Input
-                              id={`lender_name_${debt.id}`}
-                              name="lender_name"
-                              defaultValue={debt.lender_name ?? ''}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`original_principal_${debt.id}`}>
-                              Original principal
-                            </Label>
-                            <Input
-                              id={`original_principal_${debt.id}`}
-                              name="original_principal"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              defaultValue={nullableNumber(
-                                debt.original_principal
-                              )}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`interest_rate_${debt.id}`}>
-                              Interest rate
-                            </Label>
-                            <Input
-                              id={`interest_rate_${debt.id}`}
-                              name="interest_rate"
-                              type="number"
-                              min="0"
-                              step="0.0001"
-                              defaultValue={nullableNumber(debt.interest_rate)}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`interest_rate_period_${debt.id}`}>
-                              Interest period
-                            </Label>
-                            <select
-                              id={`interest_rate_period_${debt.id}`}
-                              name="interest_rate_period"
-                              defaultValue={debt.interest_rate_period ?? ''}
-                              className={selectClassName}
-                            >
-                              <option value="">Not set</option>
-                              <option value="monthly">Monthly</option>
-                              <option value="annual">Annual</option>
-                            </select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`minimum_payment_${debt.id}`}>
-                              Minimum payment
-                            </Label>
-                            <Input
-                              id={`minimum_payment_${debt.id}`}
-                              name="minimum_payment"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              defaultValue={nullableNumber(
-                                debt.minimum_payment
-                              )}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`payment_due_day_${debt.id}`}>
-                              Due day
-                            </Label>
-                            <Input
-                              id={`payment_due_day_${debt.id}`}
-                              name="payment_due_day"
-                              type="number"
-                              min="1"
-                              max="31"
-                              step="1"
-                              defaultValue={nullableNumber(debt.payment_due_day)}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor={`notes_${debt.id}`}>Notes</Label>
-                          <Textarea
-                            id={`notes_${debt.id}`}
-                            name="notes"
-                            defaultValue={debt.notes ?? ''}
-                          />
-                        </div>
-
-                        <SubmitButton
-                          type="submit"
-                          variant="outline"
-                          pendingText="Saving debt"
-                        >
-                          Save debt
-                        </SubmitButton>
-                      </form>
-
+                        {isBeingEdited ? 'Editing…' : 'Edit'}
+                      </Link>
                       {debt.status === 'active' ? (
-                        <form
-                          action={createDebtPaymentAction}
-                          className="space-y-3 rounded-lg border p-3"
-                        >
-                          <input type="hidden" name="debt_id" value={debt.id} />
-
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="space-y-2">
-                              <Label htmlFor={`source_account_id_${debt.id}`}>
-                                Source account
-                              </Label>
-                              <select
-                                id={`source_account_id_${debt.id}`}
-                                name="source_account_id"
-                                className={selectClassName}
-                                required
-                              >
-                                <option value="">Select account</option>
-                                {sourceAccounts.map((sourceAccount) => (
-                                  <option
-                                    key={sourceAccount.id}
-                                    value={sourceAccount.id}
-                                  >
-                                    {sourceAccount.name} ·{' '}
-                                    {sourceAccount.currency_code}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label htmlFor={`payment_amount_${debt.id}`}>
-                                Payment amount
-                              </Label>
-                              <Input
-                                id={`payment_amount_${debt.id}`}
-                                name="payment_amount"
-                                type="number"
-                                min="0.01"
-                                max={currentBalance || undefined}
-                                step="0.01"
-                                required
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label htmlFor={`payment_date_${debt.id}`}>
-                                Payment date
-                              </Label>
-                              <Input
-                                id={`payment_date_${debt.id}`}
-                                name="payment_date"
-                                type="date"
-                                defaultValue={todayIsoDate()}
-                                required
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label htmlFor={`payment_status_${debt.id}`}>
-                                Status
-                              </Label>
-                              <select
-                                id={`payment_status_${debt.id}`}
-                                name="status"
-                                defaultValue="posted"
-                                className={selectClassName}
-                              >
-                                <option value="posted">Posted</option>
-                                <option value="pending">Pending</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`payment_description_${debt.id}`}>
-                              Description
-                            </Label>
-                            <Input
-                              id={`payment_description_${debt.id}`}
-                              name="description"
-                              defaultValue={`Debt payment: ${debt.name}`}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`payment_notes_${debt.id}`}>
-                              Notes
-                            </Label>
-                            <Textarea
-                              id={`payment_notes_${debt.id}`}
-                              name="notes"
-                            />
-                          </div>
-
-                          <SubmitButton
-                            type="submit"
-                            disabled={!canRegisterPayment}
-                            pendingText="Registering payment"
+                        canRegisterPayment ? (
+                          <Link
+                            href={debtsPath({ pay: debt.id })}
+                            className={buttonVariants({
+                              variant: isBeingPaid ? 'default' : 'secondary',
+                              size: 'sm',
+                            })}
                           >
-                            Register payment
-                          </SubmitButton>
-                          {!canRegisterPayment ? (
-                            <p className="text-sm text-muted-foreground">
-                              Payments require an outstanding balance and a
-                              matching active asset account.
-                            </p>
-                          ) : null}
-                        </form>
+                            {isBeingPaid ? 'Registering…' : 'Register payment'}
+                          </Link>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            {sourceAccounts.length === 0
+                              ? 'No matching asset account.'
+                              : 'Fully paid off.'}
+                          </span>
+                        )
                       ) : null}
                     </div>
                   </div>
@@ -906,7 +1064,9 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
           ) : (
             <EmptyState
               title="No debts yet"
-              description="Create or link a liability account to track current balances, minimum payments, due days, and debt payments."
+              description="No debts yet. Add a debt to start tracking liabilities and payments."
+              actionHref={debtsPath({ mode: 'create' })}
+              actionLabel="Create debt"
             />
           )}
         </CardContent>
