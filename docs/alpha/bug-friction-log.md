@@ -46,7 +46,8 @@
 | BF-013 | 2026-06-04 | Accounts | UX friction | Accounts page view is too expanded/verbose; account summary cards show too much detail at once, making it hard to scan and compare accounts. | 1. Go to Accounts page. 2. Observe the layout with multiple account rows. 3. Try to quickly compare account names and balances. | Account rows should be more compact by default, with expanded detail view only when the card is tapped/clicked. Summary-only view for quick scanning. | Accounts are verbose; user must scroll through lots of detail text to see all accounts. | None | Always | Scroll slowly and mentally filter. | P2 | Fixed | [Sprint 12.8] Replaced 3 sub-cards (Posted/Pending/Projected) with a compact inline text row. Reduced card spacing from space-y-4 to space-y-3. Further expand-on-tap enhancement pending BF-016. |
 | BF-014 | 2026-06-04 | Transactions | UX friction | Transactions table/list view is too expanded with many columns, making the page feel cluttered on both desktop and mobile. | 1. Go to Transactions page. 2. Scroll through transaction rows. 3. Observe spacing and column density. | Transaction rows should be more compact; show essential info (date, description, amount) and collapse less-critical detail (e.g., notes, account, currency) into an expand-on-tap detail row. | Transaction rows are wide and verbose, hard to scan through many rows without lots of scrolling. | None | Always | Scroll patiently. | P2 | Fixed | [Sprint 12.8] Replaced 3 sub-cards (Account/Category/Currency) with single compact metadata line. Reduced spacing to space-y-1. Void UX improved: "Add reason" removed from default view; Void button now shows inline confirm+reason+cancel. |
 | BF-015 | 2026-06-04 | Transactions | UX friction | Transaction rows do not display the category icon, missing a quick visual cue for categorization. | 1. Go to Transactions page. 2. Review transaction rows. 3. Look for category icon or badge. | Each transaction row should display its category icon/badge for quick visual scanning (similar to many personal finance apps). | Category icon is not visible; only category name text is shown (if shown at all). | None | Sometimes | Read category name text. | P2 | Fixed | [Sprint 12.8] Added icon field to Category and CategoryLookup types and queries. Category icon emoji now appears before category name in transaction metadata line. |
-| BF-016 | 2026-06-04 | Accounts / Transactions | Nice-to-have | From the Accounts summary, tapping an account card should navigate to a filtered Transactions view showing only that account's transactions. | 1. Go to Accounts. 2. Identify an account. 3. Tap the account card/row. 4. Expect to see filtered transactions. | Tapping an account should navigate to Transactions page with a pre-filter for that account, enabling quick transaction review for a specific account. | Tapping the card does not navigate or filter. | None | Sometimes | Go to Transactions, then manually select the account filter. | P2 | Open | Low-risk if the account ID can be passed via URL param or query state to the transactions filter. Test with a single account first. |
+| BF-016 | 2026-06-04 | Accounts / Transactions | Nice-to-have | From the Accounts summary, tapping an account card should navigate to a filtered Transactions view showing only that account's transactions. | 1. Go to Accounts. 2. Identify an account. 3. Tap the account card/row. 4. Expect to see filtered transactions. | Tapping an account should navigate to Transactions page with a pre-filter for that account, enabling quick transaction review for a specific account. | Tapping the card does not navigate or filter. | None | Sometimes | Go to Transactions, then manually select the account filter. | P2 | Fixed | [Sprint 12.9] "View transactions →" link inside expanded account card detail navigates to /dashboard/transactions?account_id={id}. |
+| BF-021 | 2026-06-04 | Accounts | UX friction | Account cards were expanded by default with no way to collapse them, making the accounts list hard to scan. | 1. Go to Accounts. 2. Observe account cards with all details always visible. | Cards should be compact by default (just name, type, currency, balance) and expand on tap to show additional detail. | All detail always visible; accounts list was verbose and hard to scan quickly. | None | Always | Scroll patiently. | P2 | Fixed | [Sprint 12.9] AccountCardDetails client component: compact single-row summary (tap anywhere to expand/collapse); animated grid-rows expansion; expanded section shows 3-col balance grid, meta row with dot separators, View transactions link, and action buttons. |
 | BF-017 | 2026-06-04 | Transactions | Nice-to-have | Transaction filters (type, status, account, category) are single-select dropdowns; would benefit from multi-select or dynamic filtering UI. | 1. Go to Transactions. 2. Open filter section. 3. Try to filter by multiple accounts or categories. | Filters should support multi-select or dynamic filter application (e.g., filter chips, range pickers) to speed up common queries. | Only one value per filter; user must create multiple filtered views or remember which filters are active. | None | Sometimes | Use filters one at a time and adjust. | P3 | Open | Nice-to-have for power users; defer unless real usage shows this is a blocker for daily workflows. |
 | BF-018 | 2026-06-04 | Transactions | Important bug | When adding a transaction from an account (via "Add transaction" button on account card) with a preselected account, changing the transaction type from Expense to Income (or vice versa) resets the account field back to empty. | 1. Go to Accounts. 2. Click "Add transaction" on an account row. 3. Form opens with account preselected. 4. Change transaction type from Expense to Income. 5. Observe account field. | The account field should remain populated and preselected after changing transaction type. | Account field resets to empty when transaction type changes. | None | Always | Manually re-select the account after changing transaction type. | P1 | Fixed | [Sprint 12.7] handleTransactionTypeChange no longer resets accountId when switching between income/expense. Switching to Transfer now pre-populates fromAccountId with the current account. |
 | BF-019 | 2026-06-04 | Navigation / Transactions | UX friction | After successfully creating a transaction from the "Add transaction" button on an account (Accounts page) or FAB from any page, the user is redirected to the Transactions page instead of returning to the origin page (Accounts or wherever they started). | 1. Go to Accounts page. 2. Click "Add transaction" on an account. 3. Complete form and submit. 4. Observe navigation destination. | After transaction creation, user should return to the page they came from (Accounts, Dashboard, etc.), not always to Transactions. | Always redirects to Transactions page regardless of origin. | None | Always | Navigate back manually using browser/menu. | P2 | Fixed | [Sprint 12.8] TransactionForm now accepts returnTo prop (hidden input). GlobalAddTransactionButton passes usePathname() as returnTo. Root cause was addQueryParam only accepting /dashboard/transactions/* paths — now accepts any /dashboard/* path. |
@@ -58,8 +59,8 @@
 |---|---:|---:|---:|---:|---:|---:|
 | Alpha blocker | 2 | 1 | 0 | 0 | 0 | 1 |
 | Important bug | 6 | 0 | 4 | 0 | 0 | 2 |
-| UX friction | 8 | 0 | 0 | 3 | 0 | 5 |
-| Nice-to-have | 3 | 0 | 0 | 0 | 3 | 0 |
+| UX friction | 9 | 0 | 0 | 2 | 0 | 7 |
+| Nice-to-have | 3 | 0 | 0 | 0 | 2 | 1 |
 | Post-MVP | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ## Completed in prior sprints
@@ -89,9 +90,21 @@ All three critical bugs fixed:
 - ✅ `BF-015` — Transactions show category icons.
 - ✅ `BF-019` — Return to origin page after transaction creation.
 
-**Sprint 12.9+ — Remaining open issues**
+**Sprint 12.9 — COMPLETED** ✅
 
-1. `BF-016` (P2) — Accounts card tap → filtered transactions view (low-risk, high UX gain).
+- ✅ `BF-021` — Account card expand/collapse: compact single-row summary, animated detail section with balance grid, meta, and actions.
+- ✅ `BF-016` — View transactions link inside expanded account card.
+
+**Sprint 12.10+ — Remaining open issues**
+
+Open P2:
+- `BF-005` — Cash account negative balance: warning/helper text decision pending.
+- `BF-017` — Multi-select/dynamic filters (nice-to-have, defer).
+
+Open P1 (important bugs not yet fixed):
+- `BF-002` — Mobile opening balance field not accepting negative input by keyboard.
+- `BF-006` — Category parent filtering stays stale when type changes.
+- `BF-009` — Weak password signup error message misleading.
 
 **Sprint 12.9+ — Quick-access and enhancements**
 

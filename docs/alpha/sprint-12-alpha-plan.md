@@ -160,6 +160,18 @@ Fixed:
 
 Database impact: none for Sprint 12.8.
 
+### Sprint 12.9 — Account Card Expand/Collapse + View Transactions
+
+Branch: `sprint/12-9-account-card-expand`
+Tag: `v0.12.9-account-card-expand`
+
+Fixed:
+
+- `BF-021` — New `AccountCardDetails` client component wraps each account card. Collapsed state shows a single compact row (name, type, currency, posted balance, chevron). Tap anywhere on the row to expand/collapse with animated grid-rows transition. Expanded section uses a styled container with: 3-column balance grid (Posted/Pending/Projected with divide-x separators), dot-separated meta row (institution, last four, net worth inclusion, opening balance status with color indicators), "View transactions →" link with ArrowRight icon, and action buttons (Edit, Add transaction, Set opening balance, Archive).
+- `BF-016` — "View transactions →" link inside expanded detail navigates to `/dashboard/transactions?account_id={id}`, using the existing account filter on the transactions page.
+
+Database impact: none for Sprint 12.9.
+
 ## Current remaining open issues
 
 After Sprints 12.4/12.5/12.6, next priorities (from 2026-06-04 alpha feedback):
