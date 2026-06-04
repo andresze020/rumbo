@@ -132,13 +132,28 @@ UI pattern established:
 
 Database impact: none for Sprint 12.6.
 
+### Sprint 12.7 — Critical Bug Fixes
+
+Branch: `sprint/12-7-critical-bug-fixes`
+Tag: `v0.12.7-critical-bug-fixes`
+
+Fixed:
+
+- `BF-020` — Transfer between non-base-currency accounts (COP→COP, base CAD) was storing `amount_base_currency = amount` instead of `amount × exchange_rate_to_base`, causing Total Assets to treat COP amounts as CAD. Both `create_transfer_transaction` and `update_transfer_transaction` RPCs now accept `p_exchange_rate_to_base`. TransactionForm shows auto-fetch FX field for transfers when accounts are non-base-currency.
+- `BF-018` — Account field no longer resets when switching between Expense and Income. Switching to Transfer now pre-populates the From account with the currently selected account.
+- `BF-011` — `GlobalAddTransactionButton` now refetches accounts and categories on every open instead of caching after first load, so newly created categories appear immediately.
+
+Database impact: migration `20260604000100_transfer_exchange_rate.sql` — replaces `create_transfer_transaction` and `update_transfer_transaction` RPCs with versions that accept `p_exchange_rate_to_base numeric(18,8) default 1`.
+
 ## Current remaining open issues
 
 After Sprints 12.4/12.5/12.6, next priorities (from 2026-06-04 alpha feedback):
 
 | ID | Priority | Status | Next decision |
 |---|---:|---|---|
-| BF-011 | P1 | Open | [BUG] Newly created categories/subcategories missing from transaction form until page refresh. Likely NextJS revalidation issue. |
+| BF-020 | P0 | Fixed | [Sprint 12.7] Transfer FX rate bug. |
+| BF-018 | P1 | Fixed | [Sprint 12.7] Account field preserved across type changes. |
+| BF-011 | P1 | Fixed | [Sprint 12.7] GlobalAddTransactionButton refetches on every open. |
 | BF-002 | P1 | Open | [BUG] Mobile opening balance field not accepting negative values by keyboard (input type/inputMode fix). |
 | BF-012 | P2 | Open | Mobile menu should auto-collapse after navigation. |
 | BF-013 | P2 | Open | Accounts view too expanded; needs compact rows that expand on tap. |
