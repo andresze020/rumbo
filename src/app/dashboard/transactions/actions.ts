@@ -178,6 +178,12 @@ export async function createTransferTransactionAction(formData: FormData) {
   const description = String(formData.get('description') ?? '').trim()
   const notes = String(formData.get('notes') ?? '').trim()
   const status = String(formData.get('status') ?? '').trim()
+  const exchangeRateToBaseRaw = String(formData.get('exchange_rate_to_base') ?? '').trim()
+  const exchangeRateToBase = Number(exchangeRateToBaseRaw)
+  const validExchangeRate =
+    exchangeRateToBaseRaw !== '' && Number.isFinite(exchangeRateToBase) && exchangeRateToBase > 0
+      ? exchangeRateToBase
+      : 1
 
   if (!fromAccountId) {
     redirectWithError('Select the source account.')
@@ -239,6 +245,7 @@ export async function createTransferTransactionAction(formData: FormData) {
       p_description: description || null,
       p_notes: notes || null,
       p_status: status,
+      p_exchange_rate_to_base: validExchangeRate,
     }
   )
 

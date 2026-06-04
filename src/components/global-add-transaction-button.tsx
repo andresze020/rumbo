@@ -38,7 +38,7 @@ export function GlobalAddTransactionButton({
 
   async function handleOpen() {
     setOpen(true)
-    if (!formData && !loading) {
+    if (!loading) {
       setLoading(true)
       setLoadError(false)
       try {
