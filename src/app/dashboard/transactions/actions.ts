@@ -62,9 +62,12 @@ export async function createManualTransactionAction(formData: FormData) {
   const merchantName = String(formData.get('merchant_name') ?? '').trim()
   const notes = String(formData.get('notes') ?? '').trim()
   const status = String(formData.get('status') ?? '').trim()
-  const exchangeRateToBase = parsePositiveNumber(
-    formData.get('exchange_rate_to_base')
-  )
+  const rateBaseToAccount = parsePositiveNumber(formData.get('rate_base_to_account'))
+  const legacyRate = parsePositiveNumber(formData.get('exchange_rate_to_base'))
+  const exchangeRateToBase =
+    rateBaseToAccount !== null
+      ? 1 / rateBaseToAccount
+      : (legacyRate ?? 1)
 
   if (!isTransactionType(transactionType)) {
     redirectWithError('Select income or expense.')

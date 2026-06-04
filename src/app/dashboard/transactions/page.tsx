@@ -304,7 +304,7 @@ export default async function TransactionsPage({
 
   const { data: household, error: householdError } = await supabase
     .from('households')
-    .select('id, name')
+    .select('id, name, base_currency')
     .eq('id', profile.default_household_id)
     .single()
 
@@ -839,6 +839,7 @@ export default async function TransactionsPage({
             {canCreateTransaction ? (
               <TransactionForm
                 accounts={activeAccounts as TransactionFormAccount[]}
+                baseCurrency={household.base_currency}
                 cancelHref={returnTo}
                 categories={activeCategories as TransactionFormCategory[]}
                 defaultDate={todayIsoDate()}

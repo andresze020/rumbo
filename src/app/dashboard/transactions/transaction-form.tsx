@@ -1,17 +1,18 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   createManualTransactionAction,
   createTransferTransactionAction,
 } from './actions'
 import { CategoryPicker } from './category-picker'
-import { buttonVariants } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
+import { fetchFxRate } from '@/lib/fx'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
 
@@ -32,48 +33,58 @@ export type TransactionFormCategory = {
 
 type TransactionFormProps = {
   accounts: TransactionFormAccount[]
+  baseCurrency: string
   cancelHref: string
   categories: TransactionFormCategory[]
   defaultDate: string
 }
 
+const selectCls =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+
 function formatAccountLabel(account: TransactionFormAccount) {
-  return [
-    account.name,
-    account.institution_name || null,
-    account.currency_code,
-  ]
+  return [account.name, account.institution_name || null, account.currency_code]
     .filter(Boolean)
     .join(' · ')
 }
 
 export function TransactionForm({
   accounts,
+  baseCurrency,
   cancelHref,
   categories,
   defaultDate,
 }: TransactionFormProps) {
-  const [transactionType, setTransactionType] =
-    useState<TransactionType>('expense')
+  const [transactionType, setTransactionType] = useState<TransactionType>('expense')
+  const [transactionDate, setTransactionDate] = useState(defaultDate)
   const [accountId, setAccountId] = useState('')
   const [fromAccountId, setFromAccountId] = useState('')
   const [toAccountId, setToAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
+  const [userRate, setUserRate] = useState('')
+  const [fetchingRate, setFetchingRate] = useState(false)
+  const [fxNote, setFxNote] = useState('')
+  const [fxError, setFxError] = useState('')
+
+  const selectedAccount = accounts.find((a) => a.id === accountId)
+  const isMultiCurrency = Boolean(
+    selectedAccount && selectedAccount.currency_code !== baseCurrency
+  )
+  const parsedRate = Number(userRate)
+  const rateIsValid =
+    userRate.trim() !== '' && Number.isFinite(parsedRate) && parsedRate > 0
+  const exchangeRateToBase = rateIsValid ? String(1 / parsedRate) : ''
 
   const compatibleCategories = useMemo(
     () =>
       categories.filter(
-        (category) =>
-          transactionType !== 'transfer' &&
-          category.category_type === transactionType
+        (c) => transactionType !== 'transfer' && c.category_type === transactionType
       ),
     [categories, transactionType]
   )
   const isTransfer = transactionType === 'transfer'
-  const selectedFromAccount = accounts.find(
-    (account) => account.id === fromAccountId
-  )
-  const selectedToAccount = accounts.find((account) => account.id === toAccountId)
+  const selectedFromAccount = accounts.find((a) => a.id === fromAccountId)
+  const selectedToAccount = accounts.find((a) => a.id === toAccountId)
   const isCrossCurrencyTransfer =
     Boolean(selectedFromAccount && selectedToAccount) &&
     selectedFromAccount?.currency_code !== selectedToAccount?.currency_code
@@ -85,7 +96,35 @@ export function TransactionForm({
       Boolean(fromAccountId) &&
       Boolean(toAccountId) &&
       !isCrossCurrencyTransfer
-    : compatibleCategories.length > 0 && Boolean(categoryId)
+    : compatibleCategories.length > 0 &&
+      Boolean(categoryId) &&
+      (!isMultiCurrency || rateIsValid)
+
+  useEffect(() => {
+    if (!isMultiCurrency || !selectedAccount || !transactionDate) return
+    void autoFetch(selectedAccount.currency_code, transactionDate)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId, transactionDate])
+
+  async function autoFetch(accountCurrency: string, date: string) {
+    setFetchingRate(true)
+    setFxNote('')
+    setFxError('')
+    const result = await fetchFxRate(baseCurrency, accountCurrency, date)
+    setFetchingRate(false)
+    if (result.rate !== null) {
+      setUserRate(String(parseFloat(result.rate.toFixed(6))))
+      if (result.isLatest) {
+        setFxNote(
+          `No rate available for future dates — using latest market rate (${result.date}).`
+        )
+      } else {
+        setFxNote(`Rate for ${result.date}.`)
+      }
+    } else {
+      setFxError(result.error)
+    }
+  }
 
   function handleTransactionTypeChange(value: TransactionType) {
     setTransactionType(value)
@@ -93,6 +132,9 @@ export function TransactionForm({
     setFromAccountId('')
     setToAccountId('')
     setCategoryId('')
+    setUserRate('')
+    setFxNote('')
+    setFxError('')
   }
 
   return (
@@ -103,10 +145,8 @@ export function TransactionForm({
           id="transaction_type"
           name="transaction_type"
           value={transactionType}
-          onChange={(event) =>
-            handleTransactionTypeChange(event.target.value as TransactionType)
-          }
-          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          onChange={(e) => handleTransactionTypeChange(e.target.value as TransactionType)}
+          className={selectCls}
         >
           <option value="expense">Expense</option>
           <option value="income">Income</option>
@@ -120,7 +160,15 @@ export function TransactionForm({
           id="transaction_date"
           name="transaction_date"
           type="date"
-          defaultValue={defaultDate}
+          value={transactionDate}
+          onChange={(e) => {
+            setTransactionDate(e.target.value)
+            if (isMultiCurrency) {
+              setUserRate('')
+              setFxNote('')
+              setFxError('')
+            }
+          }}
           required
         />
       </div>
@@ -134,26 +182,17 @@ export function TransactionForm({
               name="from_account_id"
               required
               value={fromAccountId}
-              onChange={(event) => {
-                const nextAccountId = event.target.value
-                setFromAccountId(nextAccountId)
-
-                if (nextAccountId === toAccountId) {
-                  setToAccountId('')
-                }
+              onChange={(e) => {
+                const next = e.target.value
+                setFromAccountId(next)
+                if (next === toAccountId) setToAccountId('')
               }}
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className={selectCls}
             >
-              <option value="" disabled>
-                Select source
-              </option>
-              {accounts.map((account) => (
-                <option
-                  key={account.id}
-                  value={account.id}
-                  disabled={account.id === toAccountId}
-                >
-                  {formatAccountLabel(account)}
+              <option value="" disabled>Select source</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id} disabled={a.id === toAccountId}>
+                  {formatAccountLabel(a)}
                 </option>
               ))}
             </select>
@@ -166,26 +205,17 @@ export function TransactionForm({
               name="to_account_id"
               required
               value={toAccountId}
-              onChange={(event) => {
-                const nextAccountId = event.target.value
-                setToAccountId(nextAccountId)
-
-                if (nextAccountId === fromAccountId) {
-                  setFromAccountId('')
-                }
+              onChange={(e) => {
+                const next = e.target.value
+                setToAccountId(next)
+                if (next === fromAccountId) setFromAccountId('')
               }}
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className={selectCls}
             >
-              <option value="" disabled>
-                Select destination
-              </option>
-              {accounts.map((account) => (
-                <option
-                  key={account.id}
-                  value={account.id}
-                  disabled={account.id === fromAccountId}
-                >
-                  {formatAccountLabel(account)}
+              <option value="" disabled>Select destination</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id} disabled={a.id === fromAccountId}>
+                  {formatAccountLabel(a)}
                 </option>
               ))}
             </select>
@@ -212,15 +242,18 @@ export function TransactionForm({
               name="account_id"
               required
               value={accountId}
-              onChange={(event) => setAccountId(event.target.value)}
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              onChange={(e) => {
+                setAccountId(e.target.value)
+                setUserRate('')
+                setFxNote('')
+                setFxError('')
+              }}
+              className={selectCls}
             >
-              <option value="" disabled>
-                Select account
-              </option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {formatAccountLabel(account)}
+              <option value="" disabled>Select account</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {formatAccountLabel(a)}
                 </option>
               ))}
             </select>
@@ -237,14 +270,7 @@ export function TransactionForm({
 
       <div className="space-y-2">
         <Label htmlFor="amount">Amount</Label>
-        <Input
-          id="amount"
-          name="amount"
-          type="number"
-          min="0.01"
-          step="0.01"
-          required
-        />
+        <Input id="amount" name="amount" type="number" min="0.01" step="0.01" required />
       </div>
 
       <div className="space-y-2">
@@ -266,30 +292,64 @@ export function TransactionForm({
 
       <div className="space-y-2">
         <Label htmlFor="status">Status</Label>
-        <select
-          id="status"
-          name="status"
-          defaultValue="posted"
-          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
+        <select id="status" name="status" defaultValue="posted" className={selectCls}>
           <option value="posted">Posted</option>
           <option value="pending">Pending</option>
         </select>
       </div>
 
       {!isTransfer ? (
-        <div className="space-y-2">
-          <Label htmlFor="exchange_rate_to_base">Exchange rate to base</Label>
-          <Input
-            id="exchange_rate_to_base"
-            name="exchange_rate_to_base"
-            type="number"
-            min="0.00000001"
-            step="0.00000001"
-            defaultValue="1"
-            required
-          />
-        </div>
+        isMultiCurrency ? (
+          <div className="space-y-2">
+            <Label htmlFor="user_rate">
+              1 {baseCurrency} = ? {selectedAccount?.currency_code}
+              {fetchingRate ? (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  Fetching rate…
+                </span>
+              ) : null}
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id="user_rate"
+                type="text"
+                inputMode="decimal"
+                placeholder={fetchingRate ? 'Fetching…' : 'e.g. 2690'}
+                value={userRate}
+                onChange={(e) => {
+                  setUserRate(e.target.value)
+                  setFxNote('')
+                  setFxError('')
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                disabled={fetchingRate}
+                onClick={() =>
+                  selectedAccount &&
+                  autoFetch(selectedAccount.currency_code, transactionDate)
+                }
+              >
+                Refresh
+              </Button>
+            </div>
+            {fxError ? (
+              <p className="text-xs text-destructive">{fxError}</p>
+            ) : fxNote ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">{fxNote}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Auto-filled for {transactionDate}. Edit if needed.
+              </p>
+            )}
+            <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
+          </div>
+        ) : (
+          <input type="hidden" name="exchange_rate_to_base" value="1" />
+        )
       ) : null}
 
       <div className="flex flex-wrap gap-2">
@@ -300,10 +360,7 @@ export function TransactionForm({
         >
           {isTransfer ? 'Create transfer' : 'Create transaction'}
         </SubmitButton>
-        <Link
-          href={cancelHref}
-          className={buttonVariants({ variant: 'outline' })}
-        >
+        <Link href={cancelHref} className={buttonVariants({ variant: 'outline' })}>
           Cancel
         </Link>
       </div>

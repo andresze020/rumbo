@@ -152,6 +152,10 @@ export async function createDebtAction(formData: FormData) {
   const paymentDueDay = parseNullableDueDay(formData.get('payment_due_day'))
   const lenderName = String(formData.get('lender_name') ?? '').trim()
   const notes = String(formData.get('notes') ?? '').trim()
+  const rateBaseToAccount = parsePositiveNumber(formData.get('rate_base_to_account'))
+  const legacyRate = parsePositiveNumber(formData.get('exchange_rate_to_base'))
+  const exchangeRateToBase =
+    rateBaseToAccount !== null ? 1 / rateBaseToAccount : (legacyRate ?? 1)
 
   if (!name) {
     redirectWithError('Debt name is required.')
@@ -208,6 +212,7 @@ export async function createDebtAction(formData: FormData) {
       ? null
       : openingBalanceAmount,
     p_opening_balance_date: openingBalanceDate || null,
+    p_exchange_rate_to_base: existingAccountId ? 1 : exchangeRateToBase,
     p_original_principal: originalPrincipal,
     p_interest_rate: interestRate,
     p_interest_rate_period: interestRatePeriod || null,

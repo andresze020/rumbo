@@ -296,9 +296,17 @@ export async function setOpeningBalanceAction(formData: FormData) {
     formData.get('opening_balance_amount') ?? ''
   ).trim()
   const amount = Number(amountText)
-  const exchangeRateToBase = Number(
+  const rateBaseToAccountText = String(
+    formData.get('rate_base_to_account') ?? ''
+  ).trim()
+  const rateBaseToAccount = Number(rateBaseToAccountText)
+  const legacyRate = Number(
     String(formData.get('exchange_rate_to_base') ?? '1').trim()
   )
+  const exchangeRateToBase =
+    rateBaseToAccountText && Number.isFinite(rateBaseToAccount) && rateBaseToAccount > 0
+      ? 1 / rateBaseToAccount
+      : legacyRate
   const notes = String(formData.get('notes') ?? '').trim()
 
   if (!accountId) {
