@@ -39,6 +39,7 @@ type TransactionFormProps = {
   categories: TransactionFormCategory[]
   defaultDate: string
   defaultAccountId?: string
+  returnTo?: string
 }
 
 const selectCls =
@@ -58,6 +59,7 @@ export function TransactionForm({
   categories,
   defaultDate,
   defaultAccountId,
+  returnTo,
 }: TransactionFormProps) {
   const [transactionType, setTransactionType] = useState<TransactionType>('expense')
   const [transactionDate, setTransactionDate] = useState(defaultDate)
@@ -157,6 +159,7 @@ export function TransactionForm({
 
   return (
     <form action={submitAction} className="space-y-4">
+      {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
       <div className="space-y-2">
         <Label htmlFor="transaction_type">Type</Label>
         <select

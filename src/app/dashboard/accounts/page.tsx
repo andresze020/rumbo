@@ -856,7 +856,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                 return (
                   <div
                     key={metadata.id}
-                    className={`space-y-4 p-4 ${
+                    className={`space-y-3 p-4 ${
                       metadata.is_archived
                         ? 'bg-muted/30 text-muted-foreground'
                         : ''
@@ -927,48 +927,41 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                       </div>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-lg bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">
-                          {metadata.account_class === 'liability' ? 'Posted (owed)' : 'Posted'}
-                        </p>
-                        <p className="mt-1 font-medium">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <span>
+                        <span className="font-medium text-foreground">
                           {formatCurrency(
                             metadata.account_class === 'liability'
                               ? liabilityDisplay(balance.posted_balance_account_currency)
                               : balance.posted_balance_account_currency,
                             metadata.currency_code
                           )}
-                        </p>
-                      </div>
-
-                      <div className="rounded-lg bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">
-                          {metadata.account_class === 'liability' ? 'Pending (owed)' : 'Pending'}
-                        </p>
-                        <p className="mt-1 font-medium">
+                        </span>
+                        {' '}
+                        {metadata.account_class === 'liability' ? 'posted (owed)' : 'posted'}
+                      </span>
+                      <span>
+                        <span className="font-medium text-foreground">
                           {formatCurrency(
                             metadata.account_class === 'liability'
                               ? liabilityDisplay(balance.pending_balance_account_currency)
                               : balance.pending_balance_account_currency,
                             metadata.currency_code
                           )}
-                        </p>
-                      </div>
-
-                      <div className="rounded-lg bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">
-                          {metadata.account_class === 'liability' ? 'Projected (owed)' : 'Projected'}
-                        </p>
-                        <p className="mt-1 font-medium">
+                        </span>
+                        {' pending'}
+                      </span>
+                      <span>
+                        <span className="font-medium text-foreground">
                           {formatCurrency(
                             metadata.account_class === 'liability'
                               ? liabilityDisplay(balance.projected_balance_account_currency)
                               : balance.projected_balance_account_currency,
                             metadata.currency_code
                           )}
-                        </p>
-                      </div>
+                        </span>
+                        {' projected'}
+                      </span>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
