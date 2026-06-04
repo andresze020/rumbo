@@ -39,7 +39,7 @@
 | BF-006 | 2026-06-03 | Categories | Important bug | When creating a category, changing category type/reporting type does not refresh the available parent category options. | 1. Go to Categories. 2. Start creating a category. 3. Change the category type/reporting type, for example between income and expense. 4. Open the parent category selector. | Parent category options should refresh immediately and only show compatible parent categories for the selected type/reporting type. | Parent category options stay stale. Workaround is to filter income/expense first and then create the category. | Wrong report | Often | Filter by the desired type first, then create the category. | P1 | Open | Could lead to categories being created under the wrong parent/type and later affecting reporting/budget grouping. |
 | BF-007 | 2026-06-03 | Accounts / Transactions | UX friction | From an account detail/list item, there is no quick Add Transaction action that opens the transaction form with that account preselected. | 1. Go to Accounts. 2. Identify the account where a transaction should be added. 3. Try to add a transaction directly from that account. | There should be an Add Transaction action from the account context, prepopulating the selected account in the transaction form. | User must navigate manually to Transactions/Add Transaction and select the account again. | None | Often | Go to Transactions manually and select the account. | P2 | Fixed | [Sprint 12.6] "Add transaction" button on each account card now opens transaction form with account preselected. |
 | BF-008 | 2026-06-03 | Transactions | Nice-to-have | A new “Add next” action would help when entering multiple transactions in a row by saving the current transaction and keeping useful fields from the previous one. | 1. Add a transaction. 2. Need to add another similar transaction. 3. Observe that the form resets or requires repeated manual input. | Optional Add Next should save and keep useful context such as date, category, merchant, account, or selected transaction type where appropriate. | User must repeatedly re-enter common fields. | None | Sometimes | Add each transaction manually. | P3 | Open | Useful but can wait. Avoid building until real daily usage proves batch/manual entry friction is high. |
-| BF-009 | 2026-06-03 | Auth | Important bug | Creating an account with a weak password shows a misleading error message. | 1. Go to sign up. 2. Enter valid email and weak password. 3. Submit. 4. Read the error message. | The app should clearly explain the password requirement that failed, without confusing the user. | Error message is misleading and does not clearly tell the user how to fix the password. | None | Once | Try a stronger password manually. | P1 | Open | Important for onboarding, especially for first external testers. Check Supabase auth error mapping. |
+| BF-009 | 2026-06-03 | Auth | Important bug | Creating an account with a weak password shows a misleading error message. | 1. Go to sign up. 2. Enter valid email and weak password. 3. Submit. 4. Read the error message. | The app should clearly explain the password requirement that failed, without confusing the user. | Error message is misleading and does not clearly tell the user how to fix the password. | None | Once | Try a stronger password manually. | P1 | Fixed | [Sprint 12.4] Weak-password signup error now surfaces clearer Supabase password-specific message. |
 | BF-010 | 2026-06-03 | Navigation / Transactions | UX friction | A tester suggested adding a global Add Transaction button available from any screen. | 1. Navigate to different app screens. 2. Try to quickly create a transaction without first going to the Transactions page. | User should be able to start adding a transaction quickly from anywhere, ideally via a global action in navigation/header/mobile layout. | Add Transaction is not globally accessible. | None | Often | Navigate to Transactions, then add. | P2 | Fixed | [Sprint 12.6] FAB (floating action button) bottom-right on all dashboard pages; lazy-loads form data on first open. |
 | BF-011 | 2026-06-04 | Categories | Important bug | When creating a subcategory and navigating to add a transaction, the new subcategory does not appear in the transaction form category dropdown until page refresh. | 1. Go to Categories. 2. Create a new subcategory. 3. Navigate to Transactions → Add transaction. 4. Open category selector. | Newly created categories/subcategories should be immediately available in the transaction form without requiring a page refresh. | New subcategory is absent from the dropdown; appears only after manual page refresh. | Wrong report | Always | Manually refresh the page after creating a category. | P1 | Fixed | [Sprint 12.7] GlobalAddTransactionButton now refetches form data (accounts + categories) on every open instead of caching after first load. |
 | BF-012 | 2026-06-04 | Navigation | UX friction | On mobile, when selecting a menu item from the hamburger menu, the menu does not auto-collapse, leaving it open and consuming screen space. | 1. Open the app on mobile. 2. Tap the hamburger menu. 3. Select a menu item/page. 4. Observe the menu state. | After a menu item is selected and navigation occurs, the menu should auto-collapse. | Menu remains open even after navigation, requiring user to tap the menu again to close it. | None | Always | Manually tap the menu icon again to collapse it. | P2 | Fixed | [Sprint 12.8] Extracted mobile menu into MobileMenu client component; uses usePathname() + useEffect to set detailsRef.open = false on every route change. |
@@ -58,8 +58,8 @@
 | Type | Count | Open P0 | Open P1 | Open P2 | Open P3 | Fixed |
 |---|---:|---:|---:|---:|---:|---:|
 | Alpha blocker | 2 | 0 | 0 | 0 | 0 | 2 |
-| Important bug | 6 | 0 | 4 | 0 | 0 | 2 |
-| UX friction | 9 | 0 | 0 | 2 | 0 | 7 |
+| Important bug | 6 | 0 | 2 | 0 | 0 | 4 |
+| UX friction | 9 | 0 | 0 | 1 | 1 | 7 |
 | Nice-to-have | 3 | 0 | 0 | 0 | 2 | 1 |
 | Post-MVP | 0 | 0 | 0 | 0 | 0 | 0 |
 
@@ -95,31 +95,23 @@ All three critical bugs fixed:
 - ✅ `BF-021` — Account card expand/collapse: compact single-row summary, animated detail section with balance grid, meta, and actions.
 - ✅ `BF-016` — View transactions link inside expanded account card.
 
-**Sprint 12.10+ — Remaining open issues**
+**Sprint 12.10 — COMPLETED** ✅
 
-Open P2:
-- `BF-005` — Cash account negative balance: warning/helper text decision pending.
-- `BF-017` — Multi-select/dynamic filters (nice-to-have, defer).
+- ✅ `BF-005` — Cash account negative balance: smart suggestion dialog when user tries to set negative opening balance on asset account.
 
-Open P1 (important bugs not yet fixed):
+**Sprint 12.11+ — Remaining open issues**
+
+Open P1 (important bugs to fix next):
 - `BF-002` — Mobile opening balance field not accepting negative input by keyboard.
 - `BF-006` — Category parent filtering stays stale when type changes.
-- `BF-009` — Weak password signup error message misleading.
 
-**Sprint 12.9+ — Quick-access and enhancements**
+Open P2/P3 (nice-to-haves, defer unless high usage friction):
+- `BF-017` — Multi-select/dynamic filters (P3, nice-to-have, defer).
 
-6. `BF-016` (P2) — Accounts card tap → filtered transactions view (low-risk, high UX gain).
-7. `BF-017` (P3) — Multi-select/dynamic filters (nice-to-have if time allows).
+**Post-MVP / Defer:**
 
-**Do not include in immediate fix batches:**
-
-- `BF-001` — Full automatic FX/API integration (Post-MVP).
-- `BF-002` — Mobile negative input (deferred from 12.7, revisit if high friction).
-- `BF-003` — Liability opening balance sign (block on validation/testing).
-- `BF-005` — Auto-convert cash to liability (not recommended).
-- `BF-006` — Parent category refresh (known workaround; low-friction impact).
-- `BF-008` — Add Next transaction flow (defer; test batch-entry friction first).
-- `BF-009` — Weak password error message (defer; auth edge case, low priority).
+- `BF-001` — Full automatic FX/API integration (Post-MVP, out of scope for Alpha).
+- `BF-008` — Add Next transaction flow (nice-to-have, defer until batch-entry friction proven).
 
 ## Related documents
 
