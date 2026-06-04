@@ -28,6 +28,23 @@ Use this skill for frontend/UI changes.
 - Use loading, error, empty, and success states where relevant.
 - Keep forms keyboard-friendly and mobile-friendly.
 
+## Form/action pattern (Sprint 12.6+)
+
+**All create/edit/action forms must open in a `FormDialog`, never as inline Cards.**
+
+- Component: `src/components/form-dialog.tsx` — generic wrapper, takes `title`, `description`, `cancelHref`, `children`, `wide?`.
+- Trigger pattern: URL params (`?mode=create`, `?edit={id}`, `?pay={id}`). The server page detects the param and renders `<FormDialog>` conditionally. On close (Escape, X, outside click) `FormDialog` navigates to `cancelHref` via `useRouter.push`.
+- Cancel links inside the form navigate to the clean URL — the page re-renders without the param and the dialog disappears naturally.
+- After a successful server action redirect, same thing — param is gone, dialog is not rendered.
+- Use `wide` prop for forms with 6+ fields (accounts, debts). Omit for smaller forms (payment, opening balance).
+- For global/cross-page triggers that need data fetched lazily on open, use `GlobalAddTransactionButton` (`src/components/global-add-transaction-button.tsx`) as the pattern: client component + `useState(open)` + server action call on first open.
+- The FAB (bottom-right Plus button) is the sole global add-transaction entry point. Do not add add-transaction buttons to the navbar.
+- If adding a new form to any page, follow this checklist:
+  1. Add the URL param to the page's `searchParams` type.
+  2. Detect it in the server component.
+  3. Wrap the form in `<FormDialog>` with appropriate `cancelHref`.
+  4. The trigger button/link simply sets the URL param (standard `<Link>`).
+
 ## Form rules
 
 For financial forms:
