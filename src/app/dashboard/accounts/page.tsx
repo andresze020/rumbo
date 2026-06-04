@@ -3,9 +3,9 @@ import { redirect } from 'next/navigation'
 import {
   archiveAccountAction,
   createAccountAction,
-  setOpeningBalanceAction,
   updateAccountAction,
 } from './actions'
+import { OpeningBalanceForm } from './opening-balance-form'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
@@ -515,97 +515,6 @@ function EditAccountForm({
   )
 }
 
-function OpeningBalanceForm({
-  row,
-  showArchived,
-}: {
-  row: AccountRow
-  showArchived: boolean
-}) {
-  const account = row.metadata
-
-  return (
-    <form action={setOpeningBalanceAction} className="space-y-4">
-      <input type="hidden" name="account_id" value={account.id} />
-
-      <div>
-        <h3 className="text-sm font-medium">Set opening balance</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Leave blank or enter 0 if this account starts at zero.
-        </p>
-        {account.account_class === 'liability' ? (
-          <p className="mt-1 text-sm text-muted-foreground">
-            For liability accounts (credit cards, debts), enter the amount owed
-            as a positive number. The app stores it as a negative balance
-            internally so it reduces net worth correctly.
-          </p>
-        ) : null}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="space-y-2">
-          <Label htmlFor={`opening_balance_amount_${account.id}`}>
-            {account.account_class === 'liability' ? 'Amount owed' : 'Amount'}
-          </Label>
-          <Input
-            id={`opening_balance_amount_${account.id}`}
-            name="opening_balance_amount"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor={`opening_balance_date_${account.id}`}>Date</Label>
-          <Input
-            id={`opening_balance_date_${account.id}`}
-            name="opening_balance_date"
-            type="date"
-            defaultValue={account.opening_balance_date ?? todayIsoDate()}
-            required
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor={`exchange_rate_to_base_${account.id}`}>
-            Exchange rate
-          </Label>
-          <Input
-            id={`exchange_rate_to_base_${account.id}`}
-            name="exchange_rate_to_base"
-            type="number"
-            min="0.00000001"
-            step="0.00000001"
-            defaultValue="1"
-            required
-          />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor={`opening_notes_${account.id}`}>Notes</Label>
-        <Textarea id={`opening_notes_${account.id}`} name="notes" />
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <SubmitButton
-          type="submit"
-          variant="outline"
-          pendingText="Setting balance"
-        >
-          Set opening balance
-        </SubmitButton>
-        <Link
-          href={accountsPath({ showArchived })}
-          className={buttonVariants({ variant: 'outline' })}
-        >
-          Cancel
-        </Link>
-      </div>
-    </form>
-  )
-}
 
 export default async function AccountsPage({ searchParams }: AccountsPageProps) {
   const params = await searchParams
@@ -890,7 +799,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       ) : null}
 
       {selectedEditRow ? (
-        <Card>
+        <Card id="account-edit-form">
           <CardHeader>
             <CardTitle>Edit account</CardTitle>
             <CardDescription>
@@ -915,8 +824,12 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
           </CardHeader>
           <CardContent>
             <OpeningBalanceForm
-              row={selectedOpeningBalanceRow}
+              accountId={selectedOpeningBalanceRow.metadata.id}
+              accountClass={selectedOpeningBalanceRow.metadata.account_class}
+              accountCurrency={selectedOpeningBalanceRow.metadata.currency_code}
+              defaultDate={selectedOpeningBalanceRow.metadata.opening_balance_date ?? todayIsoDate()}
               showArchived={showArchived}
+              baseCurrency={household.base_currency}
             />
           </CardContent>
         </Card>
@@ -1068,10 +981,12 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
 
                     <div className="flex flex-wrap gap-2">
                       <Link
-                        href={accountsPath({
-                          showArchived,
-                          edit: metadata.id,
-                        })}
+                        href={
+                          accountsPath({
+                            showArchived,
+                            edit: metadata.id,
+                          }) + '#account-edit-form'
+                        }
                         className={buttonVariants({
                           variant: 'outline',
                           size: 'sm',

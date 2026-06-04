@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
-  createDebtAction,
   createDebtPaymentAction,
   updateDebtAction,
 } from './actions'
+import { DebtCreateForm } from './debt-create-form'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import {
@@ -393,176 +393,12 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={createDebtAction} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Debt name</Label>
-                  <Input id="name" name="name" required />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="lender_name">Lender</Label>
-                  <Input id="lender_name" name="lender_name" />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="existing_account_id">
-                    Existing liability account
-                  </Label>
-                  <select
-                    id="existing_account_id"
-                    name="existing_account_id"
-                    className={selectClassName}
-                    defaultValue=""
-                  >
-                    <option value="">Create new account</option>
-                    {linkableLiabilityAccounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name} · {formatValue(account.account_type)} ·{' '}
-                        {account.currency_code}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="account_type">New account type</Label>
-                  <select
-                    id="account_type"
-                    name="account_type"
-                    className={selectClassName}
-                    defaultValue="debt"
-                  >
-                    <option value="debt">Debt</option>
-                    <option value="credit_card">Credit card</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="currency_code">Currency</Label>
-                  <select
-                    id="currency_code"
-                    name="currency_code"
-                    className={selectClassName}
-                    defaultValue={defaultCurrency}
-                  >
-                    {currencyOptions.map((currency) => (
-                      <option key={currency.code} value={currency.code}>
-                        {currency.code} · {currency.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="opening_balance_amount">
-                    Current outstanding balance
-                  </Label>
-                  <Input
-                    id="opening_balance_amount"
-                    name="opening_balance_amount"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    defaultValue="0"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    The amount you currently owe. This creates the opening
-                    liability balance.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="opening_balance_date">Balance date</Label>
-                  <Input
-                    id="opening_balance_date"
-                    name="opening_balance_date"
-                    type="date"
-                    defaultValue={todayIsoDate()}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="original_principal">Original principal</Label>
-                  <Input
-                    id="original_principal"
-                    name="original_principal"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional. The original amount borrowed, used for reference
-                    and progress tracking.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="interest_rate">Interest rate (%)</Label>
-                  <Input
-                    id="interest_rate"
-                    name="interest_rate"
-                    type="number"
-                    min="0"
-                    step="0.0001"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="interest_rate_period">Interest period</Label>
-                  <select
-                    id="interest_rate_period"
-                    name="interest_rate_period"
-                    className={selectClassName}
-                    defaultValue=""
-                  >
-                    <option value="">Not set</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="annual">Annual</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="minimum_payment">Minimum payment</Label>
-                  <Input
-                    id="minimum_payment"
-                    name="minimum_payment"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="payment_due_day">Due day</Label>
-                  <Input
-                    id="payment_due_day"
-                    name="payment_due_day"
-                    type="number"
-                    min="1"
-                    max="31"
-                    step="1"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea id="notes" name="notes" />
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <SubmitButton type="submit" pendingText="Creating debt">
-                  Create debt
-                </SubmitButton>
-                <Link
-                  href={debtsPath()}
-                  className={buttonVariants({ variant: 'outline' })}
-                >
-                  Cancel
-                </Link>
-              </div>
-            </form>
+            <DebtCreateForm
+              baseCurrency={household.base_currency}
+              currencyOptions={currencyOptions}
+              defaultCurrency={defaultCurrency}
+              linkableLiabilityAccounts={linkableLiabilityAccounts}
+            />
           </CardContent>
         </Card>
       ) : null}

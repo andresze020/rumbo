@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { LogOut, Menu } from 'lucide-react'
+import { LogOut, Menu, Plus } from 'lucide-react'
 import { SubmitButton } from '@/components/submit-button'
+import { buttonVariants } from '@/components/ui/button'
 import { NavLinks } from '@/components/nav-links'
 import { signOutAction } from './session-actions'
 
@@ -57,23 +58,44 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
             <NavLinks links={dashboardLinks} variant="mobile" />
 
-            <form action={signOutAction} className="mt-3">
-              <SubmitButton
-                type="submit"
-                variant="outline"
-                size="sm"
-                className="w-full"
-                pendingText="Signing out"
+            <div className="mt-3 flex flex-col gap-2">
+              <Link
+                href="/dashboard/transactions?mode=create"
+                className={buttonVariants({ className: 'w-full' })}
               >
-                <LogOut aria-hidden="true" />
-                Sign out
-              </SubmitButton>
-            </form>
+                + Add transaction
+              </Link>
+
+              <form action={signOutAction}>
+                <SubmitButton
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  pendingText="Signing out"
+                >
+                  <LogOut aria-hidden="true" />
+                  Sign out
+                </SubmitButton>
+              </form>
+            </div>
           </details>
         </div>
       </header>
 
-      {children}
+      <div className="pb-20">
+        {children}
+      </div>
+
+      {/* FAB — visible on all dashboard pages */}
+      <Link
+        href="/dashboard/transactions?mode=create"
+        aria-label="Add transaction"
+        title="Add transaction"
+        className="fixed bottom-6 right-6 z-50 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        <Plus className="size-6" aria-hidden="true" />
+      </Link>
     </div>
   )
 }
