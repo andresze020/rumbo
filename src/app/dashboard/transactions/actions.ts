@@ -24,7 +24,7 @@ function redirectWithTransactionInfo(name: string, returnTo?: string): never {
 }
 
 function addQueryParam(returnTo: string | undefined, name: string, value: string) {
-  const safeReturnTo = returnTo?.startsWith('/dashboard/transactions')
+  const safeReturnTo = returnTo?.startsWith('/dashboard/')
     ? returnTo
     : '/dashboard/transactions'
   const url = new URL(safeReturnTo, 'http://localhost')
@@ -62,6 +62,7 @@ export async function createManualTransactionAction(formData: FormData) {
   const merchantName = String(formData.get('merchant_name') ?? '').trim()
   const notes = String(formData.get('notes') ?? '').trim()
   const status = String(formData.get('status') ?? '').trim()
+  const returnTo = String(formData.get('return_to') ?? '').trim() || undefined
   const rateBaseToAccount = parsePositiveNumber(formData.get('rate_base_to_account'))
   const legacyRate = parsePositiveNumber(formData.get('exchange_rate_to_base'))
   const exchangeRateToBase =
@@ -167,7 +168,9 @@ export async function createManualTransactionAction(formData: FormData) {
   }
 
   revalidatePath('/dashboard/transactions')
-  redirect('/dashboard/transactions?created=1')
+  revalidatePath('/dashboard/accounts')
+  revalidatePath('/dashboard')
+  redirectWithTransactionInfo('created', returnTo)
 }
 
 export async function createTransferTransactionAction(formData: FormData) {
@@ -178,6 +181,7 @@ export async function createTransferTransactionAction(formData: FormData) {
   const description = String(formData.get('description') ?? '').trim()
   const notes = String(formData.get('notes') ?? '').trim()
   const status = String(formData.get('status') ?? '').trim()
+  const returnTo = String(formData.get('return_to') ?? '').trim() || undefined
   const exchangeRateToBaseRaw = String(formData.get('exchange_rate_to_base') ?? '').trim()
   const exchangeRateToBase = Number(exchangeRateToBaseRaw)
   const validExchangeRate =
@@ -261,7 +265,7 @@ export async function createTransferTransactionAction(formData: FormData) {
   revalidatePath('/dashboard/transactions')
   revalidatePath('/dashboard/accounts')
   revalidatePath('/dashboard')
-  redirect('/dashboard/transactions?created=1')
+  redirectWithTransactionInfo('created', returnTo)
 }
 
 export async function updateManualTransactionAction(formData: FormData) {

@@ -53,6 +53,7 @@ type Category = {
   reporting_type: string
   parent_category_id: string | null
   is_archived: boolean
+  icon: string | null
 }
 
 type Transaction = {
@@ -88,6 +89,7 @@ type CategoryLookup = {
   id: string
   name: string
   parent_category_id: string | null
+  icon?: string | null
 }
 
 type TransactionFilters = {
@@ -106,6 +108,7 @@ type TransactionRow = {
   canEdit: boolean
   canEditTransfer: boolean
   canVoid: boolean
+  categoryIcon: string | null
   categoryName: string
   displayAmount?: number | string
   entry?: TransactionEntry
@@ -186,9 +189,6 @@ function getAccountLabel(account: Account) {
     .join(' · ')
 }
 
-function getSourceLabel(source: string) {
-  return source === 'csv_import' ? 'CSV import' : formatValue(source)
-}
 
 function transactionsPath(
   filters: TransactionFilters,
@@ -322,7 +322,7 @@ export default async function TransactionsPage({
   const { data: categories, error: categoriesError } = await supabase
     .from('categories')
     .select(
-      'id, name, category_type, reporting_type, parent_category_id, is_archived'
+      'id, name, category_type, reporting_type, parent_category_id, is_archived, icon'
     )
     .eq('household_id', household.id)
     .is('deleted_at', null)
@@ -424,7 +424,7 @@ export default async function TransactionsPage({
     if (categoryIds.length) {
       const { data: categoryRows, error: categoryRowsError } = await supabase
         .from('categories')
-        .select('id, name, parent_category_id')
+        .select('id, name, parent_category_id, icon')
         .eq('household_id', household.id)
 
       transactionDetailsError =
@@ -465,6 +465,9 @@ export default async function TransactionsPage({
       category.id,
       getCategoryPath(category, categoryLookupRowsById),
     ])
+  )
+  const categoryIconsById = new Map(
+    categoryLookupRows.map((category) => [category.id, category.icon ?? null])
   )
   const categoryOptionsById = new Map(
     allCategories.map((category) => [category.id, category])
@@ -563,6 +566,10 @@ export default async function TransactionsPage({
             ? categoryNamesById.get(allocation.category_id) ??
               'Unknown category'
             : 'Not categorized'
+    const categoryIcon =
+      !isTransfer && !isOpeningBalance && !isDebtPayment && allocation
+        ? (categoryIconsById.get(allocation.category_id) ?? null)
+        : null
     const amountEntry = isBalanceMovement
       ? transferInEntry ?? transferOutEntry
       : entry
@@ -578,6 +585,7 @@ export default async function TransactionsPage({
       canEdit,
       canEditTransfer,
       canVoid: !['voided', 'deleted_soft'].includes(transaction.status),
+      categoryIcon,
       categoryName,
       displayAmount,
       entry,
@@ -890,17 +898,17 @@ export default async function TransactionsPage({
               {transactionRows.map((row) => (
                 <div
                   key={row.transaction.id}
-                  className={`space-y-4 p-4 transition-colors ${
+                  className={`space-y-1 p-4 transition-colors ${
                     row.isVoided
                       ? 'bg-muted/30 text-muted-foreground'
                       : 'hover:bg-muted/20'
                   }`}
                 >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="font-medium">{row.title}</h2>
-                        <Badge variant="secondary">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <h2 className="font-medium leading-snug">{row.title}</h2>
+                        <Badge variant="secondary" className="text-xs">
                           {row.isOpeningBalance
                             ? 'Opening balance'
                             : row.isTransfer
@@ -911,26 +919,52 @@ export default async function TransactionsPage({
                         </Badge>
                         <StatusBadge status={row.transaction.status} />
                         {row.isImported ? (
-                          <Badge variant="outline">Imported</Badge>
+                          <Badge variant="outline" className="text-xs">Imported</Badge>
                         ) : null}
                       </div>
 
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                         <span>{row.transaction.transaction_date}</span>
-                        <span>{getSourceLabel(row.transaction.source)}</span>
+                        <span>·</span>
+                        <span>{row.accountName}</span>
+                        <span>·</span>
+                        <span>
+                          {row.categoryIcon ? (
+                            <span aria-hidden="true">{row.categoryIcon} </span>
+                          ) : null}
+                          {row.categoryName}
+                        </span>
+                        {row.amountEntry?.currency_code ? (
+                          <>
+                            <span>·</span>
+                            <span>{row.amountEntry.currency_code}</span>
+                          </>
+                        ) : null}
                         {row.transaction.merchant_name ? (
-                          <span>Merchant: {row.transaction.merchant_name}</span>
+                          <>
+                            <span>·</span>
+                            <span>{row.transaction.merchant_name}</span>
+                          </>
                         ) : null}
                         {row.transaction.void_reason ? (
-                          <span>Void reason: {row.transaction.void_reason}</span>
+                          <>
+                            <span>·</span>
+                            <span>Voided: {row.transaction.void_reason}</span>
+                          </>
                         ) : null}
                       </div>
+
+                      {row.transaction.notes ? (
+                        <p className="text-xs text-muted-foreground/70 italic">
+                          {row.transaction.notes}
+                        </p>
+                      ) : null}
                     </div>
 
-                    <div className="space-y-3 lg:min-w-40 lg:text-right">
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
                       {row.amountEntry && row.displayAmount !== undefined ? (
                         <p
-                          className={`text-lg font-semibold tabular-nums ${
+                          className={`text-base font-semibold tabular-nums leading-snug ${
                             row.transaction.transaction_type === 'income'
                               ? 'text-emerald-600 dark:text-emerald-400'
                               : ''
@@ -943,7 +977,7 @@ export default async function TransactionsPage({
                         </p>
                       ) : null}
 
-                      <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <div className="flex flex-wrap gap-1.5 justify-end">
                         {row.canEdit || row.canEditTransfer ? (
                           <Link
                             href={transactionsPath(filters, {
@@ -966,31 +1000,6 @@ export default async function TransactionsPage({
                       </div>
                     </div>
                   </div>
-
-                  <div className="grid gap-3 text-sm sm:grid-cols-3">
-                    <div className="rounded-lg bg-muted/40 p-3">
-                      <p className="text-xs text-muted-foreground">Account</p>
-                      <p className="mt-1 font-medium">{row.accountName}</p>
-                    </div>
-
-                    <div className="rounded-lg bg-muted/40 p-3">
-                      <p className="text-xs text-muted-foreground">Category</p>
-                      <p className="mt-1 font-medium">{row.categoryName}</p>
-                    </div>
-
-                    <div className="rounded-lg bg-muted/40 p-3">
-                      <p className="text-xs text-muted-foreground">Currency</p>
-                      <p className="mt-1 font-medium">
-                        {row.amountEntry?.currency_code ?? 'Unknown'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {row.transaction.notes ? (
-                    <p className="text-sm text-muted-foreground">
-                      {row.transaction.notes}
-                    </p>
-                  ) : null}
                 </div>
               ))}
             </div>

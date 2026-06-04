@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import { usePathname } from 'next/navigation'
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ export function GlobalAddTransactionButton({
   title?: string
   defaultAccountId?: string
 }) {
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState<QuickAddFormData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -95,6 +97,7 @@ export function GlobalAddTransactionButton({
                 categories={formData.categories}
                 defaultDate={todayIsoDate()}
                 defaultAccountId={defaultAccountId}
+                returnTo={pathname}
                 onCancel={() => setOpen(false)}
               />
             )
