@@ -144,8 +144,10 @@ export function TransactionForm({
 
   function handleTransactionTypeChange(value: TransactionType) {
     setTransactionType(value)
-    // Reset transfer-specific fields unconditionally; preserve accountId between income/expense
-    setFromAccountId('')
+    if (value === 'transfer') {
+      // Carry current account over as the transfer source
+      setFromAccountId(accountId)
+    }
     setToAccountId('')
     setCategoryId('')
     setUserRate('')
