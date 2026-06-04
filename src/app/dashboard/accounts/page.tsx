@@ -6,6 +6,7 @@ import {
   updateAccountAction,
 } from './actions'
 import { OpeningBalanceForm } from './opening-balance-form'
+import { AccountCardDetails } from './account-card-details'
 import { FormDialog } from '@/components/form-dialog'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import { createClient } from '@/lib/supabase/server'
@@ -862,55 +863,33 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                         : ''
                     }`}
                   >
-                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                      <div className="min-w-0 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {metadata.color ? (
-                            <span
-                              className="size-3 shrink-0 rounded-full border"
-                              style={{ backgroundColor: metadata.color }}
-                              aria-hidden="true"
-                            />
-                          ) : null}
-                          {metadata.icon ? (
-                            <span className="text-base leading-none" aria-hidden="true">
-                              {metadata.icon}
-                            </span>
-                          ) : null}
-                          <h2 className="font-medium">{metadata.name}</h2>
-                          <Badge variant="secondary">
-                            {formatLabel(metadata.account_type)}
-                          </Badge>
-                          <Badge variant="outline">
-                            {formatLabel(metadata.account_class)}
-                          </Badge>
-                          <Badge variant="outline">
-                            {metadata.currency_code}
-                          </Badge>
-                          {metadata.is_archived ? (
-                            <Badge variant="outline">Archived</Badge>
-                          ) : null}
-                          {row.hasOpeningBalance ? (
-                            <Badge variant="outline">Opening balance set</Badge>
-                          ) : null}
-                        </div>
-
-                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                          {metadata.institution_name ? (
-                            <span>{metadata.institution_name}</span>
-                          ) : null}
-                          {metadata.last_four ? (
-                            <span>**** {metadata.last_four}</span>
-                          ) : null}
-                          <span>
-                            {metadata.include_in_net_worth
-                              ? 'Included in net worth'
-                              : 'Excluded from net worth'}
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0 flex flex-wrap items-center gap-2">
+                        {metadata.color ? (
+                          <span
+                            className="size-3 shrink-0 rounded-full border"
+                            style={{ backgroundColor: metadata.color }}
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        {metadata.icon ? (
+                          <span className="text-base leading-none" aria-hidden="true">
+                            {metadata.icon}
                           </span>
-                        </div>
+                        ) : null}
+                        <h2 className="font-medium">{metadata.name}</h2>
+                        <Badge variant="secondary">
+                          {formatLabel(metadata.account_type)}
+                        </Badge>
+                        <Badge variant="outline">
+                          {metadata.currency_code}
+                        </Badge>
+                        {metadata.is_archived ? (
+                          <Badge variant="outline">Archived</Badge>
+                        ) : null}
                       </div>
 
-                      <div className="space-y-1 md:text-right">
+                      <div className="space-y-0.5 md:text-right shrink-0">
                         <p className="text-lg font-semibold">
                           {formatCurrency(
                             metadata.account_class === 'liability'
@@ -919,7 +898,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                             metadata.currency_code
                           )}
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {metadata.account_class === 'liability'
                             ? 'balance owed'
                             : 'posted balance'}
@@ -927,42 +906,32 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                      <span>
-                        <span className="font-medium text-foreground">
-                          {formatCurrency(
-                            metadata.account_class === 'liability'
-                              ? liabilityDisplay(balance.posted_balance_account_currency)
-                              : balance.posted_balance_account_currency,
-                            metadata.currency_code
-                          )}
-                        </span>
-                        {' '}
-                        {metadata.account_class === 'liability' ? 'posted (owed)' : 'posted'}
-                      </span>
-                      <span>
-                        <span className="font-medium text-foreground">
-                          {formatCurrency(
-                            metadata.account_class === 'liability'
-                              ? liabilityDisplay(balance.pending_balance_account_currency)
-                              : balance.pending_balance_account_currency,
-                            metadata.currency_code
-                          )}
-                        </span>
-                        {' pending'}
-                      </span>
-                      <span>
-                        <span className="font-medium text-foreground">
-                          {formatCurrency(
-                            metadata.account_class === 'liability'
-                              ? liabilityDisplay(balance.projected_balance_account_currency)
-                              : balance.projected_balance_account_currency,
-                            metadata.currency_code
-                          )}
-                        </span>
-                        {' projected'}
-                      </span>
-                    </div>
+                    <AccountCardDetails
+                      accountId={metadata.id}
+                      postedLabel={formatCurrency(
+                        metadata.account_class === 'liability'
+                          ? liabilityDisplay(balance.posted_balance_account_currency)
+                          : balance.posted_balance_account_currency,
+                        metadata.currency_code
+                      )}
+                      pendingLabel={formatCurrency(
+                        metadata.account_class === 'liability'
+                          ? liabilityDisplay(balance.pending_balance_account_currency)
+                          : balance.pending_balance_account_currency,
+                        metadata.currency_code
+                      )}
+                      projectedLabel={formatCurrency(
+                        metadata.account_class === 'liability'
+                          ? liabilityDisplay(balance.projected_balance_account_currency)
+                          : balance.projected_balance_account_currency,
+                        metadata.currency_code
+                      )}
+                      balanceType={metadata.account_class === 'liability' ? 'owed' : 'posted'}
+                      institutionName={metadata.institution_name ?? null}
+                      lastFour={metadata.last_four ?? null}
+                      includeInNetWorth={metadata.include_in_net_worth}
+                      hasOpeningBalance={row.hasOpeningBalance}
+                    />
 
                     <div className="flex flex-wrap gap-2">
                       <Link
