@@ -24,7 +24,7 @@ function redirectWithTransactionInfo(name: string, returnTo?: string): never {
 }
 
 function addQueryParam(returnTo: string | undefined, name: string, value: string) {
-  const safeReturnTo = returnTo?.startsWith('/dashboard/transactions')
+  const safeReturnTo = returnTo?.startsWith('/dashboard/')
     ? returnTo
     : '/dashboard/transactions'
   const url = new URL(safeReturnTo, 'http://localhost')

@@ -1,6 +1,5 @@
 'use client'
 
-import type { FormEvent } from 'react'
 import { useState } from 'react'
 import { voidTransactionAction } from './actions'
 import { Button } from '@/components/ui/button'
@@ -14,47 +13,34 @@ type VoidTransactionFormProps = {
 export function VoidTransactionForm({
   transactionId,
 }: VoidTransactionFormProps) {
-  const [showReason, setShowReason] = useState(false)
+  const [confirming, setConfirming] = useState(false)
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    if (
-      !window.confirm(
-        'Void this transaction? It will remain visible but will no longer affect balances or dashboard metrics.'
-      )
-    ) {
-      event.preventDefault()
-    }
+  if (!confirming) {
+    return (
+      <Button type="button" variant="outline" size="sm" onClick={() => setConfirming(true)}>
+        Void
+      </Button>
+    )
   }
 
   return (
-    <form action={voidTransactionAction} onSubmit={handleSubmit}>
+    <form action={voidTransactionAction}>
       <input type="hidden" name="transaction_id" value={transactionId} />
 
-      {showReason ? (
+      <div className="flex flex-wrap items-start gap-2">
         <Textarea
           name="void_reason"
-          placeholder="Reason"
-          className="mb-2 min-h-16"
+          placeholder="Reason (optional)"
+          className="min-h-12 w-48 text-sm"
         />
-      ) : null}
-
-      <div className="flex flex-wrap gap-2">
-        <SubmitButton
-          type="submit"
-          variant="outline"
-          size="sm"
-          pendingText="Voiding"
-        >
-          Void
-        </SubmitButton>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowReason((current) => !current)}
-        >
-          {showReason ? 'Hide reason' : 'Add reason'}
-        </Button>
+        <div className="flex gap-1.5">
+          <SubmitButton type="submit" variant="destructive" size="sm" pendingText="Voiding">
+            Confirm void
+          </SubmitButton>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+            Cancel
+          </Button>
+        </div>
       </div>
     </form>
   )
