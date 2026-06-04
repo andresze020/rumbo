@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { setOpeningBalanceAction } from './actions'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -9,6 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { fetchFxRate } from '@/lib/fx'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 export function OpeningBalanceForm({
   accountId,
@@ -27,12 +34,16 @@ export function OpeningBalanceForm({
 }) {
   const isMultiCurrency = accountCurrency !== baseCurrency
   const cancelHref = `/dashboard/accounts${showArchived ? '?showArchived=true' : ''}`
+  const formRef = useRef<HTMLFormElement>(null)
 
   const [balanceDate, setBalanceDate] = useState(defaultDate)
+  const [balanceInput, setBalanceInput] = useState('')
   const [userRate, setUserRate] = useState('')
   const [fetchingRate, setFetchingRate] = useState(false)
   const [fxNote, setFxNote] = useState('')
   const [fxError, setFxError] = useState('')
+  const [showLiabilityDialog, setShowLiabilityDialog] = useState(false)
+  const [pendingFormData, setPendingFormData] = useState<FormData | null>(null)
 
   const parsedRate = Number(userRate)
   const rateIsValid =
@@ -64,9 +75,41 @@ export function OpeningBalanceForm({
     }
   }
 
+  function handleFormSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+
+    const balance = parseFloat(balanceInput || '0')
+    const isNegativeAsset = accountClass === 'asset' && balance < 0
+
+    if (isNegativeAsset) {
+      setPendingFormData(new FormData(e.currentTarget))
+      setShowLiabilityDialog(true)
+      return
+    }
+
+    // Submit normally
+    setOpeningBalanceAction(new FormData(e.currentTarget))
+  }
+
+  function handleContinueNegative() {
+    if (pendingFormData) {
+      setOpeningBalanceAction(pendingFormData)
+    }
+    setShowLiabilityDialog(false)
+  }
+
+  function handleCreateLiability() {
+    // Navigate to create a new liability account
+    const returnTo = encodeURIComponent(
+      `/dashboard/accounts${showArchived ? '?showArchived=true' : ''}`
+    )
+    window.location.href = `/dashboard/accounts?mode=create&suggestLiability=true&returnTo=${returnTo}`
+  }
+
   return (
-    <form action={setOpeningBalanceAction} className="space-y-4">
-      <input type="hidden" name="account_id" value={accountId} />
+    <>
+      <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-4">
+        <input type="hidden" name="account_id" value={accountId} />
 
       <div>
         <h3 className="text-sm font-medium">Set opening balance</h3>
@@ -93,6 +136,8 @@ export function OpeningBalanceForm({
             type="text"
             inputMode="decimal"
             placeholder="0.00"
+            value={balanceInput}
+            onChange={(e) => setBalanceInput(e.target.value)}
           />
         </div>
 
@@ -186,6 +231,45 @@ export function OpeningBalanceForm({
           Cancel
         </Link>
       </div>
-    </form>
+      </form>
+
+      {/* Dialog: Negative balance on asset account → suggest liability */}
+      <Dialog open={showLiabilityDialog} onOpenChange={setShowLiabilityDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Negative cash balance?</DialogTitle>
+            <DialogDescription>
+              You&apos;re setting a negative balance on a Cash/Asset account. This will reduce
+              your total assets.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-sm text-muted-foreground">
+            <p>
+              If this represents <strong>money you owe</strong>, consider creating a{' '}
+              <strong>Liability account</strong> (like a credit card or debt) instead. That way,
+              the amount will appear under liabilities rather than reducing assets.
+            </p>
+            <p>If you want to keep the negative balance here, you can continue below.</p>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowLiabilityDialog(false)
+                handleCreateLiability()
+              }}
+            >
+              Create Liability account
+            </Button>
+            <Button type="button" variant="secondary" onClick={handleContinueNegative}>
+              Continue with negative
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
