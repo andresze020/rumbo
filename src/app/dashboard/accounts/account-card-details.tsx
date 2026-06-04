@@ -42,32 +42,29 @@ export function AccountCardDetails({
 
   return (
     <div>
-      {/* Summary row — always visible, single line */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Summary row — full row is clickable */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 rounded-md text-left hover:bg-muted/50 transition-colors -mx-1 px-1 py-0.5"
+        aria-expanded={open}
+      >
         <div className="min-w-0 flex flex-wrap items-center gap-2">
           {summaryLeft}
         </div>
 
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2">
           <div className="text-right">
             <p className="text-base font-semibold leading-snug">{balanceLabel}</p>
             <p className="text-xs text-muted-foreground">{balanceSubLabel}</p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            aria-expanded={open}
-            aria-label={open ? 'Hide details' : 'Show details'}
-          >
-            <ChevronDown
-              className={`size-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-              aria-hidden="true"
-            />
-          </button>
+          <ChevronDown
+            className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          />
         </div>
-      </div>
+      </button>
 
       {/* Expandable detail section */}
       <div
