@@ -2,15 +2,13 @@
 
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ChevronDown } from 'lucide-react'
+import { ArrowRight, ChevronDown } from 'lucide-react'
 
 type AccountCardDetailsProps = {
   accountId: string
-  // summary (always visible)
   summaryLeft: ReactNode
   balanceLabel: string
   balanceSubLabel: string
-  // detail content
   postedLabel: string
   pendingLabel: string
   projectedLabel: string
@@ -19,7 +17,6 @@ type AccountCardDetailsProps = {
   lastFour: string | null
   includeInNetWorth: boolean
   hasOpeningBalance: boolean
-  // action buttons passed from server component
   children: ReactNode
 }
 
@@ -40,9 +37,11 @@ export function AccountCardDetails({
 }: AccountCardDetailsProps) {
   const [open, setOpen] = useState(false)
 
+  const isOwed = balanceType === 'owed'
+
   return (
     <div>
-      {/* Summary row — full row is clickable */}
+      {/* Summary row — full row clickable */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -55,10 +54,9 @@ export function AccountCardDetails({
 
         <div className="flex shrink-0 items-center gap-2">
           <div className="text-right">
-            <p className="text-base font-semibold leading-snug">{balanceLabel}</p>
+            <p className="text-base font-semibold leading-snug tabular-nums">{balanceLabel}</p>
             <p className="text-xs text-muted-foreground">{balanceSubLabel}</p>
           </div>
-
           <ChevronDown
             className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
             aria-hidden="true"
@@ -73,43 +71,62 @@ export function AccountCardDetails({
         }`}
       >
         <div className="overflow-hidden">
-          <div className="space-y-3 pt-3 border-t mt-3">
-            {/* Balances */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-              <span>
-                <span className="font-medium text-foreground">{postedLabel}</span>
-                {' '}{balanceType === 'owed' ? 'posted (owed)' : 'posted'}
-              </span>
-              <span>
-                <span className="font-medium text-foreground">{pendingLabel}</span>
-                {' '}{balanceType === 'owed' ? 'pending (owed)' : 'pending'}
-              </span>
-              <span>
-                <span className="font-medium text-foreground">{projectedLabel}</span>
-                {' '}{balanceType === 'owed' ? 'projected (owed)' : 'projected'}
-              </span>
+          <div className="mt-2 rounded-lg bg-muted/40 p-3 space-y-3">
+
+            {/* Balance breakdown — 3 columns */}
+            <div className="grid grid-cols-3 divide-x divide-border text-center">
+              <div className="pr-3 space-y-0.5">
+                <p className="text-xs text-muted-foreground">{isOwed ? 'Posted (owed)' : 'Posted'}</p>
+                <p className="text-sm font-semibold tabular-nums">{postedLabel}</p>
+              </div>
+              <div className="px-3 space-y-0.5">
+                <p className="text-xs text-muted-foreground">{isOwed ? 'Pending (owed)' : 'Pending'}</p>
+                <p className="text-sm font-semibold tabular-nums">{pendingLabel}</p>
+              </div>
+              <div className="pl-3 space-y-0.5">
+                <p className="text-xs text-muted-foreground">{isOwed ? 'Projected (owed)' : 'Projected'}</p>
+                <p className="text-sm font-semibold tabular-nums">{projectedLabel}</p>
+              </div>
             </div>
 
-            {/* Meta */}
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-              {institutionName ? <span>{institutionName}</span> : null}
-              {lastFour ? <span>**** {lastFour}</span> : null}
+            {/* Meta row */}
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+              {institutionName ? (
+                <>
+                  <span>{institutionName}</span>
+                  <span aria-hidden="true">·</span>
+                </>
+              ) : null}
+              {lastFour ? (
+                <>
+                  <span>**** {lastFour}</span>
+                  <span aria-hidden="true">·</span>
+                </>
+              ) : null}
               <span>{includeInNetWorth ? 'Included in net worth' : 'Excluded from net worth'}</span>
-              {hasOpeningBalance
-                ? <span>Opening balance set</span>
-                : <span className="text-amber-600 dark:text-amber-400">No opening balance</span>}
+              <span aria-hidden="true">·</span>
+              {hasOpeningBalance ? (
+                <span className="text-emerald-600 dark:text-emerald-400">✓ Opening balance</span>
+              ) : (
+                <span className="text-amber-600 dark:text-amber-400">⚠ No opening balance</span>
+              )}
             </div>
 
-            {/* View transactions */}
-            <Link
-              href={`/dashboard/transactions?account_id=${accountId}`}
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-            >
-              View transactions →
-            </Link>
+            {/* Footer: link + actions on same row */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Link
+                href={`/dashboard/transactions?account_id=${accountId}`}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                <ArrowRight className="size-3" aria-hidden="true" />
+                View transactions
+              </Link>
 
-            {/* Actions passed from server */}
-            {children}
+              <div className="flex flex-wrap gap-1.5">
+                {children}
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
