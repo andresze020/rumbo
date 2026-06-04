@@ -50,12 +50,13 @@
 | BF-017 | 2026-06-04 | Transactions | Nice-to-have | Transaction filters (type, status, account, category) are single-select dropdowns; would benefit from multi-select or dynamic filtering UI. | 1. Go to Transactions. 2. Open filter section. 3. Try to filter by multiple accounts or categories. | Filters should support multi-select or dynamic filter application (e.g., filter chips, range pickers) to speed up common queries. | Only one value per filter; user must create multiple filtered views or remember which filters are active. | None | Sometimes | Use filters one at a time and adjust. | P3 | Open | Nice-to-have for power users; defer unless real usage shows this is a blocker for daily workflows. |
 | BF-018 | 2026-06-04 | Transactions | Important bug | When adding a transaction from an account (via "Add transaction" button on account card) with a preselected account, changing the transaction type from Expense to Income (or vice versa) resets the account field back to empty. | 1. Go to Accounts. 2. Click "Add transaction" on an account row. 3. Form opens with account preselected. 4. Change transaction type from Expense to Income. 5. Observe account field. | The account field should remain populated and preselected after changing transaction type. | Account field resets to empty when transaction type changes. | None | Always | Manually re-select the account after changing transaction type. | P1 | Open | Likely a React state issue in TransactionForm where `defaultAccountId` is not persisted during type change. Check if form state handling preserves account across type change. |
 | BF-019 | 2026-06-04 | Navigation / Transactions | UX friction | After successfully creating a transaction from the "Add transaction" button on an account (Accounts page) or FAB from any page, the user is redirected to the Transactions page instead of returning to the origin page (Accounts or wherever they started). | 1. Go to Accounts page. 2. Click "Add transaction" on an account. 3. Complete form and submit. 4. Observe navigation destination. | After transaction creation, user should return to the page they came from (Accounts, Dashboard, etc.), not always to Transactions. | Always redirects to Transactions page regardless of origin. | None | Always | Navigate back manually using browser/menu. | P2 | Open | Store origin page in URL state or session; after transaction creation, redirect to `?returnTo=/dashboard/accounts` or similar instead of hardcoded `/dashboard/transactions`. |
+| BF-020 | 2026-06-04 | Debts / Transfers | Alpha blocker | When creating a transfer to pay down a debt (e.g., checking account → credit card debt), the debt balance appears to decrease correctly, but the total assets/net worth calculation is incorrect. Checking account balance becomes negative after the transfer, and total assets changes unexpectedly. | 1. Create a credit card liability account with opening balance of 120,000 COP (amount owed). 2. Create a checking account with opening balance of 50,000 COP. 3. Verify total assets before: ~50,000 (checking) - 120,000 (debt) = -70,000 net worth. 4. Create a transfer from checking to credit card for 50,000 COP. 5. Observe: debt appears paid down, but checking is now -70,000 instead of -70,000, and total assets show -70,000. | Transfer should reduce both checking and debt by transferred amount. Net worth should remain unchanged: (50k - 50k) - (120k - 50k) = 0 - 70k = -70k. Checking should reflect remaining balance, not go negative incorrectly. | Debt appears to reduce, but account balance calculation is wrong. Checking shows negative balance after paying off debt; total assets/net worth may be incorrectly calculated. | Wrong balance | Once | Do not record transfers to pay debts until this is validated. | P0 | Open | Critical: Verify that transfers to pay liabilities correctly debit the source account and credit the liability account. Likely issue: transfer transaction_entries may not be correctly allocating to both accounts when a debt/liability is involved. Requires investigation of transfer RPC logic and how transaction_entries are created. |
 
 ## Summary counts (update as you go)
 
 | Type | Count | P0 | P1 | P2 | P3 |
 |---|---:|---:|---:|---:|---:|
-| Alpha blocker | 1 | 1 | 0 | 0 | 0 |
+| Alpha blocker | 2 | 2 | 0 | 0 | 0 |
 | Important bug | 6 | 0 | 6 | 0 | 0 |
 | UX friction | 8 | 0 | 0 | 8 | 0 |
 | Nice-to-have | 3 | 0 | 0 | 0 | 3 |
@@ -73,7 +74,11 @@
 
 ## Suggested next fix batch
 
-**Sprint 12.7 — Transaction form bugs & critical revalidation**
+**Sprint 12.7 — BLOCKING: debt/transfer balance issue + transaction form bugs**
+
+Critical (MUST FIX FIRST):
+
+0. **`BF-020` (P0) — INVESTIGATE URGENTLY** — Transfer to pay debt causes incorrect net worth/account balance. **STOP recording transfers to pay debts until this is validated.** This is a data integrity issue that could corrupt financial records.
 
 High-priority fixes:
 
