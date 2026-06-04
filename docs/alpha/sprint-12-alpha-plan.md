@@ -172,51 +172,63 @@ Fixed:
 
 Database impact: none for Sprint 12.9.
 
+### Sprint 12.10 — Negative Cash Balance Guidance (BF-005)
+
+Branch: `sprint/12-10-bf005-negative-cash-guidance`
+Tag: `v0.12.10-bf005-negative-cash-guidance`
+
+Fixed:
+
+- `BF-005` — Smart suggestion dialog when user attempts to set negative opening balance on a Cash/Asset account. Dialog explains the impact (reduces assets) and offers two options: (1) "Create Liability account" to navigate to account creation, or (2) "Continue with negative" to allow the negative balance. Does not auto-convert account class; respects user choice.
+
+Database impact: none for Sprint 12.10.
+
 ## Current remaining open issues
 
-After Sprints 12.4/12.5/12.6, next priorities (from 2026-06-04 alpha feedback):
+After Sprints 12.4-12.10, remaining open issues:
 
 | ID | Priority | Status | Next decision |
 |---|---:|---|---|
 | BF-020 | P0 | Fixed | [Sprint 12.7] Transfer FX rate bug. |
+| BF-003 | P0 | Fixed | [Validated] Liability sign handling correct. |
 | BF-018 | P1 | Fixed | [Sprint 12.7] Account field preserved across type changes. |
 | BF-011 | P1 | Fixed | [Sprint 12.7] GlobalAddTransactionButton refetches on every open. |
 | BF-002 | P1 | Open | [BUG] Mobile opening balance field not accepting negative values by keyboard (input type/inputMode fix). |
-| BF-012 | P2 | Open | Mobile menu should auto-collapse after navigation. |
-| BF-013 | P2 | Open | Accounts view too expanded; needs compact rows that expand on tap. |
-| BF-014 | P2 | Open | Transactions view too expanded; needs compact layout with category icons. |
-| BF-015 | P2 | Open | Transaction rows should display category icons for visual scanning. |
-| BF-016 | P2 | Open | Accounts card tap should navigate to filtered transactions view for that account (low-risk, high UX gain). |
+| BF-006 | P1 | Open | Category parent filtering stays stale when type changes. |
+| BF-009 | P1 | Open | Weak password signup error message misleading. |
+| BF-012 | P2 | Fixed | [Sprint 12.8] Mobile menu auto-collapses after navigation. |
+| BF-013 | P2 | Fixed | [Sprint 12.8] Accounts view compacted to single-row summary. |
+| BF-014 | P2 | Fixed | [Sprint 12.8] Transactions view compacted; void UX improved. |
+| BF-015 | P2 | Fixed | [Sprint 12.8] Transaction rows display category icons. |
+| BF-016 | P2 | Fixed | [Sprint 12.9] View transactions link inside expanded account card. |
+| BF-021 | P2 | Fixed | [Sprint 12.9] Account card expand/collapse with animation. |
+| BF-005 | P2 | Fixed | [Sprint 12.10] Smart suggestion when setting negative cash balance. |
 | BF-017 | P3 | Open | Multi-select/dynamic transaction filters (nice-to-have if time allows). |
-| BF-005 | P2 | Open | Decide warning/helper text vs blocking negative Cash balances. Do not auto-convert Cash to liability. |
 | BF-008 | P3 | Open | Keep deferred unless daily logs show strong repeated friction. |
 
-## Recommended next phase — Sprint 12.7+
+## Recommended next phase — Sprint 12.11+
 
-Continue Alpha real usage with compactness and critical-bug fixes:
+**Current open P1 (Important bugs):**
 
-**Sprint 12.7 high-priority batch:**
+1. `BF-002` (Mobile negative input on opening balance field)
+2. `BF-006` (Category parent filtering stays stale on type change)
+3. `BF-009` (Weak password error message)
 
-1. Fix BF-011 (category/subcategory revalidation bug).
-2. Fix BF-002 (mobile negative input).
-3. Fix BF-012 (mobile menu auto-collapse).
-4. Compact BF-013/014 (Accounts and Transactions views).
-5. Add BF-015 (transaction category icons).
+**Current open P2/P3 (Nice-to-haves, defer unless high usage friction):**
 
-**Sprint 12.8+ (lower priority):**
+4. `BF-017` (Multi-select filters)
+5. `BF-008` (TBD based on usage)
 
-6. Implement BF-016 (Accounts card tap → filtered transactions) if time allows.
-7. Keep BF-017 (multi-select filters) deferred unless usage proves necessary.
-8. Keep BF-005 and BF-008 deferred unless usage evidence justifies.
+**Validation phase:**
 
-**Validation after Sprint 12.7:**
+- Extended Alpha usage with all Sprints 12.7–12.10 fixes applied (compactness, FX, account expand, negative cash guidance).
+- Confirm balances still reconcile with AndroMoney/records.
+- No new critical bugs surface from real usage.
+- UX friction reduced to acceptable levels (compact cards, category icons, smart dialogs).
 
-- 2-week extended Alpha usage with compactness fixes applied.
-- Confirm balances still match AndroMoney/records.
-- No new critical bugs surface.
-- UX friction is reduced to acceptable levels.
+**Decision point after 2-week validation:**
 
-Then move toward **Beta Readiness Planning (v0.13)**.
+If no new P0/P1 issues and balances remain correct, recommend moving toward **Beta Readiness Planning (v0.13)** with remaining P1 bugs deferred or marked as known issues.
 
 ## Real data privacy notes
 
