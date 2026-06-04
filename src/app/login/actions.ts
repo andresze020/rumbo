@@ -51,7 +51,23 @@ export async function signUpAction(formData: FormData) {
   })
 
   if (error) {
-    redirectWithLoginError('Could not create the account. Please try again.')
+    const lower = (error.message ?? '').toLowerCase()
+
+    if (lower.includes('password')) {
+      redirectWithLoginError(
+        error.message ?? 'Password does not meet the requirements. Try a longer or more complex password.'
+      )
+    } else if (
+      lower.includes('already registered') ||
+      lower.includes('already been registered') ||
+      lower.includes('email address already')
+    ) {
+      redirectWithLoginError(
+        'An account with this email already exists. Try signing in instead.'
+      )
+    } else {
+      redirectWithLoginError('Could not create the account. Please try again.')
+    }
   }
 
   redirect('/onboarding')

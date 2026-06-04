@@ -164,6 +164,10 @@ function formatCurrency(value: number | string, currencyCode: string) {
   }).format(Number(value))
 }
 
+function liabilityDisplay(value: number | string) {
+  return Math.abs(Number(value))
+}
+
 function emptyBalance(account: AccountMetadata): AccountBalance {
   return {
     account_id: account.id,
@@ -529,20 +533,26 @@ function OpeningBalanceForm({
         <p className="mt-1 text-sm text-muted-foreground">
           Leave blank or enter 0 if this account starts at zero.
         </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          For credit cards or debts, you can enter the owed amount as positive
-          or negative; it will be stored as a liability.
-        </p>
+        {account.account_class === 'liability' ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            For liability accounts (credit cards, debts), enter the amount owed
+            as a positive number. The app stores it as a negative balance
+            internally so it reduces net worth correctly.
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
-          <Label htmlFor={`opening_balance_amount_${account.id}`}>Amount</Label>
+          <Label htmlFor={`opening_balance_amount_${account.id}`}>
+            {account.account_class === 'liability' ? 'Amount owed' : 'Amount'}
+          </Label>
           <Input
             id={`opening_balance_amount_${account.id}`}
             name="opening_balance_amount"
-            type="number"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
           />
         </div>
 
@@ -998,12 +1008,16 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                       <div className="space-y-1 md:text-right">
                         <p className="text-lg font-semibold">
                           {formatCurrency(
-                            balance.posted_balance_account_currency,
+                            metadata.account_class === 'liability'
+                              ? liabilityDisplay(balance.posted_balance_account_currency)
+                              : balance.posted_balance_account_currency,
                             metadata.currency_code
                           )}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          posted balance
+                          {metadata.account_class === 'liability'
+                            ? 'balance owed'
+                            : 'posted balance'}
                         </p>
                       </div>
                     </div>
@@ -1011,11 +1025,13 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="rounded-lg bg-muted/40 p-3">
                         <p className="text-xs text-muted-foreground">
-                          Posted
+                          {metadata.account_class === 'liability' ? 'Posted (owed)' : 'Posted'}
                         </p>
                         <p className="mt-1 font-medium">
                           {formatCurrency(
-                            balance.posted_balance_account_currency,
+                            metadata.account_class === 'liability'
+                              ? liabilityDisplay(balance.posted_balance_account_currency)
+                              : balance.posted_balance_account_currency,
                             metadata.currency_code
                           )}
                         </p>
@@ -1023,11 +1039,13 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
 
                       <div className="rounded-lg bg-muted/40 p-3">
                         <p className="text-xs text-muted-foreground">
-                          Pending
+                          {metadata.account_class === 'liability' ? 'Pending (owed)' : 'Pending'}
                         </p>
                         <p className="mt-1 font-medium">
                           {formatCurrency(
-                            balance.pending_balance_account_currency,
+                            metadata.account_class === 'liability'
+                              ? liabilityDisplay(balance.pending_balance_account_currency)
+                              : balance.pending_balance_account_currency,
                             metadata.currency_code
                           )}
                         </p>
@@ -1035,11 +1053,13 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
 
                       <div className="rounded-lg bg-muted/40 p-3">
                         <p className="text-xs text-muted-foreground">
-                          Projected
+                          {metadata.account_class === 'liability' ? 'Projected (owed)' : 'Projected'}
                         </p>
                         <p className="mt-1 font-medium">
                           {formatCurrency(
-                            balance.projected_balance_account_currency,
+                            metadata.account_class === 'liability'
+                              ? liabilityDisplay(balance.projected_balance_account_currency)
+                              : balance.projected_balance_account_currency,
                             metadata.currency_code
                           )}
                         </p>
