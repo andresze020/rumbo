@@ -92,6 +92,11 @@ export function TransactionForm({
   const isCrossCurrencyTransfer =
     Boolean(selectedFromAccount && selectedToAccount) &&
     selectedFromAccount?.currency_code !== selectedToAccount?.currency_code
+  const isTransferNonBaseCurrency =
+    isTransfer &&
+    !isCrossCurrencyTransfer &&
+    Boolean(selectedFromAccount) &&
+    selectedFromAccount?.currency_code !== baseCurrency
   const submitAction = isTransfer
     ? createTransferTransactionAction
     : createManualTransactionAction
@@ -99,7 +104,8 @@ export function TransactionForm({
     ? accounts.length >= 2 &&
       Boolean(fromAccountId) &&
       Boolean(toAccountId) &&
-      !isCrossCurrencyTransfer
+      !isCrossCurrencyTransfer &&
+      (!isTransferNonBaseCurrency || rateIsValid)
     : compatibleCategories.length > 0 &&
       Boolean(categoryId) &&
       (!isMultiCurrency || rateIsValid)
@@ -109,6 +115,12 @@ export function TransactionForm({
     void autoFetch(selectedAccount.currency_code, transactionDate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId, transactionDate])
+
+  useEffect(() => {
+    if (!isTransferNonBaseCurrency || !selectedFromAccount || !transactionDate) return
+    void autoFetch(selectedFromAccount.currency_code, transactionDate)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromAccountId, transactionDate])
 
   async function autoFetch(accountCurrency: string, date: string) {
     setFetchingRate(true)
@@ -132,8 +144,10 @@ export function TransactionForm({
 
   function handleTransactionTypeChange(value: TransactionType) {
     setTransactionType(value)
-    setAccountId('')
-    setFromAccountId('')
+    if (value === 'transfer') {
+      // Carry current account over as the transfer source
+      setFromAccountId(accountId)
+    }
     setToAccountId('')
     setCategoryId('')
     setUserRate('')
@@ -235,7 +249,57 @@ export function TransactionForm({
             <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
               Cross-currency transfers are not supported yet.
             </p>
-          ) : null}
+          ) : isTransferNonBaseCurrency ? (
+            <div className="space-y-2">
+              <Label htmlFor="user_rate">
+                1 {baseCurrency} = ? {selectedFromAccount?.currency_code}
+                {fetchingRate ? (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    Fetching rate…
+                  </span>
+                ) : null}
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="user_rate"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder={fetchingRate ? 'Fetching…' : 'e.g. 2690'}
+                  value={userRate}
+                  onChange={(e) => {
+                    setUserRate(e.target.value)
+                    setFxNote('')
+                    setFxError('')
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  disabled={fetchingRate}
+                  onClick={() =>
+                    selectedFromAccount &&
+                    autoFetch(selectedFromAccount.currency_code, transactionDate)
+                  }
+                >
+                  Refresh
+                </Button>
+              </div>
+              {fxError ? (
+                <p className="text-xs text-destructive">{fxError}</p>
+              ) : fxNote ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400">{fxNote}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Auto-filled for {transactionDate}. Edit if needed.
+                </p>
+              )}
+              <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
+            </div>
+          ) : (
+            <input type="hidden" name="exchange_rate_to_base" value="1" />
+          )}
         </>
       ) : (
         <>
