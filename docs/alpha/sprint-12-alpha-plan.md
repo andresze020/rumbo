@@ -194,11 +194,53 @@ This sprint involves **real personal/family financial data**. Treat it according
 - Prioritized fix list produced.
 - No unresolved **Alpha blocker** left undocumented.
 
+## Sprint Execution Workflow (for Sprint 12.7+)
+
+### Phase 1: Discovery & Logging (Week-long usage)
+1. Use App Finanzas normally with real data.
+2. Log findings in `alpha-daily-usage-log.md` (quick informal notes).
+3. Record: what worked, where friction appeared, unexpected behaviors.
+
+### Phase 2: Triage & Classification
+1. Review findings using `alpha-finding-triage-rules.md` (Type + Priority rules).
+2. Formalize entries in `bug-friction-log.md` as BF-018, BF-019, etc.
+   - Complete field guide: area, type, priority, steps to reproduce, impact, workaround.
+3. Update `bug-friction-log.md` summary counts.
+
+### Phase 3: Sprint Planning
+1. Select issues from `bug-friction-log.md` by priority:
+   - **P0/P1** → must do in this sprint.
+   - **P2** → do if time allows.
+   - **P3** → defer to later sprint.
+2. Give me a sprint prompt with explicit list of BF-IDs to fix.
+3. I execute: code changes, validation, commit/push/documentation.
+
+### Phase 4: Post-Sprint Update
+1. **`bug-friction-log.md`:** Mark fixed issues as `Status: Fixed` with sprint tag.
+2. **`sprint-12-alpha-plan.md`:** Add new section (e.g., "### Sprint 12.7 — [Title]") with:
+   - Branch / Tag created.
+   - Issues fixed + short description.
+   - Database impact (if any).
+   - Key implementation notes.
+   - Updated "Current remaining open issues" and "Recommended next phase".
+3. **`reconciliation-checklist.md`:** Run post-sprint validation to confirm balances/numbers are still correct.
+4. **Git:** commit (code + docs), push, keep clean for next sprint.
+
+### Phase 5: Validation (2-week usage)
+1. Use the app with fixes applied.
+2. Validate numbers still match AndroMoney / records.
+3. Log any new findings → goes back to Phase 1.
+
+### When to move to Beta Planning (v0.13)
+- All P0/P1 issues closed or explicitly deferred.
+- P2 friction reduced to acceptable levels.
+- 2+ weeks of usage with no new critical bugs.
+- Numbers/balances consistently validate.
+
 ## Related documents
 
-- [real-data-import-plan.md](./real-data-import-plan.md)
-- [reconciliation-checklist.md](./reconciliation-checklist.md)
-- [bug-friction-log.md](./bug-friction-log.md)
-- [alpha-daily-usage-log.md](./alpha-daily-usage-log.md)
-- [alpha-finding-triage-rules.md](./alpha-finding-triage-rules.md)
-- [sprint-12-4-12-5-architect-handoff.md](./sprint-12-4-12-5-architect-handoff.md)
+- [real-data-import-plan.md](./real-data-import-plan.md) — FX convention, import validation
+- [reconciliation-checklist.md](./reconciliation-checklist.md) — post-sprint validation checklist
+- [bug-friction-log.md](./bug-friction-log.md) — all findings, issue tracker
+- [alpha-daily-usage-log.md](./alpha-daily-usage-log.md) — quick usage notes
+- [alpha-finding-triage-rules.md](./alpha-finding-triage-rules.md) — how to classify findings
