@@ -145,6 +145,21 @@ Fixed:
 
 Database impact: migration `20260604000100_transfer_exchange_rate.sql` — replaces `create_transfer_transaction` and `update_transfer_transaction` RPCs with versions that accept `p_exchange_rate_to_base numeric(18,8) default 1`.
 
+### Sprint 12.8 — UX Compactness & Navigation
+
+Branch: `sprint/12-8-ux-compactness`
+Tag: `v0.12.8-ux-compactness`
+
+Fixed:
+
+- `BF-012` — Mobile menu extracted to `MobileMenu` client component; closes automatically on navigation via `usePathname()` + `useEffect`.
+- `BF-013` — Accounts view: 3 sub-cards (Posted/Pending/Projected) replaced with compact inline text row; spacing reduced.
+- `BF-014` — Transactions view: 3 sub-cards (Account/Category/Currency) replaced with single compact metadata line; spacing reduced to space-y-1; Void UX improved (inline confirm+reason+cancel instead of always-visible "Add reason" toggle).
+- `BF-015` — Transaction rows now show category emoji icon before category name.
+- `BF-019` — After transaction creation from FAB or account button, user is returned to origin page. Root cause was `addQueryParam` only accepting `/dashboard/transactions/*` returnTo paths.
+
+Database impact: none for Sprint 12.8.
+
 ## Current remaining open issues
 
 After Sprints 12.4/12.5/12.6, next priorities (from 2026-06-04 alpha feedback):
