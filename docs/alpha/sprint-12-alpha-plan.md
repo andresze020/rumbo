@@ -1,13 +1,12 @@
 # Sprint 12 — Alpha Personal Use Plan
 
-> Status: planning document. **No application, UI, business-logic, schema, RLS, or
-> migration changes are part of this sprint.** Documentation only.
+> Status: active Alpha validation document. Sprint 12 started as documentation-only, then produced real Alpha findings. Sprints 12.4, 12.5, and 12.6 addressed the first high-priority findings and UX frictions. Sprint 12.7+ will focus on compactness and remaining friction fixes based on 2026-06-04 alpha feedback.
 
 ## Objective
 
 Use App Finanzas with **real personal/family financial data**, compare it against
-the current system of record (AndroMoney and/or existing spreadsheets/bank
-statements), and validate that the core MVP produces trustworthy numbers across:
+current records (AndroMoney and/or bank/credit-card statements), and validate that the
+core MVP produces trustworthy numbers across:
 
 - Account balances
 - Dashboard metrics
@@ -17,32 +16,24 @@ statements), and validate that the core MVP produces trustworthy numbers across:
 - CSV import
 - CSV export
 
-The goal is to gather **real usage evidence** — concrete bugs and frictions — before
-deciding what to build or fix next.
+The goal remains to gather **real usage evidence** before deciding what to build or fix next.
 
 ## Why this sprint exists
 
-The MVP is feature-complete for personal use, but it has never been exercised with
-real data over a real usage period. Building more features now would be guessing.
-
-This sprint deliberately delays new functionality until real usage proves what is
-actually missing or broken. It exists to:
-
-1. Convert "it looks done" into "it is verified correct with my own money."
-2. Produce a prioritized, evidence-based list of issues instead of assumptions.
-3. Protect against shipping post-MVP features that real usage may not justify.
+The MVP is feature-complete for personal use, but real Alpha usage is what proves whether the app can be trusted with actual finances. Sprint 12 deliberately delays post-MVP functionality until real usage proves what is actually missing or broken.
 
 ## Scope
 
-- Importing real accounts and a bounded slice of real transactions.
+- Importing or manually entering real accounts and a bounded slice of transactions.
 - Reconciling App Finanzas numbers against AndroMoney / current records.
-- Using the app for everyday entry for at least one week.
-- Logging every bug and friction encountered, with severity classification.
-- Triaging findings into a prioritized fix list at the end.
+- Using the app for everyday entry.
+- Logging every bug and friction encountered.
+- Triaging findings into a prioritized fix list.
+- Fixing only the issues that block or significantly degrade Alpha usage.
 
 ## Out of scope
 
-Do **not** build, and do **not** treat as Alpha work:
+Do **not** build, and do **not** treat as Alpha work unless real usage proves it blocking:
 
 - Bank sync / open banking
 - Advanced categorization rules / auto-categorization
@@ -57,89 +48,151 @@ Do **not** build, and do **not** treat as Alpha work:
 - Advanced Payee / Vendor / Lender CRUD
 - Any other post-MVP functionality
 
-If real Alpha usage proves one of these is genuinely blocking, it gets logged as
-evidence and triaged — it is still not built inside Sprint 12 without that evidence.
-
-Also out of scope: schema changes, RLS/policy changes, RPC changes, migrations, and
-any change to financial calculations or import/export logic.
-
 ## Alpha success criteria
 
 The Alpha is considered successful when **all** of the following hold:
 
-1. **Balances reconcile.** Every active account's posted balance in App Finanzas
-   matches the current system of record within the agreed tolerance (see
-   [reconciliation-checklist.md](./reconciliation-checklist.md)).
-2. **Dashboard is trustworthy.** Monthly income, expenses, savings, and savings rate
-   match an independent recomputation for the reconciled month.
-3. **Budgets are correct.** Planned vs. actual per category matches expectations for
-   the reconciled month.
-4. **Debts are correct.** Outstanding balances and principal paydown reflect reality.
-5. **Net worth is correct.** Assets − liabilities matches the system of record at the
-   chosen month-end.
-6. **Import is safe.** CSV import does not create duplicates or silently drop valid
-   rows, and invalid/duplicate rows are reported rather than posted.
-7. **Export round-trips.** Exported CSVs contain the data needed to rebuild/verify
-   the ledger.
-8. **A findings list exists.** Every bug/friction is logged and triaged, with Alpha
-   blockers either fixed or explicitly deferred with rationale.
+1. **Balances reconcile.** Every active account's posted balance matches the current system of record within the agreed tolerance.
+2. **Dashboard is trustworthy.** Monthly income, expenses, savings, and savings rate match an independent recomputation for the reconciled month.
+3. **Budgets are correct.** Planned vs. actual per category matches expectations.
+4. **Debts are correct.** Outstanding balances and principal paydown reflect reality, including non-base-currency debts.
+5. **Net worth is correct.** Assets − liabilities matches the system of record at the chosen month-end.
+6. **Import is safe.** CSV import does not create duplicates or silently drop valid rows.
+7. **Export round-trips.** Exported CSVs contain data needed to rebuild/verify the ledger.
+8. **A findings list exists.** Every bug/friction is logged and triaged, with Alpha blockers fixed or explicitly deferred with rationale.
+
+## Progress update — Sprints 12.4 and 12.5
+
+### Sprint 12.4 — Alpha Critical Bug Fixes
+
+Branch: `sprint/12-4-alpha-critical-fixes`  
+Tag: `v0.12.4-alpha-critical-fixes`
+
+Fixed:
+
+- `BF-002` — Mobile opening balance input blocked typed negative values.
+- `BF-003` — Liability balances now display as absolute owed amounts while ledger remains signed internally.
+- `BF-006` — Category parent options now refresh when category/reporting type changes.
+- `BF-009` — Weak-password signup error now surfaces clearer Supabase password-specific message.
+
+Database impact: none for these fixes. Liability sign handling was already correct in prior migration `20260601143624_fix_opening_balance_signed_amount.sql`.
+
+### Sprint 12.5 — Alpha UX Friction Fixes
+
+Branch: `sprint/12-5-alpha-ux-friction-fixes`  
+Tag: `v0.12.5-alpha-ux-friction-fixes`
+
+Fixed:
+
+- `BF-010` — Added global Add Transaction as fixed FAB; mobile menu keeps text link.
+- `BF-004` — Edit Account now scrolls to the edit form via `#account-edit-form` fragment.
+- `BF-001` — Multi-currency exchange-rate UX redesigned across transaction, opening-balance, and debt forms.
+- `BF-001 debt data` — `create_debt_with_account` RPC no longer hardcodes `exchange_rate_to_base = 1`; it now accepts `p_exchange_rate_to_base`.
+
+Database impact: Sprint 12.5 added migration `20260603000100_debt_opening_balance_exchange_rate.sql`.
+
+## Current FX behavior after Sprint 12.5
+
+- Shared utility: `src/lib/fx.ts`.
+- User-facing rate direction: **base→account**, e.g. `1 CAD = X COP`.
+- Server actions invert user input before writing `exchange_rate_to_base`.
+- Applied in:
+  - `accounts/actions.ts` → `setOpeningBalanceAction`
+  - `transactions/actions.ts` → `createManualTransactionAction`
+  - `debts/actions.ts` → `createDebtAction`
+- Auto-fetch exists in:
+  - `TransactionForm`
+  - `OpeningBalanceForm`
+  - `DebtCreateForm`
+- For future dates, the FX utility uses the latest available rate and shows a warning.
+
+### Sprint 12.6 — Action Forms UX
+
+Branch: `sprint/12-6-action-form-ux`  
+Tag: `v0.12.6-action-form-ux`
+
+Fixed:
+
+- `BF-004` — Edit Account now opens in a `FormDialog` instead of inline, making it obvious that edit mode started.
+- `BF-007` — Add Transaction from account card now opens transaction form with account preselected.
+- `BF-010` — Global Add Transaction FAB button (bottom-right) appears on all dashboard pages; lazy-loads form data on first open.
+
+New components:
+
+- `src/components/form-dialog.tsx` — Reusable dialog wrapper for all action forms (URL-param based open/close, auto-navigate to clean URL on close).
+- `src/components/global-add-transaction-button.tsx` — Client component for global transaction entry with lazy-loaded form data.
+- `src/app/dashboard/quick-add-actions.ts` — Server action to fetch accounts/categories for the quick-add dialog.
+
+UI pattern established:
+
+- All create/edit/action forms now open in `FormDialog`, never inline.
+- Forms are triggered by URL params (`?mode=create`, `?edit={id}`, `?pay={id}`).
+- Cancel/close navigates to the clean URL, naturally dismissing the dialog.
+- Pattern codified in `app-finanzas-ui-polish` skill for future form additions.
+
+Database impact: none for Sprint 12.6.
+
+## Current remaining open issues
+
+After Sprints 12.4/12.5/12.6, next priorities (from 2026-06-04 alpha feedback):
+
+| ID | Priority | Status | Next decision |
+|---|---:|---|---|
+| BF-011 | P1 | Open | [BUG] Newly created categories/subcategories missing from transaction form until page refresh. Likely NextJS revalidation issue. |
+| BF-002 | P1 | Open | [BUG] Mobile opening balance field not accepting negative values by keyboard (input type/inputMode fix). |
+| BF-012 | P2 | Open | Mobile menu should auto-collapse after navigation. |
+| BF-013 | P2 | Open | Accounts view too expanded; needs compact rows that expand on tap. |
+| BF-014 | P2 | Open | Transactions view too expanded; needs compact layout with category icons. |
+| BF-015 | P2 | Open | Transaction rows should display category icons for visual scanning. |
+| BF-016 | P2 | Open | Accounts card tap should navigate to filtered transactions view for that account (low-risk, high UX gain). |
+| BF-017 | P3 | Open | Multi-select/dynamic transaction filters (nice-to-have if time allows). |
+| BF-005 | P2 | Open | Decide warning/helper text vs blocking negative Cash balances. Do not auto-convert Cash to liability. |
+| BF-008 | P3 | Open | Keep deferred unless daily logs show strong repeated friction. |
+
+## Recommended next phase — Sprint 12.7+
+
+Continue Alpha real usage with compactness and critical-bug fixes:
+
+**Sprint 12.7 high-priority batch:**
+
+1. Fix BF-011 (category/subcategory revalidation bug).
+2. Fix BF-002 (mobile negative input).
+3. Fix BF-012 (mobile menu auto-collapse).
+4. Compact BF-013/014 (Accounts and Transactions views).
+5. Add BF-015 (transaction category icons).
+
+**Sprint 12.8+ (lower priority):**
+
+6. Implement BF-016 (Accounts card tap → filtered transactions) if time allows.
+7. Keep BF-017 (multi-select filters) deferred unless usage proves necessary.
+8. Keep BF-005 and BF-008 deferred unless usage evidence justifies.
+
+**Validation after Sprint 12.7:**
+
+- 2-week extended Alpha usage with compactness fixes applied.
+- Confirm balances still match AndroMoney/records.
+- No new critical bugs surface.
+- UX friction is reduced to acceptable levels.
+
+Then move toward **Beta Readiness Planning (v0.13)**.
 
 ## Real data privacy notes
 
 This sprint involves **real personal/family financial data**. Treat it accordingly:
 
-- Real data lives only in the live Supabase project and the authenticated app. It is
-  protected by Supabase Auth + RLS (unchanged in this sprint).
-- **Do not** commit real CSVs, exports, statements, balances, account numbers, or
-  screenshots containing real figures into the git repository.
-- Keep working CSVs and exports in a local, non-tracked location (e.g. outside the
-  repo, or in a git-ignored scratch folder). Delete temporary exports when done.
-- The logs in this folder ([bug-friction-log.md](./bug-friction-log.md),
-  [alpha-daily-usage-log.md](./alpha-daily-usage-log.md)) are templates. When filling
-  them in, **redact** real amounts/account identifiers — describe issues structurally
-  (e.g. "checking posted balance off by one transaction") rather than pasting real
-  numbers.
-- `last_four` style fields are partial by design; still avoid pasting full numbers
-  anywhere in docs or commits.
+- Do not commit real CSVs, exports, statements, balances, account numbers, or screenshots with real figures.
+- Keep working CSVs and exports outside the repo or in a git-ignored scratch folder.
+- Redact real amounts/account identifiers in logs.
+- Use structural notes such as “checking balance off by one transaction” rather than real figures.
 
-## Definition of done (for Sprint 12 overall)
+## Definition of done — Sprint 12 overall
 
 - Real accounts created and opening balances set at the chosen cutoff date.
-- At least one recent month imported and fully reconciled.
-- At least one week of real daily usage completed and logged.
-- Bug/friction log populated and triaged using
-  [alpha-finding-triage-rules.md](./alpha-finding-triage-rules.md).
-- A prioritized fix list produced for the next sprint.
+- At least one recent period imported or entered and reconciled.
+- Real daily usage completed and logged.
+- Bug/friction log populated and triaged.
+- Prioritized fix list produced.
 - No unresolved **Alpha blocker** left undocumented.
-
-## Definition of done (for Sprint 12.1 specifically — this sub-sprint)
-
-- `docs/alpha/` exists with all six planning/checklist/log files.
-- No code, UI, logic, SQL, RLS, or migration changes.
-- `npm run lint` and `npm run build` pass.
-- Branch `sprint/12-1-alpha-setup` ready for review and manual commit.
-
-## Recommended phases
-
-### 12.1 — Alpha setup and data import plan *(this sub-sprint)*
-Produce the planning and checklist documentation (this folder). No data imported yet.
-
-### 12.2 — Real data import and reconciliation
-Follow [real-data-import-plan.md](./real-data-import-plan.md): create real accounts,
-choose a cutoff date, set opening balances, import one recent month, and reconcile
-using [reconciliation-checklist.md](./reconciliation-checklist.md). Import more history
-only after the first month reconciles.
-
-### 12.3 — One-week usage and bug/friction log
-Use the app for real daily entry for at least a week. Record sessions in
-[alpha-daily-usage-log.md](./alpha-daily-usage-log.md) and every issue in
-[bug-friction-log.md](./bug-friction-log.md).
-
-### 12.4 — Findings triage and prioritized fixes
-Classify every logged finding with
-[alpha-finding-triage-rules.md](./alpha-finding-triage-rules.md), then produce a
-prioritized fix list. Alpha blockers are addressed first; post-MVP requests are
-deferred unless real usage proved them blocking.
 
 ## Related documents
 
@@ -148,3 +201,4 @@ deferred unless real usage proved them blocking.
 - [bug-friction-log.md](./bug-friction-log.md)
 - [alpha-daily-usage-log.md](./alpha-daily-usage-log.md)
 - [alpha-finding-triage-rules.md](./alpha-finding-triage-rules.md)
+- [sprint-12-4-12-5-architect-handoff.md](./sprint-12-4-12-5-architect-handoff.md)

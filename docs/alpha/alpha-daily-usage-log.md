@@ -1,51 +1,63 @@
 # Alpha Daily Usage Log
 
-> Documentation only. Lightweight log of each real-usage session during the Alpha week
-> (phase 12.3). Keep it quick — one row per session.
+> Documentation only. Lightweight log of real-usage sessions during Alpha. Keep it quick — one row per session.
 >
-> **Privacy:** do not record real amounts or account numbers here. Counts and
-> descriptions only.
+> **Privacy:** do not record real amounts or account numbers here. Counts and structural descriptions only.
 
 ## Field guide
 
 - **Date** — YYYY-MM-DD.
 - **Device** — Desktop / Tablet / Mobile (+ browser if relevant).
 - **Session duration** — rough minutes.
-- **Actions performed** — what you did (e.g. "added expenses, reviewed dashboard,
-  imported CSV").
+- **Actions performed** — e.g. added expenses, reviewed dashboard, imported CSV, reconciled FX.
 - **# transactions added** — count of manual transactions entered.
-- **Imports performed** — count of CSV imports (and batch ids if useful).
-- **Bugs found** — count + the `BF-###` ids logged in
-  [bug-friction-log.md](./bug-friction-log.md).
+- **Imports performed** — count of CSV imports and batch ids if useful.
+- **Bugs found** — count + `BF-###` ids logged in [bug-friction-log.md](./bug-friction-log.md).
 - **Frictions found** — count + `BF-###` ids.
-- **Needed AndroMoney?** — Yes/No: did you have to fall back to AndroMoney/old records
-  to get something done or to trust a number?
-- **Notes** — anything notable.
+- **Needed AndroMoney?** — Yes/No: did you need the old system to complete the task or trust a number?
+- **Notes** — structural notes only; no real figures.
+
+## Implementation milestones already completed
+
+| Date | Sprint/tag | Summary | Issues affected | Notes |
+|---|---|---|---|---|
+| 2026-06-04 | `v0.12.4-alpha-critical-fixes` | Alpha critical fixes completed. | BF-002, BF-003, BF-006, BF-009 | Validate on mobile, liabilities, categories, and auth signup. |
+| 2026-06-04 | `v0.12.5-alpha-ux-friction-fixes` | UX friction fixes and FX redesign completed. | BF-001, BF-004, BF-010 + debt FX data issue | Validate FAB, edit-account scroll, auto-FX, non-base debt conversion. |
 
 ## Log
 
 | Date | Device | Session duration | Actions performed | # transactions added | Imports performed | Bugs found | Frictions found | Needed AndroMoney? | Notes |
-|---|---|---|---|---|---|---|---|---|---|
-| 2026-01-01 | Mobile | 10m | *(example — delete)* Added daily expenses | 5 | 0 | 0 | 1 (BF-000) | No | Example only |
-|  |  |  |  |  |  |  |  |  |  |
-|  |  |  |  |  |  |  |  |  |  |
-|  |  |  |  |  |  |  |  |  |  |
+|---|---|---|---|---:|---:|---|---|---|---|
 |  |  |  |  |  |  |  |  |  |  |
 |  |  |  |  |  |  |  |  |  |  |
 |  |  |  |  |  |  |  |  |  |  |
 |  |  |  |  |  |  |  |  |  |  |
 |  |  |  |  |  |  |  |  |  |  |
 
-## Week summary (fill in at the end of phase 12.3)
+## Post-12.5 validation sessions to capture
 
-- Days used out of 7: 
-- Total transactions added: 
-- Total imports: 
-- Total bugs / frictions logged: 
-- Times I needed AndroMoney instead: 
+Use one row per session above after checking:
+
+- Mobile negative opening balance typing.
+- Liability account setup and net worth impact.
+- Non-base-currency opening balance FX.
+- Non-base-currency debt creation FX.
+- Category parent filtering.
+- Global Add Transaction FAB.
+- Edit Account scroll/focus behavior.
+- Weak password signup message in a test account.
+
+## Week summary
+
+- Days used out of 7:
+- Total transactions added:
+- Total imports:
+- Total bugs / frictions logged:
+- Times I needed AndroMoney instead:
 - Overall: could I rely on App Finanzas alone yet? (Yes / Not yet — why):
 
 ## Related documents
 
 - [bug-friction-log.md](./bug-friction-log.md)
 - [sprint-12-alpha-plan.md](./sprint-12-alpha-plan.md)
+- [reconciliation-checklist.md](./reconciliation-checklist.md)

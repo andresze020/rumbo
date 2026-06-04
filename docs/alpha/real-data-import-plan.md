@@ -1,203 +1,178 @@
 # Real Data Import Plan
 
-> Documentation only. This describes **how to use the existing app** to bring in real
-> data. It does not change any import logic, schema, or calculations.
+> Documentation only. This describes **how to use the existing app** to bring in real data. It does not replace reconciliation. Updated after Sprints 12.4 and 12.5.
 
-## Recommended strategy (summary)
+## Recommended strategy
 
-Import in **small, verifiable slices**, newest-first, reconciling after each slice:
+Import or enter data in **small, verifiable slices**, newest-first, reconciling after each slice:
 
 1. Create real accounts.
 2. Choose a single **cutoff date**.
 3. Set **opening balances** at that cutoff date.
-4. Import **one recent month** of transactions.
+4. Import or enter **one recent month** of transactions.
 5. **Reconcile** against AndroMoney / current records.
 6. Only then import more history, one period at a time.
 
-Reconcile after every step. Never import a second batch until the previous one
-balances.
+Reconcile after every step. Never import a second batch until the previous one balances.
+
+## Sprint 12.4/12.5 implementation notes that affect import/setup
+
+- Mobile opening balance input now supports typed negative values (`BF-002`, fixed in `v0.12.4`).
+- Liability balances are still stored as signed ledger values, but displayed as absolute owed amounts for clarity (`BF-003`, fixed in `v0.12.4`).
+- Multi-currency forms now use a user-facing **base→account** exchange-rate convention, e.g. `1 CAD = X COP` (`BF-001`, fixed in `v0.12.5`).
+- Transaction, opening-balance, and debt creation forms now auto-fetch FX rates through `src/lib/fx.ts` and allow manual refresh/fallback (`BF-001`, fixed in `v0.12.5`).
+- Debt opening balances now pass `p_exchange_rate_to_base` to `create_debt_with_account`; they no longer default to exchange rate = 1 for non-base-currency debts (`BF-001 debt data`, fixed in `v0.12.5`).
 
 ## Why not import the full historical dataset first
 
-Importing years of history in one shot is the highest-risk, hardest-to-debug path:
+Importing years of history in one shot is high-risk:
 
-- **Errors compound and hide.** A mapping mistake (wrong sign, wrong column, wrong
-  account) repeats across thousands of rows, and a single wrong opening balance throws
-  off every downstream balance. With one month, the error surface is tiny.
-- **Reconciliation becomes impossible.** If the net worth is off by $213.47 across
-  6 years, you cannot find the cause. Across one month with ~30 rows, you can.
-- **Duplicates are catastrophic at scale.** A duplicated import over years silently
-  doubles activity; over one month it is obvious.
-- **Currency/FX assumptions are easier to validate small.** CAD/USD/COP handling and
-  exchange rates should be proven on a handful of rows first.
-- **Rollback is cheap when small.** Undoing one bad month is manageable; unwinding a
-  full-history import is not.
+- Errors compound and hide.
+- Reconciliation becomes difficult.
+- Duplicates are catastrophic at scale.
+- Currency/FX assumptions are easier to validate on a small sample.
+- Rollback/recovery is much easier with one small period.
 
-Get the workflow correct on one month, then scale with confidence.
+Get the workflow correct on one period, then scale with confidence.
 
 ## Step 1 — Create real accounts
 
-Create every account you actively use, with correct type, class, and currency. See the
-[Account setup checklist](#account-setup-checklist) below.
+Create every account you actively use, with correct type, class, currency, and net-worth inclusion.
 
-Do this **before** any import so the CSV can map to real accounts (or a default target
-account).
+Use this checklist:
+
+- [ ] Listed every real active account.
+- [ ] Correct account type.
+- [ ] Correct account class: asset vs liability.
+- [ ] Correct account currency.
+- [ ] Correct `include_in_net_worth` flag.
+- [ ] Institution/last four added where useful.
+- [ ] Color/icon added where useful.
+- [ ] Cutoff date chosen and recorded.
+- [ ] Opening balance + opening balance date set for every account.
+- [ ] With no imported activity after the cutoff, each posted balance matches the intended opening balance.
 
 ## Step 2 — Choose a cutoff date
 
-Pick **one** cutoff date that becomes the boundary between "opening balance" (history
-before) and "imported transactions" (activity after). Recommendations:
+Pick **one** cutoff date that separates “opening balance/history before” from “transactions after.”
 
-- Use a **month start** (e.g. the 1st) for a clean monthly boundary.
-- Prefer a date where you have a **reliable statement/snapshot** of every account
-  balance (bank/credit-card statement close, or an AndroMoney snapshot).
-- The cutoff should be recent enough that the first imported month is the month right
-  after it.
+Recommendations:
 
-Write the chosen cutoff date down; it is referenced by opening balances and
-reconciliation.
+- Use a month start if possible.
+- Prefer a date with reliable statements/snapshots for every account.
+- Do not set today's balance as opening balance and then import transactions before today unless you deliberately reset the cutoff logic.
 
-## Step 3 — Set opening balances at the cutoff date
+## Step 3 — Set opening balances at cutoff
 
-For each account, set the opening balance **as of the cutoff date**:
+For each account:
 
-- Use the account's actual balance from the statement/snapshot at that date.
-- For **asset** accounts (cash, checking, savings, investment), enter the positive
-  balance held.
-- For **liability** accounts (credit cards, debts), enter what you owe. The app stores
-  liabilities as negative internally and displays them as positive amounts owed; enter
-  the owed amount as the page instructs.
-- Set the **opening balance date** to the cutoff date, not today.
-- For non-base-currency accounts, set the **exchange rate to base** appropriately for
-  the cutoff date (see [currency notes](#currency-notes-cad--usd--cop)).
+- Asset accounts: enter the balance held.
+- Liability accounts: enter the amount owed as the UI instructs; the app displays it as “owed” while the ledger remains signed internally.
+- Non-base-currency accounts: use the fetched base→account rate or manually enter the rate if fetch fails.
 
-After this step, with no transactions yet imported, each account's posted balance
-should equal its opening balance. Verify that before importing anything.
+### FX convention after Sprint 12.5
+
+User-facing input:
+
+```text
+1 {household_base_currency} = X {account_currency}
+```
+
+Example:
+
+```text
+1 CAD = 2690 COP
+```
+
+Server-side behavior:
+
+```text
+exchange_rate_to_base = 1 / rate_base_to_account
+amount_base_currency = amount_account_currency × exchange_rate_to_base
+```
+
+Do not manually invert the rate in the UI. Enter the intuitive base→account value shown by the form.
 
 ## Step 4 — Import one recent month first
 
 Import the **single most recent full month** after the cutoff:
 
-- Export/prepare a CSV from AndroMoney (or your bank) for that one month only.
-- Use the in-app CSV import: upload → map columns → preview/validate → confirm.
-- Required mappings: **date, amount, description**. Map **account** if present,
-  otherwise choose a **default target account**.
-- Review the preview counts (valid / invalid / duplicate) before confirming. Only
-  valid rows post; invalid and duplicate rows are logged, not posted.
-- Note the import **batch id** shown after import (useful for reference and rollback).
+- Use a CSV scoped to one month, and ideally one account for the first test.
+- Required mappings: date, amount, description.
+- Map account if present, otherwise use a default target account.
+- Confirm amount sign convention in preview.
+- Confirm date parsing.
+- Review valid/invalid/duplicate counts.
+- Record the import batch id if shown.
 
-See the [CSV import checklist](#csv-import-checklist) below.
+## Step 5 — Reconcile before continuing
 
-## Step 5 — Reconcile balances against AndroMoney / current records
+Use [reconciliation-checklist.md](./reconciliation-checklist.md).
 
-Before importing anything else, reconcile the imported month using
-[reconciliation-checklist.md](./reconciliation-checklist.md):
+Minimum checks:
 
-- Each account's posted balance = opening balance ± that month's posted activity.
-- Compare against AndroMoney/bank end-of-month balances within tolerance.
-- Check dashboard income/expenses/savings for the month.
-- Check budgets actuals, debts, and net worth.
+- Account posted balances.
+- Liability owed balances.
+- Non-base-currency base conversion.
+- Debt balances.
+- Dashboard income/expenses/savings.
+- Budget actuals.
+- Net worth.
+- CSV row counts.
 
-If anything is off, fix the **input** (re-map, correct opening balance, remove a bad
-batch) — do not change app logic. Re-reconcile until it matches.
+If anything is off, stop and fix inputs before importing more.
 
 ## Step 6 — Only then import more history
 
-Once the first month reconciles cleanly:
+Once the first period reconciles cleanly:
 
-- Import **one earlier period at a time** (month by month, or quarter by quarter).
+- Import one earlier period at a time.
 - Reconcile after each batch.
-- Keep each CSV scoped to a single account or a single period to keep errors findable.
-- Stop importing history at the point where older data is no longer worth the effort.
-
-## Account setup checklist
-
-- [ ] Listed every real account currently in use (cash, checking, savings, credit
-      cards, debts, investments).
-- [ ] Each account has the correct **type**.
-- [ ] Each account has the correct **class** (asset vs. liability).
-- [ ] Each account has the correct **currency** (CAD / USD / COP / other).
-- [ ] `include_in_net_worth` set correctly per account.
-- [ ] Institution name / last four added where helpful for identification.
-- [ ] (Optional) color/icon set for quick visual identification.
-- [ ] Cutoff date chosen and recorded.
-- [ ] Opening balance + opening balance date set for every account at the cutoff.
-- [ ] With zero transactions imported, every posted balance equals its opening balance.
-
-## CSV import checklist
-
-- [ ] CSV scoped to **one month** (and ideally one account) for the first import.
-- [ ] File has a header row and at least one data row.
-- [ ] Encoding is UTF-8; delimiters/decimal separators look correct in preview.
-- [ ] Required columns mapped: **date, amount, description**.
-- [ ] Account mapped, **or** a default target account selected.
-- [ ] Currency mapped/consistent with the target account.
-- [ ] Amount **sign convention** verified (expenses negative / income positive, or as
-      your CSV encodes it) on a few preview rows.
-- [ ] Dates parse correctly (check year/month/day order in preview).
-- [ ] Preview counts reviewed: valid vs. invalid vs. duplicate.
-- [ ] Spot-checked a few valid rows for correct account, amount, and date.
-- [ ] Import confirmed; **batch id recorded**.
-- [ ] Post-import balance reconciled before importing anything else.
-
-## Rollback / recovery notes if an import goes wrong
-
-The app is the only thing that should mutate data; do **not** hand-edit the database.
-If an import is wrong:
-
-- **Stop.** Do not import more on top of a bad batch — it makes diagnosis harder.
-- **Identify the batch.** Use the recorded import batch id and the transaction
-  filters (source = CSV import, the month in question) to find affected rows.
-- **Reverse via the app's existing flows only.** Use the supported actions (e.g.
-  voiding transactions) rather than any destructive/DB-level operation. Do not run SQL,
-  migrations, or Supabase write commands.
-- **Re-verify opening balances.** A surprising number of "import" errors are actually
-  a wrong opening balance or wrong cutoff date.
-- **Fix the source CSV** (mapping, signs, account, dates) and re-import the corrected
-  month.
-- **Reconcile again** before proceeding.
-- If state becomes confusing, the safest reset for Alpha is to correct the inputs and
-  re-reconcile — capture what went wrong in
-  [bug-friction-log.md](./bug-friction-log.md) so the import UX can be improved later.
+- Stop importing old history when the value no longer justifies the effort.
 
 ## Notes for specific account types
 
 ### Credit cards
-- Class = **liability**; the opening balance is what you **owe** at the cutoff.
-- A purchase increases what you owe; a payment decreases it. Verify the sign
-  convention on a few preview rows before bulk import.
-- A credit-card **payment** is a transfer from an asset account to the card, not an
-  expense. Record it as a transfer / debt payment, not a categorized expense, so it
-  does not inflate spending.
+
+- Class = liability.
+- Opening balance = amount owed at cutoff.
+- Purchases increase amount owed; payments decrease it.
+- Credit-card payments should be transfers/debt payments, not operating expenses.
 
 ### Debts
-- Linked to a liability account; opening balance = current outstanding at the cutoff.
-- Record **principal payments** through the debt payment flow so paydown and balances
-  stay correct; principal payments are not expenses.
-- Set `original_principal`, interest, minimum payment, and due day as metadata for
-  tracking (these are reference fields, not calculations to reconcile to the cent).
+
+- Linked to a liability account.
+- Opening balance = outstanding amount owed at cutoff.
+- After Sprint 12.5, non-base-currency debt opening balances should convert correctly using the provided exchange rate.
+- Validate debt base-currency value in net worth after creation.
 
 ### Cash
-- Class = **asset**. Cash is the easiest to drift from reality.
-- Set a realistic opening cash balance at the cutoff; expect small tolerance and
-  reconcile to your own count, not to a bank statement.
+
+- Class = asset.
+- Negative Cash balance is currently possible but may be confusing (`BF-005`, open).
+- Do not assume the app auto-converts Cash to liability. If the negative value represents money owed, prefer creating a debt/liability account.
 
 ### Investments
-- Class = **asset**. For Alpha, treat the account balance as the cash/market value you
-  record manually; this MVP does not track holdings/positions or live prices.
-- Reconcile to the statement value at the cutoff and month-end; expect market movement
-  to explain differences, not bugs.
 
-### Currency notes (CAD / USD / COP)
-- Each account has a single currency. Balances display in the account currency and are
-  also converted to the household **base currency** for net worth/dashboard.
-- Set the **exchange rate to base** when setting opening balances / importing for
-  non-base-currency accounts.
-- **Cross-currency transfers are not supported** in the MVP — do not try to transfer
-  directly between accounts of different currencies; model it the way you already do in
-  your current records and log the friction if it matters.
-- When reconciling multi-currency net worth, differences are often just FX rate choice;
-  confirm the rate before assuming a bug.
+- Class = asset.
+- For Alpha, treat balance as manually recorded market/cash value; this MVP does not track holdings or live prices.
+
+### Currency notes — CAD / USD / COP
+
+- Each account has one currency.
+- Household has one base currency.
+- Account-currency balances display in account currency; consolidated reports use base currency.
+- After Sprint 12.5, enter rates in base→account direction.
+- Cross-currency transfers remain outside the MVP unless explicitly implemented later.
+
+## Rollback / recovery notes if import goes wrong
+
+- Stop; do not import more on top of a bad batch.
+- Identify the batch.
+- Use app-supported flows only; do not hand-edit DB records.
+- Re-check opening balances and FX rates.
+- Fix source CSV/mapping and re-import the corrected period.
+- Log the issue in [bug-friction-log.md](./bug-friction-log.md).
 
 ## Related documents
 

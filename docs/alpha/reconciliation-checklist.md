@@ -1,26 +1,37 @@
 # Reconciliation Checklist
 
-> Documentation only. Use this to verify that App Finanzas matches your current system
-> of record (AndroMoney and/or bank/credit-card statements) after each import slice.
+> Documentation only. Use this to verify that App Finanzas matches your current system of record after each import/data-entry slice.
 >
-> **Privacy:** when filling in the Pass/Fail and Notes fields, describe issues
-> structurally and **redact real amounts/account numbers**. Do not commit real figures.
+> **Privacy:** describe issues structurally and redact real amounts/account numbers. Do not commit real figures.
 
 ## How to use this checklist
 
-1. Reconcile **one area at a time**, in roughly the order below.
-2. For each row, compare the App Finanzas value to the system-of-record value.
-3. Mark **Pass/Fail** and capture anything surprising in **Notes**.
-4. Any **Fail** that affects a number you rely on → log it in
-   [bug-friction-log.md](./bug-friction-log.md) and classify with
-   [alpha-finding-triage-rules.md](./alpha-finding-triage-rules.md).
-5. Fix **inputs** (mappings, opening balances, cutoff date), not app logic.
+1. Reconcile **one area at a time**.
+2. Compare App Finanzas to AndroMoney/current records/bank statements.
+3. Mark Pass/Fail and capture surprises.
+4. Any Fail affecting a number you rely on → log it in [bug-friction-log.md](./bug-friction-log.md).
+5. Fix inputs first: mappings, opening balances, cutoff date, FX rate. Do not assume app logic is wrong until inputs are confirmed.
 
 **Tolerance legend:**
-- *Exact* = must match to the cent (0.00 difference).
-- *FX tolerance* = small difference acceptable, attributable to exchange-rate choice.
-- *Manual tolerance* = small difference acceptable for manually-counted values (cash)
-  or market movement (investments).
+
+- *Exact* = must match to the cent.
+- *FX tolerance* = small difference acceptable if attributable to exchange-rate choice.
+- *Manual tolerance* = small difference acceptable for manually counted cash or market-movement values.
+
+## Post-12.5 targeted validation
+
+Use this section first after Sprint 12.4/12.5 because these areas were recently changed.
+
+| Area | What changed | What to test | Expected result | Pass/Fail | Notes |
+|---|---|---|---|---|---|
+| Mobile opening balance input | `BF-002` fixed typed negative input on mobile. | On mobile, type a negative value directly in an opening balance field where valid. | Negative sign can be typed; form validation behaves normally. | | |
+| Liability balance display | `BF-003` displays liabilities as absolute owed values. | Create/review liability account opening balance. Check account card and net worth. | UI shows owed amount clearly; net worth uses signed liability internally. | | |
+| Category parent filtering | `BF-006` moved category form to client component with live parent filtering. | Change category type/reporting type while creating/editing category. | Parent category options refresh and incompatible parent is cleared/prevented. | | |
+| Weak password message | `BF-009` improved Supabase error display. | Try signup with weak password in test environment. | Error clearly explains password requirement. | | |
+| Global Add Transaction | `BF-010` added fixed FAB. | Navigate to main dashboard pages. | FAB visible, usable, not covering content; mobile menu still has link. | | |
+| Edit Account visibility | `BF-004` added `#account-edit-form` scroll target. | Click Edit for lower account. | Browser scrolls to the edit form clearly. | | |
+| FX auto-fetch | `BF-001` added `src/lib/fx.ts` and auto-fetch. | Create non-base-currency transaction/opening balance/debt. | Rate auto-fills; future dates use latest with warning; manual fallback works. | | |
+| Debt FX conversion | `BF-001 debt data` fixed debt RPC exchange rate. | Create non-base-currency debt with opening balance. | Base-currency liability/net worth reflects exchange rate, not 1:1. | | |
 
 ---
 
@@ -28,10 +39,10 @@
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Account list: every active account, its type, class, currency, and `include_in_net_worth` flag. |
-| Compare in system of record | Your real list of accounts in AndroMoney / bank portals. |
-| Expected tolerance | Exact (structure must match — every real account exists once, no extras, no missing). |
-| Common causes of differences | Account created twice; wrong class (asset vs. liability); wrong currency; archived account still expected; account missing. |
+| Compare in App Finanzas | Account list: every active account, type, class, currency, include_in_net_worth flag. |
+| Compare in system of record | Real list of accounts in AndroMoney/bank portals. |
+| Expected tolerance | Exact. |
+| Common causes of differences | Duplicate account; wrong class; wrong currency; archived/missing account. |
 | Pass / Fail | |
 | Notes | |
 
@@ -39,10 +50,10 @@
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Each account's posted balance **with zero transactions imported** = its opening balance at the cutoff date. |
-| Compare in system of record | Statement/snapshot balance for each account **at the cutoff date**. |
-| Expected tolerance | Exact for bank/card accounts; Manual tolerance for cash; FX tolerance for non-base currency. |
-| Common causes of differences | Opening balance date not set to cutoff; wrong sign on a liability; wrong exchange rate to base; used today's balance instead of cutoff balance. |
+| Compare in App Finanzas | Each account's posted balance with no post-cutoff transactions. |
+| Compare in system of record | Statement/snapshot balance for each account at cutoff. |
+| Expected tolerance | Exact for bank/card accounts; manual tolerance for cash; FX tolerance for non-base currency. |
+| Common causes of differences | Wrong cutoff date; wrong liability sign; wrong base→account FX rate; used today's balance instead of cutoff balance. |
 | Pass / Fail | |
 | Notes | |
 
@@ -50,10 +61,10 @@
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Transactions list for the reconciled month: count, dates, descriptions, amounts, categories. |
-| Compare in system of record | Same month's transactions in AndroMoney / bank statement. |
-| Expected tolerance | Exact (count and per-row amount); FX tolerance only for base-currency conversion. |
-| Common causes of differences | Duplicate or dropped rows on import; wrong amount sign; date parsed in wrong order; transaction posted to wrong account; invalid rows silently expected to post. |
+| Compare in App Finanzas | Count, dates, descriptions, amounts, categories for reconciled month. |
+| Compare in system of record | Same month's transactions in AndroMoney/bank statement. |
+| Expected tolerance | Exact; FX tolerance only for base conversion. |
+| Common causes of differences | Duplicate/dropped rows; wrong sign; wrong date parsing; wrong account; invalid row expected to post. |
 | Pass / Fail | |
 | Notes | |
 
@@ -61,10 +72,10 @@
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Transfers appear once as a movement between two accounts (not as income/expense), reducing one and increasing the other. |
-| Compare in system of record | Same transfers in AndroMoney / statements. |
-| Expected tolerance | Exact within a currency. Cross-currency transfers are **not supported** — confirm none were attempted. |
-| Common causes of differences | Transfer imported as two categorized transactions (double counted in spending); transfer counted as expense; cross-currency transfer attempted. |
+| Compare in App Finanzas | Transfer appears as movement between accounts, not income/expense. |
+| Compare in system of record | Same transfer in AndroMoney/statements. |
+| Expected tolerance | Exact within same currency. |
+| Common causes of differences | Transfer imported as two expenses/income rows; cross-currency transfer attempted. |
 | Pass / Fail | |
 | Notes | |
 
@@ -72,21 +83,21 @@
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Card account outstanding (liability) balance, displayed as amount owed; purchases increase it, payments decrease it. |
-| Compare in system of record | Credit-card statement balance at the cutoff and month-end. |
-| Expected tolerance | Exact (to the cent) for the statement balance. |
-| Common causes of differences | Payment recorded as expense instead of transfer; sign convention reversed; opening owed amount wrong; pending vs. posted timing. |
+| Compare in App Finanzas | Outstanding liability balance displayed as amount owed. |
+| Compare in system of record | Credit-card statement balance at cutoff/month-end. |
+| Expected tolerance | Exact. |
+| Common causes of differences | Payment recorded as expense; sign reversed; opening owed amount wrong; pending/posted timing. |
 | Pass / Fail | |
 | Notes | |
 
-## 6. Debt payments
+## 6. Debt payments and debt opening balances
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Debt outstanding balance after principal payments; principal paydown progress; payments recorded via the debt payment flow (not as expenses). |
-| Compare in system of record | Loan/debt statement: outstanding principal and payments made. |
-| Expected tolerance | Exact for principal balance; interest fields are reference metadata (not reconciled to the cent). |
-| Common causes of differences | Principal payment logged as a normal expense; payment posted to wrong account; opening outstanding balance wrong; interest portion mixed into principal. |
+| Compare in App Finanzas | Debt outstanding balance, principal paydown, and base-currency liability value. |
+| Compare in system of record | Loan/debt statement and expected FX conversion if non-base currency. |
+| Expected tolerance | Exact for principal in account currency; FX tolerance in base currency. |
+| Common causes of differences | Principal logged as normal expense; wrong account; wrong opening balance; wrong FX rate; old 1:1 debt FX behavior not migrated/applied. |
 | Pass / Fail | |
 | Notes | |
 
@@ -94,10 +105,10 @@
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | For the reconciled month: planned vs. actual per category, remaining, and percent used; over/near/on-track status. |
-| Compare in system of record | Your expected budget for that month and actual spend per category from AndroMoney. |
-| Expected tolerance | Exact for actuals (they derive from posted expenses); planned amounts are your own inputs. |
-| Common causes of differences | Category excluded from budget unexpectedly; transaction categorized differently than in AndroMoney; transfers/debt payments leaking into spending; archived category. |
+| Compare in App Finanzas | Planned vs actual per category, remaining, percent used. |
+| Compare in system of record | Expected budget and actual spend per category. |
+| Expected tolerance | Exact for actuals; planned amounts are user input. |
+| Common causes of differences | Category excluded from budget; different categorization; transfers/debt payments leaking into spending. |
 | Pass / Fail | |
 | Notes | |
 
@@ -105,10 +116,10 @@
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Monthly income, monthly expenses, monthly savings, savings rate, and expenses-by-category for the reconciled month. |
-| Compare in system of record | Independent recomputation from AndroMoney / statements for the same month. |
+| Compare in App Finanzas | Monthly income, expenses, savings, savings rate, expenses by category. |
+| Compare in system of record | Independent recomputation for same month. |
 | Expected tolerance | Exact for income/expense/savings; savings rate within rounding. |
-| Common causes of differences | Transfers or debt payments counted as income/expense; pending vs. posted differences; month boundary (timezone) edge cases; category type misassigned. |
+| Common causes of differences | Transfers/debt payments counted as income/expense; pending vs posted; month boundary; category type mismatch. |
 | Pass / Fail | |
 | Notes | |
 
@@ -116,10 +127,10 @@
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Total assets, total liabilities, and net worth at the chosen month-end (included accounts only). |
-| Compare in system of record | Sum of real account balances (assets − liabilities) at the same month-end. |
-| Expected tolerance | Exact for single-currency; FX tolerance when CAD/USD/COP are combined into base currency. |
-| Common causes of differences | Account wrongly included/excluded from net worth; liability sign; exchange rate choice; an account's opening balance wrong. |
+| Compare in App Finanzas | Total assets, liabilities, net worth at month-end. |
+| Compare in system of record | Sum of real balances at same month-end. |
+| Expected tolerance | Exact for single currency; FX tolerance when currencies combine. |
+| Common causes of differences | Included/excluded account wrong; liability sign; exchange-rate choice; opening balance wrong. |
 | Pass / Fail | |
 | Notes | |
 
@@ -127,10 +138,10 @@
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Import preview counts (valid/invalid/duplicate) vs. what actually posted; only valid rows become transactions. |
-| Compare in system of record | The source CSV row count and contents for the month. |
-| Expected tolerance | Exact: posted transactions = valid rows; no duplicates; invalid/duplicate rows logged, not posted. |
-| Common causes of differences | Re-running an import and duplicating rows; valid rows dropped due to mapping; duplicate detection too strict/loose; header/encoding issues. |
+| Compare in App Finanzas | Preview counts and posted rows. |
+| Compare in system of record | Source CSV row count and contents. |
+| Expected tolerance | Exact: posted transactions = valid rows; invalid/duplicate rows not posted. |
+| Common causes of differences | Re-running import; mapping errors; duplicate detection too strict/loose; header/encoding issues. |
 | Pass / Fail | |
 | Notes | |
 
@@ -138,10 +149,10 @@
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Exported transactions/accounts/categories CSVs vs. what the app displays. |
-| Compare in system of record | The in-app ledger (export should faithfully represent it; one row per entry/allocation combination). |
-| Expected tolerance | Exact: totals rebuilt from the export match the app; transfers/opening balances/principal-only debt payments export with blank allocation fields; voided transactions included with status. |
-| Common causes of differences | Misread sign/column; assuming one row per transaction instead of per entry/allocation; locale/encoding when reopening the CSV. |
+| Compare in App Finanzas | Exported transactions/accounts/categories vs app display. |
+| Compare in system of record | In-app ledger and expected totals. |
+| Expected tolerance | Exact. |
+| Common causes of differences | Misread sign/column; one row per entry/allocation assumption; locale/encoding in spreadsheet app. |
 | Pass / Fail | |
 | Notes | |
 
@@ -156,15 +167,17 @@
 | Transactions | | | | |
 | Transfers | | | | |
 | Credit cards | | | | |
-| Debt payments | | | | |
+| Debt payments / debt FX | | | | |
 | Budgets | | | | |
 | Dashboard | | | | |
 | Net worth | | | | |
 | CSV import | | | | |
 | CSV export | | | | |
+| Post-12.5 targeted checks | | | | |
 
 ## Related documents
 
 - [real-data-import-plan.md](./real-data-import-plan.md)
 - [bug-friction-log.md](./bug-friction-log.md)
 - [alpha-finding-triage-rules.md](./alpha-finding-triage-rules.md)
+- [sprint-12-4-12-5-architect-handoff.md](./sprint-12-4-12-5-architect-handoff.md)
