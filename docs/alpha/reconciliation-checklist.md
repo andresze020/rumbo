@@ -18,9 +18,21 @@
 - *FX tolerance* = small difference acceptable if attributable to exchange-rate choice.
 - *Manual tolerance* = small difference acceptable for manually counted cash or market-movement values.
 
-## Post-12.5 targeted validation
+## Post-12.7 targeted validation (CRITICAL)
 
-Use this section first after Sprint 12.4/12.5 because these areas were recently changed.
+Use this section first after Sprint 12.7 because BF-020 (transfer FX bug) could have corrupted balances.
+
+| Area | What changed | What to test | Expected result | Pass/Fail | Notes |
+|---|---|---|---|---|---|
+| Transfer in non-base currency | `BF-020` fixed exchange_rate_to_base hardcoding in transfer RPCs. | Create a transfer between two accounts in non-base-currency (e.g., COP→COP when base is CAD). Check Total Assets before/after. | Transfer reduces Total Assets by correct amount (converted via exchange rate), not by literal account-currency amount. | | |
+| Transaction form account field | `BF-018` preserves account across type changes. | Start with Expense, select an account. Change to Income. Account should remain selected. Change to Transfer. Account should move to "From account". | Account persists correctly as you switch types. | | |
+| Categories in Add Transaction | `BF-011` refetches categories on every open. | Create Categories → Add Transaction via FAB. Close dialog. Create another category. Re-open Add Transaction dialog. | New category appears in dropdown without page refresh. | | |
+
+---
+
+## Post-12.5 targeted validation (completed in previous sprints)
+
+These areas were changed in Sprint 12.4/12.5 — only re-test if making changes to them.
 
 | Area | What changed | What to test | Expected result | Pass/Fail | Notes |
 |---|---|---|---|---|---|
@@ -72,12 +84,12 @@ Use this section first after Sprint 12.4/12.5 because these areas were recently 
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Transfer appears as movement between accounts, not income/expense. |
+| Compare in App Finanzas | Transfer appears as movement between accounts, not income/expense. Also check Total Assets impact. |
 | Compare in system of record | Same transfer in AndroMoney/statements. |
-| Expected tolerance | Exact within same currency. |
-| Common causes of differences | Transfer imported as two expenses/income rows; cross-currency transfer attempted. |
+| Expected tolerance | Exact within same currency. For non-base-currency transfers, verify Total Assets impact matches (amount × exchange_rate_to_base). |
+| Common causes of differences | Transfer imported as two expenses/income rows; cross-currency transfer attempted; (Sprint 12.7 FIX) non-base-currency transfer amount treated as base-currency (now fixed). |
 | Pass / Fail | |
-| Notes | |
+| Notes | **CRITICAL (Sprint 12.7):** If you created transfers in non-base-currency BEFORE Sprint 12.7, validate Total Assets manually. Those transfers may have corrupted balances. Re-create them after upgrade. |
 
 ## 5. Credit cards
 

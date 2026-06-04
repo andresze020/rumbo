@@ -74,36 +74,37 @@
 
 ## Suggested next fix batch
 
-**Sprint 12.7 — BLOCKING: debt/transfer balance issue + transaction form bugs**
+**Sprint 12.7 — COMPLETED** ✅
 
-Critical (MUST FIX FIRST):
+All three critical bugs fixed:
+- ✅ `BF-020` (P0) — Transfer FX rate bug fixed; transfers in non-base-currency now correctly convert to base-currency amount.
+- ✅ `BF-018` (P1) — Account field preserved across expense/income type changes.
+- ✅ `BF-011` (P1) — Categories refetch on every dialog open.
 
-0. **`BF-020` (P0) — INVESTIGATE URGENTLY** — Transfer to pay debt causes incorrect net worth/account balance. **STOP recording transfers to pay debts until this is validated.** This is a data integrity issue that could corrupt financial records.
+**Sprint 12.8+ — UX compactness & navigation**
 
-High-priority fixes:
+Next recommended batch (P2 compactness + P2 navigation):
 
-1. `BF-011` (P1) — Newly created categories/subcategories not appearing in transaction form until page refresh (revalidation issue).
-2. `BF-018` (P1) — Account field resets when changing transaction type (expense ↔ income).
-3. `BF-012` (P2) — Mobile menu auto-collapse after navigation.
-4. `BF-019` (P2) — Navigation after transaction creation should return to origin page, not always to Transactions.
-5. `BF-013` (P2) — Accounts page view compactness (collapse rows, expand-on-tap).
-6. `BF-014` (P2) — Transactions view compactness (fewer columns, detail-on-tap).
-7. `BF-015` (P2) — Transactions show category icons for visual scanning.
+1. `BF-019` (P2) — Navigation after transaction creation should return to origin page, not always to Transactions.
+2. `BF-012` (P2) — Mobile menu auto-collapse after navigation.
+3. `BF-013` (P2) — Accounts page view compactness (collapse rows, expand-on-tap).
+4. `BF-014` (P2) — Transactions view compactness (fewer columns, detail-on-tap).
+5. `BF-015` (P2) — Transactions show category icons for visual scanning.
 
-**Sprint 12.8+ — Quick-access and enhancements**
+**Sprint 12.9+ — Quick-access and enhancements**
 
-8. `BF-016` (P2) — Accounts card tap → filtered transactions view (low-risk, high UX gain).
-9. `BF-017` (P3) — Multi-select/dynamic filters (nice-to-have if time allows).
+6. `BF-016` (P2) — Accounts card tap → filtered transactions view (low-risk, high UX gain).
+7. `BF-017` (P3) — Multi-select/dynamic filters (nice-to-have if time allows).
 
-Do not include in immediate fix batches:
+**Do not include in immediate fix batches:**
 
 - `BF-001` — Full automatic FX/API integration (Post-MVP).
-- `BF-003` — Liability opening balance redesign (block on testing/validation).
+- `BF-002` — Mobile negative input (deferred from 12.7, revisit if high friction).
+- `BF-003` — Liability opening balance sign (block on validation/testing).
 - `BF-005` — Auto-convert cash to liability (not recommended).
-- `BF-006` — Parent category refresh (known workaround; defer if low-friction impact).
+- `BF-006` — Parent category refresh (known workaround; low-friction impact).
 - `BF-008` — Add Next transaction flow (defer; test batch-entry friction first).
-- `BF-009` — Weak password error message (defer; auth edge case).
-- Database schema changes unless strictly required to fix a P0.
+- `BF-009` — Weak password error message (defer; auth edge case, low priority).
 
 ## Related documents
 

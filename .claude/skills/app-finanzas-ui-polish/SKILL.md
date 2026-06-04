@@ -37,7 +37,7 @@ Use this skill for frontend/UI changes.
 - Cancel links inside the form navigate to the clean URL — the page re-renders without the param and the dialog disappears naturally.
 - After a successful server action redirect, same thing — param is gone, dialog is not rendered.
 - Use `wide` prop for forms with 6+ fields (accounts, debts). Omit for smaller forms (payment, opening balance).
-- For global/cross-page triggers that need data fetched lazily on open, use `GlobalAddTransactionButton` (`src/components/global-add-transaction-button.tsx`) as the pattern: client component + `useState(open)` + server action call on first open.
+- For global/cross-page triggers that need data fetched lazily on open, use `GlobalAddTransactionButton` (`src/components/global-add-transaction-button.tsx`) as the pattern: client component + `useState(open)` + server action call **on every open** (not cached) to ensure newly created categories/accounts appear immediately.
 - The FAB (bottom-right Plus button) is the sole global add-transaction entry point. Do not add add-transaction buttons to the navbar.
 - If adding a new form to any page, follow this checklist:
   1. Add the URL param to the page's `searchParams` type.
@@ -54,6 +54,14 @@ For financial forms:
 - Allow negative values only when the business rule allows negative values, such as liability opening balances if supported.
 - Archived accounts/categories should be hidden by default in new transaction forms.
 - Existing historical records may still display archived names.
+
+## Transfer form FX support (Sprint 12.7+)
+
+When a transfer is between accounts in non-base currency (e.g., both COP when base is CAD):
+- Show an auto-fetch FX rate field: "1 CAD = ? COP"
+- Use the same `fetchFxRate()` function and auto-fill pattern as income/expense forms
+- Pass `exchange_rate_to_base` to the RPC (both `create_transfer_transaction` and `update_transfer_transaction` accept this parameter)
+- Transfers within base-currency pass exchange_rate_to_base = 1 (default)
 
 ## Responsive QA
 
