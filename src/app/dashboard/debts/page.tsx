@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/empty-state'
+import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
 import { StatusBadge } from '@/components/status-badge'
 import { SubmitButton } from '@/components/submit-button'
@@ -385,34 +386,28 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
       </div>
 
       {isCreating ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Create debt</CardTitle>
-            <CardDescription>
-              Add a debt record and create or link a liability account.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DebtCreateForm
-              baseCurrency={household.base_currency}
-              currencyOptions={currencyOptions}
-              defaultCurrency={defaultCurrency}
-              linkableLiabilityAccounts={linkableLiabilityAccounts}
-            />
-          </CardContent>
-        </Card>
+        <FormDialog
+          title="Create debt"
+          description="Add a debt record and create or link a liability account."
+          cancelHref={debtsPath()}
+          wide
+        >
+          <DebtCreateForm
+            baseCurrency={household.base_currency}
+            currencyOptions={currencyOptions}
+            defaultCurrency={defaultCurrency}
+            linkableLiabilityAccounts={linkableLiabilityAccounts}
+          />
+        </FormDialog>
       ) : null}
 
       {selectedEditDebt ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Edit debt</CardTitle>
-            <CardDescription>
-              Update metadata for {selectedEditDebt.name}. The current balance
-              comes from ledger entries and cannot be edited here.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <FormDialog
+          title="Edit debt"
+          description={`Update metadata for ${selectedEditDebt.name}. The current balance comes from ledger entries and cannot be edited here.`}
+          cancelHref={debtsPath()}
+          wide
+        >
             <form action={updateDebtAction} className="space-y-4">
               <input type="hidden" name="debt_id" value={selectedEditDebt.id} />
 
@@ -550,19 +545,15 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                 </Link>
               </div>
             </form>
-          </CardContent>
-        </Card>
+        </FormDialog>
       ) : null}
 
       {selectedPayDebt ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Register payment</CardTitle>
-            <CardDescription>
-              Record a principal payment for {selectedPayDebt.name}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <FormDialog
+          title="Register payment"
+          description={`Record a principal payment for ${selectedPayDebt.name}.`}
+          cancelHref={debtsPath()}
+        >
             {selectedPaySourceAccounts.length === 0 ? (
               <EmptyState
                 title="No source accounts available"
@@ -706,8 +697,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                 </div>
               </form>
             )}
-          </CardContent>
-        </Card>
+        </FormDialog>
       ) : null}
 
       <Card>

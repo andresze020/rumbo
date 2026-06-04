@@ -1,10 +1,5 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import {
-  TransactionForm,
-  type TransactionFormAccount,
-  type TransactionFormCategory,
-} from './transaction-form'
 import { TransactionEditForm } from './transaction-edit-form'
 import { TransferEditForm } from './transfer-edit-form'
 import { VoidTransactionForm } from './void-transaction-form'
@@ -20,6 +15,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
+import { FormDialog } from '@/components/form-dialog'
+import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import { MetricCard } from '@/components/metric-card'
 import { StatusBadge } from '@/components/status-badge'
 import { createClient } from '@/lib/supabase/server'
@@ -277,9 +274,8 @@ export default async function TransactionsPage({
     selectedAccountId !== 'all' ||
     selectedCategoryId !== 'all' ||
     searchText.length > 0
-  const isCreating = params.mode === 'create'
   const editTransactionId =
-    typeof params.edit === 'string' && !isCreating ? params.edit : null
+    typeof params.edit === 'string' ? params.edit : null
   const monthRange = getMonthRange(selectedMonth)
   const returnTo = transactionsPath(filters)
   const supabase = await createClient()
@@ -611,9 +607,6 @@ export default async function TransactionsPage({
   ).length
   const voidedCount = transactionRows.filter((row) => row.isVoided).length
   const importedCount = transactionRows.filter((row) => row.isImported).length
-  const canCreateTransaction =
-    activeAccounts.length > 0 &&
-    (activeCategories.length > 0 || activeAccounts.length >= 2)
   const summaryCards = [
     {
       label: 'Visible',
@@ -651,12 +644,9 @@ export default async function TransactionsPage({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Link
-            href={transactionsPath(filters, { mode: 'create' })}
-            className={buttonVariants()}
-          >
+          <GlobalAddTransactionButton className={buttonVariants()}>
             Add transaction
-          </Link>
+          </GlobalAddTransactionButton>
           <Link
             href="/dashboard/transactions/import"
             className={buttonVariants({ variant: 'outline' })}
@@ -815,104 +805,62 @@ export default async function TransactionsPage({
         ))}
       </div>
 
-      {isCreating ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Add transaction</CardTitle>
-            <CardDescription>
-              Add a manual income, expense, or transfer transaction.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!activeAccounts.length ? (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                Create an account first.
-              </p>
-            ) : null}
-
-            {!activeCategories.length ? (
-              <p className="mt-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                Create categories first for income and expense transactions.
-              </p>
-            ) : null}
-
-            {canCreateTransaction ? (
-              <TransactionForm
-                accounts={activeAccounts as TransactionFormAccount[]}
-                baseCurrency={household.base_currency}
-                cancelHref={returnTo}
-                categories={activeCategories as TransactionFormCategory[]}
-                defaultDate={todayIsoDate()}
-              />
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
       {selectedEditRow ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {selectedEditRow.canEditTransfer
-                ? 'Edit transfer'
-                : 'Edit transaction'}
-            </CardTitle>
-            <CardDescription>
-              Update {selectedEditRow.title}. Existing safe edit rules still
-              apply.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {selectedEditRow.canEdit &&
-            selectedEditRow.entry &&
-            selectedEditRow.allocation ? (
-              <TransactionEditForm
-                transactionId={selectedEditRow.transaction.id}
-                transactionType={
-                  selectedEditRow.transaction.transaction_type as
-                    | 'income'
-                    | 'expense'
-                }
-                transactionDate={selectedEditRow.transaction.transaction_date}
-                accountId={selectedEditRow.entry.account_id}
-                categoryId={selectedEditRow.allocation.category_id}
-                amount={Math.abs(
-                  Number(selectedEditRow.entry.amount_account_currency)
-                )}
-                cancelHref={returnTo}
-                description={selectedEditRow.transaction.description ?? ''}
-                merchantName={selectedEditRow.transaction.merchant_name ?? ''}
-                notes={selectedEditRow.transaction.notes ?? ''}
-                status={selectedEditRow.transaction.status}
-                accounts={activeAccounts}
-                categories={activeCategories}
-                returnTo={returnTo}
-              />
-            ) : null}
+        <FormDialog
+          title={selectedEditRow.canEditTransfer ? 'Edit transfer' : 'Edit transaction'}
+          description={`Update ${selectedEditRow.title}. Existing safe edit rules still apply.`}
+          cancelHref={returnTo}
+          wide
+        >
+          {selectedEditRow.canEdit &&
+          selectedEditRow.entry &&
+          selectedEditRow.allocation ? (
+            <TransactionEditForm
+              transactionId={selectedEditRow.transaction.id}
+              transactionType={
+                selectedEditRow.transaction.transaction_type as
+                  | 'income'
+                  | 'expense'
+              }
+              transactionDate={selectedEditRow.transaction.transaction_date}
+              accountId={selectedEditRow.entry.account_id}
+              categoryId={selectedEditRow.allocation.category_id}
+              amount={Math.abs(
+                Number(selectedEditRow.entry.amount_account_currency)
+              )}
+              cancelHref={returnTo}
+              description={selectedEditRow.transaction.description ?? ''}
+              merchantName={selectedEditRow.transaction.merchant_name ?? ''}
+              notes={selectedEditRow.transaction.notes ?? ''}
+              status={selectedEditRow.transaction.status}
+              accounts={activeAccounts}
+              categories={activeCategories}
+              returnTo={returnTo}
+            />
+          ) : null}
 
-            {selectedEditRow.canEditTransfer &&
-            selectedEditRow.transferOutEntry &&
-            selectedEditRow.transferInEntry ? (
-              <TransferEditForm
-                transactionId={selectedEditRow.transaction.id}
-                transactionDate={selectedEditRow.transaction.transaction_date}
-                fromAccountId={selectedEditRow.transferOutEntry.account_id}
-                toAccountId={selectedEditRow.transferInEntry.account_id}
-                amount={Math.abs(
-                  Number(
-                    selectedEditRow.transferInEntry.amount_account_currency
-                  )
-                )}
-                cancelHref={returnTo}
-                description={selectedEditRow.transaction.description ?? ''}
-                notes={selectedEditRow.transaction.notes ?? ''}
-                status={selectedEditRow.transaction.status}
-                accounts={activeAccounts}
-                returnTo={returnTo}
-              />
-            ) : null}
-          </CardContent>
-        </Card>
+          {selectedEditRow.canEditTransfer &&
+          selectedEditRow.transferOutEntry &&
+          selectedEditRow.transferInEntry ? (
+            <TransferEditForm
+              transactionId={selectedEditRow.transaction.id}
+              transactionDate={selectedEditRow.transaction.transaction_date}
+              fromAccountId={selectedEditRow.transferOutEntry.account_id}
+              toAccountId={selectedEditRow.transferInEntry.account_id}
+              amount={Math.abs(
+                Number(
+                  selectedEditRow.transferInEntry.amount_account_currency
+                )
+              )}
+              cancelHref={returnTo}
+              description={selectedEditRow.transaction.description ?? ''}
+              notes={selectedEditRow.transaction.notes ?? ''}
+              status={selectedEditRow.transaction.status}
+              accounts={activeAccounts}
+              returnTo={returnTo}
+            />
+          ) : null}
+        </FormDialog>
       ) : null}
 
       <Card>
@@ -925,12 +873,11 @@ export default async function TransactionsPage({
               </CardDescription>
             </div>
 
-            <Link
-              href={transactionsPath(filters, { mode: 'create' })}
+            <GlobalAddTransactionButton
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
               Add transaction
-            </Link>
+            </GlobalAddTransactionButton>
           </div>
         </CardHeader>
         <CardContent>

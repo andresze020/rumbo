@@ -6,6 +6,8 @@ import {
   updateAccountAction,
 } from './actions'
 import { OpeningBalanceForm } from './opening-balance-form'
+import { FormDialog } from '@/components/form-dialog'
+import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
@@ -783,56 +785,46 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       </div>
 
       {isCreating ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Create account</CardTitle>
-            <CardDescription>Add a basic household account.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <CreateAccountForm
-              activeCurrencies={activeCurrencies}
-              defaultCurrency={defaultCurrency}
-              showArchived={showArchived}
-            />
-          </CardContent>
-        </Card>
+        <FormDialog
+          title="Create account"
+          description="Add a basic household account."
+          cancelHref={accountsPath({ showArchived })}
+          wide
+        >
+          <CreateAccountForm
+            activeCurrencies={activeCurrencies}
+            defaultCurrency={defaultCurrency}
+            showArchived={showArchived}
+          />
+        </FormDialog>
       ) : null}
 
       {selectedEditRow ? (
-        <Card id="account-edit-form">
-          <CardHeader>
-            <CardTitle>Edit account</CardTitle>
-            <CardDescription>
-              Update metadata for {selectedEditRow.metadata.name}. Balances stay
-              controlled by ledger entries.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <EditAccountForm row={selectedEditRow} showArchived={showArchived} />
-          </CardContent>
-        </Card>
+        <FormDialog
+          title="Edit account"
+          description={`Update metadata for ${selectedEditRow.metadata.name}. Balances stay controlled by ledger entries.`}
+          cancelHref={accountsPath({ showArchived })}
+          wide
+        >
+          <EditAccountForm row={selectedEditRow} showArchived={showArchived} />
+        </FormDialog>
       ) : null}
 
       {selectedOpeningBalanceRow ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Opening balance</CardTitle>
-            <CardDescription>
-              Set the starting ledger balance for{' '}
-              {selectedOpeningBalanceRow.metadata.name}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <OpeningBalanceForm
-              accountId={selectedOpeningBalanceRow.metadata.id}
-              accountClass={selectedOpeningBalanceRow.metadata.account_class}
-              accountCurrency={selectedOpeningBalanceRow.metadata.currency_code}
-              defaultDate={selectedOpeningBalanceRow.metadata.opening_balance_date ?? todayIsoDate()}
-              showArchived={showArchived}
-              baseCurrency={household.base_currency}
-            />
-          </CardContent>
-        </Card>
+        <FormDialog
+          title="Opening balance"
+          description={`Set the starting ledger balance for ${selectedOpeningBalanceRow.metadata.name}.`}
+          cancelHref={accountsPath({ showArchived })}
+        >
+          <OpeningBalanceForm
+            accountId={selectedOpeningBalanceRow.metadata.id}
+            accountClass={selectedOpeningBalanceRow.metadata.account_class}
+            accountCurrency={selectedOpeningBalanceRow.metadata.currency_code}
+            defaultDate={selectedOpeningBalanceRow.metadata.opening_balance_date ?? todayIsoDate()}
+            showArchived={showArchived}
+            baseCurrency={household.base_currency}
+          />
+        </FormDialog>
       ) : null}
 
       <Card>
@@ -981,12 +973,10 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
 
                     <div className="flex flex-wrap gap-2">
                       <Link
-                        href={
-                          accountsPath({
-                            showArchived,
-                            edit: metadata.id,
-                          }) + '#account-edit-form'
-                        }
+                        href={accountsPath({
+                          showArchived,
+                          edit: metadata.id,
+                        })}
                         className={buttonVariants({
                           variant: 'outline',
                           size: 'sm',
@@ -994,6 +984,18 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                       >
                         Edit
                       </Link>
+
+                      {!metadata.is_archived ? (
+                        <GlobalAddTransactionButton
+                          className={buttonVariants({
+                            variant: 'outline',
+                            size: 'sm',
+                          })}
+                          defaultAccountId={metadata.id}
+                        >
+                          Add transaction
+                        </GlobalAddTransactionButton>
+                      ) : null}
 
                       {!metadata.is_archived && !row.hasOpeningBalance ? (
                         <Link

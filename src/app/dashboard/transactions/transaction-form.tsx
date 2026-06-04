@@ -34,9 +34,11 @@ export type TransactionFormCategory = {
 type TransactionFormProps = {
   accounts: TransactionFormAccount[]
   baseCurrency: string
-  cancelHref: string
+  cancelHref?: string
+  onCancel?: () => void
   categories: TransactionFormCategory[]
   defaultDate: string
+  defaultAccountId?: string
 }
 
 const selectCls =
@@ -52,12 +54,14 @@ export function TransactionForm({
   accounts,
   baseCurrency,
   cancelHref,
+  onCancel,
   categories,
   defaultDate,
+  defaultAccountId,
 }: TransactionFormProps) {
   const [transactionType, setTransactionType] = useState<TransactionType>('expense')
   const [transactionDate, setTransactionDate] = useState(defaultDate)
-  const [accountId, setAccountId] = useState('')
+  const [accountId, setAccountId] = useState(defaultAccountId ?? '')
   const [fromAccountId, setFromAccountId] = useState('')
   const [toAccountId, setToAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -360,9 +364,15 @@ export function TransactionForm({
         >
           {isTransfer ? 'Create transfer' : 'Create transaction'}
         </SubmitButton>
-        <Link href={cancelHref} className={buttonVariants({ variant: 'outline' })}>
-          Cancel
-        </Link>
+        {onCancel ? (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+        ) : cancelHref ? (
+          <Link href={cancelHref} className={buttonVariants({ variant: 'outline' })}>
+            Cancel
+          </Link>
+        ) : null}
       </div>
     </form>
   )

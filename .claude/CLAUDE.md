@@ -32,9 +32,8 @@ The product is an MVP Alpha. Keep scope small, usable, and aligned with the proj
 - Create one branch per sprint or fix.
 - Verify clean working tree before switching or starting.
 - Keep each sprint scoped.
-- Do not run git add, git commit, git push, git merge, git tag, git reset, git clean, or git rebase.
-- You may create a branch when explicitly asked.
-- Prepare code changes and list exact manual Git commands for the user.
+- You may create branches, commit, push, merge, and tag when the user explicitly asks.
+- Never run destructive git commands (reset --hard, push --force, clean -f, branch -D) without explicit confirmation.
 - Do not run npx supabase db push automatically.
 - If database changes are needed, create or prepare migrations only and list exact manual Supabase commands for the user.
 
@@ -53,4 +52,3 @@ End every implementation task with:
 3. Commands run
 4. Manual tests required
 5. Manual Supabase commands, if any
-6. Manual Git commands for commit, push, merge, and tag
