@@ -48,14 +48,16 @@
 | BF-015 | 2026-06-04 | Transactions | UX friction | Transaction rows do not display the category icon, missing a quick visual cue for categorization. | 1. Go to Transactions page. 2. Review transaction rows. 3. Look for category icon or badge. | Each transaction row should display its category icon/badge for quick visual scanning (similar to many personal finance apps). | Category icon is not visible; only category name text is shown (if shown at all). | None | Sometimes | Read category name text. | P2 | Open | Low-risk enhancement; check if category icons are already available in the categories table. If yes, simply add to transaction display. |
 | BF-016 | 2026-06-04 | Accounts / Transactions | Nice-to-have | From the Accounts summary, tapping an account card should navigate to a filtered Transactions view showing only that account's transactions. | 1. Go to Accounts. 2. Identify an account. 3. Tap the account card/row. 4. Expect to see filtered transactions. | Tapping an account should navigate to Transactions page with a pre-filter for that account, enabling quick transaction review for a specific account. | Tapping the card does not navigate or filter. | None | Sometimes | Go to Transactions, then manually select the account filter. | P2 | Open | Low-risk if the account ID can be passed via URL param or query state to the transactions filter. Test with a single account first. |
 | BF-017 | 2026-06-04 | Transactions | Nice-to-have | Transaction filters (type, status, account, category) are single-select dropdowns; would benefit from multi-select or dynamic filtering UI. | 1. Go to Transactions. 2. Open filter section. 3. Try to filter by multiple accounts or categories. | Filters should support multi-select or dynamic filter application (e.g., filter chips, range pickers) to speed up common queries. | Only one value per filter; user must create multiple filtered views or remember which filters are active. | None | Sometimes | Use filters one at a time and adjust. | P3 | Open | Nice-to-have for power users; defer unless real usage shows this is a blocker for daily workflows. |
+| BF-018 | 2026-06-04 | Transactions | Important bug | When adding a transaction from an account (via "Add transaction" button on account card) with a preselected account, changing the transaction type from Expense to Income (or vice versa) resets the account field back to empty. | 1. Go to Accounts. 2. Click "Add transaction" on an account row. 3. Form opens with account preselected. 4. Change transaction type from Expense to Income. 5. Observe account field. | The account field should remain populated and preselected after changing transaction type. | Account field resets to empty when transaction type changes. | None | Always | Manually re-select the account after changing transaction type. | P1 | Open | Likely a React state issue in TransactionForm where `defaultAccountId` is not persisted during type change. Check if form state handling preserves account across type change. |
+| BF-019 | 2026-06-04 | Navigation / Transactions | UX friction | After successfully creating a transaction from the "Add transaction" button on an account (Accounts page) or FAB from any page, the user is redirected to the Transactions page instead of returning to the origin page (Accounts or wherever they started). | 1. Go to Accounts page. 2. Click "Add transaction" on an account. 3. Complete form and submit. 4. Observe navigation destination. | After transaction creation, user should return to the page they came from (Accounts, Dashboard, etc.), not always to Transactions. | Always redirects to Transactions page regardless of origin. | None | Always | Navigate back manually using browser/menu. | P2 | Open | Store origin page in URL state or session; after transaction creation, redirect to `?returnTo=/dashboard/accounts` or similar instead of hardcoded `/dashboard/transactions`. |
 
 ## Summary counts (update as you go)
 
 | Type | Count | P0 | P1 | P2 | P3 |
 |---|---:|---:|---:|---:|---:|
 | Alpha blocker | 1 | 1 | 0 | 0 | 0 |
-| Important bug | 5 | 0 | 5 | 0 | 0 |
-| UX friction | 7 | 0 | 0 | 7 | 0 |
+| Important bug | 6 | 0 | 6 | 0 | 0 |
+| UX friction | 8 | 0 | 0 | 8 | 0 |
 | Nice-to-have | 3 | 0 | 0 | 0 | 3 |
 | Post-MVP | 0 | 0 | 0 | 0 | 0 |
 
@@ -71,21 +73,22 @@
 
 ## Suggested next fix batch
 
-**Sprint 12.7 — Compactness & critical bugs**
+**Sprint 12.7 — Transaction form bugs & critical revalidation**
 
 High-priority fixes:
 
 1. `BF-011` (P1) — Newly created categories/subcategories not appearing in transaction form until page refresh (revalidation issue).
-2. `BF-002` (P1) — Mobile opening balance field not accepting negative values by keyboard (input type/inputMode fix).
+2. `BF-018` (P1) — Account field resets when changing transaction type (expense ↔ income).
 3. `BF-012` (P2) — Mobile menu auto-collapse after navigation.
-4. `BF-013` (P2) — Accounts page view compactness (collapse rows, expand-on-tap).
-5. `BF-014` (P2) — Transactions view compactness (fewer columns, detail-on-tap).
-6. `BF-015` (P2) — Transactions show category icons for visual scanning.
+4. `BF-019` (P2) — Navigation after transaction creation should return to origin page, not always to Transactions.
+5. `BF-013` (P2) — Accounts page view compactness (collapse rows, expand-on-tap).
+6. `BF-014` (P2) — Transactions view compactness (fewer columns, detail-on-tap).
+7. `BF-015` (P2) — Transactions show category icons for visual scanning.
 
 **Sprint 12.8+ — Quick-access and enhancements**
 
-7. `BF-016` (P2) — Accounts card tap → filtered transactions view (low-risk, high UX gain).
-8. `BF-017` (P3) — Multi-select/dynamic filters (nice-to-have if time allows).
+8. `BF-016` (P2) — Accounts card tap → filtered transactions view (low-risk, high UX gain).
+9. `BF-017` (P3) — Multi-select/dynamic filters (nice-to-have if time allows).
 
 Do not include in immediate fix batches:
 
