@@ -39,6 +39,8 @@ type TransactionFormProps = {
   categories: TransactionFormCategory[]
   defaultDate: string
   defaultAccountId?: string
+  defaultType?: TransactionType
+  defaultStatus?: string
   returnTo?: string
 }
 
@@ -59,9 +61,11 @@ export function TransactionForm({
   categories,
   defaultDate,
   defaultAccountId,
+  defaultType,
+  defaultStatus,
   returnTo,
 }: TransactionFormProps) {
-  const [transactionType, setTransactionType] = useState<TransactionType>('expense')
+  const [transactionType, setTransactionType] = useState<TransactionType>(defaultType ?? 'expense')
   const [transactionDate, setTransactionDate] = useState(defaultDate)
   const [accountId, setAccountId] = useState(defaultAccountId ?? '')
   const [fromAccountId, setFromAccountId] = useState('')
@@ -363,7 +367,7 @@ export function TransactionForm({
 
       <div className="space-y-2">
         <Label htmlFor="status">Status</Label>
-        <select id="status" name="status" defaultValue="posted" className={selectCls}>
+        <select id="status" name="status" defaultValue={defaultStatus ?? 'posted'} className={selectCls}>
           <option value="posted">Posted</option>
           <option value="pending">Pending</option>
         </select>
@@ -431,6 +435,18 @@ export function TransactionForm({
         >
           {isTransfer ? 'Create transfer' : 'Create transaction'}
         </SubmitButton>
+        {!isTransfer ? (
+          <SubmitButton
+            type="submit"
+            name="add_next"
+            value="true"
+            variant="outline"
+            disabled={!canSubmit}
+            pendingText="Saving…"
+          >
+            Save & Add Next
+          </SubmitButton>
+        ) : null}
         {onCancel ? (
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel

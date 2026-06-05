@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import type { ReactNode } from 'react'
+import { Suspense, type ReactNode } from 'react'
 import { LogOut, Plus } from 'lucide-react'
 import { SubmitButton } from '@/components/submit-button'
 import { NavLinks } from '@/components/nav-links'
@@ -57,13 +57,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </div>
 
       {/* FAB — visible on all dashboard pages */}
-      <GlobalAddTransactionButton
-        aria-label="Add transaction"
-        title="Add transaction"
-        className="fixed bottom-6 right-6 z-50 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      >
-        <Plus className="size-6" aria-hidden="true" />
-      </GlobalAddTransactionButton>
+      <Suspense>
+        <GlobalAddTransactionButton
+          aria-label="Add transaction"
+          title="Add transaction"
+          className="fixed bottom-6 right-6 z-50 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <Plus className="size-6" aria-hidden="true" />
+        </GlobalAddTransactionButton>
+      </Suspense>
     </div>
   )
 }

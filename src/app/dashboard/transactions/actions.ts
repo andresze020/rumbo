@@ -63,6 +63,7 @@ export async function createManualTransactionAction(formData: FormData) {
   const notes = String(formData.get('notes') ?? '').trim()
   const status = String(formData.get('status') ?? '').trim()
   const returnTo = String(formData.get('return_to') ?? '').trim() || undefined
+  const addNext = formData.get('add_next') === 'true'
   const rateBaseToAccount = parsePositiveNumber(formData.get('rate_base_to_account'))
   const legacyRate = parsePositiveNumber(formData.get('exchange_rate_to_base'))
   const exchangeRateToBase =
@@ -170,6 +171,18 @@ export async function createManualTransactionAction(formData: FormData) {
   revalidatePath('/dashboard/transactions')
   revalidatePath('/dashboard/accounts')
   revalidatePath('/dashboard')
+
+  if (addNext) {
+    const base = returnTo?.startsWith('/dashboard/') ? returnTo : '/dashboard/transactions'
+    const url = new URL(base, 'http://localhost')
+    url.searchParams.set('created', '1')
+    url.searchParams.set('next_date', transactionDate)
+    url.searchParams.set('next_type', transactionType)
+    if (accountId) url.searchParams.set('next_account', accountId)
+    if (status) url.searchParams.set('next_status', status)
+    redirect(`${url.pathname}?${url.searchParams.toString()}`)
+  }
+
   redirectWithTransactionInfo('created', returnTo)
 }
 

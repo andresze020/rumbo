@@ -30,8 +30,8 @@ type TransactionsPageProps = {
     month?: string
     type?: string
     status?: string
-    account_id?: string
-    category_id?: string
+    account_id?: string | string[]
+    category_id?: string | string[]
     search?: string
     mode?: string
     edit?: string
@@ -93,8 +93,8 @@ type CategoryLookup = {
 }
 
 type TransactionFilters = {
-  accountId: string
-  categoryId: string
+  accountIds: string[]
+  categoryIds: string[]
   month: string
   search: string
   status: string
@@ -209,12 +209,12 @@ function transactionsPath(
     params.set('status', filters.status)
   }
 
-  if (filters.accountId !== 'all') {
-    params.set('account_id', filters.accountId)
+  for (const id of filters.accountIds) {
+    params.append('account_id', id)
   }
 
-  if (filters.categoryId !== 'all') {
-    params.set('category_id', filters.categoryId)
+  for (const id of filters.categoryIds) {
+    params.append('category_id', id)
   }
 
   if (filters.search) {
@@ -254,14 +254,22 @@ export default async function TransactionsPage({
     'pending',
     'voided',
   ])
-  const selectedAccountId =
-    typeof params.account_id === 'string' ? params.account_id : 'all'
-  const selectedCategoryId =
-    typeof params.category_id === 'string' ? params.category_id : 'all'
+  const rawAccountIds = params.account_id
+  const selectedAccountIds: string[] = Array.isArray(rawAccountIds)
+    ? rawAccountIds
+    : rawAccountIds
+    ? [rawAccountIds]
+    : []
+  const rawCategoryIds = params.category_id
+  const selectedCategoryIds: string[] = Array.isArray(rawCategoryIds)
+    ? rawCategoryIds
+    : rawCategoryIds
+    ? [rawCategoryIds]
+    : []
   const searchText = typeof params.search === 'string' ? params.search.trim() : ''
   const filters: TransactionFilters = {
-    accountId: selectedAccountId,
-    categoryId: selectedCategoryId,
+    accountIds: selectedAccountIds,
+    categoryIds: selectedCategoryIds,
     month: selectedMonth,
     search: searchText,
     status: selectedStatus,
@@ -271,8 +279,8 @@ export default async function TransactionsPage({
     params.month !== undefined ||
     selectedType !== 'all' ||
     selectedStatus !== 'all' ||
-    selectedAccountId !== 'all' ||
-    selectedCategoryId !== 'all' ||
+    selectedAccountIds.length > 0 ||
+    selectedCategoryIds.length > 0 ||
     searchText.length > 0
   const editTransactionId =
     typeof params.edit === 'string' ? params.edit : null
@@ -484,11 +492,11 @@ export default async function TransactionsPage({
       const entries = entriesByTransactionId.get(transaction.id) ?? []
       const allocation = allocationsByTransactionId.get(transaction.id)
       const matchesAccount =
-        selectedAccountId === 'all' ||
-        entries.some((entry) => entry.account_id === selectedAccountId)
+        selectedAccountIds.length === 0 ||
+        entries.some((entry) => selectedAccountIds.includes(entry.account_id))
       const matchesCategory =
-        selectedCategoryId === 'all' ||
-        allocation?.category_id === selectedCategoryId
+        selectedCategoryIds.length === 0 ||
+        (allocation !== undefined && selectedCategoryIds.includes(allocation.category_id))
 
       return matchesAccount && matchesCategory
     }
@@ -745,14 +753,18 @@ export default async function TransactionsPage({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="account_id">Account</Label>
+              <Label htmlFor="account_id">
+                Account
+                <span className="ml-1 font-normal text-muted-foreground">(hold Ctrl/⌘ for multiple)</span>
+              </Label>
               <select
                 id="account_id"
                 name="account_id"
-                defaultValue={selectedAccountId}
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                multiple
+                size={4}
+                defaultValue={selectedAccountIds}
+                className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
-                <option value="all">All accounts</option>
                 {allAccounts.map((account) => (
                   <option key={account.id} value={account.id}>
                     {getAccountLabel(account)}
@@ -762,14 +774,18 @@ export default async function TransactionsPage({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="category_id">Category</Label>
+              <Label htmlFor="category_id">
+                Category
+                <span className="ml-1 font-normal text-muted-foreground">(hold Ctrl/⌘ for multiple)</span>
+              </Label>
               <select
                 id="category_id"
                 name="category_id"
-                defaultValue={selectedCategoryId}
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                multiple
+                size={4}
+                defaultValue={selectedCategoryIds}
+                className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
-                <option value="all">All categories</option>
                 {allCategories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {getCategoryPath(category, categoryOptionsById)}

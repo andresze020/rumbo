@@ -194,9 +194,21 @@ Fixed:
 
 Database impact: none for Sprint 12.11.
 
+### Sprint 12.12 — Add Next + Multi-select Filters (BF-008, BF-017)
+
+Branch: `claude/alpha-docs-pending-bugs-BAzGM`
+Tag: `v0.12.12-bf008-bf017`
+
+Fixed:
+
+- `BF-008` — "Save & Add Next" button in the transaction form (income/expense only, not transfers). After saving, the server action redirects with `next_date`, `next_type`, `next_account`, and `next_status` URL params. `GlobalAddTransactionButton` detects these params via `useSearchParams`, auto-opens the dialog, pre-fills the form with the preserved context, increments `formKey` to force a fresh `TransactionForm` mount, and cleans the params via `router.replace()`. Layout FAB wrapped in `<Suspense>` for `useSearchParams()` support.
+- `BF-017` — Account and Category filter selects changed to `<select multiple size={4}>`. URL params now support repeated `account_id`/`category_id` values. Parser uses `Array.isArray` check on the raw param. Client-side filter uses `.includes()`. `transactionsPath()` uses `params.append()` for arrays. `TransactionFilters` type updated: `accountIds: string[]`, `categoryIds: string[]`. Type and Status remain single-select.
+
+Database impact: none for Sprint 12.12.
+
 ## Current remaining open issues
 
-After Sprints 12.4-12.10, remaining open issues:
+After Sprints 12.4–12.12:
 
 | ID | Priority | Status | Next decision |
 |---|---:|---|---|
@@ -204,9 +216,9 @@ After Sprints 12.4-12.10, remaining open issues:
 | BF-003 | P0 | Fixed | [Validated] Liability sign handling correct. |
 | BF-018 | P1 | Fixed | [Sprint 12.7] Account field preserved across type changes. |
 | BF-011 | P1 | Fixed | [Sprint 12.7] GlobalAddTransactionButton refetches on every open. |
-| BF-002 | P1 | Open | [BUG] Mobile opening balance field not accepting negative values by keyboard (input type/inputMode fix). |
-| BF-006 | P1 | Open | Category parent filtering stays stale when type changes. |
-| BF-009 | P1 | Open | Weak password signup error message misleading. |
+| BF-002 | P1 | Fixed | [Sprint 12.11] All monetary inputs changed to type="text" inputMode="decimal". |
+| BF-006 | P1 | Fixed | [Sprint 12.4] Category parent options refresh on type change. |
+| BF-009 | P1 | Fixed | [Sprint 12.4] Weak-password error message clarified. |
 | BF-012 | P2 | Fixed | [Sprint 12.8] Mobile menu auto-collapses after navigation. |
 | BF-013 | P2 | Fixed | [Sprint 12.8] Accounts view compacted to single-row summary. |
 | BF-014 | P2 | Fixed | [Sprint 12.8] Transactions view compacted; void UX improved. |
@@ -214,27 +226,24 @@ After Sprints 12.4-12.10, remaining open issues:
 | BF-016 | P2 | Fixed | [Sprint 12.9] View transactions link inside expanded account card. |
 | BF-021 | P2 | Fixed | [Sprint 12.9] Account card expand/collapse with animation. |
 | BF-005 | P2 | Fixed | [Sprint 12.10] Smart suggestion when setting negative cash balance. |
-| BF-017 | P3 | Open | Multi-select/dynamic transaction filters (nice-to-have if time allows). |
-| BF-008 | P3 | Open | Keep deferred unless daily logs show strong repeated friction. |
+| BF-001 | P2 | Open | Multi-currency UX friction (labels/helper text). FX API is Post-MVP. |
+| BF-017 | P3 | Fixed | [Sprint 12.12] Multi-select account/category filters. |
+| BF-008 | P3 | Fixed | [Sprint 12.12] Save & Add Next flow in transaction dialog. |
 
-## Recommended next phase — Sprint 12.11+
+## Recommended next phase — Beta Readiness (v0.13)
 
-**All P0/P1 issues are now resolved.** ✅
-
-**Current open P2/P3 (Nice-to-haves, defer unless high usage friction):**
-
-- `BF-017` — Multi-select/dynamic transaction filters (P3)
-- `BF-008` — Add Next transaction flow (P3)
+**All P0/P1/P3 issues are now resolved.** ✅  
+**One P2 open:** BF-001 (multi-currency label UX) — low risk, can fix in a targeted sprint before Beta if real usage shows it remains a friction point.
 
 **Validation phase:**
 
-- Extended Alpha usage with all Sprints 12.7–12.11 fixes applied.
+- Extended Alpha usage with all Sprints 12.7–12.12 fixes applied.
 - Confirm balances still reconcile with AndroMoney/records.
 - No new critical bugs surface from real usage.
 
 **Decision point:**
 
-With all Alpha blockers and P1 bugs resolved (Sprints 12.4–12.11), the app is ready for **Beta Readiness Planning (v0.13)** whenever validation confirms numbers are stable.
+With all Alpha blockers, P1, and P3 issues resolved (Sprints 12.4–12.12), the app is ready for **Beta Readiness Planning (v0.13)** whenever validation confirms numbers are stable.
 
 ## Real data privacy notes
 
