@@ -70,6 +70,8 @@ type AccountMeta = {
   id: string
   institution_name: string | null
   last_four: string | null
+  icon: string | null
+  color: string | null
 }
 
 function currentMonthParam() {
@@ -230,7 +232,7 @@ export default async function DashboardPage({
 
   const { data: accountMetaRows } = await supabase
     .from('accounts')
-    .select('id, institution_name, last_four')
+    .select('id, institution_name, last_four, icon, color')
     .eq('household_id', household.id)
     .is('deleted_at', null)
 
@@ -484,11 +486,13 @@ export default async function DashboardPage({
                         ? Math.round((amount / largestExpenseAmount) * 100)
                         : 0
                     const categoryPath = getCategoryPath(category, categoriesById)
+                    const txUrl = `/dashboard/transactions?category_id=${category.category_id}&month=${selectedMonth}&type=expense`
 
                     return (
-                      <div
+                      <Link
                         key={category.category_id}
-                        className="grid gap-3 p-4 sm:grid-cols-[1fr_auto]"
+                        href={txUrl}
+                        className="grid gap-3 p-4 sm:grid-cols-[1fr_auto] transition-colors hover:bg-muted/50"
                       >
                         <div className="min-w-0 space-y-2">
                           <div>
@@ -517,7 +521,7 @@ export default async function DashboardPage({
                             {percentOfExpenses === null ? 'N/A' : formatPercent(percentOfExpenses)}
                           </p>
                         </div>
-                      </div>
+                      </Link>
                     )
                   })}
                 </div>
@@ -561,6 +565,18 @@ export default async function DashboardPage({
                       accountId={account.account_id}
                       summaryLeft={
                         <>
+                          {meta?.color ? (
+                            <span
+                              className="size-2.5 shrink-0 rounded-full border"
+                              style={{ backgroundColor: meta.color }}
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                          {meta?.icon ? (
+                            <span className="text-sm leading-none" aria-hidden="true">
+                              {meta.icon}
+                            </span>
+                          ) : null}
                           <span className="font-medium text-sm">{account.account_name}</span>
                           <Badge variant="secondary" className="text-xs">
                             {formatLabel(account.account_type)}
