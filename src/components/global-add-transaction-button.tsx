@@ -55,6 +55,7 @@ export function GlobalAddTransactionButton({
   const nextType = searchParams.get('next_type')
   const nextAccount = searchParams.get('next_account')
   const nextStatus = searchParams.get('next_status')
+  const created = searchParams.get('created')
 
   useEffect(() => {
     if (!nextDate && !nextType && !nextAccount) return
@@ -74,22 +75,28 @@ export function GlobalAddTransactionButton({
     cleaned.delete('next_type')
     cleaned.delete('next_account')
     cleaned.delete('next_status')
+    cleaned.delete('created')  // prevent effect 2 from firing after URL is cleaned
     const qs = cleaned.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname)
 
-    if (!loading) {
-      setLoading(true)
-      setLoadError(false)
-      getQuickAddFormData()
-        .then((data) => {
-          setFormData(data ?? null)
-          if (!data) setLoadError(true)
-        })
-        .catch(() => setLoadError(true))
-        .finally(() => setLoading(false))
-    }
+    // Refresh form data in background without showing loading state
+    getQuickAddFormData()
+      .then((data) => { if (data) setFormData(data) })
+      .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nextDate, nextType, nextAccount])
+
+  // Auto-close the dialog after the final "Create transaction" in an add-next session
+  useEffect(() => {
+    if (created !== '1' || nextDate || nextType || nextAccount || !addNextDefaults) return
+    setOpen(false)
+    setAddNextDefaults(null)
+    const cleaned = new URLSearchParams(searchParams.toString())
+    cleaned.delete('created')
+    const qs = cleaned.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [created, nextDate, nextType, nextAccount, addNextDefaults])
 
   async function handleOpen() {
     setOpen(true)
