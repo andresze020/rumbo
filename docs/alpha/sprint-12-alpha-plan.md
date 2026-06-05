@@ -183,6 +183,17 @@ Fixed:
 
 Database impact: none for Sprint 12.10.
 
+### Sprint 12.11 — Numeric Input Fix (BF-002)
+
+Branch: `sprint/12-11-bf002-negative-input`
+Tag: `v0.12.11-bf002-negative-input`
+
+Fixed:
+
+- `BF-002` — All monetary amount fields app-wide changed from `type="number"` to `type="text" inputMode="decimal"`. Desktop: no spinner that locks at 0.01. Mobile: decimal keyboard shows minus (−) button, allowing negative values to be typed. Fields changed: transaction form (add/edit/transfer), debt forms (create/edit/payment), budget planned amount (add/edit), opening balance. Left as `type="number"`: `sort_order` and `payment_due_day` (integers where spinner is appropriate).
+
+Database impact: none for Sprint 12.11.
+
 ## Current remaining open issues
 
 After Sprints 12.4-12.10, remaining open issues:
@@ -208,27 +219,22 @@ After Sprints 12.4-12.10, remaining open issues:
 
 ## Recommended next phase — Sprint 12.11+
 
-**Current open P1 (Important bugs):**
-
-1. `BF-002` (Mobile negative input on opening balance field)
-2. `BF-006` (Category parent filtering stays stale on type change)
-3. `BF-009` (Weak password error message)
+**All P0/P1 issues are now resolved.** ✅
 
 **Current open P2/P3 (Nice-to-haves, defer unless high usage friction):**
 
-4. `BF-017` (Multi-select filters)
-5. `BF-008` (TBD based on usage)
+- `BF-017` — Multi-select/dynamic transaction filters (P3)
+- `BF-008` — Add Next transaction flow (P3)
 
 **Validation phase:**
 
-- Extended Alpha usage with all Sprints 12.7–12.10 fixes applied (compactness, FX, account expand, negative cash guidance).
+- Extended Alpha usage with all Sprints 12.7–12.11 fixes applied.
 - Confirm balances still reconcile with AndroMoney/records.
 - No new critical bugs surface from real usage.
-- UX friction reduced to acceptable levels (compact cards, category icons, smart dialogs).
 
-**Decision point after 2-week validation:**
+**Decision point:**
 
-If no new P0/P1 issues and balances remain correct, recommend moving toward **Beta Readiness Planning (v0.13)** with remaining P1 bugs deferred or marked as known issues.
+With all Alpha blockers and P1 bugs resolved (Sprints 12.4–12.11), the app is ready for **Beta Readiness Planning (v0.13)** whenever validation confirms numbers are stable.
 
 ## Real data privacy notes
 

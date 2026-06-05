@@ -32,7 +32,7 @@
 | ID | Date found | Area | Type | Description | Steps to reproduce | Expected result | Actual result | Financial impact | Frequency | Workaround | Priority | Status | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | BF-001 | 2026-06-03 | Other / Multi-currency | UX friction | Entering exchange-rate conversion factors manually during setup is cumbersome and creates high friction. Debts may also need a clearer exchange value / exchange-rate field when debt currency differs from the household base currency. | 1. Create or edit an account/debt in a non-base currency. 2. Try to enter or validate the conversion factor manually. 3. Repeat for multiple accounts/debts. | Multi-currency setup should be understandable and low-friction, with clear labels for exchange rate/value and how it affects base-currency totals. | User must manually reason about and type conversion factors, which is error-prone and slows setup. Debts do not make the exchange value obvious enough. | Wrong report | Often | Manually calculate and enter the conversion factor carefully; verify totals after setup. | P2 | Open | Do not build full automatic FX yet. First clarify labels/helper text and debt FX handling if low-risk. If automatic FX/API is required, classify that part as Post-MVP. |
-| BF-002 | 2026-06-03 | Accounts | Important bug | On mobile, the opening balance input does not allow typing a negative value directly, but pasting a negative value works. | 1. Open the app on mobile. 2. Create or edit an account. 3. Tap the opening balance field. 4. Try to type a negative value manually. 5. Paste the same negative value instead. | The input should allow valid negative values when the account/setup flow supports them, especially for liabilities or corrections. | Mobile keyboard/input blocks typing the negative sign, but pasted negative values are accepted. | Wrong balance | Often | Copy/paste the negative value into the field. | P1 | Open | Likely an input type/inputMode/pattern issue. Verify on mobile browsers. |
+| BF-002 | 2026-06-03 | Accounts | Important bug | On mobile, the opening balance input does not allow typing a negative value directly, but pasting a negative value works. | 1. Open the app on mobile. 2. Create or edit an account. 3. Tap the opening balance field. 4. Try to type a negative value manually. 5. Paste the same negative value instead. | The input should allow valid negative values when the account/setup flow supports them, especially for liabilities or corrections. | Mobile keyboard/input blocks typing the negative sign, but pasted negative values are accepted. | Wrong balance | Often | Copy/paste the negative value into the field. | P1 | Fixed | [Sprint 12.11] Changed all monetary amount fields from type="number" to type="text" inputMode="decimal" app-wide (transaction form, edit forms, debt forms, budget forms, opening balance). Desktop: no spinner lock. Mobile: decimal keyboard shows minus button. |
 | BF-003 | 2026-06-03 | Accounts / Net worth | Alpha blocker | Opening balance sign handling for liability accounts needs validation. Liability accounts must store/display owed balances consistently so account balances and net worth are correct. | 1. Create a liability account such as credit card or debt. 2. Enter an opening balance representing the amount owed. 3. Save the account. 4. Review account balance, total liabilities, and net worth. | The app should clearly accept the owed amount and convert/store it with the correct internal sign for liabilities. Net worth should decrease by the liability amount. | Needs verification; current behavior is unclear and may lead to wrong liability signs or wrong net worth. | Wrong balance | Sometimes | Manually verify liability balances and net worth after each liability setup. | P0 | Fixed | Alpha validation confirmed correct behavior: CC/Debt with opening balance correctly registers as liability and decreases net worth. Checking with negative balance correctly reduces assets. Internal sign handling was already correct from Sprint 12.4 fix. |
 | BF-004 | 2026-06-03 | Accounts | UX friction | When editing an account located lower on the accounts page, the edit form opens but the user does not notice it opened. | 1. Go to Accounts. 2. Scroll to an account lower on the page. 3. Click Edit. 4. Observe where the edit form appears. | The UI should clearly move focus to the edit form, open a modal/drawer, or otherwise make it obvious that edit mode started. | The form opens, but it is not visually obvious; user may think nothing happened. | None | Often | Scroll manually and look for the form. | P2 | Fixed | [Sprint 12.6] Edit Account now opens in FormDialog. |
 | BF-005 | 2026-06-03 | Accounts | UX friction | It is unclear what should happen if a cash account has a negative opening balance. User wonders whether it should automatically become a liability. | 1. Create a Cash account. 2. Enter a negative opening balance. 3. Review account class, balance, and net worth behavior. | The app should explain the meaning of a negative cash balance and guide the user to create a liability/debt account if the negative balance represents money owed. | Behavior/product rule is unclear. Auto-changing the account to liability could be confusing or dangerous. | Wrong report | Once | Manually create a liability/debt account if the negative cash value represents money owed. | P2 | Fixed | [Sprint 12.10] Smart suggestion dialog: when user tries to set negative opening balance on Cash/Asset account, dialog appears asking "Create Liability instead?" with option to proceed or continue with negative. Does not auto-convert; respects user choice. |
@@ -58,7 +58,7 @@
 | Type | Count | Open P0 | Open P1 | Open P2 | Open P3 | Fixed |
 |---|---:|---:|---:|---:|---:|---:|
 | Alpha blocker | 2 | 0 | 0 | 0 | 0 | 2 |
-| Important bug | 6 | 0 | 1 | 0 | 0 | 5 |
+| Important bug | 6 | 0 | 0 | 0 | 0 | 6 |
 | UX friction | 9 | 0 | 0 | 1 | 1 | 7 |
 | Nice-to-have | 3 | 0 | 0 | 0 | 2 | 1 |
 | Post-MVP | 0 | 0 | 0 | 0 | 0 | 0 |
@@ -99,13 +99,15 @@ All three critical bugs fixed:
 
 - ✅ `BF-005` — Cash account negative balance: smart suggestion dialog when user tries to set negative opening balance on asset account.
 
-**Sprint 12.11+ — Remaining open issues**
+**Sprint 12.11 — COMPLETED** ✅
 
-Open P1 (critical for Alpha):
-- `BF-002` — Mobile opening balance field: input type limits negative values. On desktop, arrows stop at 0.01; on mobile, minus button missing and keyboard doesn't allow negative sign.
+- ✅ `BF-002` — All monetary amount fields changed to type="text" inputMode="decimal". No more spinner lock on desktop, minus button available on mobile.
 
-Open P2/P3 (nice-to-haves, defer):
-- `BF-017` — Multi-select/dynamic filters (P3, defer unless high usage friction).
+**Sprint 12.12+ — Remaining open issues**
+
+Open P2/P3 (defer unless high usage friction):
+- `BF-017` — Multi-select/dynamic filters (P3, nice-to-have).
+- `BF-008` — Add Next transaction flow (P3, nice-to-have).
 
 **Post-MVP / Defer:**
 
