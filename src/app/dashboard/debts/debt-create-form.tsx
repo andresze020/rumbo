@@ -240,9 +240,9 @@ export function DebtCreateForm({
           <Input
             id="original_principal"
             name="original_principal"
-            type="number"
-            min="0"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
           />
           <p className="text-xs text-muted-foreground">
             Optional. The original amount borrowed, used for progress tracking.
@@ -254,9 +254,9 @@ export function DebtCreateForm({
           <Input
             id="interest_rate"
             name="interest_rate"
-            type="number"
-            min="0"
-            step="0.0001"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
           />
         </div>
 
@@ -279,9 +279,9 @@ export function DebtCreateForm({
           <Input
             id="minimum_payment"
             name="minimum_payment"
-            type="number"
-            min="0"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
           />
         </div>
 

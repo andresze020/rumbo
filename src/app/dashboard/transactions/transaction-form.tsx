@@ -341,7 +341,7 @@ export function TransactionForm({
 
       <div className="space-y-2">
         <Label htmlFor="amount">Amount</Label>
-        <Input id="amount" name="amount" type="number" min="0.01" step="0.01" required />
+        <Input id="amount" name="amount" type="text" inputMode="decimal" placeholder="0.00" required />
       </div>
 
       <div className="space-y-2">

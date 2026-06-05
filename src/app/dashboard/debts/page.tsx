@@ -451,9 +451,9 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                   <Input
                     id="edit_original_principal"
                     name="original_principal"
-                    type="number"
-                    min="0"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
                     defaultValue={nullableNumber(
                       selectedEditDebt.original_principal
                     )}
@@ -469,9 +469,9 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                   <Input
                     id="edit_interest_rate"
                     name="interest_rate"
-                    type="number"
-                    min="0"
-                    step="0.0001"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
                     defaultValue={nullableNumber(selectedEditDebt.interest_rate)}
                   />
                 </div>
@@ -497,9 +497,9 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                   <Input
                     id="edit_minimum_payment"
                     name="minimum_payment"
-                    type="number"
-                    min="0"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
                     defaultValue={nullableNumber(
                       selectedEditDebt.minimum_payment
                     )}
@@ -625,10 +625,9 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                     <Input
                       id="pay_payment_amount"
                       name="payment_amount"
-                      type="number"
-                      min="0.01"
-                      max={selectedPayBalance || undefined}
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0.00"
                       required
                     />
                     <p className="text-xs text-muted-foreground">
