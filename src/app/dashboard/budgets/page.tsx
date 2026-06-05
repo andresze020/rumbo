@@ -244,9 +244,9 @@ function AddBudgetLineForm({
           <Input
             id="planned_amount"
             name="planned_amount"
-            type="number"
-            min="0"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
             required
           />
         </div>
@@ -302,9 +302,9 @@ function EditBudgetLineForm({
         <Input
           id={`planned_${line.line_id}`}
           name="planned_amount"
-          type="number"
-          min="0"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
+          placeholder="0.00"
           defaultValue={plannedAmount}
           required
         />

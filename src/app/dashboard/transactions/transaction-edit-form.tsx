@@ -120,9 +120,9 @@ export function TransactionEditForm({
           <Input
             id={`edit_amount_${transactionId}`}
             name="amount"
-            type="number"
-            min="0.01"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
             defaultValue={amount}
             required
           />
