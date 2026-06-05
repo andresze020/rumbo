@@ -16,7 +16,7 @@ type AccountCardDetailsProps = {
   institutionName: string | null
   lastFour: string | null
   includeInNetWorth: boolean
-  hasOpeningBalance: boolean
+  hasOpeningBalance?: boolean
   children: ReactNode
 }
 
@@ -104,12 +104,16 @@ export function AccountCardDetails({
                 </>
               ) : null}
               <span>{includeInNetWorth ? 'Included in net worth' : 'Excluded from net worth'}</span>
-              <span aria-hidden="true">·</span>
-              {hasOpeningBalance ? (
-                <span className="text-emerald-600 dark:text-emerald-400">✓ Opening balance</span>
-              ) : (
-                <span className="text-amber-600 dark:text-amber-400">⚠ No opening balance</span>
-              )}
+              {hasOpeningBalance !== undefined ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  {hasOpeningBalance ? (
+                    <span className="text-emerald-600 dark:text-emerald-400">✓ Opening balance</span>
+                  ) : (
+                    <span className="text-amber-600 dark:text-amber-400">⚠ No opening balance</span>
+                  )}
+                </>
+              ) : null}
             </div>
 
             {/* Footer: link + actions on same row */}
