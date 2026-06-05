@@ -395,21 +395,25 @@ export default async function DashboardPage({
       label: 'Total assets',
       value: totalAssets,
       description: 'Posted asset balances at month end',
+      trendMetric: 'total-assets' as const,
     },
     {
       label: 'Total liabilities',
       value: totalLiabilities,
       description: 'Posted liability balances at month end',
+      trendMetric: 'total-liabilities' as const,
     },
     {
       label: 'Net worth',
       value: netWorth,
       description: 'Posted included balances at month end',
+      trendMetric: 'net-worth' as const,
     },
     {
       label: 'Projected net worth',
       value: projectedNetWorth,
       description: 'Posted plus pending at month end',
+      trendMetric: 'projected-net-worth' as const,
     },
   ]
   const monthlyCards = [
@@ -423,6 +427,7 @@ export default async function DashboardPage({
         'posted income transaction'
       ),
       delta: renderDelta(incomeDelta, dashboardCurrency, false),
+      trendMetric: 'monthly-income' as const,
     },
     {
       label: 'Monthly expenses',
@@ -437,6 +442,7 @@ export default async function DashboardPage({
         'posted expense transaction'
       ),
       delta: renderDelta(expensesDelta, dashboardCurrency, true),
+      trendMetric: 'monthly-expenses' as const,
     },
     {
       label: 'Monthly savings',
@@ -448,12 +454,14 @@ export default async function DashboardPage({
         : formatCurrency(0, dashboardCurrency),
       description: 'Income minus expenses',
       delta: renderDelta(savingsDelta, dashboardCurrency, false),
+      trendMetric: 'monthly-savings' as const,
     },
     {
       label: 'Savings rate',
       value: formatPercent(monthlySummary?.savings_rate ?? null),
       description: 'Savings divided by income',
       delta: renderRateDelta(savingsRateDelta),
+      trendMetric: 'savings-rate' as const,
     },
   ]
   const largestExpenseCategory = expenseCategories.reduce(
@@ -514,6 +522,9 @@ export default async function DashboardPage({
               label={summary.label}
               value={formatCurrency(summary.value, household.base_currency)}
               description={summary.description}
+              trendMetric={summary.trendMetric}
+              currentMonth={selectedMonth}
+              currency={household.base_currency}
             />
           ))}
         </div>
@@ -546,6 +557,9 @@ export default async function DashboardPage({
                 value={summary.value}
                 description={summary.description}
                 delta={summary.delta}
+                trendMetric={summary.trendMetric}
+                currentMonth={selectedMonth}
+                currency={dashboardCurrency}
               />
             ))}
           </div>
