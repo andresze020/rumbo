@@ -13,6 +13,8 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { MetricCard } from '@/components/metric-card'
+import { AccountCardDetails } from './accounts/account-card-details'
+import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 
 type AccountBalance = {
   account_id: string
@@ -64,6 +66,12 @@ type CategoryLookup = {
   is_archived: boolean
 }
 
+type AccountMeta = {
+  id: string
+  institution_name: string | null
+  last_four: string | null
+}
+
 function currentMonthParam() {
   const today = new Date()
   const year = today.getFullYear()
@@ -93,28 +101,22 @@ function formatCurrency(value: number, currencyCode: string) {
   }).format(value)
 }
 
-function formatValue(value: string) {
-  return value
-    .replaceAll('_', ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
-}
-
 function formatTransactionCount(count: number, descriptor = 'transaction') {
   return `${count} ${descriptor}${count === 1 ? '' : 's'}`
-}
-
-function getDisplayAccountBalance(account: AccountBalance, value: number | string) {
-  const numericValue = Number(value)
-
-  return account.account_class === 'liability'
-    ? Math.max(0, -numericValue)
-    : numericValue
 }
 
 function getDisplayedLiabilityBalance(value: number | string) {
   const numericValue = Number(value)
 
   return Math.max(0, -numericValue)
+}
+
+function liabilityDisplay(value: number | string) {
+  return Math.max(0, -Number(value))
+}
+
+function formatLabel(value: string) {
+  return value.replaceAll('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
 function formatPercent(value: number | string | null) {
@@ -226,6 +228,12 @@ export default async function DashboardPage({
       .eq('household_id', household.id)
       .is('deleted_at', null)
 
+  const { data: accountMetaRows } = await supabase
+    .from('accounts')
+    .select('id, institution_name, last_four')
+    .eq('household_id', household.id)
+    .is('deleted_at', null)
+
   const balances = (accountBalances ?? []) as AccountBalance[]
   const monthlySummary =
     ((monthlySummaryRows ?? [])[0] as MonthlyDashboardSummary | undefined) ??
@@ -237,6 +245,9 @@ export default async function DashboardPage({
       category.id,
       category,
     ])
+  )
+  const accountMetaById = new Map(
+    ((accountMetaRows ?? []) as AccountMeta[]).map((a) => [a.id, a])
   )
   const dashboardCurrency =
     monthlySummary?.base_currency ?? household.base_currency
@@ -366,69 +377,74 @@ export default async function DashboardPage({
     largestExpenseCategory?.amount_base_currency ?? 0
   )
 
+  const activeBalances = balances.filter((a) => !a.is_archived)
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{household.name}</p>
-          <h1 className="text-2xl font-semibold tracking-normal">
-            Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
             {formatMonthLabel(selectedMonth)}
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:items-end">
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/dashboard/debts"
-              className={buttonVariants({ variant: 'outline' })}
-            >
-              Debts
-            </Link>
-            <Link
-              href={`/dashboard/net-worth?month=${selectedMonth}`}
-              className={buttonVariants({ variant: 'outline' })}
-            >
-              Net worth
-            </Link>
+        <form action="/dashboard" className="flex items-end gap-2">
+          <div className="grid gap-1">
+            <Label htmlFor="month" className="text-xs text-muted-foreground">Month</Label>
+            <Input
+              id="month"
+              type="month"
+              name="month"
+              defaultValue={selectedMonth}
+              className="h-8 text-sm"
+            />
           </div>
-          <form action="/dashboard" className="flex flex-wrap items-end gap-2">
-            <div className="grid gap-1">
-              <Label htmlFor="month">Month</Label>
-              <Input
-                id="month"
-                type="month"
-                name="month"
-                defaultValue={selectedMonth}
-              />
-            </div>
-            <Button type="submit" variant="outline">
-              View
-            </Button>
-          </form>
-        </div>
+          <Button type="submit" variant="outline" size="sm">View</Button>
+        </form>
       </div>
 
-      {accountBalancesError ? (
+      {/* ── Errors ─────────────────────────────────────────────────────── */}
+      {(accountBalancesError || monthlySummaryError || expenseCategoriesError || categoryLookupError) ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Could not load financial summary.
+          Could not load some dashboard data. Try refreshing the page.
         </div>
       ) : null}
 
-      {monthlySummaryError || expenseCategoriesError ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Could not load monthly dashboard metrics.
+      {/* ── Financial position ─────────────────────────────────────────── */}
+      {!accountBalancesError && balances.length ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {summaryCards.map((summary) => (
+            <MetricCard
+              key={summary.label}
+              label={summary.label}
+              value={formatCurrency(summary.value, household.base_currency)}
+              description={summary.description}
+            />
+          ))}
         </div>
       ) : null}
 
-      {categoryLookupError ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Could not load category names.
-        </div>
+      {!accountBalancesError && !balances.length ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Financial summary</CardTitle>
+            <CardDescription>
+              Create accounts to start building your financial summary.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/accounts" className={buttonVariants({ variant: 'default' })}>
+              Go to accounts
+            </Link>
+          </CardContent>
+        </Card>
       ) : null}
 
+      {/* ── Monthly activity ───────────────────────────────────────────── */}
       {!monthlySummaryError && !expenseCategoriesError ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -444,15 +460,16 @@ export default async function DashboardPage({
 
           {!hasMonthlyActivity ? (
             <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-              No posted income or expense activity for this month.
+              No posted income or expense activity for {formatMonthLabel(selectedMonth)}.
             </p>
           ) : null}
 
+          {/* ── Expenses by category ─────────────────────────────────── */}
           <Card>
             <CardHeader>
               <CardTitle>Expenses by category</CardTitle>
               <CardDescription>
-                Posted expense allocations for the selected month.
+                Posted expense allocations for {formatMonthLabel(selectedMonth)}.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -466,10 +483,7 @@ export default async function DashboardPage({
                       largestExpenseAmount > 0
                         ? Math.round((amount / largestExpenseAmount) * 100)
                         : 0
-                    const categoryPath = getCategoryPath(
-                      category,
-                      categoriesById
-                    )
+                    const categoryPath = getCategoryPath(category, categoriesById)
 
                     return (
                       <div
@@ -479,17 +493,13 @@ export default async function DashboardPage({
                         <div className="min-w-0 space-y-2">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-medium">
-                                {categoryPath.name}
-                              </p>
+                              <p className="font-medium">{categoryPath.name}</p>
                               {categoryPath.isArchived ? (
                                 <Badge variant="outline">Archived</Badge>
                               ) : null}
                             </div>
                             <p className="text-sm text-muted-foreground">
-                              {formatTransactionCount(
-                                Number(category.transaction_count)
-                              )}
+                              {formatTransactionCount(Number(category.transaction_count))}
                             </p>
                           </div>
                           <div className="h-2 overflow-hidden rounded-lg bg-muted">
@@ -499,15 +509,12 @@ export default async function DashboardPage({
                             />
                           </div>
                         </div>
-
                         <div className="space-y-1 sm:text-right">
                           <p className="font-medium">
                             {formatCurrency(amount, dashboardCurrency)}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {percentOfExpenses === null
-                              ? 'N/A'
-                              : formatPercent(percentOfExpenses)}
+                            {percentOfExpenses === null ? 'N/A' : formatPercent(percentOfExpenses)}
                           </p>
                         </div>
                       </div>
@@ -516,7 +523,7 @@ export default async function DashboardPage({
                 </div>
               ) : (
                 <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                  No expenses recorded for this month.
+                  No expenses recorded for {formatMonthLabel(selectedMonth)}.
                 </p>
               )}
             </CardContent>
@@ -524,113 +531,90 @@ export default async function DashboardPage({
         </>
       ) : null}
 
-      {!accountBalancesError && !balances.length ? (
+      {/* ── Accounts ───────────────────────────────────────────────────── */}
+      {!accountBalancesError && activeBalances.length ? (
         <Card>
           <CardHeader>
-            <CardTitle>Financial summary</CardTitle>
-            <CardDescription>
-              Create accounts to start building your financial summary.
-            </CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle>Accounts</CardTitle>
+                <CardDescription>
+                  Active account balances at month end.
+                </CardDescription>
+              </div>
+              <Link
+                href="/dashboard/accounts"
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                Manage accounts
+              </Link>
+            </div>
           </CardHeader>
           <CardContent>
-            <Link
-              href="/dashboard/accounts"
-              className={buttonVariants({ variant: 'default' })}
-            >
-              Go to accounts
-            </Link>
+            <div className="divide-y rounded-lg border">
+              {activeBalances.map((account) => {
+                const meta = accountMetaById.get(account.account_id)
+                const isLiability = account.account_class === 'liability'
+                return (
+                  <div key={account.account_id} className="p-3">
+                    <AccountCardDetails
+                      accountId={account.account_id}
+                      summaryLeft={
+                        <>
+                          <span className="font-medium text-sm">{account.account_name}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {formatLabel(account.account_type)}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {account.currency_code}
+                          </Badge>
+                        </>
+                      }
+                      balanceLabel={formatCurrency(
+                        isLiability
+                          ? liabilityDisplay(account.posted_balance_account_currency)
+                          : Number(account.posted_balance_account_currency),
+                        account.currency_code
+                      )}
+                      balanceSubLabel={isLiability ? 'balance owed' : 'posted balance'}
+                      postedLabel={formatCurrency(
+                        isLiability
+                          ? liabilityDisplay(account.posted_balance_account_currency)
+                          : Number(account.posted_balance_account_currency),
+                        account.currency_code
+                      )}
+                      pendingLabel={formatCurrency(
+                        isLiability
+                          ? liabilityDisplay(account.pending_balance_account_currency)
+                          : Number(account.pending_balance_account_currency),
+                        account.currency_code
+                      )}
+                      projectedLabel={formatCurrency(
+                        isLiability
+                          ? liabilityDisplay(account.projected_balance_account_currency)
+                          : Number(account.projected_balance_account_currency),
+                        account.currency_code
+                      )}
+                      balanceType={isLiability ? 'owed' : 'posted'}
+                      institutionName={meta?.institution_name ?? null}
+                      lastFour={meta?.last_four ?? null}
+                      includeInNetWorth={account.include_in_net_worth}
+                    >
+                      <GlobalAddTransactionButton
+                        className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                        defaultAccountId={account.account_id}
+                      >
+                        Add transaction
+                      </GlobalAddTransactionButton>
+                    </AccountCardDetails>
+                  </div>
+                )
+              })}
+            </div>
           </CardContent>
         </Card>
       ) : null}
 
-      {!accountBalancesError && balances.length ? (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {summaryCards.map((summary) => (
-              <MetricCard
-                key={summary.label}
-                label={summary.label}
-                value={formatCurrency(summary.value, household.base_currency)}
-                description={summary.description}
-              />
-            ))}
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Accounts summary</CardTitle>
-              <CardDescription>
-                Posted and projected balances by account at month end.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="divide-y rounded-lg border">
-                {balances.map((account) => (
-                  <div key={account.account_id} className="space-y-3 p-4">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="font-medium">
-                            {account.account_name}
-                          </h2>
-                          <Badge variant="secondary">
-                            {formatValue(account.account_type)}
-                          </Badge>
-                          <Badge variant="outline">
-                            {formatValue(account.account_class)}
-                          </Badge>
-                          {account.is_archived ? (
-                            <Badge variant="outline">Archived</Badge>
-                          ) : null}
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {account.currency_code}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-lg bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">
-                          {account.account_class === 'liability'
-                            ? 'Posted outstanding balance'
-                            : 'Posted balance'}
-                        </p>
-                        <p className="mt-1 font-medium">
-                          {formatCurrency(
-                            getDisplayAccountBalance(
-                              account,
-                              account.posted_balance_account_currency
-                            ),
-                            account.currency_code
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="rounded-lg bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">
-                          {account.account_class === 'liability'
-                            ? 'Projected outstanding balance'
-                            : 'Projected balance'}
-                        </p>
-                        <p className="mt-1 font-medium">
-                          {formatCurrency(
-                            getDisplayAccountBalance(
-                              account,
-                              account.projected_balance_account_currency
-                            ),
-                            account.currency_code
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      ) : null}
     </main>
   )
 }
