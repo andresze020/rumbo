@@ -139,6 +139,11 @@ export function OpeningBalanceForm({
             value={balanceInput}
             onChange={(e) => setBalanceInput(e.target.value)}
           />
+          {accountClass === 'asset' ? (
+            <p className="text-xs text-muted-foreground">
+              Enter a negative value (e.g., -100) for negative balances. On mobile, tap the keyboard&apos;s minus button.
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-2">
