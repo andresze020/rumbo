@@ -60,7 +60,7 @@ export function TrendChart({ data, currency, formatAs, gradientId }: TrendChartP
         />
         <YAxis domain={yDomain} hide />
         <Tooltip
-          formatter={(value: number) => [formatValue(value, currency, formatAs), '']}
+          formatter={(value) => [formatValue(Number(value ?? 0), currency, formatAs), '']}
           labelFormatter={(label) => label}
           contentStyle={{
             fontSize: 12,

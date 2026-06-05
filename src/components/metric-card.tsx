@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import dynamic from 'next/dynamic'
 import { ChevronDown } from 'lucide-react'
 import {
   Card,
@@ -10,7 +11,14 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { getDashboardTrend, type TrendMetric, type TrendPoint } from '@/app/dashboard/trend-actions'
-import { TrendChart } from './trend-chart'
+
+const TrendChart = dynamic(
+  () => import('./trend-chart').then((m) => ({ default: m.TrendChart })),
+  {
+    ssr: false,
+    loading: () => <p className="py-4 text-center text-xs text-muted-foreground">Loading chart…</p>,
+  }
+)
 
 type MetricCardProps = {
   label: string
