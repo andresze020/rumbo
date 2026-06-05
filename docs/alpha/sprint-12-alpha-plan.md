@@ -206,9 +206,26 @@ Fixed:
 
 Database impact: none for Sprint 12.12.
 
+### Sprint 12.13 — Dashboard: Month-over-Month Deltas + Budget vs Actual
+
+Branch: `claude/alpha-docs-pending-bugs-BAzGM`
+Tag: `v0.12.13-dashboard-deltas-budget`
+
+Implemented:
+
+- **Month-over-month deltas** — Monthly activity cards (Income, Expenses, Savings, Savings Rate) now show a delta line below the value. A second `get_monthly_dashboard_summary` call fetches the previous month's data. Deltas are color-coded: green = improvement (income/savings up, expenses down), red = regression. Savings rate delta is shown in percentage points (pp). No delta is shown if the previous month has no data. `MetricCard` extended with optional `delta?: ReactNode` prop.
+- **Budget vs Actual section** — New card on the dashboard between Monthly Activity and Expenses by Category. Calls `get_monthly_budget_details` for the selected month. Shows: a total summary bar (actual / planned with color-coded progress bar), and per-category rows (each clickable link to filtered transactions). Bar colors: green = on track (<80%), amber = near limit (≥80%), red = over budget. Empty state with "Create a budget" link when no budget lines exist. "View budget →" button in card header.
+
+New helpers added to `dashboard/page.tsx`:
+- `getPreviousMonthDate(month)` — computes YYYY-MM-01 for the month before `month`.
+- `renderDelta(diff, currency, higherIsBad)` — returns colored `<span>` with arrow + amount + "vs last month".
+- `renderRateDelta(diff)` — returns colored `<span>` for savings rate deltas in pp.
+
+Database impact: none for Sprint 12.13.
+
 ## Current remaining open issues
 
-After Sprints 12.4–12.12:
+After Sprints 12.4–12.13:
 
 | ID | Priority | Status | Next decision |
 |---|---:|---|---|
@@ -237,13 +254,13 @@ After Sprints 12.4–12.12:
 
 **Validation phase:**
 
-- Extended Alpha usage with all Sprints 12.7–12.12 fixes applied.
+- Extended Alpha usage with all Sprints 12.7–12.13 fixes applied.
 - Confirm balances still reconcile with AndroMoney/records.
 - No new critical bugs surface from real usage.
 
 **Decision point:**
 
-With all Alpha blockers, P1, and P3 issues resolved (Sprints 12.4–12.12), the app is ready for **Beta Readiness Planning (v0.13)** whenever validation confirms numbers are stable.
+With all Alpha blockers, P1, and P3 issues resolved (Sprints 12.4–12.13), the app is ready for **Beta Readiness Planning (v0.13)** whenever validation confirms numbers are stable.
 
 ## Real data privacy notes
 

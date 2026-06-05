@@ -66,10 +66,67 @@ type CategoryLookup = {
   is_archived: boolean
 }
 
+type BudgetDetailRow = {
+  budget_id: string
+  household_id: string
+  budget_month: string
+  budget_status: string
+  currency_code: string
+  line_id: string | null
+  category_id: string | null
+  category_name: string | null
+  parent_category_id: string | null
+  category_is_archived: boolean | null
+  category_exclude_from_budget: boolean | null
+  category_exclude_from_reports: boolean | null
+  planned_amount: number | string | null
+  actual_amount: number | string | null
+  transaction_count: number | string | null
+}
+
 type AccountMeta = {
   id: string
   institution_name: string | null
   last_four: string | null
+  icon: string | null
+  color: string | null
+}
+
+function getPreviousMonthDate(month: string): string {
+  const [year, mon] = month.split('-').map(Number)
+  const d = new Date(year, mon - 2, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+
+function renderDelta(diff: number | null, currency: string, higherIsBad = false) {
+  if (diff === null) return null
+  if (Math.abs(diff) < 0.01) return <span className="text-xs text-muted-foreground">No change vs last month</span>
+  const isUp = diff > 0
+  const isGood = higherIsBad ? !isUp : isUp
+  const arrow = isUp ? '↑' : '↓'
+  const formatted = formatCurrency(Math.abs(diff), currency)
+  return (
+    <span className={`text-xs font-medium ${isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+      {arrow} {formatted} vs last month
+    </span>
+  )
+}
+
+function renderRateDelta(diff: number | null) {
+  if (diff === null) return null
+  if (Math.abs(diff) < 0.0001) return <span className="text-xs text-muted-foreground">No change vs last month</span>
+  const isUp = diff > 0
+  const isGood = isUp
+  const arrow = isUp ? '↑' : '↓'
+  const formatted = new Intl.NumberFormat('en-CA', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(Math.abs(diff * 100))
+  return (
+    <span className={`text-xs font-medium ${isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+      {arrow} {formatted} pp vs last month
+    </span>
+  )
 }
 
 function currentMonthParam() {
@@ -230,9 +287,19 @@ export default async function DashboardPage({
 
   const { data: accountMetaRows } = await supabase
     .from('accounts')
-    .select('id, institution_name, last_four')
+    .select('id, institution_name, last_four, icon, color')
     .eq('household_id', household.id)
     .is('deleted_at', null)
+
+  const prevMonthDate = getPreviousMonthDate(selectedMonth)
+  const { data: prevSummaryRows } = await supabase.rpc('get_monthly_dashboard_summary', {
+    p_household_id: household.id,
+    p_month: prevMonthDate,
+  })
+  const { data: budgetRows, error: budgetError } = await supabase.rpc('get_monthly_budget_details', {
+    p_household_id: household.id,
+    p_budget_month: selectedMonthDate,
+  })
 
   const balances = (accountBalances ?? []) as AccountBalance[]
   const monthlySummary =
@@ -249,8 +316,28 @@ export default async function DashboardPage({
   const accountMetaById = new Map(
     ((accountMetaRows ?? []) as AccountMeta[]).map((a) => [a.id, a])
   )
+  const prevSummary = ((prevSummaryRows ?? [])[0] as MonthlyDashboardSummary | undefined) ?? null
+  const budgetDetails = (budgetRows ?? []) as BudgetDetailRow[]
+  const budgetLines = budgetDetails.filter((row) => row.line_id !== null)
+  const totalBudgetPlanned = budgetLines.reduce((sum, l) => sum + Number(l.planned_amount ?? 0), 0)
+  const totalBudgetSpent = budgetLines.reduce((sum, l) => sum + Number(l.actual_amount ?? 0), 0)
+  const totalBudgetPercent = totalBudgetPlanned > 0 ? totalBudgetSpent / totalBudgetPlanned : 0
+  const budgetCurrency = budgetDetails[0]?.currency_code ?? household.base_currency
+
   const dashboardCurrency =
     monthlySummary?.base_currency ?? household.base_currency
+  const incomeDelta = prevSummary !== null
+    ? Number(monthlySummary?.monthly_income ?? 0) - Number(prevSummary.monthly_income)
+    : null
+  const expensesDelta = prevSummary !== null
+    ? Number(monthlySummary?.monthly_expenses ?? 0) - Number(prevSummary.monthly_expenses)
+    : null
+  const savingsDelta = prevSummary !== null
+    ? Number(monthlySummary?.monthly_savings ?? 0) - Number(prevSummary.monthly_savings)
+    : null
+  const savingsRateDelta = (prevSummary !== null && monthlySummary?.savings_rate != null && prevSummary.savings_rate != null)
+    ? Number(monthlySummary.savings_rate) - Number(prevSummary.savings_rate)
+    : null
   const monthlyExpenses = Number(monthlySummary?.monthly_expenses ?? 0)
   const hasMonthlyActivity =
     Number(monthlySummary?.income_transaction_count ?? 0) > 0 ||
@@ -308,21 +395,25 @@ export default async function DashboardPage({
       label: 'Total assets',
       value: totalAssets,
       description: 'Posted asset balances at month end',
+      trendMetric: 'total-assets' as const,
     },
     {
       label: 'Total liabilities',
       value: totalLiabilities,
       description: 'Posted liability balances at month end',
+      trendMetric: 'total-liabilities' as const,
     },
     {
       label: 'Net worth',
       value: netWorth,
       description: 'Posted included balances at month end',
+      trendMetric: 'net-worth' as const,
     },
     {
       label: 'Projected net worth',
       value: projectedNetWorth,
       description: 'Posted plus pending at month end',
+      trendMetric: 'projected-net-worth' as const,
     },
   ]
   const monthlyCards = [
@@ -335,6 +426,8 @@ export default async function DashboardPage({
         incomeTransactionCount,
         'posted income transaction'
       ),
+      delta: renderDelta(incomeDelta, dashboardCurrency, false),
+      trendMetric: 'monthly-income' as const,
     },
     {
       label: 'Monthly expenses',
@@ -348,6 +441,8 @@ export default async function DashboardPage({
         expenseTransactionCount,
         'posted expense transaction'
       ),
+      delta: renderDelta(expensesDelta, dashboardCurrency, true),
+      trendMetric: 'monthly-expenses' as const,
     },
     {
       label: 'Monthly savings',
@@ -358,11 +453,15 @@ export default async function DashboardPage({
           )
         : formatCurrency(0, dashboardCurrency),
       description: 'Income minus expenses',
+      delta: renderDelta(savingsDelta, dashboardCurrency, false),
+      trendMetric: 'monthly-savings' as const,
     },
     {
       label: 'Savings rate',
       value: formatPercent(monthlySummary?.savings_rate ?? null),
       description: 'Savings divided by income',
+      delta: renderRateDelta(savingsRateDelta),
+      trendMetric: 'savings-rate' as const,
     },
   ]
   const largestExpenseCategory = expenseCategories.reduce(
@@ -423,6 +522,9 @@ export default async function DashboardPage({
               label={summary.label}
               value={formatCurrency(summary.value, household.base_currency)}
               description={summary.description}
+              trendMetric={summary.trendMetric}
+              currentMonth={selectedMonth}
+              currency={household.base_currency}
             />
           ))}
         </div>
@@ -454,6 +556,10 @@ export default async function DashboardPage({
                 label={summary.label}
                 value={summary.value}
                 description={summary.description}
+                delta={summary.delta}
+                trendMetric={summary.trendMetric}
+                currentMonth={selectedMonth}
+                currency={dashboardCurrency}
               />
             ))}
           </div>
@@ -462,6 +568,98 @@ export default async function DashboardPage({
             <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
               No posted income or expense activity for {formatMonthLabel(selectedMonth)}.
             </p>
+          ) : null}
+
+          {/* ── Budget vs Actual ─────────────────────────────────────── */}
+          {!budgetError ? (
+            <Card>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle>Budget vs Actual</CardTitle>
+                    <CardDescription>
+                      Planned vs posted spend for {formatMonthLabel(selectedMonth)}.
+                    </CardDescription>
+                  </div>
+                  <Link
+                    href={`/dashboard/budgets?month=${selectedMonth}`}
+                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  >
+                    View budget
+                  </Link>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {budgetLines.length === 0 ? (
+                  <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                    No budget set up for {formatMonthLabel(selectedMonth)}.{' '}
+                    <Link
+                      href={`/dashboard/budgets?month=${selectedMonth}`}
+                      className="underline underline-offset-2 hover:text-foreground"
+                    >
+                      Create a budget
+                    </Link>
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium">Total</span>
+                        <span className="tabular-nums text-muted-foreground">
+                          {formatCurrency(totalBudgetSpent, budgetCurrency)} of {formatCurrency(totalBudgetPlanned, budgetCurrency)}
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            totalBudgetPercent >= 1
+                              ? 'bg-destructive'
+                              : totalBudgetPercent >= 0.8
+                              ? 'bg-amber-500'
+                              : 'bg-primary'
+                          }`}
+                          style={{ width: `${Math.min(100, Math.round(totalBudgetPercent * 100))}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="divide-y rounded-lg border">
+                      {budgetLines.map((line) => {
+                        const planned = Number(line.planned_amount ?? 0)
+                        const actual = Number(line.actual_amount ?? 0)
+                        const pct = planned > 0 ? actual / planned : 0
+                        const isOver = actual > planned && planned > 0
+                        const isNear = !isOver && planned > 0 && pct >= 0.8
+                        const barColor = isOver
+                          ? 'bg-destructive'
+                          : isNear
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500'
+                        return (
+                          <Link
+                            key={line.line_id}
+                            href={`/dashboard/transactions?category_id=${line.category_id}&month=${selectedMonth}&type=expense`}
+                            className="block p-3 space-y-1.5 hover:bg-muted/50 transition-colors"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium truncate">{line.category_name ?? '—'}</span>
+                              <span className="text-xs tabular-nums text-muted-foreground shrink-0">
+                                {formatCurrency(actual, budgetCurrency)} / {formatCurrency(planned, budgetCurrency)}
+                              </span>
+                            </div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className={`h-full rounded-full ${barColor}`}
+                                style={{ width: `${Math.min(100, Math.round(pct * 100))}%` }}
+                              />
+                            </div>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           ) : null}
 
           {/* ── Expenses by category ─────────────────────────────────── */}
@@ -484,11 +682,13 @@ export default async function DashboardPage({
                         ? Math.round((amount / largestExpenseAmount) * 100)
                         : 0
                     const categoryPath = getCategoryPath(category, categoriesById)
+                    const txUrl = `/dashboard/transactions?category_id=${category.category_id}&month=${selectedMonth}&type=expense`
 
                     return (
-                      <div
+                      <Link
                         key={category.category_id}
-                        className="grid gap-3 p-4 sm:grid-cols-[1fr_auto]"
+                        href={txUrl}
+                        className="grid gap-3 p-4 sm:grid-cols-[1fr_auto] transition-colors hover:bg-muted/50"
                       >
                         <div className="min-w-0 space-y-2">
                           <div>
@@ -517,7 +717,7 @@ export default async function DashboardPage({
                             {percentOfExpenses === null ? 'N/A' : formatPercent(percentOfExpenses)}
                           </p>
                         </div>
-                      </div>
+                      </Link>
                     )
                   })}
                 </div>
@@ -561,6 +761,18 @@ export default async function DashboardPage({
                       accountId={account.account_id}
                       summaryLeft={
                         <>
+                          {meta?.color ? (
+                            <span
+                              className="size-2.5 shrink-0 rounded-full border"
+                              style={{ backgroundColor: meta.color }}
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                          {meta?.icon ? (
+                            <span className="text-sm leading-none" aria-hidden="true">
+                              {meta.icon}
+                            </span>
+                          ) : null}
                           <span className="font-medium text-sm">{account.account_name}</span>
                           <Badge variant="secondary" className="text-xs">
                             {formatLabel(account.account_type)}
