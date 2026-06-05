@@ -33,6 +33,29 @@ function formatValue(value: number, currency: string, formatAs: 'currency' | 'pe
   }).format(value)
 }
 
+function CustomTooltip({
+  active,
+  payload,
+  label,
+  currency,
+  formatAs,
+}: {
+  active?: boolean
+  payload?: Array<{ value?: number | string }>
+  label?: string
+  currency: string
+  formatAs: 'currency' | 'percent'
+}) {
+  if (!active || !payload?.length) return null
+  const val = Number(payload[0]?.value ?? 0)
+  return (
+    <div className="rounded-md border border-border bg-card px-3 py-2 text-xs shadow-sm">
+      <p className="text-muted-foreground">{label}</p>
+      <p className="mt-0.5 font-semibold tabular-nums">{formatValue(val, currency, formatAs)}</p>
+    </div>
+  )
+}
+
 export function TrendChart({ data, currency, formatAs, gradientId }: TrendChartProps) {
   const values = data.map((d) => d.value)
   const min = Math.min(...values)
@@ -47,7 +70,7 @@ export function TrendChart({ data, currency, formatAs, gradientId }: TrendChartP
       <AreaChart data={data} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
+            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
             <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
           </linearGradient>
         </defs>
@@ -60,18 +83,8 @@ export function TrendChart({ data, currency, formatAs, gradientId }: TrendChartP
         />
         <YAxis domain={yDomain} hide />
         <Tooltip
-          formatter={(value) => [formatValue(Number(value ?? 0), currency, formatAs), '']}
-          labelFormatter={(label) => label}
-          contentStyle={{
-            fontSize: 12,
-            borderRadius: 6,
-            border: '1px solid hsl(var(--border))',
-            background: 'hsl(var(--card))',
-            color: 'hsl(var(--card-foreground))',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          }}
-          itemStyle={{ color: 'hsl(var(--foreground))' }}
-          cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}
+          content={<CustomTooltip currency={currency} formatAs={formatAs} />}
+          cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '3 3' }}
         />
         <Area
           type="monotone"
