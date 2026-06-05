@@ -223,9 +223,35 @@ New helpers added to `dashboard/page.tsx`:
 
 Database impact: none for Sprint 12.13.
 
+### Sprint 12.14 — Tappable Metric Cards + 6-Month Trend Charts
+
+Branch: `claude/alpha-docs-pending-bugs-BAzGM`  
+Merged to `main` via PR #2.
+
+Implemented:
+
+- **Tappable metric cards** — All 8 dashboard metric cards (4 financial position + 4 monthly activity) now expand on tap to show a 6-month area trend chart. A `ChevronDown` icon indicates the card is tappable. The expand/collapse uses the same animated `grid-rows` CSS pattern used in account cards.
+- **6-month trend charts** — Recharts 3.x `AreaChart` with gradient fill, hidden Y axis, labeled X axis (e.g. "Jan '26"), and a custom tooltip showing month + formatted value cleanly.
+- **Lazy data loading** — Trend data is fetched only on first open via a server action; no extra DB calls on initial page render.
+- **Monthly metrics** (Income, Expenses, Savings, Rate): 6 parallel calls to `get_monthly_dashboard_summary`.
+- **Balance metrics** (Net Worth, Assets, Liabilities, Projected): 6 parallel calls to `get_account_balances` per month-end, then derived values computed client-side.
+- **Savings rate chart** uses percent formatting; all others use compact currency notation (e.g. "$12.5K").
+
+New files:
+- `src/app/dashboard/trend-actions.ts` — `getDashboardTrend(metric, currentMonth, numMonths=6)` server action.
+- `src/components/trend-chart.tsx` — Recharts `AreaChart` with custom tooltip component.
+
+Key fixes during Sprint 12.14:
+- Used `next/dynamic` with `ssr: false` to prevent Recharts browser APIs from crashing Next.js server pre-render (root cause of a Vercel build failure).
+- Fixed Recharts 3.x type changes (`TooltipProps.payload` removed; `formatter` value typed as `undefined`-able).
+
+New dependency: `recharts@3.8.1`.
+
+Database impact: none for Sprint 12.14.
+
 ## Current remaining open issues
 
-After Sprints 12.4–12.13:
+After Sprints 12.4–12.14:
 
 | ID | Priority | Status | Next decision |
 |---|---:|---|---|
@@ -247,6 +273,15 @@ After Sprints 12.4–12.13:
 | BF-017 | P3 | Fixed | [Sprint 12.12] Multi-select account/category filters. |
 | BF-008 | P3 | Fixed | [Sprint 12.12] Save & Add Next flow in transaction dialog. |
 
+**Dashboard enhancements (non-bug, same branch):**
+
+| Feature | Sprint | Description |
+|---|---|---|
+| Dashboard revamp | 12.12–12.13 | AccountCardDetails on dashboard, account icons/colors, category rows as clickable links to filtered transactions, section reorder. |
+| MoM deltas | 12.13 | Colored ↑/↓ deltas vs last month on all 4 monthly metric cards. |
+| Budget vs Actual | 12.13 | New dashboard card with per-category progress bars and total summary bar; links to filtered transactions. |
+| Trend charts | 12.14 | All 8 metric cards expand on tap to show 6-month area chart (lazy loaded). |
+
 ## Recommended next phase — Beta Readiness (v0.13)
 
 **All P0/P1/P3 issues are now resolved.** ✅  
@@ -254,13 +289,13 @@ After Sprints 12.4–12.13:
 
 **Validation phase:**
 
-- Extended Alpha usage with all Sprints 12.7–12.13 fixes applied.
+- Extended Alpha usage with all Sprints 12.7–12.14 fixes applied.
 - Confirm balances still reconcile with AndroMoney/records.
 - No new critical bugs surface from real usage.
 
 **Decision point:**
 
-With all Alpha blockers, P1, and P3 issues resolved (Sprints 12.4–12.13), the app is ready for **Beta Readiness Planning (v0.13)** whenever validation confirms numbers are stable.
+With all Alpha blockers, P1, and P3 issues resolved (Sprints 12.4–12.14), the app is ready for **Beta Readiness Planning (v0.13)** whenever validation confirms numbers are stable.
 
 ## Real data privacy notes
 

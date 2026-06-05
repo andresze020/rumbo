@@ -103,16 +103,23 @@ All three critical bugs fixed:
 
 - ✅ `BF-002` — All monetary amount fields changed to type="text" inputMode="decimal". No more spinner lock on desktop, minus button available on mobile.
 
-**Sprint 12.12+ — Remaining open issues**
+**Sprint 12.12 — COMPLETED** ✅
 
-Open P2/P3 (defer unless high usage friction):
-- `BF-017` — Multi-select/dynamic filters (P3, nice-to-have).
-- `BF-008` — Add Next transaction flow (P3, nice-to-have).
+- ✅ `BF-008` — "Save & Add Next" button in transaction form; dialog auto-reopens pre-filled with prior context; auto-closes after final save in batch.
+- ✅ `BF-017` — Account and Category filters changed to multi-select; URL params support repeated values.
+
+**Sprints 12.13–12.14 — Dashboard enhancements (no BF IDs)** ✅
+
+- ✅ Dashboard revamp: AccountCardDetails on dashboard, account icons/colors, section reorder.
+- ✅ Month-over-month deltas on all 4 monthly metric cards (colored ↑/↓ vs last month).
+- ✅ Budget vs Actual section on dashboard (per-category progress bars, links to filtered transactions).
+- ✅ All 8 metric cards tappable with 6-month trend area charts (lazy loaded, recharts).
 
 **Post-MVP / Defer:**
 
 - `BF-001` — Full automatic FX/API integration (Post-MVP, out of scope for Alpha).
-- `BF-008` — Add Next transaction flow (nice-to-have, defer until batch-entry friction proven).
+
+**Current open issues:** only `BF-001` (P2, low risk for Alpha — multi-currency label UX).
 
 ## Related documents
 
