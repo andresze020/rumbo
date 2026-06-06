@@ -50,6 +50,7 @@ export function CategoryRow({
     Boolean(parentName) ||
     parentUnavailable ||
     childCount > 0 ||
+    category.is_system ||
     category.exclude_from_budget ||
     category.exclude_from_reports ||
     category.sort_order != null
@@ -83,11 +84,6 @@ export function CategoryRow({
           {category.reporting_type !== category.category_type ? (
             <Badge variant="outline" className="text-xs">
               {formatValue(category.reporting_type)}
-            </Badge>
-          ) : null}
-          {category.is_system ? (
-            <Badge variant="outline" className="text-xs">
-              System
             </Badge>
           ) : null}
           {category.is_archived ? (
@@ -135,6 +131,9 @@ export function CategoryRow({
                     {childCount}{' '}
                     {childCount === 1 ? 'subcategory' : 'subcategories'}
                   </span>
+                ) : null}
+                {category.is_system ? (
+                  <span>System category</span>
                 ) : null}
                 {category.exclude_from_budget ? (
                   <span>Excluded from budget</span>
