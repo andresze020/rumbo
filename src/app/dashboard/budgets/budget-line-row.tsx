@@ -175,6 +175,14 @@ export function BudgetLineRow({
                   Edit
                 </Link>
               ) : null}
+              {line.category_id ? (
+                <Link
+                  href={`/dashboard/transactions?category_id=${encodeURIComponent(line.category_id)}&month=${encodeURIComponent(selectedMonth)}`}
+                  className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+                >
+                  View transactions →
+                </Link>
+              ) : null}
               <form action={deleteBudgetLineAction}>
                 <input type="hidden" name="month" value={selectedMonth} />
                 <input type="hidden" name="line_id" value={line.line_id ?? ''} />

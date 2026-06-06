@@ -5,13 +5,6 @@ import { TransferEditForm } from './transfer-edit-form'
 import { VoidTransactionForm } from './void-transaction-form'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
@@ -28,6 +21,8 @@ type TransactionsPageProps = {
     voided?: string
     updated?: string
     month?: string
+    date_from?: string
+    date_to?: string
     type?: string
     status?: string
     account_id?: string | string[]
@@ -80,11 +75,7 @@ type TransactionAllocation = {
   category_id: string
 }
 
-type AccountLookup = {
-  id: string
-  name: string
-}
-
+type AccountLookup = { id: string; name: string }
 type CategoryLookup = {
   id: string
   name: string
@@ -96,6 +87,8 @@ type TransactionFilters = {
   accountIds: string[]
   categoryIds: string[]
   month: string
+  dateFrom: string
+  dateTo: string
   search: string
   status: string
   type: string
@@ -127,6 +120,9 @@ type TransactionRow = {
   transferToAccountName: string
 }
 
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
 }
@@ -139,15 +135,31 @@ function normalizeMonth(value: string | undefined) {
   return value && /^\d{4}-\d{2}$/.test(value) ? value : currentMonth()
 }
 
-function getMonthRange(month: string) {
-  const [year, monthNumber] = month.split('-').map(Number)
-  const startDate = new Date(Date.UTC(year, monthNumber - 1, 1))
-  const endDate = new Date(Date.UTC(year, monthNumber, 1))
+function monthFirstDay(month: string) {
+  return `${month}-01`
+}
 
-  return {
-    start: startDate.toISOString().slice(0, 10),
-    end: endDate.toISOString().slice(0, 10),
+function monthLastDay(month: string) {
+  const [yr, mo] = month.split('-').map(Number)
+  return new Date(Date.UTC(yr, mo, 0)).toISOString().slice(0, 10)
+}
+
+function offsetDate(baseDate: string, days: number): string {
+  const [yr, mo, dy] = baseDate.split('-').map(Number)
+  return new Date(Date.UTC(yr, mo - 1, dy + days)).toISOString().slice(0, 10)
+}
+
+function formatDateRangeLabel(dateFrom: string, dateTo: string): string {
+  const fromMonth = dateFrom.slice(0, 7)
+  const toMonth = dateTo.slice(0, 7)
+  if (fromMonth === toMonth) {
+    const [yr, mo] = fromMonth.split('-').map(Number)
+    return new Intl.DateTimeFormat('en-CA', { month: 'long', year: 'numeric' }).format(
+      new Date(yr, mo - 1, 1)
+    )
   }
+  const fmt = new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
+  return `${fmt.format(new Date(dateFrom))} – ${fmt.format(new Date(dateTo))}`
 }
 
 function normalizeOption(value: string | undefined, allowedValues: string[]) {
@@ -155,9 +167,7 @@ function normalizeOption(value: string | undefined, allowedValues: string[]) {
 }
 
 function formatValue(value: string) {
-  return value
-    .replaceAll('_', ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+  return value.replaceAll('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
 function formatCurrency(value: number | string, currencyCode: string) {
@@ -174,7 +184,6 @@ function getCategoryPath(
   const parentName = category.parent_category_id
     ? categoriesById.get(category.parent_category_id)?.name
     : null
-
   return parentName ? `${parentName} / ${category.name}` : category.name
 }
 
@@ -189,47 +198,36 @@ function getAccountLabel(account: Account) {
     .join(' · ')
 }
 
-
 function transactionsPath(
   filters: TransactionFilters,
-  panel?: {
-    edit?: string
-    mode?: 'create'
-  }
+  panel?: { edit?: string; mode?: 'create' }
 ) {
   const params = new URLSearchParams()
 
-  params.set('month', filters.month)
-
-  if (filters.type !== 'all') {
-    params.set('type', filters.type)
+  if (filters.dateFrom && filters.dateTo) {
+    params.set('date_from', filters.dateFrom)
+    params.set('date_to', filters.dateTo)
+  } else {
+    params.set('month', filters.month || currentMonth())
   }
 
-  if (filters.status !== 'all') {
-    params.set('status', filters.status)
-  }
-
-  for (const id of filters.accountIds) {
-    params.append('account_id', id)
-  }
-
-  for (const id of filters.categoryIds) {
-    params.append('category_id', id)
-  }
-
-  if (filters.search) {
-    params.set('search', filters.search)
-  }
-
-  if (panel?.mode) {
-    params.set('mode', panel.mode)
-  }
-
-  if (panel?.edit) {
-    params.set('edit', panel.edit)
-  }
+  if (filters.type !== 'all') params.set('type', filters.type)
+  if (filters.status !== 'all') params.set('status', filters.status)
+  for (const id of filters.accountIds) params.append('account_id', id)
+  for (const id of filters.categoryIds) params.append('category_id', id)
+  if (filters.search) params.set('search', filters.search)
+  if (panel?.mode) params.set('mode', panel.mode)
+  if (panel?.edit) params.set('edit', panel.edit)
 
   return `/dashboard/transactions?${params.toString()}`
+}
+
+function presetPath(
+  filters: TransactionFilters,
+  dateFrom: string,
+  dateTo: string
+) {
+  return transactionsPath({ ...filters, dateFrom, dateTo, month: '' })
 }
 
 export default async function TransactionsPage({
@@ -240,7 +238,28 @@ export default async function TransactionsPage({
   const created = params.created === '1'
   const voided = params.voided === '1'
   const updated = params.updated === '1'
-  const selectedMonth = normalizeMonth(params.month)
+
+  const rawDateFrom = typeof params.date_from === 'string' ? params.date_from : ''
+  const rawDateTo = typeof params.date_to === 'string' ? params.date_to : ''
+  const hasCustomDateRange =
+    Boolean(rawDateFrom && rawDateTo) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(rawDateFrom) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(rawDateTo)
+
+  let resolvedDateFrom: string
+  let resolvedDateTo: string
+  let resolvedMonth: string
+
+  if (hasCustomDateRange) {
+    resolvedDateFrom = rawDateFrom
+    resolvedDateTo = rawDateTo
+    resolvedMonth = rawDateFrom.slice(0, 7)
+  } else {
+    resolvedMonth = normalizeMonth(params.month)
+    resolvedDateFrom = monthFirstDay(resolvedMonth)
+    resolvedDateTo = monthLastDay(resolvedMonth)
+  }
+
   const selectedType = normalizeOption(params.type, [
     'income',
     'expense',
@@ -267,54 +286,62 @@ export default async function TransactionsPage({
     ? [rawCategoryIds]
     : []
   const searchText = typeof params.search === 'string' ? params.search.trim() : ''
+
   const filters: TransactionFilters = {
     accountIds: selectedAccountIds,
     categoryIds: selectedCategoryIds,
-    month: selectedMonth,
+    month: resolvedMonth,
+    dateFrom: hasCustomDateRange ? resolvedDateFrom : '',
+    dateTo: hasCustomDateRange ? resolvedDateTo : '',
     search: searchText,
     status: selectedStatus,
     type: selectedType,
   }
+
   const hasActiveFilters =
+    hasCustomDateRange ||
     params.month !== undefined ||
     selectedType !== 'all' ||
     selectedStatus !== 'all' ||
     selectedAccountIds.length > 0 ||
     selectedCategoryIds.length > 0 ||
     searchText.length > 0
+
   const editTransactionId =
     typeof params.edit === 'string' ? params.edit : null
-  const monthRange = getMonthRange(selectedMonth)
   const returnTo = transactionsPath(filters)
-  const supabase = await createClient()
 
+  // Presets — computed from today server-side
+  const todayStr = todayIsoDate()
+  const thisYear = todayStr.slice(0, 4)
+  const thisMonthStr = currentMonth()
+  const datePresets = [
+    { label: 'This month', from: monthFirstDay(thisMonthStr), to: monthLastDay(thisMonthStr) },
+    { label: 'Last 30 days', from: offsetDate(todayStr, -29), to: todayStr },
+    { label: 'Last 60 days', from: offsetDate(todayStr, -59), to: todayStr },
+    { label: 'Last 90 days', from: offsetDate(todayStr, -89), to: todayStr },
+    { label: 'This year', from: `${thisYear}-01-01`, to: `${thisYear}-12-31` },
+  ]
+
+  const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
+  if (!user) redirect('/login')
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('default_household_id')
     .eq('id', user.id)
     .maybeSingle()
-
-  if (!profile?.default_household_id) {
-    redirect('/onboarding')
-  }
+  if (!profile?.default_household_id) redirect('/onboarding')
 
   const { data: household, error: householdError } = await supabase
     .from('households')
     .select('id, name, base_currency')
     .eq('id', profile.default_household_id)
     .single()
-
-  if (householdError || !household) {
-    redirect('/onboarding')
-  }
+  if (householdError || !household) redirect('/onboarding')
 
   const { data: accounts, error: accountsError } = await supabase
     .from('accounts')
@@ -322,10 +349,7 @@ export default async function TransactionsPage({
     .eq('household_id', household.id)
     .is('deleted_at', null)
     .order('name', { ascending: true })
-
-  if (accountsError) {
-    throw new Error('Could not load accounts.')
-  }
+  if (accountsError) throw new Error('Could not load accounts.')
 
   const { data: categories, error: categoriesError } = await supabase
     .from('categories')
@@ -336,10 +360,7 @@ export default async function TransactionsPage({
     .is('deleted_at', null)
     .order('parent_category_id', { ascending: true, nullsFirst: true })
     .order('name', { ascending: true })
-
-  if (categoriesError) {
-    throw new Error('Could not load categories.')
-  }
+  if (categoriesError) throw new Error('Could not load categories.')
 
   let transactionsQuery = supabase
     .from('transactions')
@@ -347,8 +368,8 @@ export default async function TransactionsPage({
       'id, transaction_date, transaction_type, status, description, merchant_name, notes, source, void_reason'
     )
     .eq('household_id', household.id)
-    .gte('transaction_date', monthRange.start)
-    .lt('transaction_date', monthRange.end)
+    .gte('transaction_date', resolvedDateFrom)
+    .lte('transaction_date', resolvedDateTo)
     .is('deleted_at', null)
     .order('transaction_date', { ascending: false })
     .order('created_at', { ascending: false })
@@ -356,31 +377,20 @@ export default async function TransactionsPage({
   if (selectedType !== 'all') {
     transactionsQuery = transactionsQuery.eq('transaction_type', selectedType)
   }
-
   if (selectedStatus !== 'all') {
     transactionsQuery = transactionsQuery.eq('status', selectedStatus)
   }
-
   if (searchText) {
-    const escapedSearchText = searchText
-      .replaceAll('%', '\\%')
-      .replaceAll('_', '\\_')
-
+    const escaped = searchText.replaceAll('%', '\\%').replaceAll('_', '\\_')
     transactionsQuery = transactionsQuery.or(
-      `description.ilike.%${escapedSearchText}%,merchant_name.ilike.%${escapedSearchText}%,notes.ilike.%${escapedSearchText}%`
+      `description.ilike.%${escaped}%,merchant_name.ilike.%${escaped}%,notes.ilike.%${escaped}%`
     )
   }
 
-  const { data: transactions, error: transactionsError } =
-    await transactionsQuery
+  const { data: transactions, error: transactionsError } = await transactionsQuery
+  if (transactionsError) throw new Error('Could not load transactions.')
 
-  if (transactionsError) {
-    throw new Error('Could not load transactions.')
-  }
-
-  const transactionIds = (transactions ?? []).map(
-    (transaction) => transaction.id
-  )
+  const transactionIds = (transactions ?? []).map((t) => t.id)
 
   let transactionEntries: TransactionEntry[] = []
   let transactionAllocations: TransactionAllocation[] = []
@@ -391,9 +401,7 @@ export default async function TransactionsPage({
   if (transactionIds.length) {
     const { data: entries, error: entriesError } = await supabase
       .from('transaction_entries')
-      .select(
-        'transaction_id, account_id, amount_account_currency, currency_code'
-      )
+      .select('transaction_id, account_id, amount_account_currency, currency_code')
       .eq('household_id', household.id)
       .in('transaction_id', transactionIds)
 
@@ -404,18 +412,11 @@ export default async function TransactionsPage({
       .in('transaction_id', transactionIds)
 
     transactionDetailsError = Boolean(entriesError || allocationsError)
-
     transactionEntries = (entries ?? []) as TransactionEntry[]
     transactionAllocations = (allocations ?? []) as TransactionAllocation[]
 
-    const accountIds = Array.from(
-      new Set(transactionEntries.map((entry) => entry.account_id))
-    )
-    const categoryIds = Array.from(
-      new Set(
-        transactionAllocations.map((allocation) => allocation.category_id)
-      )
-    )
+    const accountIds = Array.from(new Set(transactionEntries.map((e) => e.account_id)))
+    const categoryIds = Array.from(new Set(transactionAllocations.map((a) => a.category_id)))
 
     if (accountIds.length) {
       const { data: accountRows, error: accountRowsError } = await supabase
@@ -423,9 +424,7 @@ export default async function TransactionsPage({
         .select('id, name')
         .eq('household_id', household.id)
         .in('id', accountIds)
-
-      transactionDetailsError =
-        transactionDetailsError || Boolean(accountRowsError)
+      transactionDetailsError = transactionDetailsError || Boolean(accountRowsError)
       accountLookupRows = (accountRows ?? []) as AccountLookup[]
     }
 
@@ -434,77 +433,58 @@ export default async function TransactionsPage({
         .from('categories')
         .select('id, name, parent_category_id, icon')
         .eq('household_id', household.id)
-
-      transactionDetailsError =
-        transactionDetailsError || Boolean(categoryRowsError)
+      transactionDetailsError = transactionDetailsError || Boolean(categoryRowsError)
       categoryLookupRows = (categoryRows ?? []) as CategoryLookup[]
     }
   }
 
   const entriesByTransactionId = new Map<string, TransactionEntry[]>()
-
   for (const entry of transactionEntries) {
-    const existingEntries = entriesByTransactionId.get(entry.transaction_id)
-
-    if (existingEntries) {
-      existingEntries.push(entry)
-    } else {
-      entriesByTransactionId.set(entry.transaction_id, [entry])
-    }
+    const existing = entriesByTransactionId.get(entry.transaction_id)
+    if (existing) existing.push(entry)
+    else entriesByTransactionId.set(entry.transaction_id, [entry])
   }
 
   const allocationsByTransactionId = new Map(
-    transactionAllocations.map((allocation) => [
-      allocation.transaction_id,
-      allocation,
-    ])
+    transactionAllocations.map((a) => [a.transaction_id, a])
   )
   const allAccounts = (accounts ?? []) as Account[]
   const allCategories = (categories ?? []) as Category[]
   const accountNamesById = new Map([
-    ...allAccounts.map((account) => [account.id, account.name] as const),
-    ...accountLookupRows.map((account) => [account.id, account.name] as const),
+    ...allAccounts.map((a) => [a.id, a.name] as const),
+    ...accountLookupRows.map((a) => [a.id, a.name] as const),
   ])
-  const categoryLookupRowsById = new Map(
-    categoryLookupRows.map((category) => [category.id, category])
-  )
+  const categoryLookupRowsById = new Map(categoryLookupRows.map((c) => [c.id, c]))
   const categoryNamesById = new Map(
-    categoryLookupRows.map((category) => [
-      category.id,
-      getCategoryPath(category, categoryLookupRowsById),
-    ])
+    categoryLookupRows.map((c) => [c.id, getCategoryPath(c, categoryLookupRowsById)])
   )
   const categoryIconsById = new Map(
-    categoryLookupRows.map((category) => [category.id, category.icon ?? null])
+    categoryLookupRows.map((c) => [c.id, c.icon ?? null])
   )
-  const categoryOptionsById = new Map(
-    allCategories.map((category) => [category.id, category])
-  )
-  const activeAccounts = allAccounts.filter((account) => !account.is_archived)
+  const categoryOptionsById = new Map(allCategories.map((c) => [c.id, c]))
+  const activeAccounts = allAccounts.filter((a) => !a.is_archived)
   const activeCategories = allCategories.filter(
-    (category) =>
-      !category.is_archived &&
-      (category.category_type === 'income' ||
-        category.category_type === 'expense')
+    (c) =>
+      !c.is_archived &&
+      (c.category_type === 'income' || c.category_type === 'expense')
   )
+
   const filteredTransactions = ((transactions ?? []) as Transaction[]).filter(
     (transaction) => {
       const entries = entriesByTransactionId.get(transaction.id) ?? []
       const allocation = allocationsByTransactionId.get(transaction.id)
       const matchesAccount =
         selectedAccountIds.length === 0 ||
-        entries.some((entry) => selectedAccountIds.includes(entry.account_id))
+        entries.some((e) => selectedAccountIds.includes(e.account_id))
       const matchesCategory =
         selectedCategoryIds.length === 0 ||
         (allocation !== undefined && selectedCategoryIds.includes(allocation.category_id))
-
       return matchesAccount && matchesCategory
     }
   )
 
   function buildTransactionRow(transaction: Transaction): TransactionRow {
-    const isOpeningBalance =
-      transaction.transaction_type === 'opening_balance'
+    const isOpeningBalance = transaction.transaction_type === 'opening_balance'
     const isTransfer = transaction.transaction_type === 'transfer'
     const isDebtPayment = transaction.transaction_type === 'debt_payment'
     const isBalanceMovement = isTransfer || isDebtPayment
@@ -512,18 +492,10 @@ export default async function TransactionsPage({
     const entries = entriesByTransactionId.get(transaction.id) ?? []
     const entry = entries[0]
     const transferOutEntry =
-      entries.find(
-        (transactionEntry) =>
-          Number(transactionEntry.amount_account_currency) < 0
-      ) ?? entry
+      entries.find((e) => Number(e.amount_account_currency) < 0) ?? entry
     const transferInEntry =
-      entries.find(
-        (transactionEntry) =>
-          Number(transactionEntry.amount_account_currency) > 0
-      ) ??
-      entries.find(
-        (transactionEntry) => transactionEntry !== transferOutEntry
-      )
+      entries.find((e) => Number(e.amount_account_currency) > 0) ??
+      entries.find((e) => e !== transferOutEntry)
     const allocation = allocationsByTransactionId.get(transaction.id)
     const canEdit =
       transaction.source === 'manual' &&
@@ -538,49 +510,41 @@ export default async function TransactionsPage({
       Boolean(
         transferOutEntry &&
           transferInEntry &&
-          activeAccounts.some(
-            (account) => account.id === transferOutEntry.account_id
-          ) &&
-          activeAccounts.some(
-            (account) => account.id === transferInEntry.account_id
-          )
+          activeAccounts.some((a) => a.id === transferOutEntry.account_id) &&
+          activeAccounts.some((a) => a.id === transferInEntry.account_id)
       )
     const transferFromAccountName = transferOutEntry
-      ? accountNamesById.get(transferOutEntry.account_id) ?? 'Unknown account'
+      ? (accountNamesById.get(transferOutEntry.account_id) ?? 'Unknown account')
       : 'Unknown account'
     const transferToAccountName = transferInEntry
-      ? accountNamesById.get(transferInEntry.account_id) ?? 'Unknown account'
+      ? (accountNamesById.get(transferInEntry.account_id) ?? 'Unknown account')
       : 'Unknown account'
     const title = isOpeningBalance
       ? 'Opening balance'
       : isTransfer
-        ? `Transfer: ${transferFromAccountName} -> ${transferToAccountName}`
-        : isDebtPayment
-          ? transaction.description ||
-            `Debt payment: ${transferFromAccountName} -> ${transferToAccountName}`
-          : transaction.description || 'Transaction'
+      ? `Transfer: ${transferFromAccountName} -> ${transferToAccountName}`
+      : isDebtPayment
+      ? transaction.description || `Debt payment: ${transferFromAccountName} -> ${transferToAccountName}`
+      : transaction.description || 'Transaction'
     const accountName = isBalanceMovement
       ? `${transferFromAccountName} -> ${transferToAccountName}`
       : entry
-        ? accountNamesById.get(entry.account_id) ?? 'Unknown account'
-        : 'Unknown account'
+      ? (accountNamesById.get(entry.account_id) ?? 'Unknown account')
+      : 'Unknown account'
     const categoryName = isTransfer
       ? 'Transfer'
       : isOpeningBalance
-        ? 'Opening balance'
-        : isDebtPayment
-          ? 'Debt principal'
-          : allocation
-            ? categoryNamesById.get(allocation.category_id) ??
-              'Unknown category'
-            : 'Not categorized'
+      ? 'Opening balance'
+      : isDebtPayment
+      ? 'Debt principal'
+      : allocation
+      ? (categoryNamesById.get(allocation.category_id) ?? 'Unknown category')
+      : 'Not categorized'
     const categoryIcon =
       !isTransfer && !isOpeningBalance && !isDebtPayment && allocation
         ? (categoryIconsById.get(allocation.category_id) ?? null)
         : null
-    const amountEntry = isBalanceMovement
-      ? transferInEntry ?? transferOutEntry
-      : entry
+    const amountEntry = isBalanceMovement ? transferInEntry ?? transferOutEntry : entry
     const displayAmount =
       isBalanceMovement && amountEntry
         ? Math.abs(Number(amountEntry.amount_account_currency))
@@ -618,115 +582,81 @@ export default async function TransactionsPage({
     (row) => row.transaction.id === editTransactionId
   )
   const visibleCount = transactionRows.length
-  const pendingCount = transactionRows.filter(
-    (row) => row.transaction.status === 'pending'
-  ).length
-  const voidedCount = transactionRows.filter((row) => row.isVoided).length
-  const importedCount = transactionRows.filter((row) => row.isImported).length
-  const summaryCards = [
-    {
-      label: 'Visible',
-      value: String(visibleCount),
-      description: selectedMonth,
-    },
-    {
-      label: 'Pending',
-      value: String(pendingCount),
-      description: 'Awaiting posting',
-    },
-    {
-      label: 'Voided',
-      value: String(voidedCount),
-      description: 'Excluded by existing rules',
-    },
-    {
-      label: 'Imported',
-      value: String(importedCount),
-      description: 'CSV source',
-    },
-  ]
+  const pendingCount = transactionRows.filter((r) => r.transaction.status === 'pending').length
+  const voidedCount = transactionRows.filter((r) => r.isVoided).length
+  const importedCount = transactionRows.filter((r) => r.isImported).length
+  const dateRangeLabel = formatDateRangeLabel(resolvedDateFrom, resolvedDateTo)
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{household.name}</p>
-          <h1 className="text-2xl font-semibold tracking-normal">
-            Transactions
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-normal">Transactions</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Review and manage household transactions.
           </p>
         </div>
-
         <div className="flex flex-wrap gap-2">
-          <GlobalAddTransactionButton className={buttonVariants()}>
+          <GlobalAddTransactionButton className={buttonVariants({ size: 'sm' })}>
             Add transaction
           </GlobalAddTransactionButton>
           <Link
             href="/dashboard/transactions/import"
-            className={buttonVariants({ variant: 'outline' })}
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
           >
             Import CSV
           </Link>
         </div>
       </div>
 
+      {/* ── Notifications ──────────────────────────────────────────────── */}
       {errorMessage ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {errorMessage}
         </div>
       ) : null}
-
       {created ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          Transaction created.
-        </div>
+        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">Transaction created.</div>
       ) : null}
-
       {voided ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          Transaction voided.
-        </div>
+        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">Transaction voided.</div>
       ) : null}
-
       {updated ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          Transaction updated.
-        </div>
+        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">Transaction updated.</div>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>
-            Narrow the list without leaving the transactions workflow.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            method="get"
-            action="/dashboard/transactions"
-            className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
-          >
-            <div className="space-y-2">
-              <Label htmlFor="month">Month</Label>
-              <Input
-                id="month"
-                name="month"
-                type="month"
-                defaultValue={selectedMonth}
-              />
-            </div>
+      {/* ── Filters ────────────────────────────────────────────────────── */}
+      <section className="rounded-lg border p-4">
+        <div className="mb-4 flex items-center justify-between">
+          <p className="text-sm font-medium">Filters</p>
+          {hasActiveFilters ? (
+            <Link
+              href="/dashboard/transactions"
+              className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+            >
+              Clear filters
+            </Link>
+          ) : null}
+        </div>
 
-            <div className="space-y-2">
+        <form method="get" action="/dashboard/transactions" className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="search">Search</Label>
+            <Input
+              id="search"
+              name="search"
+              defaultValue={searchText}
+              placeholder="Description, merchant or notes…"
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
               <Label htmlFor="type">Type</Label>
-              <select
-                id="type"
-                name="type"
-                defaultValue={selectedType}
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
+              <select id="type" name="type" defaultValue={selectedType} className={selectClassName}>
                 <option value="all">All types</option>
                 <option value="income">Income</option>
                 <option value="expense">Expense</option>
@@ -737,25 +667,22 @@ export default async function TransactionsPage({
               </select>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="status">Status</Label>
-              <select
-                id="status"
-                name="status"
-                defaultValue={selectedStatus}
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
+              <select id="status" name="status" defaultValue={selectedStatus} className={selectClassName}>
                 <option value="all">All statuses</option>
                 <option value="posted">Posted</option>
                 <option value="pending">Pending</option>
                 <option value="voided">Voided</option>
               </select>
             </div>
+          </div>
 
-            <div className="space-y-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
               <Label htmlFor="account_id">
-                Account
-                <span className="ml-1 font-normal text-muted-foreground">(hold Ctrl/⌘ for multiple)</span>
+                Account{' '}
+                <span className="font-normal text-muted-foreground">(Ctrl/⌘ for multiple)</span>
               </Label>
               <select
                 id="account_id"
@@ -773,10 +700,10 @@ export default async function TransactionsPage({
               </select>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="category_id">
-                Category
-                <span className="ml-1 font-normal text-muted-foreground">(hold Ctrl/⌘ for multiple)</span>
+                Category{' '}
+                <span className="font-normal text-muted-foreground">(Ctrl/⌘ for multiple)</span>
               </Label>
               <select
                 id="category_id"
@@ -794,41 +721,74 @@ export default async function TransactionsPage({
                 ))}
               </select>
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="search">Search</Label>
-              <Input
-                id="search"
-                name="search"
-                defaultValue={searchText}
-                placeholder="Description or notes"
-              />
+          {/* Date range */}
+          <div className="space-y-2">
+            <Label>Date range</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {datePresets.map((preset) => {
+                const isActive =
+                  resolvedDateFrom === preset.from && resolvedDateTo === preset.to
+                return (
+                  <Link
+                    key={preset.label}
+                    href={presetPath(filters, preset.from, preset.to)}
+                    className={buttonVariants({
+                      variant: isActive ? 'secondary' : 'outline',
+                      size: 'sm',
+                    })}
+                  >
+                    {preset.label}
+                  </Link>
+                )
+              })}
             </div>
-
-            <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
-              <Button type="submit">Apply filters</Button>
-              <Link
-                href="/dashboard/transactions"
-                className={buttonVariants({ variant: 'outline' })}
-              >
-                Clear filters
-              </Link>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="date_from" className="text-xs text-muted-foreground">
+                  From
+                </Label>
+                <Input
+                  id="date_from"
+                  name="date_from"
+                  type="date"
+                  defaultValue={resolvedDateFrom}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="date_to" className="text-xs text-muted-foreground">
+                  To
+                </Label>
+                <Input
+                  id="date_to"
+                  name="date_to"
+                  type="date"
+                  defaultValue={resolvedDateTo}
+                />
+              </div>
             </div>
-          </form>
-        </CardContent>
-      </Card>
+          </div>
 
+          <Button type="submit" size="sm">
+            Apply filters
+          </Button>
+        </form>
+      </section>
+
+      {/* ── Summary cards ──────────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {summaryCards.map((card) => (
-          <MetricCard
-            key={card.label}
-            label={card.label}
-            value={card.value}
-            description={card.description}
-          />
-        ))}
+        <MetricCard
+          label="Visible"
+          value={String(visibleCount)}
+          description={dateRangeLabel}
+        />
+        <MetricCard label="Pending" value={String(pendingCount)} description="Awaiting posting" />
+        <MetricCard label="Voided" value={String(voidedCount)} description="Excluded by existing rules" />
+        <MetricCard label="Imported" value={String(importedCount)} description="CSV source" />
       </div>
 
+      {/* ── Edit dialogs ───────────────────────────────────────────────── */}
       {selectedEditRow ? (
         <FormDialog
           title={selectedEditRow.canEditTransfer ? 'Edit transfer' : 'Edit transaction'}
@@ -842,16 +802,12 @@ export default async function TransactionsPage({
             <TransactionEditForm
               transactionId={selectedEditRow.transaction.id}
               transactionType={
-                selectedEditRow.transaction.transaction_type as
-                  | 'income'
-                  | 'expense'
+                selectedEditRow.transaction.transaction_type as 'income' | 'expense'
               }
               transactionDate={selectedEditRow.transaction.transaction_date}
               accountId={selectedEditRow.entry.account_id}
               categoryId={selectedEditRow.allocation.category_id}
-              amount={Math.abs(
-                Number(selectedEditRow.entry.amount_account_currency)
-              )}
+              amount={Math.abs(Number(selectedEditRow.entry.amount_account_currency))}
               cancelHref={returnTo}
               description={selectedEditRow.transaction.description ?? ''}
               merchantName={selectedEditRow.transaction.merchant_name ?? ''}
@@ -871,11 +827,7 @@ export default async function TransactionsPage({
               transactionDate={selectedEditRow.transaction.transaction_date}
               fromAccountId={selectedEditRow.transferOutEntry.account_id}
               toAccountId={selectedEditRow.transferInEntry.account_id}
-              amount={Math.abs(
-                Number(
-                  selectedEditRow.transferInEntry.amount_account_currency
-                )
-              )}
+              amount={Math.abs(Number(selectedEditRow.transferInEntry.amount_account_currency))}
               cancelHref={returnTo}
               description={selectedEditRow.transaction.description ?? ''}
               notes={selectedEditRow.transaction.notes ?? ''}
@@ -887,160 +839,143 @@ export default async function TransactionsPage({
         </FormDialog>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <CardTitle>Transaction list</CardTitle>
-              <CardDescription>
-                Manual, imported, transfer, debt, and opening-balance activity.
-              </CardDescription>
-            </div>
+      {/* ── Transaction list ───────────────────────────────────────────── */}
+      <section className="space-y-1.5">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-sm font-medium text-muted-foreground">
+            {visibleCount} transaction{visibleCount !== 1 ? 's' : ''} · {dateRangeLabel}
+          </h2>
+          <GlobalAddTransactionButton
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          >
+            Add transaction
+          </GlobalAddTransactionButton>
+        </div>
 
-            <GlobalAddTransactionButton
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              Add transaction
-            </GlobalAddTransactionButton>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {transactionDetailsError ? (
-            <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-              Could not load transaction details.
-            </p>
-          ) : transactionRows.length ? (
-            <div className="divide-y rounded-lg border">
-              {transactionRows.map((row) => (
-                <div
-                  key={row.transaction.id}
-                  className={`space-y-1 p-4 transition-colors ${
-                    row.isVoided
-                      ? 'bg-muted/30 text-muted-foreground'
-                      : 'hover:bg-muted/20'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <h2 className="font-medium leading-snug">{row.title}</h2>
-                        <Badge variant="secondary" className="text-xs">
-                          {row.isOpeningBalance
-                            ? 'Opening balance'
-                            : row.isTransfer
-                              ? 'Transfer'
-                              : row.isDebtPayment
-                                ? 'Debt payment'
-                                : formatValue(row.transaction.transaction_type)}
+        {transactionDetailsError ? (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+            Could not load transaction details.
+          </p>
+        ) : transactionRows.length ? (
+          <div className="divide-y rounded-lg border">
+            {transactionRows.map((row) => (
+              <div
+                key={row.transaction.id}
+                className={`space-y-1 p-4 transition-colors ${
+                  row.isVoided ? 'bg-muted/30 text-muted-foreground' : 'hover:bg-muted/20'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <h2 className="font-medium leading-snug">{row.title}</h2>
+                      <Badge variant="secondary" className="text-xs">
+                        {row.isOpeningBalance
+                          ? 'Opening balance'
+                          : row.isTransfer
+                          ? 'Transfer'
+                          : row.isDebtPayment
+                          ? 'Debt payment'
+                          : formatValue(row.transaction.transaction_type)}
+                      </Badge>
+                      <StatusBadge status={row.transaction.status} />
+                      {row.isImported ? (
+                        <Badge variant="outline" className="text-xs">
+                          Imported
                         </Badge>
-                        <StatusBadge status={row.transaction.status} />
-                        {row.isImported ? (
-                          <Badge variant="outline" className="text-xs">Imported</Badge>
-                        ) : null}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                        <span>{row.transaction.transaction_date}</span>
-                        <span>·</span>
-                        <span>{row.accountName}</span>
-                        <span>·</span>
-                        <span>
-                          {row.categoryIcon ? (
-                            <span aria-hidden="true">{row.categoryIcon} </span>
-                          ) : null}
-                          {row.categoryName}
-                        </span>
-                        {row.amountEntry?.currency_code ? (
-                          <>
-                            <span>·</span>
-                            <span>{row.amountEntry.currency_code}</span>
-                          </>
-                        ) : null}
-                        {row.transaction.merchant_name ? (
-                          <>
-                            <span>·</span>
-                            <span>{row.transaction.merchant_name}</span>
-                          </>
-                        ) : null}
-                        {row.transaction.void_reason ? (
-                          <>
-                            <span>·</span>
-                            <span>Voided: {row.transaction.void_reason}</span>
-                          </>
-                        ) : null}
-                      </div>
-
-                      {row.transaction.notes ? (
-                        <p className="text-xs text-muted-foreground/70 italic">
-                          {row.transaction.notes}
-                        </p>
                       ) : null}
                     </div>
 
-                    <div className="flex shrink-0 flex-col items-end gap-1.5">
-                      {row.amountEntry && row.displayAmount !== undefined ? (
-                        <p
-                          className={`text-base font-semibold tabular-nums leading-snug ${
-                            row.transaction.transaction_type === 'income'
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : ''
-                          }`}
-                        >
-                          {formatCurrency(
-                            row.displayAmount,
-                            row.amountEntry.currency_code
-                          )}
-                        </p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      <span>{row.transaction.transaction_date}</span>
+                      <span>·</span>
+                      <span>{row.accountName}</span>
+                      <span>·</span>
+                      <span>
+                        {row.categoryIcon ? (
+                          <span aria-hidden="true">{row.categoryIcon} </span>
+                        ) : null}
+                        {row.categoryName}
+                      </span>
+                      {row.amountEntry?.currency_code ? (
+                        <>
+                          <span>·</span>
+                          <span>{row.amountEntry.currency_code}</span>
+                        </>
                       ) : null}
+                      {row.transaction.merchant_name ? (
+                        <>
+                          <span>·</span>
+                          <span>{row.transaction.merchant_name}</span>
+                        </>
+                      ) : null}
+                      {row.transaction.void_reason ? (
+                        <>
+                          <span>·</span>
+                          <span>Voided: {row.transaction.void_reason}</span>
+                        </>
+                      ) : null}
+                    </div>
 
-                      <div className="flex flex-wrap gap-1.5 justify-end">
-                        {row.canEdit || row.canEditTransfer ? (
-                          <Link
-                            href={transactionsPath(filters, {
-                              edit: row.transaction.id,
-                            })}
-                            className={buttonVariants({
-                              variant: 'outline',
-                              size: 'sm',
-                            })}
-                          >
-                            Edit
-                          </Link>
-                        ) : null}
+                    {row.transaction.notes ? (
+                      <p className="text-xs italic text-muted-foreground/70">
+                        {row.transaction.notes}
+                      </p>
+                    ) : null}
+                  </div>
 
-                        {row.canVoid ? (
-                          <VoidTransactionForm
-                            transactionId={row.transaction.id}
-                          />
-                        ) : null}
-                      </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    {row.amountEntry && row.displayAmount !== undefined ? (
+                      <p
+                        className={`text-base font-semibold tabular-nums leading-snug ${
+                          row.transaction.transaction_type === 'income'
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : ''
+                        }`}
+                      >
+                        {formatCurrency(row.displayAmount, row.amountEntry.currency_code)}
+                      </p>
+                    ) : null}
+
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      {row.canEdit || row.canEditTransfer ? (
+                        <Link
+                          href={transactionsPath(filters, { edit: row.transaction.id })}
+                          className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                        >
+                          Edit
+                        </Link>
+                      ) : null}
+                      {row.canVoid ? (
+                        <VoidTransactionForm transactionId={row.transaction.id} />
+                      ) : null}
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title={
-                hasActiveFilters
-                  ? 'No transactions found for these filters'
-                  : 'No transactions yet'
-              }
-              description={
-                hasActiveFilters
-                  ? 'Clear filters or choose another month to see more household activity.'
-                  : 'Add a transaction or import a CSV once accounts and categories are ready.'
-              }
-              actionHref={
-                hasActiveFilters
-                  ? '/dashboard/transactions'
-                  : transactionsPath(filters, { mode: 'create' })
-              }
-              actionLabel={hasActiveFilters ? 'Clear filters' : 'Add transaction'}
-            />
-          )}
-        </CardContent>
-      </Card>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title={
+              hasActiveFilters
+                ? 'No transactions found for these filters'
+                : 'No transactions yet'
+            }
+            description={
+              hasActiveFilters
+                ? 'Clear filters or adjust the date range to see more activity.'
+                : 'Add a transaction or import a CSV once accounts and categories are ready.'
+            }
+            actionHref={
+              hasActiveFilters
+                ? '/dashboard/transactions'
+                : transactionsPath(filters, { mode: 'create' })
+            }
+            actionLabel={hasActiveFilters ? 'Clear filters' : 'Add transaction'}
+          />
+        )}
+      </section>
     </main>
   )
 }
