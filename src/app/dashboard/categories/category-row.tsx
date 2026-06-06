@@ -80,12 +80,11 @@ export function CategoryRow({
           >
             {category.name}
           </span>
-          <Badge variant="secondary" className="text-xs">
-            {formatValue(category.category_type)}
-          </Badge>
-          <Badge variant="outline" className="text-xs">
-            {formatValue(category.reporting_type)}
-          </Badge>
+          {category.reporting_type !== category.category_type ? (
+            <Badge variant="outline" className="text-xs">
+              {formatValue(category.reporting_type)}
+            </Badge>
+          ) : null}
           {category.is_system ? (
             <Badge variant="outline" className="text-xs">
               System
