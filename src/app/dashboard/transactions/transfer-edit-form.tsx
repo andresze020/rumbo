@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { updateTransferTransactionAction } from './actions'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
+import { fetchFxRate } from '@/lib/fx'
 
 type TransferAccount = {
   id: string
@@ -28,6 +29,8 @@ type TransferEditFormProps = {
   status: string
   accounts: TransferAccount[]
   returnTo: string
+  baseCurrency: string
+  initialExchangeRateToBase: number
 }
 
 function formatAccountLabel(account: TransferAccount) {
@@ -39,6 +42,16 @@ function formatAccountLabel(account: TransferAccount) {
     .filter(Boolean)
     .join(' · ')
 }
+
+function formatCurrency(value: number, currencyCode: string) {
+  return new Intl.NumberFormat('en-CA', {
+    style: 'currency',
+    currency: currencyCode,
+  }).format(value)
+}
+
+const selectCls =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 export function TransferEditForm({
   transactionId,
@@ -52,25 +65,82 @@ export function TransferEditForm({
   status,
   accounts,
   returnTo,
+  baseCurrency,
+  initialExchangeRateToBase,
 }: TransferEditFormProps) {
-  const [selectedFromAccountId, setSelectedFromAccountId] =
-    useState(fromAccountId)
+  const [selectedFromAccountId, setSelectedFromAccountId] = useState(fromAccountId)
   const [selectedToAccountId, setSelectedToAccountId] = useState(toAccountId)
-  const selectedFromAccount = accounts.find(
-    (account) => account.id === selectedFromAccountId
-  )
-  const selectedToAccount = accounts.find(
-    (account) => account.id === selectedToAccountId
-  )
+  const [currentDate, setCurrentDate] = useState(transactionDate)
+  const [amountInput, setAmountInput] = useState(String(amount))
+
+  // userRate is expressed as "1 baseCurrency = X foreignCurrency" (what the user sees)
+  // exchange_rate_to_base = 1 / userRate (what the DB stores)
+  const initialUserRate =
+    initialExchangeRateToBase > 0 && initialExchangeRateToBase !== 1
+      ? String(parseFloat((1 / initialExchangeRateToBase).toFixed(6)))
+      : ''
+  const [userRate, setUserRate] = useState(initialUserRate)
+  const [fetchingRate, setFetchingRate] = useState(false)
+  const [fxNote, setFxNote] = useState('')
+  const [fxError, setFxError] = useState('')
+
+  const selectedFromAccount = accounts.find((a) => a.id === selectedFromAccountId)
+  const selectedToAccount = accounts.find((a) => a.id === selectedToAccountId)
+
   const isCrossCurrencyTransfer =
     Boolean(selectedFromAccount && selectedToAccount) &&
     selectedFromAccount?.currency_code !== selectedToAccount?.currency_code
+
+  const isNonBaseCurrencyTransfer =
+    !isCrossCurrencyTransfer &&
+    Boolean(selectedFromAccount) &&
+    selectedFromAccount?.currency_code !== baseCurrency
+
+  const parsedRate = Number(userRate)
+  const rateIsValid =
+    userRate.trim() !== '' && Number.isFinite(parsedRate) && parsedRate > 0
+  const exchangeRateToBase = rateIsValid ? String(1 / parsedRate) : ''
+
+  const parsedAmount = Number(amountInput)
+  const amountIsValid = Number.isFinite(parsedAmount) && parsedAmount > 0
+
+  function conversionPreview() {
+    if (!selectedFromAccount || !rateIsValid || !amountIsValid) return null
+    return `${formatCurrency(parsedAmount, selectedFromAccount.currency_code)} ≈ ${formatCurrency(parsedAmount / parsedRate, baseCurrency)}`
+  }
+
   const canSubmit = Boolean(
     selectedFromAccountId &&
       selectedToAccountId &&
       selectedFromAccountId !== selectedToAccountId &&
-      !isCrossCurrencyTransfer
+      !isCrossCurrencyTransfer &&
+      (!isNonBaseCurrencyTransfer || rateIsValid)
   )
+
+  // Auto-fetch rate when account or date changes
+  useEffect(() => {
+    if (!isNonBaseCurrencyTransfer || !selectedFromAccount || !currentDate) return
+    void autoFetch(selectedFromAccount.currency_code, currentDate)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFromAccountId, currentDate])
+
+  async function autoFetch(accountCurrency: string, date: string) {
+    setFetchingRate(true)
+    setFxNote('')
+    setFxError('')
+    const result = await fetchFxRate(baseCurrency, accountCurrency, date)
+    setFetchingRate(false)
+    if (result.rate !== null) {
+      setUserRate(String(parseFloat(result.rate.toFixed(6))))
+      setFxNote(
+        result.isLatest
+          ? `No rate for future dates — using latest market rate (${result.date}).`
+          : `Rate for ${result.date}.`
+      )
+    } else {
+      setFxError(result.error)
+    }
+  }
 
   return (
     <form action={updateTransferTransactionAction} className="space-y-4">
@@ -85,6 +155,7 @@ export function TransferEditForm({
             name="transaction_date"
             type="date"
             defaultValue={transactionDate}
+            onChange={(e) => setCurrentDate(e.target.value)}
             required
           />
         </div>
@@ -95,7 +166,7 @@ export function TransferEditForm({
             id={`transfer_status_${transactionId}`}
             name="status"
             defaultValue={status}
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className={selectCls}
           >
             <option value="posted">Posted</option>
             <option value="pending">Pending</option>
@@ -103,28 +174,23 @@ export function TransferEditForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`from_account_${transactionId}`}>
-            From account
-          </Label>
+          <Label htmlFor={`from_account_${transactionId}`}>From account</Label>
           <select
             id={`from_account_${transactionId}`}
             name="from_account_id"
             value={selectedFromAccountId}
-            onChange={(event) => {
-              const nextAccountId = event.target.value
-
-              setSelectedFromAccountId(nextAccountId)
-
-              if (nextAccountId === selectedToAccountId) {
-                setSelectedToAccountId('')
-              }
+            onChange={(e) => {
+              const next = e.target.value
+              setSelectedFromAccountId(next)
+              setUserRate('')
+              setFxNote('')
+              setFxError('')
+              if (next === selectedToAccountId) setSelectedToAccountId('')
             }}
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className={selectCls}
             required
           >
-            <option value="" disabled>
-              Select source
-            </option>
+            <option value="" disabled>Select source</option>
             {accounts.map((account) => (
               <option
                 key={account.id}
@@ -143,21 +209,15 @@ export function TransferEditForm({
             id={`to_account_${transactionId}`}
             name="to_account_id"
             value={selectedToAccountId}
-            onChange={(event) => {
-              const nextAccountId = event.target.value
-
-              setSelectedToAccountId(nextAccountId)
-
-              if (nextAccountId === selectedFromAccountId) {
-                setSelectedFromAccountId('')
-              }
+            onChange={(e) => {
+              const next = e.target.value
+              setSelectedToAccountId(next)
+              if (next === selectedFromAccountId) setSelectedFromAccountId('')
             }}
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className={selectCls}
             required
           >
-            <option value="" disabled>
-              Select destination
-            </option>
+            <option value="" disabled>Select destination</option>
             {accounts.map((account) => (
               <option
                 key={account.id}
@@ -178,7 +238,8 @@ export function TransferEditForm({
             type="text"
             inputMode="decimal"
             placeholder="0.00"
-            defaultValue={amount}
+            value={amountInput}
+            onChange={(e) => setAmountInput(e.target.value)}
             required
           />
         </div>
@@ -190,10 +251,51 @@ export function TransferEditForm({
         </p>
       ) : null}
 
+      {isNonBaseCurrencyTransfer ? (
+        <div className="space-y-2">
+          <Label htmlFor={`exchange_rate_${transactionId}`}>
+            Exchange rate{' '}
+            <span className="font-normal text-muted-foreground">
+              (1 {baseCurrency} = ? {selectedFromAccount?.currency_code})
+            </span>
+          </Label>
+          <Input
+            id={`exchange_rate_${transactionId}`}
+            type="text"
+            inputMode="decimal"
+            placeholder={fetchingRate ? 'Fetching rate…' : 'e.g. 3800'}
+            value={userRate}
+            onChange={(e) => {
+              setUserRate(e.target.value)
+              setFxNote('')
+              setFxError('')
+            }}
+            disabled={fetchingRate}
+          />
+          {fxNote ? (
+            <p className="text-xs text-muted-foreground">{fxNote}</p>
+          ) : null}
+          {fxError ? (
+            <p className="text-xs text-destructive">{fxError}</p>
+          ) : null}
+          {conversionPreview() ? (
+            <p className="text-xs text-muted-foreground">
+              {conversionPreview()}{' '}
+              <span className="font-normal text-muted-foreground">at this rate</span>
+            </p>
+          ) : null}
+          {rateIsValid ? (
+            <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
+          ) : (
+            <input type="hidden" name="exchange_rate_to_base" value="" />
+          )}
+        </div>
+      ) : (
+        <input type="hidden" name="exchange_rate_to_base" value="1" />
+      )}
+
       <div className="space-y-2">
-        <Label htmlFor={`transfer_description_${transactionId}`}>
-          Description
-        </Label>
+        <Label htmlFor={`transfer_description_${transactionId}`}>Description</Label>
         <Input
           id={`transfer_description_${transactionId}`}
           name="description"
@@ -218,10 +320,7 @@ export function TransferEditForm({
         >
           Save transfer
         </SubmitButton>
-        <Link
-          href={cancelHref}
-          className={buttonVariants({ variant: 'outline' })}
-        >
+        <Link href={cancelHref} className={buttonVariants({ variant: 'outline' })}>
           Cancel
         </Link>
       </div>

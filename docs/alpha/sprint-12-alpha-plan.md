@@ -316,12 +316,37 @@ To compute the live preview, the amount inputs in `transaction-form.tsx` (`amoun
 
 Database impact: none (UI-only; no schema, RPC, or server action changes).
 
+### Sprint 12.17 — Edit Transfer FX Overload Fix (BF-023)
+
+Branch: `fix/bf-023-edit-transfer-overload` (or committed directly to main).
+
+**Root cause (two-part bug):**
+
+1. The BF-020 migration (`20260604000100_transfer_exchange_rate.sql`) used `CREATE OR REPLACE FUNCTION` with a new `p_exchange_rate_to_base` parameter. In PostgreSQL, adding a parameter creates a *new overload* rather than replacing the original — the old 8-param `update_transfer_transaction` still existed alongside the new 9-param version. PostgREST cannot resolve the ambiguity and returns an error on every edit-transfer call.
+
+2. Even if the overload had been resolved, `updateTransferTransactionAction` was not sending `p_exchange_rate_to_base`, so every edit would silently re-save `exchange_rate_to_base = 1` (the RPC default), re-introducing the BF-020 data regression on each edit.
+
+**Changes:**
+
+- **`supabase/migrations/20260607000100_drop_update_transfer_overload.sql`** — `DROP FUNCTION IF EXISTS` the old 8-param overload. The 9-param version (with `p_exchange_rate_to_base default 1`) remains as the sole implementation.
+- **`src/app/dashboard/transactions/transfer-edit-form.tsx`** — Added `baseCurrency` and `initialExchangeRateToBase` props. When `fromAccount.currency_code ≠ baseCurrency`, shows an exchange rate field with auto-fetch (via `fetchFxRate`) and a live conversion preview, pre-populated from the stored `exchange_rate_to_base` of the original entry (`userRate = 1 / initialExchangeRateToBase`). Submit is blocked until a valid rate is entered for non-base-currency transfers, matching the behavior of the create-transfer form.
+- **`src/app/dashboard/transactions/actions.ts`** — `updateTransferTransactionAction` now reads `exchange_rate_to_base` from `formData` and forwards it as `p_exchange_rate_to_base` to the RPC.
+- **`src/app/dashboard/transactions/page.tsx`** — `TransactionEntry` type and entries query now include `exchange_rate_to_base`. `TransferEditForm` receives `baseCurrency={household.base_currency}` and `initialExchangeRateToBase` from `transferOutEntry.exchange_rate_to_base`.
+
+Database impact: **Manual Supabase command required** — run the new migration in the Supabase SQL Editor:
+```sql
+DROP FUNCTION IF EXISTS public.update_transfer_transaction(
+  uuid, uuid, uuid, numeric, date, text, text, text
+);
+```
+
 ## Current remaining open issues
 
-After Sprints 12.4–12.16:
+After Sprints 12.4–12.17:
 
 | ID | Priority | Status | Next decision |
 |---|---:|---|---|
+| BF-023 | P1 | Fixed | [Sprint 12.17] Drop 8-param overload; add FX field to edit transfer form. |
 | BF-020 | P0 | Fixed | [Sprint 12.7] Transfer FX rate bug. |
 | BF-003 | P0 | Fixed | [Validated] Liability sign handling correct. |
 | BF-018 | P1 | Fixed | [Sprint 12.7] Account field preserved across type changes. |
@@ -339,6 +364,7 @@ After Sprints 12.4–12.16:
 | BF-001 | P2 | Fixed | [Sprint 12.16] Clearer "Exchange rate:" label, plain-language helper text, and live conversion preview in all 3 FX-rate forms. Full automatic FX/API remains Post-MVP. |
 | BF-017 | P3 | Fixed | [Sprint 12.12] Multi-select account/category filters. |
 | BF-008 | P3 | Fixed | [Sprint 12.12] Save & Add Next flow in transaction dialog. |
+| BF-022 | P3 | Open | Reconciliation flow — deferred to Beta. |
 
 **Dashboard enhancements (non-bug, same branch):**
 

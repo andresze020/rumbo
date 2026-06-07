@@ -66,6 +66,7 @@ type TransactionEntry = {
   account_id: string
   amount_account_currency: number | string
   currency_code: string
+  exchange_rate_to_base: number | string
 }
 
 type TransactionAllocation = {
@@ -373,7 +374,7 @@ export default async function TransactionsPage({
   if (transactionIds.length) {
     const { data: entries, error: entriesError } = await supabase
       .from('transaction_entries')
-      .select('transaction_id, account_id, amount_account_currency, currency_code')
+      .select('transaction_id, account_id, amount_account_currency, currency_code, exchange_rate_to_base')
       .eq('household_id', household.id)
       .in('transaction_id', transactionIds)
 
@@ -696,6 +697,8 @@ export default async function TransactionsPage({
               status={selectedEditRow.transaction.status}
               accounts={activeAccounts}
               returnTo={returnTo}
+              baseCurrency={household.base_currency}
+              initialExchangeRateToBase={Number(selectedEditRow.transferOutEntry.exchange_rate_to_base ?? 1)}
             />
           ) : null}
         </FormDialog>

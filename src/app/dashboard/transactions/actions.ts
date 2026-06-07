@@ -383,6 +383,7 @@ export async function updateTransferTransactionAction(formData: FormData) {
   const notes = String(formData.get('notes') ?? '').trim()
   const status = String(formData.get('status') ?? '').trim()
   const returnTo = String(formData.get('return_to') ?? '').trim()
+  const exchangeRateToBase = parsePositiveNumber(formData.get('exchange_rate_to_base'))
 
   if (!transactionId) {
     redirectWithTransactionError('Transaction id is required.', returnTo)
@@ -451,6 +452,7 @@ export async function updateTransferTransactionAction(formData: FormData) {
       p_description: description || null,
       p_notes: notes || null,
       p_status: status,
+      p_exchange_rate_to_base: exchangeRateToBase ?? 1,
     }
   )
 
