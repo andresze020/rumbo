@@ -4,6 +4,7 @@ import { LogOut, Plus, Wallet } from 'lucide-react'
 import { SubmitButton } from '@/components/submit-button'
 import { NavLinks } from '@/components/nav-links'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { MobileMenu } from './mobile-menu'
 import { signOutAction } from './session-actions'
 
@@ -38,17 +39,20 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <NavLinks links={dashboardLinks} />
             </div>
 
-            <form action={signOutAction} className="shrink-0">
-              <SubmitButton
-                type="submit"
-                variant="outline"
-                size="sm"
-                pendingText="Signing out"
-              >
-                <LogOut aria-hidden="true" />
-                Sign out
-              </SubmitButton>
-            </form>
+            <div className="flex shrink-0 items-center gap-2">
+              <ThemeToggle />
+              <form action={signOutAction}>
+                <SubmitButton
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  pendingText="Signing out"
+                >
+                  <LogOut aria-hidden="true" />
+                  Sign out
+                </SubmitButton>
+              </form>
+            </div>
           </div>
 
           <MobileMenu />

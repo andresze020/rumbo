@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { LogOut, Menu, Wallet } from 'lucide-react'
 import { SubmitButton } from '@/components/submit-button'
 import { NavLinks } from '@/components/nav-links'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { signOutAction } from './session-actions'
 
 const dashboardLinks = [
@@ -46,8 +47,8 @@ export function MobileMenu() {
 
       <NavLinks links={dashboardLinks} variant="mobile" />
 
-      <div className="mt-3 flex flex-col gap-2">
-        <form action={signOutAction}>
+      <div className="mt-3 flex items-center gap-2">
+        <form action={signOutAction} className="flex-1">
           <SubmitButton
             type="submit"
             variant="outline"
@@ -59,6 +60,7 @@ export function MobileMenu() {
             Sign out
           </SubmitButton>
         </form>
+        <ThemeToggle />
       </div>
     </details>
   )
