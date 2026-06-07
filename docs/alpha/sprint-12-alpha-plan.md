@@ -249,9 +249,56 @@ New dependency: `recharts@3.8.1`.
 
 Database impact: none for Sprint 12.14.
 
+### Sprint 12.15 — UI Revamp: Categories, Debts, Budgets, Net Worth, Transactions
+
+Branches: `claude/alpha-docs-pending-bugs-BAzGM` (transactions filters) + direct commits on `main` (categories, debts, budgets, net worth).
+
+A broad UI consistency pass removing `Card` wrappers across secondary dashboard pages, replacing them with section headers (`<h2 className="px-1 text-sm font-medium text-muted-foreground">`) and `divide-y rounded-lg border` lists — matching the pattern already used on Accounts/Transactions. Most list rows became accordion-style expand/collapse components (`useState` + animated `grid-rows-[1fr]/[0fr]` transition), keeping collapsed rows compact and pushing detail/actions into an expandable panel.
+
+**Categories**
+
+- Removed the redundant `category_type` badge from each row (the section header — Income/Expense/System — already communicates it).
+- `reporting_type` badge now only renders when it differs from `category_type`, cutting visual noise from rows where both tags were identical.
+- Moved the "System" badge out of the always-visible row and into the expanded detail panel (`category.is_system`), so the list isn't dominated by repeated "System" tags.
+
+**Debts** (new `debt-row.tsx`, new `debt-edit-form.tsx`)
+
+- Extracted each debt into an accordion `DebtRow` client component: collapsed view shows name, status badge, and outstanding balance; expanded view shows account info, 4 detail tiles (principal, rate, minimum payment, due day), paydown progress bar, notes, and Edit / Register payment actions.
+- Extracted the inline edit form into `DebtEditForm` (server component) for reuse and to declutter `page.tsx`.
+- `page.tsx` rewritten: removed `Card` imports, organized into Active/Inactive sections with `<h2>` headers and `divide-y rounded-lg border` lists. Payment form remains inline in `FormDialog` (too many page-level props to extract cleanly).
+
+**Budgets** (new `budget-line-row.tsx`)
+
+- Extracted each budget line into an accordion `BudgetLineRow`: collapsed view shows category name, status badge (On track / Near limit / Over budget), transaction count, actual vs. planned; expanded view shows progress bar, 4 detail tiles (Planned/Actual/Remaining/Used), notes, and Edit / **View transactions →** / Remove actions.
+- New **"View transactions →" link** (addresses suggestion #5 from Alpha follow-up): navigates to `/dashboard/transactions?category_id={id}&month={selectedMonth}`, pre-filtering the transactions list by that category and month directly from a budget line.
+- `page.tsx` rewritten: removed all `Card`/`CardContent`/`CardHeader` imports; add/edit line forms moved into `FormDialog`; "No budget for this month" now a dashed-border block instead of a `Card`.
+
+**Net Worth**
+
+- Removed `Card` wrappers from all four sections (summary, evolution, assets, liabilities, excluded).
+- Simplified `AccountList`: compact single row (name + type badge + archived badge + balance), base-currency balance only shown when the account currency differs from household base currency; removed redundant class/inclusion badges where the section already implies them.
+- Monthly evolution bar thinned to `h-1.5` to match the compact visual language used elsewhere.
+
+**Transactions** (new `transaction-filters.tsx`)
+
+Addressed Alpha follow-up suggestions #1 (text + merchant search) and #3 (flexible date range including full year), plus a UX fix for a reported issue where filters and metric cards consumed ~60% of the screen on mobile:
+
+- Extracted the filter form into a collapsible `TransactionFilters` client component. Collapsed by default (unless an advanced filter is already active, indicated by a badge count on the toggle button): shows just a search bar + sliders toggle + always-visible date-preset chips (This month, Last 30/60/90 days, This year).
+- Expanding reveals date from/to, type, status, multi-select account and category — preserved via hidden inputs when collapsed so a search-only submit doesn't clear active filters.
+- Added `date_from`/`date_to` query params with flexible custom ranges, falling back to the existing `month` param for backward compatibility with external links (account card "View transactions", budget line links).
+- Search (`ilike`) already covered `description`, `merchant_name`, and `notes`.
+- Replaced the 4 large `MetricCard`s (Visible/Pending/Voided/Imported, often showing 0) with a single compact stats line: `N transactions · <date range label> · X pending · X imported` (pending/imported only shown when > 0).
+
+**Logged but not implemented (per user direction):**
+
+- `BF-022` — Reconciliation flow (mark transactions as cleared against bank statements). Logged as P3/Deferred; candidate for Beta (v0.13), requires a schema migration.
+- Account/category reconciliation tooling — discussed as suggestion #4, kept optional/deferred.
+
+Database impact: none for Sprint 12.15 (UI-only changes).
+
 ## Current remaining open issues
 
-After Sprints 12.4–12.14:
+After Sprints 12.4–12.15:
 
 | ID | Priority | Status | Next decision |
 |---|---:|---|---|
@@ -281,6 +328,8 @@ After Sprints 12.4–12.14:
 | MoM deltas | 12.13 | Colored ↑/↓ deltas vs last month on all 4 monthly metric cards. |
 | Budget vs Actual | 12.13 | New dashboard card with per-category progress bars and total summary bar; links to filtered transactions. |
 | Trend charts | 12.14 | All 8 metric cards expand on tap to show 6-month area chart (lazy loaded). |
+| UI revamp (Cards → sections) | 12.15 | Categories badge cleanup, Debts/Budgets accordion rows + extracted forms, Net Worth compact account lists, Transactions collapsible filters + flexible date range + compact stats. |
+| Budget line → transactions link | 12.15 | "View transactions →" on each budget line pre-filters by category + month. |
 
 ## Recommended next phase — Beta Readiness (v0.13)
 
@@ -289,13 +338,13 @@ After Sprints 12.4–12.14:
 
 **Validation phase:**
 
-- Extended Alpha usage with all Sprints 12.7–12.14 fixes applied.
+- Extended Alpha usage with all Sprints 12.7–12.15 fixes applied.
 - Confirm balances still reconcile with AndroMoney/records.
 - No new critical bugs surface from real usage.
 
 **Decision point:**
 
-With all Alpha blockers, P1, and P3 issues resolved (Sprints 12.4–12.14), the app is ready for **Beta Readiness Planning (v0.13)** whenever validation confirms numbers are stable.
+With all Alpha blockers, P1, and P3 issues resolved (Sprints 12.4–12.15), the app is ready for **Beta Readiness Planning (v0.13)** whenever validation confirms numbers are stable.
 
 ## Real data privacy notes
 
