@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   LogOut,
   Scale,
+  Settings,
   Tag,
   Target,
   TrendingUp,
@@ -35,6 +36,7 @@ const secondaryLinks = [
   { href: '/dashboard/categories', label: 'Categories', icon: Tag },
   { href: '/dashboard/transactions/import', label: 'Import CSV', icon: Upload },
   { href: '/dashboard/export', label: 'Export', icon: Download },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ]
 
 type NavItemProps = {

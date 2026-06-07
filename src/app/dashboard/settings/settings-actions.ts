@@ -1,0 +1,91 @@
+'use server'
+
+import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
+import { createClient } from '@/lib/supabase/server'
+
+const VALID_CURRENCIES = ['CAD', 'USD', 'COP'] as const
+
+async function getAuthContext() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+  if (error || !user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('default_household_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (!profile?.default_household_id) redirect('/onboarding')
+
+  return { supabase, user, householdId: profile.default_household_id as string }
+}
+
+function redirectWithError(message: string): never {
+  redirect(`/dashboard/settings?error=${encodeURIComponent(message)}`)
+}
+
+export async function updateProfileAction(formData: FormData) {
+  const displayName = String(formData.get('display_name') ?? '').trim()
+
+  const { supabase, user } = await getAuthContext()
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ display_name: displayName || null })
+    .eq('id', user.id)
+
+  if (error) redirectWithError('Could not update profile. Please try again.')
+
+  revalidatePath('/dashboard/settings')
+  redirect('/dashboard/settings?saved=profile')
+}
+
+export async function updatePasswordAction(formData: FormData) {
+  const newPassword = String(formData.get('password') ?? '').trim()
+  const confirmPassword = String(formData.get('confirm_password') ?? '').trim()
+
+  if (!newPassword) redirectWithError('New password is required.')
+  if (newPassword.length < 8) redirectWithError('Password must be at least 8 characters.')
+  if (newPassword !== confirmPassword) redirectWithError('Passwords do not match.')
+
+  const { supabase } = await getAuthContext()
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+
+  if (error) redirectWithError('Could not update password. Please try again.')
+
+  redirect('/dashboard/settings?saved=password')
+}
+
+export async function updateHouseholdAction(formData: FormData) {
+  const name = String(formData.get('name') ?? '').trim()
+  const baseCurrency = String(formData.get('base_currency') ?? '').trim().toUpperCase()
+
+  if (!name) redirectWithError('Household name is required.')
+  if (!(VALID_CURRENCIES as readonly string[]).includes(baseCurrency)) {
+    redirectWithError('Select a valid base currency.')
+  }
+
+  const { supabase, householdId } = await getAuthContext()
+
+  const { error } = await supabase
+    .from('households')
+    .update({ name, base_currency: baseCurrency })
+    .eq('id', householdId)
+
+  if (error) redirectWithError('Could not update household. Please try again.')
+
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/settings')
+  redirect('/dashboard/settings?saved=household')
+}
+
+export async function signOutAllAction() {
+  const supabase = await createClient()
+  await supabase.auth.signOut({ scope: 'global' })
+  redirect('/login')
+}
