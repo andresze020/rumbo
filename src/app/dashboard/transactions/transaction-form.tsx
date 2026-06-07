@@ -53,6 +53,13 @@ function formatAccountLabel(account: TransactionFormAccount) {
     .join(' · ')
 }
 
+function formatCurrency(value: number | string, currencyCode: string) {
+  return new Intl.NumberFormat('en-CA', {
+    style: 'currency',
+    currency: currencyCode,
+  }).format(Number(value))
+}
+
 export function TransactionForm({
   accounts,
   baseCurrency,
@@ -71,6 +78,7 @@ export function TransactionForm({
   const [fromAccountId, setFromAccountId] = useState('')
   const [toAccountId, setToAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
+  const [amountInput, setAmountInput] = useState('')
   const [userRate, setUserRate] = useState('')
   const [fetchingRate, setFetchingRate] = useState(false)
   const [fxNote, setFxNote] = useState('')
@@ -84,6 +92,14 @@ export function TransactionForm({
   const rateIsValid =
     userRate.trim() !== '' && Number.isFinite(parsedRate) && parsedRate > 0
   const exchangeRateToBase = rateIsValid ? String(1 / parsedRate) : ''
+  const parsedAmount = Number(amountInput)
+  const amountIsValid =
+    amountInput.trim() !== '' && Number.isFinite(parsedAmount) && parsedAmount !== 0
+
+  function conversionPreview(foreignCurrency: string | undefined) {
+    if (!foreignCurrency || !rateIsValid || !amountIsValid) return null
+    return `${formatCurrency(parsedAmount, foreignCurrency)} ≈ ${formatCurrency(parsedAmount / parsedRate, baseCurrency)}`
+  }
 
   const compatibleCategories = useMemo(
     () =>
@@ -259,13 +275,17 @@ export function TransactionForm({
           ) : isTransferNonBaseCurrency ? (
             <div className="space-y-2">
               <Label htmlFor="user_rate">
-                1 {baseCurrency} = ? {selectedFromAccount?.currency_code}
+                Exchange rate: 1 {baseCurrency} = ? {selectedFromAccount?.currency_code}
                 {fetchingRate ? (
                   <span className="ml-2 text-xs font-normal text-muted-foreground">
                     Fetching rate…
                   </span>
                 ) : null}
               </Label>
+              <p className="text-xs text-muted-foreground">
+                Enter how many {selectedFromAccount?.currency_code} make up 1 {baseCurrency}.
+                This converts the transfer amount into {baseCurrency} for your reports and totals.
+              </p>
               <div className="flex gap-2">
                 <Input
                   id="user_rate"
@@ -302,6 +322,12 @@ export function TransactionForm({
                   Auto-filled for {transactionDate}. Edit if needed.
                 </p>
               )}
+              {conversionPreview(selectedFromAccount?.currency_code) ? (
+                <p className="text-xs font-medium text-foreground">
+                  {conversionPreview(selectedFromAccount?.currency_code)}{' '}
+                  <span className="font-normal text-muted-foreground">at this rate</span>
+                </p>
+              ) : null}
               <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
             </div>
           ) : (
@@ -345,7 +371,16 @@ export function TransactionForm({
 
       <div className="space-y-2">
         <Label htmlFor="amount">Amount</Label>
-        <Input id="amount" name="amount" type="text" inputMode="decimal" placeholder="0.00" required />
+        <Input
+          id="amount"
+          name="amount"
+          type="text"
+          inputMode="decimal"
+          placeholder="0.00"
+          value={amountInput}
+          onChange={(e) => setAmountInput(e.target.value)}
+          required
+        />
       </div>
 
       <div className="space-y-2">
@@ -377,13 +412,17 @@ export function TransactionForm({
         isMultiCurrency ? (
           <div className="space-y-2">
             <Label htmlFor="user_rate">
-              1 {baseCurrency} = ? {selectedAccount?.currency_code}
+              Exchange rate: 1 {baseCurrency} = ? {selectedAccount?.currency_code}
               {fetchingRate ? (
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
                   Fetching rate…
                 </span>
               ) : null}
             </Label>
+            <p className="text-xs text-muted-foreground">
+              Enter how many {selectedAccount?.currency_code} make up 1 {baseCurrency}. This
+              converts the amount into {baseCurrency} for your reports and totals.
+            </p>
             <div className="flex gap-2">
               <Input
                 id="user_rate"
@@ -420,6 +459,12 @@ export function TransactionForm({
                 Auto-filled for {transactionDate}. Edit if needed.
               </p>
             )}
+            {conversionPreview(selectedAccount?.currency_code) ? (
+              <p className="text-xs font-medium text-foreground">
+                {conversionPreview(selectedAccount?.currency_code)}{' '}
+                <span className="font-normal text-muted-foreground">at this rate</span>
+              </p>
+            ) : null}
             <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
           </div>
         ) : (

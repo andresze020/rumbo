@@ -17,6 +17,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
+function formatCurrency(value: number | string, currencyCode: string) {
+  return new Intl.NumberFormat('en-CA', {
+    style: 'currency',
+    currency: currencyCode,
+  }).format(Number(value))
+}
+
 export function OpeningBalanceForm({
   accountId,
   accountClass,
@@ -48,6 +55,11 @@ export function OpeningBalanceForm({
   const parsedRate = Number(userRate)
   const rateIsValid =
     userRate.trim() !== '' && Number.isFinite(parsedRate) && parsedRate > 0
+  const parsedAmount = Number(balanceInput)
+  const conversionPreview =
+    rateIsValid && balanceInput.trim() !== '' && Number.isFinite(parsedAmount) && parsedAmount !== 0
+      ? `${formatCurrency(parsedAmount, accountCurrency)} ≈ ${formatCurrency(parsedAmount / parsedRate, baseCurrency)}`
+      : null
 
   useEffect(() => {
     if (!isMultiCurrency) return
@@ -168,13 +180,18 @@ export function OpeningBalanceForm({
         {isMultiCurrency ? (
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor={`rate_${accountId}`}>
-              1 {baseCurrency} = ? {accountCurrency}
+              Exchange rate: 1 {baseCurrency} = ? {accountCurrency}
               {fetchingRate ? (
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
                   Fetching rate…
                 </span>
               ) : null}
             </Label>
+            <p className="text-xs text-muted-foreground">
+              Enter how many {accountCurrency} make up 1 {baseCurrency}. This converts the
+              {' '}{accountClass === 'liability' ? 'amount owed' : 'amount'} above into{' '}
+              {baseCurrency} for your net worth and reports.
+            </p>
             <div className="flex gap-2">
               <Input
                 id={`rate_${accountId}`}
@@ -208,6 +225,11 @@ export function OpeningBalanceForm({
                 Auto-filled for {balanceDate}. Edit if needed.
               </p>
             )}
+            {conversionPreview ? (
+              <p className="text-xs font-medium text-foreground">
+                {conversionPreview} <span className="font-normal text-muted-foreground">at this rate</span>
+              </p>
+            ) : null}
             {rateIsValid ? (
               <input
                 type="hidden"

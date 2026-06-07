@@ -296,9 +296,29 @@ Addressed Alpha follow-up suggestions #1 (text + merchant search) and #3 (flexib
 
 Database impact: none for Sprint 12.15 (UI-only changes).
 
+### Sprint 12.16 — Multi-currency FX Rate Clarity (BF-001)
+
+Branch: `fix/bf-001-multicurrency-fx-labels`.
+
+Per the bug log's "Next decision" for BF-001 ("Do not build full automatic FX yet. First clarify labels/helper text and debt FX handling if low-risk"), this sprint clarified the exchange-rate UX in the three places it appears — **without** adding automatic FX lookups beyond the existing `fetchFxRate` auto-fill:
+
+- **Clearer label**: changed from `1 {base} = ? {currency}` to `Exchange rate: 1 {base} = ? {currency}` so the field reads as a labeled rate input rather than a bare equation.
+- **Plain-language helper sentence** added under each label explaining what the number means in context (e.g., "Enter how many COP make up 1 CAD. This converts the amount into CAD for your reports and totals"), tailored per form (account opening balance, transaction/transfer amount, debt outstanding balance).
+- **Live conversion preview**: a real-time line below the rate field — e.g. `$1,000,000 COP ≈ $371.75 CAD at this rate` — computed from the entered amount and rate as the user types (`amountInBase = amountInForeignCurrency / rate`, matching the existing `exchange_rate_to_base = 1 / rate` storage convention). This directly targets the bug's "Expected result" of making the rate's effect on base-currency totals concrete and verifiable, helping users catch direction-reversal mistakes before saving.
+
+Applied consistently to all 3 forms that collect a manual FX rate:
+
+- `opening-balance-form.tsx` (account opening balances) — also addresses the "debt FX handling" angle indirectly since debts backed by a new liability account go through this same opening-balance flow.
+- `transaction-form.tsx` (multi-currency income/expense, and cross-currency-safe transfers).
+- `debt-create-form.tsx` (new debt with a new liability account in a non-base currency).
+
+To compute the live preview, the amount inputs in `transaction-form.tsx` (`amount`) and `debt-create-form.tsx` (`opening_balance_amount`) were converted from uncontrolled to controlled inputs (`opening-balance-form.tsx` already tracked its amount in state). A small local `formatCurrency` helper (`Intl.NumberFormat` with `style: 'currency'`) was added to each form, following the existing per-file convention already used in `page.tsx`/`debt-row.tsx`/etc. (no shared formatter existed in the codebase).
+
+Database impact: none (UI-only; no schema, RPC, or server action changes).
+
 ## Current remaining open issues
 
-After Sprints 12.4–12.15:
+After Sprints 12.4–12.16:
 
 | ID | Priority | Status | Next decision |
 |---|---:|---|---|
@@ -316,7 +336,7 @@ After Sprints 12.4–12.15:
 | BF-016 | P2 | Fixed | [Sprint 12.9] View transactions link inside expanded account card. |
 | BF-021 | P2 | Fixed | [Sprint 12.9] Account card expand/collapse with animation. |
 | BF-005 | P2 | Fixed | [Sprint 12.10] Smart suggestion when setting negative cash balance. |
-| BF-001 | P2 | Open | Multi-currency UX friction (labels/helper text). FX API is Post-MVP. |
+| BF-001 | P2 | Fixed | [Sprint 12.16] Clearer "Exchange rate:" label, plain-language helper text, and live conversion preview in all 3 FX-rate forms. Full automatic FX/API remains Post-MVP. |
 | BF-017 | P3 | Fixed | [Sprint 12.12] Multi-select account/category filters. |
 | BF-008 | P3 | Fixed | [Sprint 12.12] Save & Add Next flow in transaction dialog. |
 
@@ -330,6 +350,7 @@ After Sprints 12.4–12.15:
 | Trend charts | 12.14 | All 8 metric cards expand on tap to show 6-month area chart (lazy loaded). |
 | UI revamp (Cards → sections) | 12.15 | Categories badge cleanup, Debts/Budgets accordion rows + extracted forms, Net Worth compact account lists, Transactions collapsible filters + flexible date range + compact stats. |
 | Budget line → transactions link | 12.15 | "View transactions →" on each budget line pre-filters by category + month. |
+| FX rate clarity (BF-001) | 12.16 | "Exchange rate:" label, plain-language helper text, and live conversion preview in opening-balance, transaction/transfer, and debt-creation forms. |
 
 ## Recommended next phase — Beta Readiness (v0.13)
 
@@ -338,13 +359,13 @@ After Sprints 12.4–12.15:
 
 **Validation phase:**
 
-- Extended Alpha usage with all Sprints 12.7–12.15 fixes applied.
+- Extended Alpha usage with all Sprints 12.7–12.16 fixes applied.
 - Confirm balances still reconcile with AndroMoney/records.
 - No new critical bugs surface from real usage.
 
 **Decision point:**
 
-With all Alpha blockers, P1, and P3 issues resolved (Sprints 12.4–12.15), the app is ready for **Beta Readiness Planning (v0.13)** whenever validation confirms numbers are stable.
+With all Alpha blockers, P1, and P3 issues resolved (Sprints 12.4–12.16), the app is ready for **Beta Readiness Planning (v0.13)** whenever validation confirms numbers are stable.
 
 ## Real data privacy notes
 
