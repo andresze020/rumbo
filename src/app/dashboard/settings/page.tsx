@@ -20,8 +20,6 @@ import {
   updateProfileAction,
 } from './settings-actions'
 
-const selectClassName =
-  'h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 type Props = {
   searchParams: Promise<Record<string, string | undefined>>
@@ -152,17 +150,13 @@ export default async function SettingsPage({ searchParams }: Props) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="base_currency">Base currency</Label>
-              <select
-                id="base_currency"
-                name="base_currency"
-                defaultValue={household?.base_currency ?? 'CAD'}
-                className={selectClassName}
-              >
-                <option value="CAD">CAD — Canadian Dollar</option>
-                <option value="USD">USD — US Dollar</option>
-                <option value="COP">COP — Colombian Peso</option>
-              </select>
+              <Label>Base currency</Label>
+              <p className="rounded-lg border border-input bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                {household?.base_currency ?? '—'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                The base currency is set at household creation. Changing it would invalidate all stored balance calculations and requires a full data migration.
+              </p>
             </div>
             <SubmitButton type="submit" size="sm" pendingText="Saving…">
               Save household
