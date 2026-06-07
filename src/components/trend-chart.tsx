@@ -1,14 +1,38 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import { useTheme } from 'next-themes'
 import {
-  AreaChart,
   Area,
+  AreaChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  Tooltip,
-  ResponsiveContainer,
 } from 'recharts'
 import type { TrendPoint } from '@/app/dashboard/trend-actions'
+
+// Reads CSS custom properties at runtime so Recharts SVG attributes
+// get resolved color values instead of unresolved var() strings.
+function useChartColors() {
+  const { resolvedTheme } = useTheme()
+  const [colors, setColors] = useState({
+    primary: 'oklch(0.546 0.245 262.881)',
+    muted: 'oklch(0.556 0 0)',
+  })
+
+  useEffect(() => {
+    const style = getComputedStyle(document.documentElement)
+    const primary = style.getPropertyValue('--primary').trim()
+    const muted = style.getPropertyValue('--muted-foreground').trim()
+    setColors({
+      primary: primary || 'oklch(0.546 0.245 262.881)',
+      muted: muted || 'oklch(0.556 0 0)',
+    })
+  }, [resolvedTheme])
+
+  return colors
+}
 
 type TrendChartProps = {
   data: TrendPoint[]
@@ -57,6 +81,8 @@ function CustomTooltip({
 }
 
 export function TrendChart({ data, currency, formatAs, gradientId }: TrendChartProps) {
+  const { primary, muted } = useChartColors()
+
   const values = data.map((d) => d.value)
   const min = Math.min(...values)
   const max = Math.max(...values)
@@ -70,13 +96,13 @@ export function TrendChart({ data, currency, formatAs, gradientId }: TrendChartP
       <AreaChart data={data} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+            <stop offset="5%" style={{ stopColor: primary, stopOpacity: 0.25 }} />
+            <stop offset="95%" style={{ stopColor: primary, stopOpacity: 0 }} />
           </linearGradient>
         </defs>
         <XAxis
           dataKey="label"
-          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+          tick={{ fontSize: 10, fill: muted }}
           axisLine={false}
           tickLine={false}
           interval={0}
@@ -84,16 +110,16 @@ export function TrendChart({ data, currency, formatAs, gradientId }: TrendChartP
         <YAxis domain={yDomain} hide />
         <Tooltip
           content={<CustomTooltip currency={currency} formatAs={formatAs} />}
-          cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '3 3' }}
+          cursor={{ stroke: muted, strokeWidth: 1, strokeDasharray: '3 3' }}
         />
         <Area
           type="monotone"
           dataKey="value"
-          stroke="hsl(var(--primary))"
+          stroke={primary}
           strokeWidth={2}
           fill={`url(#${gradientId})`}
           dot={false}
-          activeDot={{ r: 3, fill: 'hsl(var(--primary))' }}
+          activeDot={{ r: 3, fill: primary }}
         />
       </AreaChart>
     </ResponsiveContainer>
