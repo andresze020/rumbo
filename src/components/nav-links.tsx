@@ -52,11 +52,12 @@ export function NavLinks({
         <Link
           key={link.href}
           href={link.href}
+          aria-current={isActive(link.href) ? 'page' : undefined}
           className={cn(
-            'shrink-0 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors',
+            'shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors',
             isActive(link.href)
-              ? 'text-primary'
-              : 'text-muted-foreground hover:text-foreground'
+              ? 'bg-primary/10 text-primary'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
           )}
         >
           {link.label}

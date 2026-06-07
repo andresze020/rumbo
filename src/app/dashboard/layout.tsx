@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Suspense, type ReactNode } from 'react'
-import { LogOut, Plus } from 'lucide-react'
+import { LogOut, Plus, Wallet } from 'lucide-react'
 import { SubmitButton } from '@/components/submit-button'
 import { NavLinks } from '@/components/nav-links'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
@@ -22,14 +22,17 @@ const dashboardLinks = [
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-b-primary/15 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3 sm:px-6">
           <div className="hidden items-center justify-between gap-4 lg:flex">
-            <div className="flex min-w-0 items-center gap-4">
+            <div className="flex min-w-0 items-center gap-5">
               <Link
                 href="/dashboard"
-                className="shrink-0 text-sm font-semibold text-foreground"
+                className="flex shrink-0 items-center gap-2 text-sm font-semibold text-foreground"
               >
+                <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <Wallet className="size-4" aria-hidden="true" />
+                </span>
                 App Finanzas
               </Link>
               <NavLinks links={dashboardLinks} />

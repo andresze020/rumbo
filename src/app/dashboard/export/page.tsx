@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { PageHeader } from '@/components/page-header'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function ExportPage() {
@@ -41,13 +42,11 @@ export default async function ExportPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <div>
-        <p className="text-sm text-muted-foreground">{household.name}</p>
-        <h1 className="text-2xl font-semibold tracking-normal">Export CSV</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Download household data as UTF-8 CSV files.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow={household.name}
+        title="Export CSV"
+        description="Download household data as UTF-8 CSV files."
+      />
 
       <ExportDownloadClient />
 

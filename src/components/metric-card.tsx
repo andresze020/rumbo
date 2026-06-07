@@ -6,10 +6,10 @@ import { ChevronDown } from 'lucide-react'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import { getDashboardTrend, type TrendMetric, type TrendPoint } from '@/app/dashboard/trend-actions'
 
 const TrendChart = dynamic(
@@ -23,8 +23,14 @@ const TrendChart = dynamic(
 type MetricCardProps = {
   label: string
   value: ReactNode
-  description: string
+  description?: string
   delta?: ReactNode
+  /** Optional glyph shown in a tinted tile next to the label. */
+  icon?: ReactNode
+  /** Tailwind classes for the icon tile (bg + text). */
+  accent?: string
+  /** Color treatment for the value text. */
+  valueClassName?: string
   trendMetric?: TrendMetric
   currentMonth?: string
   currency?: string
@@ -35,6 +41,9 @@ export function MetricCard({
   value,
   description,
   delta,
+  icon,
+  accent = 'bg-primary/10 text-primary',
+  valueClassName,
   trendMetric,
   currentMonth,
   currency = 'CAD',
@@ -72,8 +81,23 @@ export function MetricCard({
   const header = (
     <>
       <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-sm font-medium leading-snug">{label}</CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {icon ? (
+              <span
+                className={cn(
+                  'flex size-8 shrink-0 items-center justify-center rounded-lg [&_svg]:size-4',
+                  accent
+                )}
+                aria-hidden="true"
+              >
+                {icon}
+              </span>
+            ) : null}
+            <CardTitle className="truncate text-sm font-medium leading-snug text-muted-foreground">
+              {label}
+            </CardTitle>
+          </div>
           {hasTrend ? (
             <ChevronDown
               className={`size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
@@ -81,17 +105,21 @@ export function MetricCard({
             />
           ) : null}
         </div>
-        <CardDescription className="text-xs">{description}</CardDescription>
       </CardHeader>
       <CardContent className="pt-0">
-        <p className="text-2xl font-semibold tabular-nums">{value}</p>
-        {delta ? <div className="mt-1">{delta}</div> : null}
+        <p className={cn('text-2xl font-semibold tracking-tight tabular-nums', valueClassName)}>
+          {value}
+        </p>
+        {delta ? <div className="mt-1.5">{delta}</div> : null}
+        {description ? (
+          <p className="mt-1.5 text-xs text-muted-foreground">{description}</p>
+        ) : null}
       </CardContent>
     </>
   )
 
   return (
-    <Card className="border-t-2 border-t-primary/50">
+    <Card className="transition-shadow hover:shadow-md">
       {hasTrend ? (
         <button
           type="button"

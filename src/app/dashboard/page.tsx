@@ -1,5 +1,15 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  PiggyBank,
+  Percent,
+  Scale,
+  Sparkles,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -13,8 +23,20 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { MetricCard } from '@/components/metric-card'
+import { PageHeader } from '@/components/page-header'
+import { SectionHeading } from '@/components/section-heading'
+import { Callout } from '@/components/callout'
+import { AccountAvatar } from '@/components/account-avatar'
 import { AccountCardDetails } from './accounts/account-card-details'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
+
+const ACCENT = {
+  emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+  rose: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
+  sky: 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400',
+  violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
+  primary: 'bg-primary/10 text-primary',
+} as const
 
 type AccountBalance = {
   account_id: string
@@ -396,26 +418,39 @@ export default async function DashboardPage({
       value: totalAssets,
       description: 'Posted asset balances at month end',
       trendMetric: 'total-assets' as const,
+      icon: <Wallet />,
+      accent: ACCENT.emerald,
+      valueClassName: undefined as string | undefined,
     },
     {
       label: 'Total liabilities',
       value: totalLiabilities,
       description: 'Posted liability balances at month end',
       trendMetric: 'total-liabilities' as const,
+      icon: <Scale />,
+      accent: ACCENT.rose,
+      valueClassName: undefined as string | undefined,
     },
     {
       label: 'Net worth',
       value: netWorth,
       description: 'Posted included balances at month end',
       trendMetric: 'net-worth' as const,
+      icon: <TrendingUp />,
+      accent: ACCENT.primary,
+      valueClassName: netWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined,
     },
     {
       label: 'Projected net worth',
       value: projectedNetWorth,
       description: 'Posted plus pending at month end',
       trendMetric: 'projected-net-worth' as const,
+      icon: <Sparkles />,
+      accent: ACCENT.violet,
+      valueClassName: projectedNetWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined,
     },
   ]
+  const monthlySavings = Number(monthlySummary?.monthly_savings ?? 0)
   const monthlyCards = [
     {
       label: 'Monthly income',
@@ -428,6 +463,9 @@ export default async function DashboardPage({
       ),
       delta: renderDelta(incomeDelta, dashboardCurrency, false),
       trendMetric: 'monthly-income' as const,
+      icon: <ArrowUpRight />,
+      accent: ACCENT.emerald,
+      valueClassName: undefined as string | undefined,
     },
     {
       label: 'Monthly expenses',
@@ -443,6 +481,9 @@ export default async function DashboardPage({
       ),
       delta: renderDelta(expensesDelta, dashboardCurrency, true),
       trendMetric: 'monthly-expenses' as const,
+      icon: <ArrowDownRight />,
+      accent: ACCENT.rose,
+      valueClassName: undefined as string | undefined,
     },
     {
       label: 'Monthly savings',
@@ -455,6 +496,9 @@ export default async function DashboardPage({
       description: 'Income minus expenses',
       delta: renderDelta(savingsDelta, dashboardCurrency, false),
       trendMetric: 'monthly-savings' as const,
+      icon: <PiggyBank />,
+      accent: ACCENT.sky,
+      valueClassName: monthlySavings < 0 ? 'text-red-600 dark:text-red-400' : undefined,
     },
     {
       label: 'Savings rate',
@@ -462,6 +506,9 @@ export default async function DashboardPage({
       description: 'Savings divided by income',
       delta: renderRateDelta(savingsRateDelta),
       trendMetric: 'savings-rate' as const,
+      icon: <Percent />,
+      accent: ACCENT.violet,
+      valueClassName: undefined as string | undefined,
     },
   ]
   const largestExpenseCategory = expenseCategories.reduce(
@@ -482,52 +529,58 @@ export default async function DashboardPage({
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">{household.name}</p>
-          <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {formatMonthLabel(selectedMonth)}
-          </p>
-        </div>
-
-        <form action="/dashboard" className="flex items-end gap-2">
-          <div className="grid gap-1">
-            <Label htmlFor="month" className="text-xs text-muted-foreground">Month</Label>
-            <Input
-              id="month"
-              type="month"
-              name="month"
-              defaultValue={selectedMonth}
-              className="h-8 text-sm"
-            />
-          </div>
-          <Button type="submit" variant="outline" size="sm">View</Button>
-        </form>
-      </div>
+      <PageHeader
+        eyebrow={household.name}
+        title="Dashboard"
+        description={`Your money in ${formatMonthLabel(selectedMonth)}`}
+        actions={
+          <form action="/dashboard" className="flex items-end gap-2">
+            <div className="grid gap-1">
+              <Label htmlFor="month" className="text-xs text-muted-foreground">Month</Label>
+              <Input
+                id="month"
+                type="month"
+                name="month"
+                defaultValue={selectedMonth}
+                className="h-8 text-sm"
+              />
+            </div>
+            <Button type="submit" variant="outline" size="sm">View</Button>
+          </form>
+        }
+      />
 
       {/* ── Errors ─────────────────────────────────────────────────────── */}
       {(accountBalancesError || monthlySummaryError || expenseCategoriesError || categoryLookupError) ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <Callout variant="error">
           Could not load some dashboard data. Try refreshing the page.
-        </div>
+        </Callout>
       ) : null}
 
       {/* ── Financial position ─────────────────────────────────────────── */}
       {!accountBalancesError && balances.length ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {summaryCards.map((summary) => (
-            <MetricCard
-              key={summary.label}
-              label={summary.label}
-              value={formatCurrency(summary.value, household.base_currency)}
-              description={summary.description}
-              trendMetric={summary.trendMetric}
-              currentMonth={selectedMonth}
-              currency={household.base_currency}
-            />
-          ))}
-        </div>
+        <section className="space-y-3">
+          <SectionHeading
+            title="Financial position"
+            description="Where you stand at the end of the selected month."
+          />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {summaryCards.map((summary) => (
+              <MetricCard
+                key={summary.label}
+                label={summary.label}
+                value={formatCurrency(summary.value, household.base_currency)}
+                description={summary.description}
+                icon={summary.icon}
+                accent={summary.accent}
+                valueClassName={summary.valueClassName}
+                trendMetric={summary.trendMetric}
+                currentMonth={selectedMonth}
+                currency={household.base_currency}
+              />
+            ))}
+          </div>
+        </section>
       ) : null}
 
       {!accountBalancesError && !balances.length ? (
@@ -549,25 +602,34 @@ export default async function DashboardPage({
       {/* ── Monthly activity ───────────────────────────────────────────── */}
       {!monthlySummaryError && !expenseCategoriesError ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {monthlyCards.map((summary) => (
-              <MetricCard
-                key={summary.label}
-                label={summary.label}
-                value={summary.value}
-                description={summary.description}
-                delta={summary.delta}
-                trendMetric={summary.trendMetric}
-                currentMonth={selectedMonth}
-                currency={dashboardCurrency}
-              />
-            ))}
-          </div>
+          <section className="space-y-3">
+            <SectionHeading
+              title="This month"
+              description="Income, spending and savings for the selected month."
+            />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {monthlyCards.map((summary) => (
+                <MetricCard
+                  key={summary.label}
+                  label={summary.label}
+                  value={summary.value}
+                  description={summary.description}
+                  delta={summary.delta}
+                  icon={summary.icon}
+                  accent={summary.accent}
+                  valueClassName={summary.valueClassName}
+                  trendMetric={summary.trendMetric}
+                  currentMonth={selectedMonth}
+                  currency={dashboardCurrency}
+                />
+              ))}
+            </div>
+          </section>
 
           {!hasMonthlyActivity ? (
-            <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+            <Callout variant="info" className="border-dashed text-muted-foreground">
               No posted income or expense activity for {formatMonthLabel(selectedMonth)}.
-            </p>
+            </Callout>
           ) : null}
 
           {/* ── Budget vs Actual ─────────────────────────────────────── */}
@@ -761,25 +823,27 @@ export default async function DashboardPage({
                       accountId={account.account_id}
                       summaryLeft={
                         <>
-                          {meta?.color ? (
-                            <span
-                              className="size-2.5 shrink-0 rounded-full border"
-                              style={{ backgroundColor: meta.color }}
-                              aria-hidden="true"
-                            />
-                          ) : null}
-                          {meta?.icon ? (
-                            <span className="text-sm leading-none" aria-hidden="true">
-                              {meta.icon}
-                            </span>
-                          ) : null}
-                          <span className="font-medium text-sm">{account.account_name}</span>
-                          <Badge variant="secondary" className="text-xs">
-                            {formatLabel(account.account_type)}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {account.currency_code}
-                          </Badge>
+                          <AccountAvatar
+                            accountType={account.account_type}
+                            emoji={meta?.icon}
+                            color={meta?.color}
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{account.account_name}</p>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <Badge variant="secondary" className="text-[11px]">
+                                {formatLabel(account.account_type)}
+                              </Badge>
+                              <Badge variant="outline" className="text-[11px]">
+                                {account.currency_code}
+                              </Badge>
+                              {isLiability ? (
+                                <Badge variant="outline" className="border-rose-200 text-[11px] text-rose-600 dark:border-rose-900 dark:text-rose-400">
+                                  Liability
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </div>
                         </>
                       }
                       balanceLabel={formatCurrency(

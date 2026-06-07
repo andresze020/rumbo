@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { FolderTree, Layers, Plus, Settings, Tag } from 'lucide-react'
 import { CategoryForm } from './category-form'
 import { CategoryRow } from './category-row'
 import { createClient } from '@/lib/supabase/server'
@@ -7,6 +8,9 @@ import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
+import { PageHeader } from '@/components/page-header'
+import { SectionHeading } from '@/components/section-heading'
+import { Callout } from '@/components/callout'
 
 type CategoriesPageProps = {
   searchParams: Promise<{
@@ -207,63 +211,42 @@ export default async function CategoriesPage({
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">{household.name}</p>
-          <h1 className="text-2xl font-semibold tracking-normal">Categories</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Manage household categories and reporting behavior.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={categoriesPath({
-              showArchived,
-              categoryType: categoryTypeFilter,
-              mode: 'create',
-            })}
-            className={buttonVariants({ size: 'sm' })}
-          >
-            Create category
-          </Link>
-          <Link
-            href={categoriesPath({
-              showArchived: !showArchived,
-              categoryType: categoryTypeFilter,
-            })}
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            {showArchived ? 'Hide archived' : 'Show archived'}
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow={household.name}
+        title="Categories"
+        description="Manage household categories and reporting behavior."
+        actions={
+          <>
+            <Link
+              href={categoriesPath({
+                showArchived,
+                categoryType: categoryTypeFilter,
+                mode: 'create',
+              })}
+              className={buttonVariants({ size: 'sm' })}
+            >
+              <Plus aria-hidden="true" />
+              Create category
+            </Link>
+            <Link
+              href={categoriesPath({
+                showArchived: !showArchived,
+                categoryType: categoryTypeFilter,
+              })}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              {showArchived ? 'Hide archived' : 'Show archived'}
+            </Link>
+          </>
+        }
+      />
 
       {/* ── Notifications ──────────────────────────────────────────────── */}
-      {errorMessage ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {errorMessage}
-        </div>
-      ) : null}
-      {params.created === '1' ? (
-        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-          Category created.
-        </div>
-      ) : null}
-      {params.updated === '1' ? (
-        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-          Category updated.
-        </div>
-      ) : null}
-      {params.archived === '1' ? (
-        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-          Category archived.
-        </div>
-      ) : null}
-      {params.unarchived === '1' ? (
-        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-          Category restored.
-        </div>
-      ) : null}
+      {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
+      {params.created === '1' ? <Callout variant="success">Category created.</Callout> : null}
+      {params.updated === '1' ? <Callout variant="success">Category updated.</Callout> : null}
+      {params.archived === '1' ? <Callout variant="info">Category archived.</Callout> : null}
+      {params.unarchived === '1' ? <Callout variant="success">Category restored.</Callout> : null}
 
       {/* ── Type filter tabs ───────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2">
@@ -291,21 +274,29 @@ export default async function CategoriesPage({
               ? 'All types'
               : `${formatValue(categoryTypeFilter)} categories`
           }
+          icon={<Tag />}
+          accent="bg-primary/10 text-primary"
         />
         <MetricCard
           label="Root categories"
           value={String(rootCount)}
           description="Top-level categories"
+          icon={<FolderTree />}
+          accent="bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400"
         />
         <MetricCard
           label="Subcategories"
           value={String(subcategoryCount)}
           description="Nested under parents"
+          icon={<Layers />}
+          accent="bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
         />
         <MetricCard
           label="System / excluded"
           value={`${systemCount} / ${excludedCount}`}
           description="System or excluded from reports"
+          icon={<Settings />}
+          accent="bg-muted text-muted-foreground"
         />
       </div>
 
@@ -345,21 +336,17 @@ export default async function CategoriesPage({
 
       {/* ── Category list ──────────────────────────────────────────────── */}
       {categoriesError ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Could not load categories. Try refreshing.
-        </div>
+        <Callout variant="error">Could not load categories. Try refreshing.</Callout>
       ) : categoryGroups.length ? (
-        <div className="space-y-5">
+        <div className="space-y-6">
           {categoryGroups.map((group) => {
             const hierarchy = buildCategoryHierarchy(group.categories)
 
             return (
-              <section key={group.value} className="space-y-1.5">
-                <h2 className="px-1 text-sm font-medium text-muted-foreground">
-                  {group.label}
-                </h2>
+              <section key={group.value} className="space-y-3">
+                <SectionHeading title={group.label} />
 
-                <div className="divide-y rounded-lg border">
+                <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
                   {hierarchy.roots.map((category) => {
                     const children =
                       hierarchy.childrenByParentId.get(category.id) ?? []

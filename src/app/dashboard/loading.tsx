@@ -12,7 +12,7 @@ function SkeletonCard({ title }: { title: string }) {
         <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-7 w-32 rounded-lg bg-muted" />
+        <div className="h-7 w-32 animate-pulse rounded-lg bg-muted" />
       </CardContent>
     </Card>
   )
@@ -23,10 +23,10 @@ export default function DashboardLoading() {
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
-          <div className="h-4 w-28 rounded-lg bg-muted" />
-          <div className="h-8 w-40 rounded-lg bg-muted" />
+          <div className="h-4 w-28 animate-pulse rounded-lg bg-muted" />
+          <div className="h-8 w-40 animate-pulse rounded-lg bg-muted" />
         </div>
-        <div className="h-9 w-44 rounded-lg bg-muted" />
+        <div className="h-9 w-44 animate-pulse rounded-lg bg-muted" />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -41,9 +41,9 @@ export default function DashboardLoading() {
           <CardTitle>Expenses by category</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="h-12 rounded-lg bg-muted" />
-          <div className="h-12 rounded-lg bg-muted" />
-          <div className="h-12 rounded-lg bg-muted" />
+          <div className="h-12 animate-pulse rounded-lg bg-muted" />
+          <div className="h-12 animate-pulse rounded-lg bg-muted" />
+          <div className="h-12 animate-pulse rounded-lg bg-muted" />
         </CardContent>
       </Card>
     </main>
