@@ -93,7 +93,7 @@ export default async function SettingsPage({ searchParams }: Props) {
                 Contact support to change your email address.
               </p>
             </div>
-            <SubmitButton size="sm" pendingText="Saving…">
+            <SubmitButton type="submit" size="sm" pendingText="Saving…">
               Save profile
             </SubmitButton>
           </form>
@@ -127,7 +127,7 @@ export default async function SettingsPage({ searchParams }: Props) {
                 autoComplete="new-password"
               />
             </div>
-            <SubmitButton size="sm" pendingText="Updating…">
+            <SubmitButton type="submit" size="sm" pendingText="Updating…">
               Update password
             </SubmitButton>
           </form>
@@ -164,7 +164,7 @@ export default async function SettingsPage({ searchParams }: Props) {
                 <option value="COP">COP — Colombian Peso</option>
               </select>
             </div>
-            <SubmitButton size="sm" pendingText="Saving…">
+            <SubmitButton type="submit" size="sm" pendingText="Saving…">
               Save household
             </SubmitButton>
           </form>
@@ -189,7 +189,7 @@ export default async function SettingsPage({ searchParams }: Props) {
               </p>
             </div>
             <form action={signOutAllAction} className="shrink-0">
-              <SubmitButton variant="destructive" size="sm" pendingText="Signing out…">
+              <SubmitButton type="submit" variant="destructive" size="sm" pendingText="Signing out…">
                 Sign out all
               </SubmitButton>
             </form>
