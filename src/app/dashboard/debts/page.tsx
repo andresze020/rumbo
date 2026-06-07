@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { CalendarDays, CircleDollarSign, HandCoins, Plus, Scale } from 'lucide-react'
 import { createDebtPaymentAction } from './actions'
 import { DebtCreateForm } from './debt-create-form'
 import { DebtEditForm } from './debt-edit-form'
@@ -11,6 +12,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
+import { PageHeader } from '@/components/page-header'
+import { SectionHeading } from '@/components/section-heading'
+import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
 import { createClient } from '@/lib/supabase/server'
 
@@ -246,55 +250,36 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">{household.name}</p>
-          <h1 className="text-2xl font-semibold tracking-normal">Debts</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Liability accounts, debt metadata, and principal payments.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={debtsPath({ mode: 'create' })}
-            className={buttonVariants({ size: 'sm' })}
-          >
-            Create debt
-          </Link>
-          <Link
-            href="/dashboard/net-worth"
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            Net worth
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow={household.name}
+        title="Debts"
+        description="Liability accounts, debt metadata, and principal payments."
+        actions={
+          <>
+            <Link
+              href={debtsPath({ mode: 'create' })}
+              className={buttonVariants({ size: 'sm' })}
+            >
+              <Plus aria-hidden="true" />
+              Create debt
+            </Link>
+            <Link
+              href="/dashboard/net-worth"
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Net worth
+            </Link>
+          </>
+        }
+      />
 
       {/* ── Notifications ──────────────────────────────────────────────── */}
-      {errorMessage ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {errorMessage}
-        </div>
-      ) : null}
-      {created ? (
-        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-          Debt created.
-        </div>
-      ) : null}
-      {updated ? (
-        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-          Debt updated.
-        </div>
-      ) : null}
-      {paid ? (
-        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-          Payment registered.
-        </div>
-      ) : null}
+      {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
+      {created ? <Callout variant="success">Debt created.</Callout> : null}
+      {updated ? <Callout variant="success">Debt updated.</Callout> : null}
+      {paid ? <Callout variant="success">Payment registered.</Callout> : null}
       {hasLoadError ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Could not load debt data. Try refreshing.
-        </div>
+        <Callout variant="error">Could not load debt data. Try refreshing.</Callout>
       ) : null}
 
       {/* ── Summary cards ──────────────────────────────────────────────── */}
@@ -303,21 +288,29 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
           label="Active debts"
           value={String(activeDebts.length)}
           description={`${inactiveDebts.length} inactive`}
+          icon={<Scale />}
+          accent="bg-primary/10 text-primary"
         />
         <MetricCard
           label="Outstanding debt"
           value={formatCurrency(totalDebtBase, household.base_currency)}
           description="Posted liability balances"
+          icon={<CircleDollarSign />}
+          accent="bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400"
         />
         <MetricCard
           label="Minimum payments"
           value={formatCurrency(totalMinimumPayment, household.base_currency)}
           description="Monthly metadata total"
+          icon={<HandCoins />}
+          accent="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
         />
         <MetricCard
           label="Next due day"
           value={nextDueDebt ? formatDueDay(nextDueDebt.payment_due_day) : 'N/A'}
           description={nextDueDebt?.name ?? 'No due days set'}
+          icon={<CalendarDays />}
+          accent="bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400"
         />
       </div>
 
@@ -364,9 +357,9 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
             />
           ) : selectedPayBalance <= 0 ? (
             <div className="space-y-4">
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              <Callout variant="success">
                 This debt is fully paid off. No outstanding balance to pay.
-              </p>
+              </Callout>
               <Link href={debtsPath()} className={buttonVariants({ variant: 'outline' })}>
                 Back to debts
               </Link>
@@ -475,9 +468,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
 
       {/* ── Debt list ──────────────────────────────────────────────────── */}
       {debtsError ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Could not load debts. Try refreshing.
-        </div>
+        <Callout variant="error">Could not load debts. Try refreshing.</Callout>
       ) : debtRows.length === 0 ? (
         <EmptyState
           title="No debts yet"
@@ -486,11 +477,11 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
           actionLabel="Create debt"
         />
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-6">
           {activeDebts.length > 0 ? (
-            <section className="space-y-1.5">
-              <h2 className="px-1 text-sm font-medium text-muted-foreground">Active</h2>
-              <div className="divide-y rounded-lg border">
+            <section className="space-y-3">
+              <SectionHeading title="Active" description="Debts you are currently paying down." />
+              <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
                 {activeDebts.map((debt) => {
                   const account = accountsById.get(debt.account_id)
                   const currentBalance = getDebtBalance(debt, balancesByAccountId)
@@ -520,9 +511,9 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
           ) : null}
 
           {inactiveDebts.length > 0 ? (
-            <section className="space-y-1.5">
-              <h2 className="px-1 text-sm font-medium text-muted-foreground">Inactive</h2>
-              <div className="divide-y rounded-lg border">
+            <section className="space-y-3">
+              <SectionHeading title="Inactive" description="Closed or paused debts." />
+              <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
                 {inactiveDebts.map((debt) => {
                   const account = accountsById.get(debt.account_id)
                   const currentBalance = getDebtBalance(debt, balancesByAccountId)

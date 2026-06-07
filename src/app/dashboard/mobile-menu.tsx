@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
-import { LogOut, Menu } from 'lucide-react'
+import { LogOut, Menu, Wallet } from 'lucide-react'
 import { SubmitButton } from '@/components/submit-button'
 import { NavLinks } from '@/components/nav-links'
 import { signOutAction } from './session-actions'
@@ -31,12 +31,17 @@ export function MobileMenu() {
 
   return (
     <details ref={detailsRef} className="lg:hidden">
-      <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg border px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg border bg-card px-3 py-2 text-sm font-medium shadow-sm [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <Menu aria-hidden="true" className="size-4" />
           Menu
         </span>
-        <span className="text-sm font-semibold">App Finanzas</span>
+        <span className="inline-flex items-center gap-2 font-semibold">
+          <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <Wallet className="size-3.5" aria-hidden="true" />
+          </span>
+          App Finanzas
+        </span>
       </summary>
 
       <NavLinks links={dashboardLinks} variant="mobile" />

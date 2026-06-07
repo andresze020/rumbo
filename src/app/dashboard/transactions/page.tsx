@@ -9,6 +9,8 @@ import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
+import { PageHeader } from '@/components/page-header'
+import { Callout } from '@/components/callout'
 import { StatusBadge } from '@/components/status-badge'
 import { createClient } from '@/lib/supabase/server'
 
@@ -597,45 +599,33 @@ export default async function TransactionsPage({
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">{household.name}</p>
-          <h1 className="text-2xl font-semibold tracking-normal">Transactions</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Review and manage household transactions.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <GlobalAddTransactionButton className={buttonVariants({ size: 'sm' })}>
-            Add transaction
-          </GlobalAddTransactionButton>
-          <Link
-            href="/dashboard/transactions/import"
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            Import CSV
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow={household.name}
+        title="Transactions"
+        description="Review and manage household transactions."
+        actions={
+          <>
+            <GlobalAddTransactionButton className={buttonVariants({ size: 'sm' })}>
+              Add transaction
+            </GlobalAddTransactionButton>
+            <Link
+              href="/dashboard/transactions/import"
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Import CSV
+            </Link>
+          </>
+        }
+      />
 
       {/* ── Notifications ──────────────────────────────────────────────── */}
-      {errorMessage ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {errorMessage}
-        </div>
-      ) : null}
-      {created ? (
-        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">Transaction created.</div>
-      ) : null}
-      {voided ? (
-        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">Transaction voided.</div>
-      ) : null}
-      {updated ? (
-        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">Transaction updated.</div>
-      ) : null}
+      {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
+      {created ? <Callout variant="success">Transaction created.</Callout> : null}
+      {voided ? <Callout variant="info">Transaction voided.</Callout> : null}
+      {updated ? <Callout variant="success">Transaction updated.</Callout> : null}
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      <div className="rounded-lg border p-3">
+      <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
         <TransactionFilters
           searchText={searchText}
           selectedType={selectedType}
@@ -732,16 +722,14 @@ export default async function TransactionsPage({
         </div>
 
         {transactionDetailsError ? (
-          <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-            Could not load transaction details.
-          </p>
+          <Callout variant="error">Could not load transaction details.</Callout>
         ) : transactionRows.length ? (
-          <div className="divide-y rounded-lg border">
+          <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
             {transactionRows.map((row) => (
               <div
                 key={row.transaction.id}
                 className={`space-y-1 p-4 transition-colors ${
-                  row.isVoided ? 'bg-muted/30 text-muted-foreground' : 'hover:bg-muted/20'
+                  row.isVoided ? 'bg-muted/30 text-muted-foreground' : 'hover:bg-muted/30'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">

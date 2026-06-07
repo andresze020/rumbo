@@ -45,17 +45,17 @@ export function AccountCardDetails({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 rounded-md text-left hover:bg-muted/50 transition-colors -mx-1 px-1 py-0.5"
+        className="-mx-2 flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/60"
         aria-expanded={open}
       >
-        <div className="min-w-0 flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           {summaryLeft}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
           <div className="text-right">
             <p className="text-base font-semibold leading-snug tabular-nums">{balanceLabel}</p>
-            <p className="text-xs text-muted-foreground">{balanceSubLabel}</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{balanceSubLabel}</p>
           </div>
           <ChevronDown
             className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}

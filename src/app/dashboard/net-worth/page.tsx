@@ -1,12 +1,24 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { Scale, Sparkles, TrendingUp, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { EmptyState } from '@/components/empty-state'
 import { MetricCard } from '@/components/metric-card'
+import { PageHeader } from '@/components/page-header'
+import { SectionHeading } from '@/components/section-heading'
+import { Callout } from '@/components/callout'
+import { Money } from '@/components/money'
+import { AccountAvatar } from '@/components/account-avatar'
 import { createClient } from '@/lib/supabase/server'
+
+const ACCENT = {
+  emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+  rose: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
+  primary: 'bg-primary/10 text-primary',
+  violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
+}
 
 type NetWorthPageProps = {
   searchParams: Promise<{
@@ -146,47 +158,56 @@ function AccountList({
   showInclusionBadge?: boolean
 }) {
   if (!accounts.length) {
-    return <p className="px-1 text-sm text-muted-foreground">{emptyMessage}</p>
+    return (
+      <Callout variant="info" className="border-dashed text-muted-foreground">
+        {emptyMessage}
+      </Callout>
+    )
   }
 
   return (
-    <div className="divide-y rounded-lg border">
+    <div className="divide-y rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
       {accounts.map((account) => (
         <div
           key={account.account_id}
-          className={`flex items-center justify-between gap-3 px-4 py-3 ${
-            account.is_archived ? 'bg-muted/20 text-muted-foreground' : ''
-          }`}
+          className="flex items-center justify-between gap-3 px-4 py-3"
         >
-          <div className="min-w-0 space-y-0.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`text-sm font-medium ${account.is_archived ? 'text-muted-foreground' : ''}`}>
+          <div className="flex min-w-0 items-center gap-3">
+            <AccountAvatar
+              accountType={account.account_type}
+              className={account.is_archived ? 'opacity-60 grayscale' : undefined}
+            />
+            <div className="min-w-0">
+              <p className={`truncate text-sm font-medium ${account.is_archived ? 'text-muted-foreground' : ''}`}>
                 {account.account_name}
-              </span>
-              <Badge variant="secondary" className="text-xs">
-                {formatValue(account.account_type)}
-              </Badge>
-              {showInclusionBadge ? (
-                <Badge variant="outline" className="text-xs">
-                  {account.include_in_net_worth ? 'Included' : 'Excluded'}
+              </p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                <Badge variant="secondary" className="text-[11px]">
+                  {formatValue(account.account_type)}
                 </Badge>
-              ) : null}
-              {account.is_archived ? (
-                <Badge variant="outline" className="text-xs text-muted-foreground">
-                  Archived
+                <Badge variant="outline" className="text-[11px]">
+                  {account.currency_code}
                 </Badge>
-              ) : null}
+                {showInclusionBadge ? (
+                  <Badge variant="outline" className="text-[11px]">
+                    {account.include_in_net_worth ? 'Included' : 'Excluded'}
+                  </Badge>
+                ) : null}
+                {account.is_archived ? (
+                  <Badge variant="outline" className="text-[11px] text-muted-foreground">
+                    Archived
+                  </Badge>
+                ) : null}
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">{account.currency_code}</p>
           </div>
 
           <div className="shrink-0 text-right">
-            <p className="text-sm font-semibold tabular-nums">
-              {formatCurrency(
-                getDisplayBalance(account, account.posted_balance_account_currency),
-                account.currency_code
-              )}
-            </p>
+            <Money
+              value={getDisplayBalance(account, account.posted_balance_account_currency)}
+              currency={account.currency_code}
+              className="text-sm font-semibold"
+            />
             {account.currency_code !== baseCurrency ? (
               <p className="text-xs text-muted-foreground tabular-nums">
                 {formatCurrency(
@@ -264,44 +285,37 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">{household.name}</p>
-          <h1 className="text-2xl font-semibold tracking-normal">Net Worth</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {formatMonthLabel(selectedMonth)}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-end gap-2">
-          <Link
-            href="/dashboard/debts"
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            Debts
-          </Link>
-          <form action="/dashboard/net-worth" className="flex flex-wrap items-end gap-2">
-            <div className="grid gap-1">
-              <Label htmlFor="month" className="text-xs">Month</Label>
-              <Input id="month" type="month" name="month" defaultValue={selectedMonth} className="h-8 text-sm" />
-            </div>
-            <Button type="submit" variant="outline" size="sm">
-              View
-            </Button>
-          </form>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow={household.name}
+        title="Net Worth"
+        description={formatMonthLabel(selectedMonth)}
+        actions={
+          <>
+            <Link
+              href="/dashboard/debts"
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Debts
+            </Link>
+            <form action="/dashboard/net-worth" className="flex flex-wrap items-end gap-2">
+              <div className="grid gap-1">
+                <Label htmlFor="month" className="text-xs">Month</Label>
+                <Input id="month" type="month" name="month" defaultValue={selectedMonth} className="h-8 text-sm" />
+              </div>
+              <Button type="submit" variant="outline" size="sm">
+                View
+              </Button>
+            </form>
+          </>
+        }
+      />
 
       {/* ── Error ──────────────────────────────────────────────────────── */}
       {selectedBalancesError ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Could not load net worth balances.
-        </div>
+        <Callout variant="error">Could not load net worth balances.</Callout>
       ) : null}
       {hasEvolutionError ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Could not load every monthly evolution point.
-        </div>
+        <Callout variant="error">Could not load every monthly evolution point.</Callout>
       ) : null}
 
       {/* ── Summary cards ──────────────────────────────────────────────── */}
@@ -310,28 +324,41 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
           label="Total assets"
           value={formatCurrency(summary.totalAssets, household.base_currency)}
           description="Posted included asset balances"
+          icon={<Wallet />}
+          accent={ACCENT.emerald}
         />
         <MetricCard
           label="Total liabilities"
           value={formatCurrency(summary.totalLiabilities, household.base_currency)}
           description="Posted included liability balances"
+          icon={<Scale />}
+          accent={ACCENT.rose}
         />
         <MetricCard
           label="Net worth"
           value={formatCurrency(summary.netWorth, household.base_currency)}
           description="Assets minus liabilities"
+          icon={<TrendingUp />}
+          accent={ACCENT.primary}
+          valueClassName={summary.netWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined}
         />
         <MetricCard
           label="Projected net worth"
           value={formatCurrency(summary.projectedNetWorth, household.base_currency)}
           description="Posted plus pending balances"
+          icon={<Sparkles />}
+          accent={ACCENT.violet}
+          valueClassName={summary.projectedNetWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined}
         />
       </div>
 
       {/* ── Monthly evolution ──────────────────────────────────────────── */}
-      <section className="space-y-1.5">
-        <h2 className="px-1 text-sm font-medium text-muted-foreground">Monthly evolution</h2>
-        <div className="divide-y rounded-lg border">
+      <section className="space-y-3">
+        <SectionHeading
+          title="Monthly evolution"
+          description="Net worth over the last six months."
+        />
+        <div className="divide-y rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
           {evolution.map((point) => {
             const barWidth = Math.round(
               (Math.abs(point.netWorth) / maxEvolutionMagnitude) * 100
@@ -369,8 +396,8 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
       </section>
 
       {/* ── Assets ─────────────────────────────────────────────────────── */}
-      <section className="space-y-1.5">
-        <h2 className="px-1 text-sm font-medium text-muted-foreground">Assets</h2>
+      <section className="space-y-3">
+        <SectionHeading title="Assets" description="Included asset accounts." />
         <AccountList
           accounts={includedAssets}
           baseCurrency={household.base_currency}
@@ -379,8 +406,8 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
       </section>
 
       {/* ── Liabilities ────────────────────────────────────────────────── */}
-      <section className="space-y-1.5">
-        <h2 className="px-1 text-sm font-medium text-muted-foreground">Liabilities</h2>
+      <section className="space-y-3">
+        <SectionHeading title="Liabilities" description="Included liability accounts." />
         <AccountList
           accounts={includedLiabilities}
           baseCurrency={household.base_currency}
@@ -390,8 +417,11 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
 
       {/* ── Excluded ───────────────────────────────────────────────────── */}
       {excludedAccounts.length > 0 ? (
-        <section className="space-y-1.5">
-          <h2 className="px-1 text-sm font-medium text-muted-foreground">Excluded from net worth</h2>
+        <section className="space-y-3">
+          <SectionHeading
+            title="Excluded from net worth"
+            description="Accounts not counted in household totals."
+          />
           <AccountList
             accounts={excludedAccounts}
             baseCurrency={household.base_currency}

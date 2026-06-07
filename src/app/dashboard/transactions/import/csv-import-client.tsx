@@ -15,6 +15,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
+import { PageHeader } from '@/components/page-header'
+import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
 import { parseCsv, guessCsvMapping } from '@/lib/imports/csv-parser'
 import { buildValidatedRows } from '@/lib/imports/csv-validation'
@@ -177,48 +179,39 @@ export function CsvImportClient({
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">{householdName}</p>
-          <h1 className="text-2xl font-semibold tracking-normal">
-            Import CSV
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Upload, map, preview, and confirm transaction imports.
-          </p>
-        </div>
+      <PageHeader
+        eyebrow={householdName}
+        title="Import CSV"
+        description="Upload, map, preview, and confirm transaction imports."
+        actions={
+          <Link
+            href="/dashboard/transactions"
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          >
+            Back to transactions
+          </Link>
+        }
+      />
 
-        <Link
-          href="/dashboard/transactions"
-          className={buttonVariants({ variant: 'outline', size: 'sm' })}
-        >
-          Back to transactions
-        </Link>
-      </div>
-
-      {errorMessage ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {errorMessage}
-        </div>
-      ) : null}
+      {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
 
       {imported ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+        <Callout variant="success">
           CSV import completed.
           {batchId ? <span className="ml-1">Batch: {batchId}</span> : null}
-        </div>
+        </Callout>
       ) : null}
 
       {!accounts.length ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <Callout variant="error">
           Create an active account before importing transactions.
-        </div>
+        </Callout>
       ) : null}
 
       {!categories.length ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <Callout variant="error">
           Create active income and expense categories before importing.
-        </div>
+        </Callout>
       ) : null}
 
       <Card>
@@ -239,11 +232,7 @@ export function CsvImportClient({
             />
           </div>
 
-          {fileError ? (
-            <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-              {fileError}
-            </p>
-          ) : null}
+          {fileError ? <Callout variant="error">{fileError}</Callout> : null}
 
           {fileName ? (
             <div className="grid gap-3 sm:grid-cols-3">
@@ -355,15 +344,21 @@ export function CsvImportClient({
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg bg-muted/40 p-3">
                 <p className="text-xs text-muted-foreground">Valid</p>
-                <p className="mt-1 font-medium">{validRows.length}</p>
+                <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  {validRows.length}
+                </p>
               </div>
               <div className="rounded-lg bg-muted/40 p-3">
                 <p className="text-xs text-muted-foreground">Invalid</p>
-                <p className="mt-1 font-medium">{invalidRows.length}</p>
+                <p className={`mt-1 text-lg font-semibold tabular-nums ${invalidRows.length > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+                  {invalidRows.length}
+                </p>
               </div>
               <div className="rounded-lg bg-muted/40 p-3">
                 <p className="text-xs text-muted-foreground">Duplicates</p>
-                <p className="mt-1 font-medium">{duplicateRows.length}</p>
+                <p className={`mt-1 text-lg font-semibold tabular-nums ${duplicateRows.length > 0 ? 'text-amber-600 dark:text-amber-400' : ''}`}>
+                  {duplicateRows.length}
+                </p>
               </div>
             </div>
 

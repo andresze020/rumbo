@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { Plus, Scale, TrendingUp, Wallet } from 'lucide-react'
 import {
   archiveAccountAction,
   createAccountAction,
@@ -24,7 +25,17 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/empty-state'
 import { MetricCard } from '@/components/metric-card'
+import { PageHeader } from '@/components/page-header'
+import { Callout } from '@/components/callout'
+import { AccountAvatar } from '@/components/account-avatar'
 import { SubmitButton } from '@/components/submit-button'
+
+const ACCENT = {
+  emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+  rose: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
+  primary: 'bg-primary/10 text-primary',
+  muted: 'bg-muted text-muted-foreground',
+}
 
 type AccountsPageProps = {
   searchParams: Promise<{
@@ -685,16 +696,25 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       label: 'Total assets',
       value: formatCurrency(totalAssets, household.base_currency),
       description: 'Included active asset accounts',
+      icon: <Wallet />,
+      accent: ACCENT.emerald,
+      valueClassName: undefined as string | undefined,
     },
     {
       label: 'Total liabilities',
       value: formatCurrency(totalLiabilities, household.base_currency),
       description: 'Included active liability accounts',
+      icon: <Scale />,
+      accent: ACCENT.rose,
+      valueClassName: undefined as string | undefined,
     },
     {
       label: 'Net worth impact',
       value: formatCurrency(netWorthImpact, household.base_currency),
       description: `${includedAccountCount} included accounts`,
+      icon: <TrendingUp />,
+      accent: ACCENT.primary,
+      valueClassName: netWorthImpact < 0 ? 'text-red-600 dark:text-red-400' : undefined,
     },
     {
       label: showArchived ? 'Archived accounts' : 'Active accounts',
@@ -702,76 +722,45 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       description: showArchived
         ? `${activeRows.length} active accounts`
         : `${archivedRows.length} archived accounts`,
+      icon: <Plus />,
+      accent: ACCENT.muted,
+      valueClassName: undefined as string | undefined,
     },
   ]
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">{household.name}</p>
-          <h1 className="text-2xl font-semibold tracking-normal">Accounts</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage household accounts and balances.
-          </p>
-        </div>
+      <PageHeader
+        eyebrow={household.name}
+        title="Accounts"
+        description="Manage household accounts and balances."
+        actions={
+          <>
+            <Link
+              href={accountsPath({ showArchived, mode: 'create' })}
+              className={buttonVariants({ size: 'sm' })}
+            >
+              <Plus aria-hidden="true" />
+              Create account
+            </Link>
+            <Link
+              href={accountsPath({ showArchived: !showArchived })}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              {showArchived ? 'Hide archived' : 'Show archived'}
+            </Link>
+          </>
+        }
+      />
 
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={accountsPath({ showArchived, mode: 'create' })}
-            className={buttonVariants()}
-          >
-            Create account
-          </Link>
-          <Link
-            href={accountsPath({ showArchived: !showArchived })}
-            className={buttonVariants({ variant: 'outline' })}
-          >
-            {showArchived ? 'Hide archived' : 'Show archived'}
-          </Link>
-        </div>
-      </div>
-
-      {errorMessage ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {errorMessage}
-        </div>
-      ) : null}
-
-      {created ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          Account created.
-        </div>
-      ) : null}
-
-      {updated ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          Account updated.
-        </div>
-      ) : null}
-
-      {archived ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          Account archived.
-        </div>
-      ) : null}
-
-      {unarchived ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          Account restored.
-        </div>
-      ) : null}
-
-      {infoMessage ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          {infoMessage}
-        </div>
-      ) : null}
-
+      {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
+      {created ? <Callout variant="success">Account created.</Callout> : null}
+      {updated ? <Callout variant="success">Account updated.</Callout> : null}
+      {archived ? <Callout variant="info">Account archived.</Callout> : null}
+      {unarchived ? <Callout variant="success">Account restored.</Callout> : null}
+      {infoMessage ? <Callout variant="info">{infoMessage}</Callout> : null}
       {openingBalanceSet ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          Opening balance set.
-        </div>
+        <Callout variant="success">Opening balance set.</Callout>
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -781,6 +770,9 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
             label={card.label}
             value={card.value}
             description={card.description}
+            icon={card.icon}
+            accent={card.accent}
+            valueClassName={card.valueClassName}
           />
         ))}
       </div>
@@ -846,9 +838,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
         </CardHeader>
         <CardContent>
           {hasLoadError ? (
-            <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-              Could not load account balances.
-            </p>
+            <Callout variant="error">Could not load account balances.</Callout>
           ) : displayRows.length ? (
             <div className="divide-y rounded-lg border">
               {displayRows.map((row) => {
@@ -858,37 +848,44 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                   <div
                     key={metadata.id}
                     className={`p-3 ${
-                      metadata.is_archived
-                        ? 'bg-muted/30 text-muted-foreground'
-                        : ''
+                      metadata.is_archived ? 'bg-muted/30' : ''
                     }`}
                   >
                     <AccountCardDetails
                       accountId={metadata.id}
                       summaryLeft={
                         <>
-                          {metadata.color ? (
-                            <span
-                              className="size-2.5 shrink-0 rounded-full border"
-                              style={{ backgroundColor: metadata.color }}
-                              aria-hidden="true"
-                            />
-                          ) : null}
-                          {metadata.icon ? (
-                            <span className="text-sm leading-none" aria-hidden="true">
-                              {metadata.icon}
-                            </span>
-                          ) : null}
-                          <span className="font-medium text-sm">{metadata.name}</span>
-                          <Badge variant="secondary" className="text-xs">
-                            {formatLabel(metadata.account_type)}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {metadata.currency_code}
-                          </Badge>
-                          {metadata.is_archived ? (
-                            <Badge variant="outline" className="text-xs">Archived</Badge>
-                          ) : null}
+                          <AccountAvatar
+                            accountType={metadata.account_type}
+                            emoji={metadata.icon}
+                            color={metadata.color}
+                            className={metadata.is_archived ? 'opacity-60 grayscale' : undefined}
+                          />
+                          <div className="min-w-0">
+                            <p
+                              className={`truncate text-sm font-medium ${
+                                metadata.is_archived ? 'text-muted-foreground' : ''
+                              }`}
+                            >
+                              {metadata.name}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <Badge variant="secondary" className="text-[11px]">
+                                {formatLabel(metadata.account_type)}
+                              </Badge>
+                              <Badge variant="outline" className="text-[11px]">
+                                {metadata.currency_code}
+                              </Badge>
+                              {metadata.account_class === 'liability' ? (
+                                <Badge variant="outline" className="border-rose-200 text-[11px] text-rose-600 dark:border-rose-900 dark:text-rose-400">
+                                  Liability
+                                </Badge>
+                              ) : null}
+                              {metadata.is_archived ? (
+                                <Badge variant="outline" className="text-[11px]">Archived</Badge>
+                              ) : null}
+                            </div>
+                          </div>
                         </>
                       }
                       balanceLabel={formatCurrency(
