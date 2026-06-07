@@ -63,7 +63,7 @@ export function TransactionFilters({
     selectedCategoryIds.length > 0,
   ].filter(Boolean).length
 
-  const [expanded, setExpanded] = useState(advancedActiveCount > 0)
+  const [expanded, setExpanded] = useState(false)
 
   return (
     <div className="space-y-2.5">
