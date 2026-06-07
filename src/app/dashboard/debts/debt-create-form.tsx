@@ -16,6 +16,13 @@ type LiabilityAccount = { id: string; name: string; account_type: string; curren
 const selectCls =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
+function formatCurrency(value: number | string, currencyCode: string) {
+  return new Intl.NumberFormat('en-CA', {
+    style: 'currency',
+    currency: currencyCode,
+  }).format(Number(value))
+}
+
 export function DebtCreateForm({
   baseCurrency,
   currencyOptions,
@@ -31,6 +38,7 @@ export function DebtCreateForm({
 
   const [existingAccountId, setExistingAccountId] = useState('')
   const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency)
+  const [openingBalanceInput, setOpeningBalanceInput] = useState('0')
   const [openingBalanceDate, setOpeningBalanceDate] = useState(today)
   const [userRate, setUserRate] = useState('')
   const [fetchingRate, setFetchingRate] = useState(false)
@@ -42,6 +50,14 @@ export function DebtCreateForm({
   const parsedRate = Number(userRate)
   const rateIsValid =
     userRate.trim() !== '' && Number.isFinite(parsedRate) && parsedRate > 0
+  const parsedOpeningBalance = Number(openingBalanceInput)
+  const conversionPreview =
+    rateIsValid &&
+    openingBalanceInput.trim() !== '' &&
+    Number.isFinite(parsedOpeningBalance) &&
+    parsedOpeningBalance !== 0
+      ? `${formatCurrency(parsedOpeningBalance, selectedCurrency)} ≈ ${formatCurrency(parsedOpeningBalance / parsedRate, baseCurrency)}`
+      : null
 
   useEffect(() => {
     if (!isMultiCurrency) return
@@ -151,7 +167,8 @@ export function DebtCreateForm({
                 type="text"
                 inputMode="decimal"
                 placeholder="0.00"
-                defaultValue="0"
+                value={openingBalanceInput}
+                onChange={(e) => setOpeningBalanceInput(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
                 The amount you currently owe. This creates the opening liability balance.
@@ -179,13 +196,17 @@ export function DebtCreateForm({
             {isMultiCurrency ? (
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="debt_user_rate">
-                  1 {baseCurrency} = ? {selectedCurrency}
+                  Exchange rate: 1 {baseCurrency} = ? {selectedCurrency}
                   {fetchingRate ? (
                     <span className="ml-2 text-xs font-normal text-muted-foreground">
                       Fetching rate…
                     </span>
                   ) : null}
                 </Label>
+                <p className="text-xs text-muted-foreground">
+                  Enter how many {selectedCurrency} make up 1 {baseCurrency}. This converts the
+                  outstanding balance above into {baseCurrency} for your net worth and reports.
+                </p>
                 <div className="flex gap-2">
                   <Input
                     id="debt_user_rate"
@@ -219,6 +240,12 @@ export function DebtCreateForm({
                     Auto-filled for {openingBalanceDate}. Edit if needed.
                   </p>
                 )}
+                {conversionPreview ? (
+                  <p className="text-xs font-medium text-foreground">
+                    {conversionPreview}{' '}
+                    <span className="font-normal text-muted-foreground">at this rate</span>
+                  </p>
+                ) : null}
                 {rateIsValid ? (
                   <input
                     type="hidden"
