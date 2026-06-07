@@ -1,69 +1,26 @@
-import Link from 'next/link'
 import { Suspense, type ReactNode } from 'react'
-import { LogOut, Plus, Wallet } from 'lucide-react'
-import { SubmitButton } from '@/components/submit-button'
-import { NavLinks } from '@/components/nav-links'
+import { Plus } from 'lucide-react'
+import { AppSidebar } from '@/components/app-sidebar'
+import { MobileNav } from '@/components/mobile-nav'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
-import { ThemeToggle } from '@/components/theme-toggle'
-import { MobileMenu } from './mobile-menu'
-import { signOutAction } from './session-actions'
-
-const dashboardLinks = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/dashboard/accounts', label: 'Accounts' },
-  { href: '/dashboard/transactions', label: 'Transactions' },
-  { href: '/dashboard/budgets', label: 'Budgets' },
-  { href: '/dashboard/debts', label: 'Debts' },
-  { href: '/dashboard/net-worth', label: 'Net Worth' },
-  { href: '/dashboard/categories', label: 'Categories' },
-  { href: '/dashboard/transactions/import', label: 'Import CSV' },
-  { href: '/dashboard/export', label: 'Export' },
-]
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3 sm:px-6">
-          <div className="hidden items-center justify-between gap-4 lg:flex">
-            <div className="flex min-w-0 items-center gap-5">
-              <Link
-                href="/dashboard"
-                className="flex shrink-0 items-center gap-2 text-sm font-semibold text-foreground"
-              >
-                <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Wallet className="size-4" aria-hidden="true" />
-                </span>
-                App Finanzas
-              </Link>
-              <NavLinks links={dashboardLinks} />
-            </div>
+    <div className="flex min-h-screen">
+      {/* Desktop sidebar */}
+      <AppSidebar className="hidden lg:flex" />
 
-            <div className="flex shrink-0 items-center gap-2">
-              <ThemeToggle />
-              <form action={signOutAction}>
-                <SubmitButton
-                  type="submit"
-                  variant="outline"
-                  size="sm"
-                  pendingText="Signing out"
-                >
-                  <LogOut aria-hidden="true" />
-                  Sign out
-                </SubmitButton>
-              </form>
-            </div>
-          </div>
+      {/* Main content area */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile top bar */}
+        <MobileNav className="lg:hidden" />
 
-          <MobileMenu />
-        </div>
-      </header>
-
-      <div className="pb-20">
-        {children}
+        <main className="flex-1 pb-24">
+          {children}
+        </main>
       </div>
 
-      {/* FAB — visible on all dashboard pages */}
+      {/* FAB — all dashboard pages */}
       <Suspense>
         <GlobalAddTransactionButton
           aria-label="Add transaction"
