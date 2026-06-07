@@ -2,15 +2,13 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { TransactionEditForm } from './transaction-edit-form'
 import { TransferEditForm } from './transfer-edit-form'
+import { TransactionFilters } from './transaction-filters'
 import { VoidTransactionForm } from './void-transaction-form'
 import { Badge } from '@/components/ui/badge'
-import { Button, buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
-import { MetricCard } from '@/components/metric-card'
 import { StatusBadge } from '@/components/status-badge'
 import { createClient } from '@/lib/supabase/server'
 
@@ -120,9 +118,6 @@ type TransactionRow = {
   transferToAccountName: string
 }
 
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
-
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
 }
@@ -185,17 +180,6 @@ function getCategoryPath(
     ? categoriesById.get(category.parent_category_id)?.name
     : null
   return parentName ? `${parentName} / ${category.name}` : category.name
-}
-
-function getAccountLabel(account: Account) {
-  return [
-    account.name,
-    account.institution_name || null,
-    account.currency_code,
-    account.is_archived ? 'archived' : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
 }
 
 function transactionsPath(
@@ -310,18 +294,6 @@ export default async function TransactionsPage({
   const editTransactionId =
     typeof params.edit === 'string' ? params.edit : null
   const returnTo = transactionsPath(filters)
-
-  // Presets — computed from today server-side
-  const todayStr = todayIsoDate()
-  const thisYear = todayStr.slice(0, 4)
-  const thisMonthStr = currentMonth()
-  const datePresets = [
-    { label: 'This month', from: monthFirstDay(thisMonthStr), to: monthLastDay(thisMonthStr) },
-    { label: 'Last 30 days', from: offsetDate(todayStr, -29), to: todayStr },
-    { label: 'Last 60 days', from: offsetDate(todayStr, -59), to: todayStr },
-    { label: 'Last 90 days', from: offsetDate(todayStr, -89), to: todayStr },
-    { label: 'This year', from: `${thisYear}-01-01`, to: `${thisYear}-12-31` },
-  ]
 
   const supabase = await createClient()
   const {
@@ -583,9 +555,42 @@ export default async function TransactionsPage({
   )
   const visibleCount = transactionRows.length
   const pendingCount = transactionRows.filter((r) => r.transaction.status === 'pending').length
-  const voidedCount = transactionRows.filter((r) => r.isVoided).length
   const importedCount = transactionRows.filter((r) => r.isImported).length
   const dateRangeLabel = formatDateRangeLabel(resolvedDateFrom, resolvedDateTo)
+
+  // Presets — computed server-side to bake in current non-date filters
+  const todayStr = todayIsoDate()
+  const thisYear = todayStr.slice(0, 4)
+  const thisMonthStr = currentMonth()
+  const rawPresets = [
+    { label: 'This month', from: monthFirstDay(thisMonthStr), to: monthLastDay(thisMonthStr) },
+    { label: 'Last 30d', from: offsetDate(todayStr, -29), to: todayStr },
+    { label: 'Last 60d', from: offsetDate(todayStr, -59), to: todayStr },
+    { label: 'Last 90d', from: offsetDate(todayStr, -89), to: todayStr },
+    { label: 'This year', from: `${thisYear}-01-01`, to: `${thisYear}-12-31` },
+  ]
+  const presetLinks = rawPresets.map((p) => ({
+    label: p.label,
+    href: presetPath(filters, p.from, p.to),
+    isActive: resolvedDateFrom === p.from && resolvedDateTo === p.to,
+  }))
+
+  const accountOptions = allAccounts.map((a) => ({
+    id: a.id,
+    label: [a.name, a.institution_name, a.currency_code, a.is_archived ? 'archived' : null]
+      .filter(Boolean)
+      .join(' · '),
+    isArchived: a.is_archived,
+  }))
+
+  const categoryOpts = allCategories.map((c) => ({
+    id: c.id,
+    label: (() => {
+      const parent = c.parent_category_id ? categoryOptionsById.get(c.parent_category_id) : null
+      return parent ? `${parent.name} / ${c.name}` : c.name
+    })(),
+    isArchived: c.is_archived,
+  }))
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
@@ -629,163 +634,20 @@ export default async function TransactionsPage({
       ) : null}
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      <section className="rounded-lg border p-4">
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm font-medium">Filters</p>
-          {hasActiveFilters ? (
-            <Link
-              href="/dashboard/transactions"
-              className={buttonVariants({ variant: 'ghost', size: 'sm' })}
-            >
-              Clear filters
-            </Link>
-          ) : null}
-        </div>
-
-        <form method="get" action="/dashboard/transactions" className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="search">Search</Label>
-            <Input
-              id="search"
-              name="search"
-              defaultValue={searchText}
-              placeholder="Description, merchant or notes…"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="type">Type</Label>
-              <select id="type" name="type" defaultValue={selectedType} className={selectClassName}>
-                <option value="all">All types</option>
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
-                <option value="transfer">Transfer</option>
-                <option value="opening_balance">Opening balance</option>
-                <option value="debt_payment">Debt payment</option>
-                <option value="adjustment">Adjustment</option>
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="status">Status</Label>
-              <select id="status" name="status" defaultValue={selectedStatus} className={selectClassName}>
-                <option value="all">All statuses</option>
-                <option value="posted">Posted</option>
-                <option value="pending">Pending</option>
-                <option value="voided">Voided</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="account_id">
-                Account{' '}
-                <span className="font-normal text-muted-foreground">(Ctrl/⌘ for multiple)</span>
-              </Label>
-              <select
-                id="account_id"
-                name="account_id"
-                multiple
-                size={4}
-                defaultValue={selectedAccountIds}
-                className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                {allAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {getAccountLabel(account)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="category_id">
-                Category{' '}
-                <span className="font-normal text-muted-foreground">(Ctrl/⌘ for multiple)</span>
-              </Label>
-              <select
-                id="category_id"
-                name="category_id"
-                multiple
-                size={4}
-                defaultValue={selectedCategoryIds}
-                className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                {allCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {getCategoryPath(category, categoryOptionsById)}
-                    {category.is_archived ? ' - archived' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Date range */}
-          <div className="space-y-2">
-            <Label>Date range</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {datePresets.map((preset) => {
-                const isActive =
-                  resolvedDateFrom === preset.from && resolvedDateTo === preset.to
-                return (
-                  <Link
-                    key={preset.label}
-                    href={presetPath(filters, preset.from, preset.to)}
-                    className={buttonVariants({
-                      variant: isActive ? 'secondary' : 'outline',
-                      size: 'sm',
-                    })}
-                  >
-                    {preset.label}
-                  </Link>
-                )
-              })}
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="date_from" className="text-xs text-muted-foreground">
-                  From
-                </Label>
-                <Input
-                  id="date_from"
-                  name="date_from"
-                  type="date"
-                  defaultValue={resolvedDateFrom}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="date_to" className="text-xs text-muted-foreground">
-                  To
-                </Label>
-                <Input
-                  id="date_to"
-                  name="date_to"
-                  type="date"
-                  defaultValue={resolvedDateTo}
-                />
-              </div>
-            </div>
-          </div>
-
-          <Button type="submit" size="sm">
-            Apply filters
-          </Button>
-        </form>
-      </section>
-
-      {/* ── Summary cards ──────────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          label="Visible"
-          value={String(visibleCount)}
-          description={dateRangeLabel}
+      <div className="rounded-lg border p-3">
+        <TransactionFilters
+          searchText={searchText}
+          selectedType={selectedType}
+          selectedStatus={selectedStatus}
+          selectedAccountIds={selectedAccountIds}
+          selectedCategoryIds={selectedCategoryIds}
+          resolvedDateFrom={resolvedDateFrom}
+          resolvedDateTo={resolvedDateTo}
+          hasActiveFilters={hasActiveFilters}
+          accountOptions={accountOptions}
+          categoryOptions={categoryOpts}
+          presetLinks={presetLinks}
         />
-        <MetricCard label="Pending" value={String(pendingCount)} description="Awaiting posting" />
-        <MetricCard label="Voided" value={String(voidedCount)} description="Excluded by existing rules" />
-        <MetricCard label="Imported" value={String(importedCount)} description="CSV source" />
       </div>
 
       {/* ── Edit dialogs ───────────────────────────────────────────────── */}
@@ -842,8 +704,22 @@ export default async function TransactionsPage({
       {/* ── Transaction list ───────────────────────────────────────────── */}
       <section className="space-y-1.5">
         <div className="flex items-center justify-between px-1">
-          <h2 className="text-sm font-medium text-muted-foreground">
-            {visibleCount} transaction{visibleCount !== 1 ? 's' : ''} · {dateRangeLabel}
+          <h2 className="flex flex-wrap items-center gap-x-1.5 text-sm font-medium text-muted-foreground">
+            <span>{visibleCount} transaction{visibleCount !== 1 ? 's' : ''}</span>
+            <span>·</span>
+            <span>{dateRangeLabel}</span>
+            {pendingCount > 0 ? (
+              <>
+                <span>·</span>
+                <span className="text-amber-600 dark:text-amber-400">{pendingCount} pending</span>
+              </>
+            ) : null}
+            {importedCount > 0 ? (
+              <>
+                <span>·</span>
+                <span>{importedCount} imported</span>
+              </>
+            ) : null}
           </h2>
           <GlobalAddTransactionButton
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
