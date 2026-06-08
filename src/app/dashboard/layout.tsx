@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react'
 import { AppSidebar } from '@/components/app-sidebar'
 import { MobileNav } from '@/components/mobile-nav'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
+import { AssistantDrawer } from '@/components/assistant-drawer'
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
@@ -20,7 +21,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </main>
       </div>
 
-      {/* FAB — all dashboard pages */}
+      {/* FABs — assistant + add transaction */}
+      <AssistantDrawer />
       <Suspense>
         <GlobalAddTransactionButton
           aria-label="Add transaction"

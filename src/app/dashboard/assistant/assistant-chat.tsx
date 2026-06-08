@@ -36,6 +36,7 @@ type AssistantChatProps = {
   baseCurrency: string
   accounts: TransactionFormAccount[]
   categories: TransactionFormCategory[]
+  returnTo?: string
 }
 
 function todayIsoDate() {
@@ -59,7 +60,7 @@ function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }
   })
 }
 
-export function AssistantChat({ baseCurrency, accounts, categories }: AssistantChatProps) {
+export function AssistantChat({ baseCurrency, accounts, categories, returnTo }: AssistantChatProps) {
   const inputId = useId()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -235,7 +236,7 @@ export function AssistantChat({ baseCurrency, accounts, categories }: AssistantC
                 defaultCategoryId={reviewDraft.suggested_category_id ?? undefined}
                 defaultDescription={reviewDraft.description ?? undefined}
                 defaultMerchantName={reviewDraft.merchant_name ?? undefined}
-                returnTo="/dashboard/assistant"
+                returnTo={returnTo ?? '/dashboard/assistant'}
                 onCancel={() => setDialogOpen(false)}
               />
             )

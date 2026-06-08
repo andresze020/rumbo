@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAnthropicClient, ASSISTANT_MODEL } from '@/lib/ai/client'
 import { ASSISTANT_TOOLS, executeAssistantTool } from '@/lib/ai/tools'
 import { buildAnalysisSystemPrompt, buildTransactionDraftSystemPrompt } from '@/lib/ai/prompts'
+import type { TransactionFormAccount, TransactionFormCategory } from '@/app/dashboard/transactions/transaction-form'
 
 const MAX_TOOL_ROUNDS = 6
 const MAX_HISTORY_MESSAGES = 20
@@ -89,6 +90,52 @@ function friendlyAssistantError(error: unknown) {
     return 'The AI assistant is not configured yet. Add an ANTHROPIC_API_KEY to enable it.'
   }
   return 'The assistant could not process your request right now. Please try again in a moment.'
+}
+
+export async function getAssistantContextAction(): Promise<
+  | { baseCurrency: string; accounts: TransactionFormAccount[]; categories: TransactionFormCategory[] }
+  | { error: string }
+> {
+  const supabase = await createClient()
+
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) return { error: 'Session expired.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('default_household_id')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (!profile?.default_household_id) return { error: 'No household found.' }
+
+  const { data: household } = await supabase
+    .from('households')
+    .select('base_currency')
+    .eq('id', profile.default_household_id)
+    .maybeSingle()
+  if (!household) return { error: 'Could not load household.' }
+
+  const { data: accounts } = await supabase
+    .from('accounts')
+    .select('id, name, currency_code, institution_name')
+    .eq('household_id', profile.default_household_id)
+    .is('deleted_at', null)
+    .eq('is_archived', false)
+    .order('name', { ascending: true })
+
+  const { data: categories } = await supabase
+    .from('categories')
+    .select('id, name, category_type, reporting_type, parent_category_id')
+    .eq('household_id', profile.default_household_id)
+    .is('deleted_at', null)
+    .eq('is_archived', false)
+    .order('name', { ascending: true })
+
+  return {
+    baseCurrency: household.base_currency,
+    accounts: accounts ?? [],
+    categories: (categories ?? []).map((c) => ({ ...c, reporting_type: c.reporting_type ?? '' })),
+  }
 }
 
 export async function sendAssistantMessageAction(
