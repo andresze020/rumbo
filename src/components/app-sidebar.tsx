@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   ArrowLeftRight,
+  Bot,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -25,6 +26,7 @@ import { signOutAction } from '@/app/dashboard/session-actions'
 
 const primaryLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard/assistant', label: 'Assistant', icon: Bot },
   { href: '/dashboard/accounts', label: 'Accounts', icon: Wallet },
   { href: '/dashboard/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/dashboard/budgets', label: 'Budgets', icon: Target },

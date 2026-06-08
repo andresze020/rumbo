@@ -41,6 +41,10 @@ type TransactionFormProps = {
   defaultAccountId?: string
   defaultType?: TransactionType
   defaultStatus?: string
+  defaultAmount?: string
+  defaultCategoryId?: string
+  defaultDescription?: string
+  defaultMerchantName?: string
   returnTo?: string
 }
 
@@ -70,6 +74,10 @@ export function TransactionForm({
   defaultAccountId,
   defaultType,
   defaultStatus,
+  defaultAmount,
+  defaultCategoryId,
+  defaultDescription,
+  defaultMerchantName,
   returnTo,
 }: TransactionFormProps) {
   const [transactionType, setTransactionType] = useState<TransactionType>(defaultType ?? 'expense')
@@ -77,8 +85,8 @@ export function TransactionForm({
   const [accountId, setAccountId] = useState(defaultAccountId ?? '')
   const [fromAccountId, setFromAccountId] = useState('')
   const [toAccountId, setToAccountId] = useState('')
-  const [categoryId, setCategoryId] = useState('')
-  const [amountInput, setAmountInput] = useState('')
+  const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
+  const [amountInput, setAmountInput] = useState(defaultAmount ?? '')
   const [userRate, setUserRate] = useState('')
   const [fetchingRate, setFetchingRate] = useState(false)
   const [fxNote, setFxNote] = useState('')
@@ -385,13 +393,13 @@ export function TransactionForm({
 
       <div className="space-y-2">
         <Label htmlFor="description">Description</Label>
-        <Input id="description" name="description" />
+        <Input id="description" name="description" defaultValue={defaultDescription} />
       </div>
 
       {!isTransfer ? (
         <div className="space-y-2">
           <Label htmlFor="merchant_name">Merchant</Label>
-          <Input id="merchant_name" name="merchant_name" />
+          <Input id="merchant_name" name="merchant_name" defaultValue={defaultMerchantName} />
         </div>
       ) : null}
 
