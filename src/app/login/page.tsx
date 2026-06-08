@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { signInAction, signUpAction } from './actions'
+import { GoogleSignInButton } from './google-sign-in-button'
 import {
   Card,
   CardContent,
@@ -56,6 +57,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </div>
           ) : null}
 
+          <GoogleSignInButton />
+
+          <div className="flex items-center gap-3">
+            <Separator className="flex-1" />
+            <span className="text-xs text-muted-foreground">or continue with email</span>
+            <Separator className="flex-1" />
+          </div>
+
           <form action={signInAction} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="signin-email">Email</Label>
@@ -88,6 +97,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </form>
 
           <Separator />
+
+          <p className="text-center text-xs text-muted-foreground">Don&apos;t have an account?</p>
 
           <form action={signUpAction} className="space-y-4">
             <div className="space-y-2">
