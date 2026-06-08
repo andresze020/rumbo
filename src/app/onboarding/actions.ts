@@ -32,7 +32,7 @@ export async function createHouseholdAction(formData: FormData) {
     {
       id: user.id,
       email: user.email ?? '',
-      display_name: user.user_metadata?.display_name ?? null,
+      display_name: user.user_metadata?.display_name ?? user.user_metadata?.full_name ?? null,
     },
     {
       onConflict: 'id',
