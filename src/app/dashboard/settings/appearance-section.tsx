@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -12,6 +13,11 @@ const THEMES = [
 
 export function AppearanceSection() {
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   return (
     <Card>
@@ -28,7 +34,7 @@ export function AppearanceSection() {
               onClick={() => setTheme(value)}
               className={cn(
                 'flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
-                theme === value
+                mounted && theme === value
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
