@@ -9,6 +9,7 @@ import { signOutAction } from './session-actions'
 
 const dashboardLinks = [
   { href: '/dashboard', label: 'Dashboard' },
+  { href: '/dashboard/assistant', label: 'Assistant' },
   { href: '/dashboard/accounts', label: 'Accounts' },
   { href: '/dashboard/transactions', label: 'Transactions' },
   { href: '/dashboard/budgets', label: 'Budgets' },
