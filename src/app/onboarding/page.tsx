@@ -57,7 +57,7 @@ export default async function OnboardingPage() {
               <Input
                 id="name"
                 name="name"
-                placeholder="Andrés & María"
+                placeholder="My Household"
                 required
               />
             </div>
