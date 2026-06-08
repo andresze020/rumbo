@@ -3,8 +3,9 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-function redirectWithLoginError(message: string): never {
-  redirect(`/login?error=${encodeURIComponent(message)}`)
+function redirectWithLoginError(message: string, mode?: string): never {
+  const modeParam = mode ? `&mode=${mode}` : ''
+  redirect(`/login?error=${encodeURIComponent(message)}${modeParam}`)
 }
 
 export async function signInAction(formData: FormData) {
@@ -35,7 +36,7 @@ export async function signUpAction(formData: FormData) {
   const displayName = String(formData.get('displayName') ?? '').trim()
 
   if (!email || !password) {
-    redirectWithLoginError('Email and password are required.')
+    redirectWithLoginError('Email and password are required.', 'signup')
   }
 
   const supabase = await createClient()
@@ -55,7 +56,8 @@ export async function signUpAction(formData: FormData) {
 
     if (lower.includes('password')) {
       redirectWithLoginError(
-        error.message ?? 'Password does not meet the requirements. Try a longer or more complex password.'
+        error.message ?? 'Password does not meet the requirements. Try a longer or more complex password.',
+        'signup'
       )
     } else if (
       lower.includes('already registered') ||
@@ -66,7 +68,7 @@ export async function signUpAction(formData: FormData) {
         'An account with this email already exists. Try signing in instead.'
       )
     } else {
-      redirectWithLoginError('Could not create the account. Please try again.')
+      redirectWithLoginError('Could not create the account. Please try again.', 'signup')
     }
   }
 
