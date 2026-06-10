@@ -25,11 +25,13 @@ export function InfoTooltip({
   return (
     <Tooltip>
       <TooltipTrigger
+        render={<span tabIndex={0} role="button" />}
         className={cn(
           "inline-flex shrink-0 items-center text-muted-foreground transition-colors hover:text-foreground",
           className
         )}
         aria-label={label ?? "More information"}
+        onClick={(e) => e.stopPropagation()}
       >
         <HelpCircle className="size-3.5" aria-hidden="true" />
       </TooltipTrigger>

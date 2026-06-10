@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createDebtAction } from './actions'
 import { AdvancedFields } from '@/components/advanced-fields'
+import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -210,6 +211,7 @@ export function DebtCreateForm({
           >
             <Label htmlFor="debt_user_rate">
               Exchange rate: 1 {baseCurrency} = ? {selectedCurrency}
+              <InfoTooltip term="exchangeRate" label="Exchange rate" />
               {fetchingRate ? (
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
                   Fetching rate…

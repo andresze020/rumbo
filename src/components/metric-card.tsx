@@ -34,6 +34,8 @@ type MetricCardProps = {
   trendMetric?: TrendMetric
   currentMonth?: string
   currency?: string
+  /** Optional inline help icon (e.g. <InfoTooltip />) shown next to the label. */
+  tooltip?: ReactNode
 }
 
 export function MetricCard({
@@ -47,6 +49,7 @@ export function MetricCard({
   trendMetric,
   currentMonth,
   currency = 'CAD',
+  tooltip,
 }: MetricCardProps) {
   const [open, setOpen] = useState(false)
   const [trendData, setTrendData] = useState<TrendPoint[] | null>(null)
@@ -94,8 +97,9 @@ export function MetricCard({
                 {icon}
               </span>
             ) : null}
-            <CardTitle className="truncate text-sm font-medium leading-snug text-muted-foreground">
-              {label}
+            <CardTitle className="flex min-w-0 items-center gap-1 truncate text-sm font-medium leading-snug text-muted-foreground">
+              <span className="truncate">{label}</span>
+              {tooltip}
             </CardTitle>
           </div>
           {hasTrend ? (

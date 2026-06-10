@@ -8,6 +8,7 @@ import {
 } from './actions'
 import { CategoryPicker } from './category-picker'
 import { AdvancedFields } from '@/components/advanced-fields'
+import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -190,7 +191,10 @@ export function TransactionForm({
     <form action={submitAction} className="space-y-4">
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
       <div className="space-y-2">
-        <Label htmlFor="transaction_type">Type</Label>
+        <Label htmlFor="transaction_type">
+          Type
+          <InfoTooltip term="transfer" label="Transfer" />
+        </Label>
         <select
           id="transaction_type"
           name="transaction_type"
@@ -292,6 +296,7 @@ export function TransactionForm({
             >
               <Label htmlFor="user_rate">
                 Exchange rate: 1 {baseCurrency} = ? {selectedFromAccount?.currency_code}
+                <InfoTooltip term="exchangeRate" label="Exchange rate" />
                 {fetchingRate ? (
                   <span className="ml-2 text-xs font-normal text-muted-foreground">
                     Fetching rate…
@@ -436,6 +441,7 @@ export function TransactionForm({
           >
             <Label htmlFor="user_rate">
               Exchange rate: 1 {baseCurrency} = ? {selectedAccount?.currency_code}
+              <InfoTooltip term="exchangeRate" label="Exchange rate" />
               {fetchingRate ? (
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
                   Fetching rate…

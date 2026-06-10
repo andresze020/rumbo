@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
 import { PageHeader } from '@/components/page-header'
+import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
@@ -252,7 +253,12 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <PageHeader
         eyebrow={household.name}
-        title="Debts"
+        title={
+          <span className="flex items-center gap-1.5">
+            Debts
+            <InfoTooltip term="liabilities" label="Debts" />
+          </span>
+        }
         description="Liability accounts, debt metadata, and principal payments."
         actions={
           <>

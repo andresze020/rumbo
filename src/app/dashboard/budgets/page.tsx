@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
 import { PageHeader } from '@/components/page-header'
+import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
@@ -231,7 +232,12 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <PageHeader
         eyebrow={household.name}
-        title="Budgets"
+        title={
+          <span className="flex items-center gap-1.5">
+            Budgets
+            <InfoTooltip term="allocations" label="Budgets" />
+          </span>
+        }
         description={formatMonthLabel(selectedMonth)}
         actions={
           <>

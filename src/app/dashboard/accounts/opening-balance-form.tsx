@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { setOpeningBalanceAction } from './actions'
 import { AdvancedFields } from '@/components/advanced-fields'
+import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -125,7 +126,10 @@ export function OpeningBalanceForm({
         <input type="hidden" name="account_id" value={accountId} />
 
       <div>
-        <h3 className="text-sm font-medium">Set opening balance</h3>
+        <h3 className="flex items-center gap-1.5 text-sm font-medium">
+          Set opening balance
+          <InfoTooltip term="openingBalance" label="Opening balance" />
+        </h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Leave blank or enter 0 if this account starts at zero.
         </p>
@@ -191,6 +195,7 @@ export function OpeningBalanceForm({
         >
           <Label htmlFor={`rate_${accountId}`}>
             Exchange rate: 1 {baseCurrency} = ? {accountCurrency}
+            <InfoTooltip term="exchangeRate" label="Exchange rate" />
             {fetchingRate ? (
               <span className="ml-2 text-xs font-normal text-muted-foreground">
                 Fetching rate…

@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
 import { PageHeader } from '@/components/page-header'
+import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 
@@ -213,7 +214,12 @@ export default async function CategoriesPage({
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <PageHeader
         eyebrow={household.name}
-        title="Categories"
+        title={
+          <span className="flex items-center gap-1.5">
+            Categories
+            <InfoTooltip term="allocations" label="Categories" />
+          </span>
+        }
         description="Manage household categories and reporting behavior."
         actions={
           <>

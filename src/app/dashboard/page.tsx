@@ -23,6 +23,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { MetricCard } from '@/components/metric-card'
+import { InfoTooltip } from '@/components/info-tooltip'
 import { PageHeader } from '@/components/page-header'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
@@ -430,6 +431,7 @@ export default async function DashboardPage({
       icon: <Scale />,
       accent: ACCENT.rose,
       valueClassName: undefined as string | undefined,
+      tooltip: <InfoTooltip term="liabilities" label="Total liabilities" />,
     },
     {
       label: 'Net worth',
@@ -439,6 +441,7 @@ export default async function DashboardPage({
       icon: <TrendingUp />,
       accent: ACCENT.primary,
       valueClassName: netWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined,
+      tooltip: <InfoTooltip term="netWorth" label="Net worth" />,
     },
     {
       label: 'Projected net worth',
@@ -448,6 +451,7 @@ export default async function DashboardPage({
       icon: <Sparkles />,
       accent: ACCENT.violet,
       valueClassName: projectedNetWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined,
+      tooltip: <InfoTooltip term="projectedNetWorth" label="Projected net worth" />,
     },
   ]
   const monthlySavings = Number(monthlySummary?.monthly_savings ?? 0)
@@ -509,6 +513,7 @@ export default async function DashboardPage({
       icon: <Percent />,
       accent: ACCENT.violet,
       valueClassName: undefined as string | undefined,
+      tooltip: <InfoTooltip term="savingsRate" label="Savings rate" />,
     },
   ]
   const largestExpenseCategory = expenseCategories.reduce(
@@ -577,6 +582,7 @@ export default async function DashboardPage({
                 trendMetric={summary.trendMetric}
                 currentMonth={selectedMonth}
                 currency={household.base_currency}
+                tooltip={'tooltip' in summary ? summary.tooltip : undefined}
               />
             ))}
           </div>
@@ -621,6 +627,7 @@ export default async function DashboardPage({
                   trendMetric={summary.trendMetric}
                   currentMonth={selectedMonth}
                   currency={dashboardCurrency}
+                  tooltip={'tooltip' in summary ? summary.tooltip : undefined}
                 />
               ))}
             </div>

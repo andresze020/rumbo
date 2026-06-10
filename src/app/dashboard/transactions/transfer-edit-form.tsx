@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { updateTransferTransactionAction } from './actions'
 import { AdvancedFields } from '@/components/advanced-fields'
+import { InfoTooltip } from '@/components/info-tooltip'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -266,6 +267,7 @@ export function TransferEditForm({
             <span className="font-normal text-muted-foreground">
               (1 {baseCurrency} = ? {selectedFromAccount?.currency_code})
             </span>
+            <InfoTooltip term="exchangeRate" label="Exchange rate" />
           </Label>
           <Input
             id={`exchange_rate_${transactionId}`}

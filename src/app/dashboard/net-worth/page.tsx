@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { MetricCard } from '@/components/metric-card'
 import { PageHeader } from '@/components/page-header'
+import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { Money } from '@/components/money'
@@ -287,7 +288,12 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <PageHeader
         eyebrow={household.name}
-        title="Net Worth"
+        title={
+          <span className="flex items-center gap-1.5">
+            Net Worth
+            <InfoTooltip term="netWorth" label="Net worth" />
+          </span>
+        }
         description={formatMonthLabel(selectedMonth)}
         actions={
           <>
@@ -333,6 +339,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
           description="Posted included liability balances"
           icon={<Scale />}
           accent={ACCENT.rose}
+          tooltip={<InfoTooltip term="liabilities" label="Total liabilities" />}
         />
         <MetricCard
           label="Net worth"
@@ -341,6 +348,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
           icon={<TrendingUp />}
           accent={ACCENT.primary}
           valueClassName={summary.netWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined}
+          tooltip={<InfoTooltip term="netWorth" label="Net worth" />}
         />
         <MetricCard
           label="Projected net worth"
@@ -349,6 +357,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
           icon={<Sparkles />}
           accent={ACCENT.violet}
           valueClassName={summary.projectedNetWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined}
+          tooltip={<InfoTooltip term="projectedNetWorth" label="Projected net worth" />}
         />
       </div>
 
