@@ -140,6 +140,7 @@ export const en = {
     saveAndAddNext: 'Save & Add Next',
     saving: 'Saving…',
     cancel: 'Cancel',
+    frequentlyUsed: 'Frequently used:',
   },
   installPrompt: {
     title: 'Install App Finanzas',
@@ -291,6 +292,7 @@ export const es: DeepStringify<typeof en> = {
     saveAndAddNext: 'Guardar y agregar otra',
     saving: 'Guardando…',
     cancel: 'Cancelar',
+    frequentlyUsed: 'Usadas con frecuencia:',
   },
   installPrompt: {
     title: 'Instala App Finanzas',

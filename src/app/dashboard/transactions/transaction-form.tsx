@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { fetchFxRate } from '@/lib/fx'
 import { useLanguage } from '@/components/language-provider'
+import { cn } from '@/lib/utils'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
 
@@ -54,6 +55,13 @@ type TransactionFormProps = {
 const selectCls =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
+const LAST_ACCOUNT_KEY = 'af_last_account_id'
+const CATEGORY_USAGE_KEY = 'af_category_usage'
+
+function lastCategoryKey(transactionType: TransactionType) {
+  return `af_last_category_id_${transactionType}`
+}
+
 function formatAccountLabel(account: TransactionFormAccount) {
   return [account.name, account.institution_name || null, account.currency_code]
     .filter(Boolean)
@@ -65,6 +73,52 @@ function formatCurrency(value: number | string, currencyCode: string) {
     style: 'currency',
     currency: currencyCode,
   }).format(Number(value))
+}
+
+function getCurrencySymbol(currencyCode: string) {
+  try {
+    const parts = new Intl.NumberFormat('en-CA', {
+      style: 'currency',
+      currency: currencyCode,
+      currencyDisplay: 'narrowSymbol',
+    }).formatToParts(0)
+    return parts.find((part) => part.type === 'currency')?.value ?? currencyCode
+  } catch {
+    return currencyCode
+  }
+}
+
+const thousandsFormatter = new Intl.NumberFormat('en-CA', {
+  maximumFractionDigits: 20,
+})
+
+/** Formats a raw numeric string (e.g. "1234567.5") with thousands separators while typing. */
+function formatAmountForDisplay(raw: string) {
+  if (!raw) return ''
+  const negative = raw.startsWith('-')
+  const unsigned = negative ? raw.slice(1) : raw
+  const [integerPart, ...rest] = unsigned.split('.')
+  const decimalPart = rest.length ? rest.join('') : undefined
+  const groupedInteger = integerPart
+    ? thousandsFormatter.format(BigInt(integerPart || '0'))
+    : ''
+  let result = groupedInteger
+  if (decimalPart !== undefined) {
+    result = `${result || '0'}.${decimalPart}`
+  }
+  return negative ? `-${result}` : result
+}
+
+/** Strips formatting back to a plain numeric string, allowing digits, one leading "-" and one ".". */
+function sanitizeAmountInput(value: string) {
+  let negative = value.trim().startsWith('-')
+  let digits = value.replace(/[^0-9.]/g, '')
+  const firstDot = digits.indexOf('.')
+  if (firstDot !== -1) {
+    digits = digits.slice(0, firstDot + 1) + digits.slice(firstDot + 1).replace(/\./g, '')
+  }
+  if (!digits) negative = false
+  return negative ? `-${digits}` : digits
 }
 
 export function TransactionForm({
@@ -96,6 +150,26 @@ export function TransactionForm({
   const [fxNote, setFxNote] = useState('')
   const [fxError, setFxError] = useState('')
 
+  // Apply remembered account/category defaults from previous submissions, once,
+  // only when the caller hasn't supplied explicit defaults of their own.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!defaultAccountId) {
+      const lastAccountId = window.localStorage.getItem(LAST_ACCOUNT_KEY)
+      if (lastAccountId && accounts.some((a) => a.id === lastAccountId)) {
+        setAccountId((current) => current || lastAccountId)
+      }
+    }
+    if (!defaultCategoryId) {
+      const lastCategoryId = window.localStorage.getItem(lastCategoryKey(transactionType))
+      if (lastCategoryId && categories.some((c) => c.id === lastCategoryId)) {
+        setCategoryId((current) => current || lastCategoryId)
+      }
+    }
+    // Only run on initial mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const selectedAccount = accounts.find((a) => a.id === accountId)
   const isMultiCurrency = Boolean(
     selectedAccount && selectedAccount.currency_code !== baseCurrency
@@ -120,9 +194,34 @@ export function TransactionForm({
       ),
     [categories, transactionType]
   )
+
+  // Most-used categories (for the current type) as one-tap chips.
+  const [frequentCategories, setFrequentCategories] = useState<TransactionFormCategory[]>([])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (compatibleCategories.length < 2) {
+      setFrequentCategories([])
+      return
+    }
+    try {
+      const raw = window.localStorage.getItem(CATEGORY_USAGE_KEY)
+      const usage: Record<string, number> = raw ? JSON.parse(raw) : {}
+      const ranked = compatibleCategories
+        .filter((c) => usage[c.id] > 0)
+        .sort((a, b) => (usage[b.id] ?? 0) - (usage[a.id] ?? 0))
+        .slice(0, 4)
+      setFrequentCategories(ranked)
+    } catch {
+      setFrequentCategories([])
+    }
+  }, [compatibleCategories])
   const isTransfer = transactionType === 'transfer'
   const selectedFromAccount = accounts.find((a) => a.id === fromAccountId)
   const selectedToAccount = accounts.find((a) => a.id === toAccountId)
+  const amountCurrencyCode =
+    (isTransfer ? selectedFromAccount?.currency_code : selectedAccount?.currency_code) ??
+    baseCurrency
+  const amountCurrencySymbol = getCurrencySymbol(amountCurrencyCode)
   const isCrossCurrencyTransfer =
     Boolean(selectedFromAccount && selectedToAccount) &&
     selectedFromAccount?.currency_code !== selectedToAccount?.currency_code
@@ -176,6 +275,21 @@ export function TransactionForm({
     }
   }
 
+  function rememberDefaults() {
+    if (typeof window === 'undefined' || isTransfer) return
+    if (accountId) window.localStorage.setItem(LAST_ACCOUNT_KEY, accountId)
+    if (!categoryId) return
+    window.localStorage.setItem(lastCategoryKey(transactionType), categoryId)
+    try {
+      const raw = window.localStorage.getItem(CATEGORY_USAGE_KEY)
+      const usage: Record<string, number> = raw ? JSON.parse(raw) : {}
+      usage[categoryId] = (usage[categoryId] ?? 0) + 1
+      window.localStorage.setItem(CATEGORY_USAGE_KEY, JSON.stringify(usage))
+    } catch {
+      // Ignore malformed usage data; chips simply won't update this time.
+    }
+  }
+
   function handleTransactionTypeChange(value: TransactionType) {
     setTransactionType(value)
     if (value === 'transfer') {
@@ -190,7 +304,7 @@ export function TransactionForm({
   }
 
   return (
-    <form action={submitAction} className="space-y-4">
+    <form action={submitAction} onSubmit={rememberDefaults} className="space-y-4">
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
       <div className="space-y-2">
         <Label htmlFor="transaction_type">
@@ -388,22 +502,50 @@ export function TransactionForm({
             categories={compatibleCategories}
             transactionType={transactionType}
             onCategoryChange={setCategoryId}
+            selectedCategoryId={categoryId}
           />
+
+          {frequentCategories.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
+              {frequentCategories.map((category) => (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => setCategoryId(category.id)}
+                  className={cn(
+                    'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                    categoryId === category.id
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                  )}
+                >
+                  {category.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </>
       )}
 
       <div className="space-y-2">
         <Label htmlFor="amount">{t('transactionForm.amount')}</Label>
-        <Input
-          id="amount"
-          name="amount"
-          type="text"
-          inputMode="decimal"
-          placeholder="0.00"
-          value={amountInput}
-          onChange={(e) => setAmountInput(e.target.value)}
-          required
-        />
+        <div className="relative">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            {amountCurrencySymbol}
+          </span>
+          <Input
+            id="amount"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={formatAmountForDisplay(amountInput)}
+            onChange={(e) => setAmountInput(sanitizeAmountInput(e.target.value))}
+            className="pl-7"
+            required
+          />
+        </div>
+        <input type="hidden" name="amount" value={amountInput} />
       </div>
 
       <div className="space-y-2">
