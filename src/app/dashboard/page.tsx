@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/card'
 import { MetricCard } from '@/components/metric-card'
 import { InfoTooltip } from '@/components/info-tooltip'
+import { DashboardSummary } from '@/components/dashboard-summary'
 import { PageHeader } from '@/components/page-header'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
@@ -554,6 +555,17 @@ export default async function DashboardPage({
           </form>
         }
       />
+
+      {/* ── Plain-language summary ─────────────────────────────────────── */}
+      {!monthlySummaryError && monthlySummary ? (
+        <DashboardSummary
+          monthlyExpenses={monthlyExpenses}
+          expensesDelta={expensesDelta}
+          hasBudget={budgetLines.length > 0 && totalBudgetPlanned > 0}
+          totalBudgetPercent={totalBudgetPercent}
+          currency={dashboardCurrency}
+        />
+      ) : null}
 
       {/* ── Errors ─────────────────────────────────────────────────────── */}
       {(accountBalancesError || monthlySummaryError || expenseCategoriesError || categoryLookupError) ? (
