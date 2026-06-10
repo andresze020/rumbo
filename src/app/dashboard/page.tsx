@@ -12,9 +12,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
-import { Button, buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { buttonVariants } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -32,6 +30,7 @@ import { Callout } from '@/components/callout'
 import { AccountAvatar } from '@/components/account-avatar'
 import { AccountCardDetails } from './accounts/account-card-details'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
+import { MonthNav } from '@/components/month-nav'
 import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
@@ -553,19 +552,12 @@ export default async function DashboardPage({
         title={t('dashboard.title')}
         description={t('dashboard.yourMoneyIn', { month: formatMonthLabel(selectedMonth) })}
         actions={
-          <form action="/dashboard" className="flex items-end gap-2">
-            <div className="grid gap-1">
-              <Label htmlFor="month" className="text-xs text-muted-foreground">{t('dashboard.month')}</Label>
-              <Input
-                id="month"
-                type="month"
-                name="month"
-                defaultValue={selectedMonth}
-                className="h-8 text-sm"
-              />
-            </div>
-            <Button type="submit" variant="outline" size="sm">{t('dashboard.view')}</Button>
-          </form>
+          <MonthNav
+            month={selectedMonth}
+            basePath="/dashboard"
+            previousLabel={t('common.previousMonth')}
+            nextLabel={t('common.nextMonth')}
+          />
         }
       />
 

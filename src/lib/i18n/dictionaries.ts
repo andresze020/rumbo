@@ -42,6 +42,8 @@ export const en = {
     noChangeVsLastMonth: 'No change vs last month',
     vsLastMonth: 'vs last month',
     ppVsLastMonth: 'pp vs last month',
+    previousMonth: 'Previous month',
+    nextMonth: 'Next month',
   },
   settings: {
     language: {
@@ -177,6 +179,8 @@ export const es: DeepStringify<typeof en> = {
     noChangeVsLastMonth: 'Sin cambios respecto al mes anterior',
     vsLastMonth: 'vs. mes anterior',
     ppVsLastMonth: 'pp vs. mes anterior',
+    previousMonth: 'Mes anterior',
+    nextMonth: 'Mes siguiente',
   },
   settings: {
     language: {
