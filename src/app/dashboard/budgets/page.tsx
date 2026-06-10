@@ -7,17 +7,21 @@ import {
 } from './actions'
 import { HandCoins, PieChart, Plus, Target, Wallet } from 'lucide-react'
 import { BudgetLineRow } from './budget-line-row'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
+import { MonthNav } from '@/components/month-nav'
 import { PageHeader } from '@/components/page-header'
+import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
 import { createClient } from '@/lib/supabase/server'
+import { getLocale } from '@/lib/i18n/server'
+import { translate } from '@/lib/i18n/translate'
 
 type BudgetsPageProps = {
   searchParams: Promise<{
@@ -138,6 +142,7 @@ function getCategoryPath(
 
 export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
   const selectedMonth = parseBudgetMonth(params.month)
   const selectedMonthDate = `${selectedMonth}-01`
   const previousMonth = previousMonthParam(selectedMonth)
@@ -231,19 +236,21 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <PageHeader
         eyebrow={household.name}
-        title="Budgets"
+        title={
+          <span className="flex items-center gap-1.5">
+            Budgets
+            <InfoTooltip term="allocations" label="Budgets" />
+          </span>
+        }
         description={formatMonthLabel(selectedMonth)}
         actions={
           <>
-            <form action="/dashboard/budgets" className="flex flex-wrap items-end gap-2">
-              <div className="grid gap-1">
-                <Label htmlFor="month" className="text-xs">Month</Label>
-                <Input id="month" type="month" name="month" defaultValue={selectedMonth} className="h-8 text-sm" />
-              </div>
-              <Button type="submit" variant="outline" size="sm">
-                View
-              </Button>
-            </form>
+            <MonthNav
+              month={selectedMonth}
+              basePath="/dashboard/budgets"
+              previousLabel={translate(locale, 'common.previousMonth')}
+              nextLabel={translate(locale, 'common.nextMonth')}
+            />
 
             {!budgetError && budget && hasPreviousBudget ? (
               <form action={copyPreviousMonthBudgetAction}>

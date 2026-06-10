@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createDebtAction } from './actions'
+import { AdvancedFields } from '@/components/advanced-fields'
+import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -193,137 +195,152 @@ export function DebtCreateForm({
               />
             </div>
 
-            {isMultiCurrency ? (
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="debt_user_rate">
-                  Exchange rate: 1 {baseCurrency} = ? {selectedCurrency}
-                  {fetchingRate ? (
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
-                      Fetching rate…
-                    </span>
-                  ) : null}
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Enter how many {selectedCurrency} make up 1 {baseCurrency}. This converts the
-                  outstanding balance above into {baseCurrency} for your net worth and reports.
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    id="debt_user_rate"
-                    type="text"
-                    inputMode="decimal"
-                    placeholder={fetchingRate ? 'Fetching…' : 'e.g. 1.35'}
-                    value={userRate}
-                    onChange={(e) => {
-                      setUserRate(e.target.value)
-                      setFxNote('')
-                      setFxError('')
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    disabled={fetchingRate}
-                    onClick={() => autoFetch(selectedCurrency, openingBalanceDate)}
-                  >
-                    Refresh
-                  </Button>
-                </div>
-                {fxError ? (
-                  <p className="text-xs text-destructive">{fxError}</p>
-                ) : fxNote ? (
-                  <p className="text-xs text-amber-600 dark:text-amber-400">{fxNote}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Auto-filled for {openingBalanceDate}. Edit if needed.
-                  </p>
-                )}
-                {conversionPreview ? (
-                  <p className="text-xs font-medium text-foreground">
-                    {conversionPreview}{' '}
-                    <span className="font-normal text-muted-foreground">at this rate</span>
-                  </p>
-                ) : null}
-                {rateIsValid ? (
-                  <input
-                    type="hidden"
-                    name="rate_base_to_account"
-                    value={String(parsedRate)}
-                  />
-                ) : (
-                  <input type="hidden" name="exchange_rate_to_base" value="1" />
-                )}
-              </div>
+          </>
+        ) : null}
+      </div>
+
+      {isNewAccount ? (
+        isMultiCurrency ? (
+          <AdvancedFields
+            defaultOpen
+            summary={
+              rateIsValid
+                ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${selectedCurrency}`
+                : undefined
+            }
+          >
+            <Label htmlFor="debt_user_rate">
+              Exchange rate: 1 {baseCurrency} = ? {selectedCurrency}
+              <InfoTooltip term="exchangeRate" label="Exchange rate" />
+              {fetchingRate ? (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  Fetching rate…
+                </span>
+              ) : null}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Enter how many {selectedCurrency} make up 1 {baseCurrency}. This converts the
+              outstanding balance above into {baseCurrency} for your net worth and reports.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                id="debt_user_rate"
+                type="text"
+                inputMode="decimal"
+                placeholder={fetchingRate ? 'Fetching…' : 'e.g. 1.35'}
+                value={userRate}
+                onChange={(e) => {
+                  setUserRate(e.target.value)
+                  setFxNote('')
+                  setFxError('')
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                disabled={fetchingRate}
+                onClick={() => autoFetch(selectedCurrency, openingBalanceDate)}
+              >
+                Refresh
+              </Button>
+            </div>
+            {fxError ? (
+              <p className="text-xs text-destructive">{fxError}</p>
+            ) : fxNote ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">{fxNote}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Auto-filled for {openingBalanceDate}. Edit if needed.
+              </p>
+            )}
+            {conversionPreview ? (
+              <p className="text-xs font-medium text-foreground">
+                {conversionPreview}{' '}
+                <span className="font-normal text-muted-foreground">at this rate</span>
+              </p>
+            ) : null}
+            {rateIsValid ? (
+              <input
+                type="hidden"
+                name="rate_base_to_account"
+                value={String(parsedRate)}
+              />
             ) : (
               <input type="hidden" name="exchange_rate_to_base" value="1" />
             )}
-          </>
-        ) : null}
+          </AdvancedFields>
+        ) : (
+          <input type="hidden" name="exchange_rate_to_base" value="1" />
+        )
+      ) : null}
 
-        <div className="space-y-2">
-          <Label htmlFor="original_principal">Original principal</Label>
-          <Input
-            id="original_principal"
-            name="original_principal"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-          />
-          <p className="text-xs text-muted-foreground">
-            Optional. The original amount borrowed, used for progress tracking.
-          </p>
-        </div>
+      <AdvancedFields label="Loan details (optional)">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="original_principal">Original principal</Label>
+            <Input
+              id="original_principal"
+              name="original_principal"
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional. The original amount borrowed, used for progress tracking.
+            </p>
+          </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="interest_rate">Interest rate (%)</Label>
-          <Input
-            id="interest_rate"
-            name="interest_rate"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-          />
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="interest_rate">Interest rate (%)</Label>
+            <Input
+              id="interest_rate"
+              name="interest_rate"
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+            />
+          </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="interest_rate_period">Interest period</Label>
-          <select
-            id="interest_rate_period"
-            name="interest_rate_period"
-            className={selectCls}
-            defaultValue=""
-          >
-            <option value="">Not set</option>
-            <option value="monthly">Monthly</option>
-            <option value="annual">Annual</option>
-          </select>
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="interest_rate_period">Interest period</Label>
+            <select
+              id="interest_rate_period"
+              name="interest_rate_period"
+              className={selectCls}
+              defaultValue=""
+            >
+              <option value="">Not set</option>
+              <option value="monthly">Monthly</option>
+              <option value="annual">Annual</option>
+            </select>
+          </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="minimum_payment">Minimum payment</Label>
-          <Input
-            id="minimum_payment"
-            name="minimum_payment"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-          />
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="minimum_payment">Minimum payment</Label>
+            <Input
+              id="minimum_payment"
+              name="minimum_payment"
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+            />
+          </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="payment_due_day">Due day</Label>
-          <Input
-            id="payment_due_day"
-            name="payment_due_day"
-            type="number"
-            min="1"
-            max="31"
-            step="1"
-          />
+          <div className="space-y-2">
+            <Label htmlFor="payment_due_day">Due day</Label>
+            <Input
+              id="payment_due_day"
+              name="payment_due_day"
+              type="number"
+              min="1"
+              max="31"
+              step="1"
+            />
+          </div>
         </div>
-      </div>
+      </AdvancedFields>
 
       <div className="space-y-2">
         <Label htmlFor="notes">Notes</Label>

@@ -2,16 +2,18 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Scale, Sparkles, TrendingUp, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button, buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { buttonVariants } from '@/components/ui/button'
 import { MetricCard } from '@/components/metric-card'
+import { MonthNav } from '@/components/month-nav'
 import { PageHeader } from '@/components/page-header'
+import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { Money } from '@/components/money'
 import { AccountAvatar } from '@/components/account-avatar'
 import { createClient } from '@/lib/supabase/server'
+import { getLocale } from '@/lib/i18n/server'
+import { translate } from '@/lib/i18n/translate'
 
 const ACCENT = {
   emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
@@ -225,6 +227,7 @@ function AccountList({
 
 export default async function NetWorthPage({ searchParams }: NetWorthPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
   const selectedMonth = parseMonth(params.month)
   const selectedMonthEndDate = getMonthEndDate(selectedMonth)
   const evolutionMonths = getPreviousMonths(selectedMonth, 6)
@@ -287,7 +290,12 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <PageHeader
         eyebrow={household.name}
-        title="Net Worth"
+        title={
+          <span className="flex items-center gap-1.5">
+            Net Worth
+            <InfoTooltip term="netWorth" label="Net worth" />
+          </span>
+        }
         description={formatMonthLabel(selectedMonth)}
         actions={
           <>
@@ -297,15 +305,12 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
             >
               Debts
             </Link>
-            <form action="/dashboard/net-worth" className="flex flex-wrap items-end gap-2">
-              <div className="grid gap-1">
-                <Label htmlFor="month" className="text-xs">Month</Label>
-                <Input id="month" type="month" name="month" defaultValue={selectedMonth} className="h-8 text-sm" />
-              </div>
-              <Button type="submit" variant="outline" size="sm">
-                View
-              </Button>
-            </form>
+            <MonthNav
+              month={selectedMonth}
+              basePath="/dashboard/net-worth"
+              previousLabel={translate(locale, 'common.previousMonth')}
+              nextLabel={translate(locale, 'common.nextMonth')}
+            />
           </>
         }
       />
@@ -333,6 +338,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
           description="Posted included liability balances"
           icon={<Scale />}
           accent={ACCENT.rose}
+          tooltip={<InfoTooltip term="liabilities" label="Total liabilities" />}
         />
         <MetricCard
           label="Net worth"
@@ -341,6 +347,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
           icon={<TrendingUp />}
           accent={ACCENT.primary}
           valueClassName={summary.netWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined}
+          tooltip={<InfoTooltip term="netWorth" label="Net worth" />}
         />
         <MetricCard
           label="Projected net worth"
@@ -349,6 +356,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
           icon={<Sparkles />}
           accent={ACCENT.violet}
           valueClassName={summary.projectedNetWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined}
+          tooltip={<InfoTooltip term="projectedNetWorth" label="Projected net worth" />}
         />
       </div>
 
