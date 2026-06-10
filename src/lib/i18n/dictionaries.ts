@@ -148,6 +148,13 @@ export const en = {
     install: 'Install',
     dismiss: 'Dismiss',
   },
+  transactionsList: {
+    today: 'Today',
+    yesterday: 'Yesterday',
+    toastCreated: 'Transaction created.',
+    toastUpdated: 'Transaction updated.',
+    toastVoided: 'Transaction voided.',
+  },
 } as const
 
 export const es: DeepStringify<typeof en> = {
@@ -291,6 +298,13 @@ export const es: DeepStringify<typeof en> = {
     iosDescription: 'Toca el ícono de compartir y luego "Agregar a pantalla de inicio".',
     install: 'Instalar',
     dismiss: 'Descartar',
+  },
+  transactionsList: {
+    today: 'Hoy',
+    yesterday: 'Ayer',
+    toastCreated: 'Transacción creada.',
+    toastUpdated: 'Transacción actualizada.',
+    toastVoided: 'Transacción anulada.',
   },
 } as const
 
