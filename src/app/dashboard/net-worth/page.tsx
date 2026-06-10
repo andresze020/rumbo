@@ -2,10 +2,9 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Scale, Sparkles, TrendingUp, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button, buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { buttonVariants } from '@/components/ui/button'
 import { MetricCard } from '@/components/metric-card'
+import { MonthNav } from '@/components/month-nav'
 import { PageHeader } from '@/components/page-header'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
@@ -13,6 +12,8 @@ import { Callout } from '@/components/callout'
 import { Money } from '@/components/money'
 import { AccountAvatar } from '@/components/account-avatar'
 import { createClient } from '@/lib/supabase/server'
+import { getLocale } from '@/lib/i18n/server'
+import { translate } from '@/lib/i18n/translate'
 
 const ACCENT = {
   emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
@@ -226,6 +227,7 @@ function AccountList({
 
 export default async function NetWorthPage({ searchParams }: NetWorthPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
   const selectedMonth = parseMonth(params.month)
   const selectedMonthEndDate = getMonthEndDate(selectedMonth)
   const evolutionMonths = getPreviousMonths(selectedMonth, 6)
@@ -303,15 +305,12 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
             >
               Debts
             </Link>
-            <form action="/dashboard/net-worth" className="flex flex-wrap items-end gap-2">
-              <div className="grid gap-1">
-                <Label htmlFor="month" className="text-xs">Month</Label>
-                <Input id="month" type="month" name="month" defaultValue={selectedMonth} className="h-8 text-sm" />
-              </div>
-              <Button type="submit" variant="outline" size="sm">
-                View
-              </Button>
-            </form>
+            <MonthNav
+              month={selectedMonth}
+              basePath="/dashboard/net-worth"
+              previousLabel={translate(locale, 'common.previousMonth')}
+              nextLabel={translate(locale, 'common.nextMonth')}
+            />
           </>
         }
       />
