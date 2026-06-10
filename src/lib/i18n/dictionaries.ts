@@ -141,6 +141,13 @@ export const en = {
     saving: 'Saving…',
     cancel: 'Cancel',
   },
+  installPrompt: {
+    title: 'Install App Finanzas',
+    androidDescription: 'Add this app to your home screen for quick access.',
+    iosDescription: 'Tap the Share icon, then "Add to Home Screen".',
+    install: 'Install',
+    dismiss: 'Dismiss',
+  },
 } as const
 
 export const es: DeepStringify<typeof en> = {
@@ -277,6 +284,13 @@ export const es: DeepStringify<typeof en> = {
     saveAndAddNext: 'Guardar y agregar otra',
     saving: 'Guardando…',
     cancel: 'Cancelar',
+  },
+  installPrompt: {
+    title: 'Instala App Finanzas',
+    androidDescription: 'Agrega esta app a tu pantalla de inicio para acceder más rápido.',
+    iosDescription: 'Toca el ícono de compartir y luego "Agregar a pantalla de inicio".',
+    install: 'Instalar',
+    dismiss: 'Descartar',
   },
 } as const
 
