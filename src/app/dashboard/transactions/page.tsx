@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight } from 'lucide-react'
 import { TransactionEditForm } from './transaction-edit-form'
 import { TransferEditForm } from './transfer-edit-form'
 import { TransactionFilters } from './transaction-filters'
@@ -82,6 +83,7 @@ type CategoryLookup = {
   name: string
   parent_category_id: string | null
   icon?: string | null
+  color?: string | null
 }
 
 type TransactionFilters = {
@@ -102,6 +104,7 @@ type TransactionRow = {
   canEdit: boolean
   canEditTransfer: boolean
   canVoid: boolean
+  categoryColor: string | null
   categoryIcon: string | null
   categoryName: string
   displayAmount?: number | string
@@ -173,6 +176,17 @@ function formatCurrency(value: number | string, currencyCode: string) {
     style: 'currency',
     currency: currencyCode,
   }).format(Number(value))
+}
+
+function getTransactionTypeStyle(transactionType: string) {
+  switch (transactionType) {
+    case 'income':
+      return { icon: ArrowDownLeft, colorClass: 'text-emerald-600 dark:text-emerald-400' }
+    case 'expense':
+      return { icon: ArrowUpRight, colorClass: 'text-red-600 dark:text-red-400' }
+    default:
+      return { icon: ArrowLeftRight, colorClass: 'text-foreground' }
+  }
 }
 
 function getCategoryPath(
@@ -406,7 +420,7 @@ export default async function TransactionsPage({
     if (categoryIds.length) {
       const { data: categoryRows, error: categoryRowsError } = await supabase
         .from('categories')
-        .select('id, name, parent_category_id, icon')
+        .select('id, name, parent_category_id, icon, color')
         .eq('household_id', household.id)
       transactionDetailsError = transactionDetailsError || Boolean(categoryRowsError)
       categoryLookupRows = (categoryRows ?? []) as CategoryLookup[]
@@ -435,6 +449,9 @@ export default async function TransactionsPage({
   )
   const categoryIconsById = new Map(
     categoryLookupRows.map((c) => [c.id, c.icon ?? null])
+  )
+  const categoryColorsById = new Map(
+    categoryLookupRows.map((c) => [c.id, c.color ?? null])
   )
   const categoryOptionsById = new Map(allCategories.map((c) => [c.id, c]))
   const activeAccounts = allAccounts.filter((a) => !a.is_archived)
@@ -519,6 +536,10 @@ export default async function TransactionsPage({
       !isTransfer && !isOpeningBalance && !isDebtPayment && allocation
         ? (categoryIconsById.get(allocation.category_id) ?? null)
         : null
+    const categoryColor =
+      !isTransfer && !isOpeningBalance && !isDebtPayment && allocation
+        ? (categoryColorsById.get(allocation.category_id) ?? null)
+        : null
     const amountEntry = isBalanceMovement ? transferInEntry ?? transferOutEntry : entry
     const displayAmount =
       isBalanceMovement && amountEntry
@@ -532,6 +553,7 @@ export default async function TransactionsPage({
       canEdit,
       canEditTransfer,
       canVoid: !['voided', 'deleted_soft'].includes(transaction.status),
+      categoryColor,
       categoryIcon,
       categoryName,
       displayAmount,
@@ -733,7 +755,19 @@ export default async function TransactionsPage({
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                    {(() => {
+                      const { icon: TypeIcon, colorClass } = getTransactionTypeStyle(
+                        row.transaction.transaction_type
+                      )
+                      return (
+                        <TypeIcon
+                          className={`mt-0.5 size-4 shrink-0 ${colorClass}`}
+                          aria-hidden="true"
+                        />
+                      )
+                    })()}
+                    <div className="min-w-0 flex-1 space-y-0.5">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <h2 className="font-medium leading-snug">{row.title}</h2>
                       <Badge variant="secondary" className="text-xs">
@@ -758,7 +792,14 @@ export default async function TransactionsPage({
                       <span>·</span>
                       <span>{row.accountName}</span>
                       <span>·</span>
-                      <span>
+                      <span className="inline-flex items-center gap-1">
+                        {row.categoryColor ? (
+                          <span
+                            className="size-2 shrink-0 rounded-full border"
+                            style={{ backgroundColor: row.categoryColor }}
+                            aria-hidden="true"
+                          />
+                        ) : null}
                         {row.categoryIcon ? (
                           <span aria-hidden="true">{row.categoryIcon} </span>
                         ) : null}
@@ -789,6 +830,7 @@ export default async function TransactionsPage({
                         {row.transaction.notes}
                       </p>
                     ) : null}
+                    </div>
                   </div>
 
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -797,6 +839,8 @@ export default async function TransactionsPage({
                         className={`text-base font-semibold tabular-nums leading-snug ${
                           row.transaction.transaction_type === 'income'
                             ? 'text-emerald-600 dark:text-emerald-400'
+                            : row.transaction.transaction_type === 'expense'
+                            ? 'text-red-600 dark:text-red-400'
                             : ''
                         }`}
                       >
