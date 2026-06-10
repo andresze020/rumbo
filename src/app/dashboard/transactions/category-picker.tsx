@@ -17,6 +17,8 @@ type CategoryPickerProps = {
   transactionType: TransactionType
   onCategoryChange: (categoryId: string) => void
   defaultCategoryId?: string
+  /** External selection (e.g. from a "frequently used" chip) to sync into the picker. */
+  selectedCategoryId?: string
 }
 
 export function CategoryPicker({
@@ -24,6 +26,7 @@ export function CategoryPicker({
   transactionType,
   onCategoryChange,
   defaultCategoryId,
+  selectedCategoryId,
 }: CategoryPickerProps) {
   const defaultCategory = defaultCategoryId
     ? categories.find((category) => category.id === defaultCategoryId)
@@ -34,6 +37,28 @@ export function CategoryPicker({
   const [subcategoryId, setSubcategoryId] = useState(
     defaultCategory?.parent_category_id ? defaultCategory.id : ''
   )
+
+  // Keep internal selection in sync when a category is chosen externally
+  // (e.g. by clicking a "frequently used" chip). Adjust state during render
+  // rather than in an effect, per https://react.dev/learn/you-might-not-need-an-effect.
+  const [syncedSelectedCategoryId, setSyncedSelectedCategoryId] = useState(selectedCategoryId)
+  if (
+    selectedCategoryId &&
+    selectedCategoryId !== syncedSelectedCategoryId &&
+    selectedCategoryId !== (subcategoryId || parentCategoryId)
+  ) {
+    setSyncedSelectedCategoryId(selectedCategoryId)
+    const category = categories.find((c) => c.id === selectedCategoryId)
+    if (category) {
+      if (category.parent_category_id) {
+        setParentCategoryId(category.parent_category_id)
+        setSubcategoryId(category.id)
+      } else {
+        setParentCategoryId(category.id)
+        setSubcategoryId('')
+      }
+    }
+  }
 
   const parentCategories = useMemo(
     () =>
