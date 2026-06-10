@@ -25,6 +25,7 @@ import {
 import { MetricCard } from '@/components/metric-card'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { DashboardSummary } from '@/components/dashboard-summary'
+import { GettingStartedChecklist } from '@/components/getting-started-checklist'
 import { PageHeader } from '@/components/page-header'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
@@ -325,6 +326,13 @@ export default async function DashboardPage({
     p_budget_month: selectedMonthDate,
   })
 
+  const { count: nonOpeningTransactionCount } = await supabase
+    .from('transactions')
+    .select('id', { count: 'exact', head: true })
+    .eq('household_id', household.id)
+    .neq('transaction_type', 'opening_balance')
+    .is('deleted_at', null)
+
   const balances = (accountBalances ?? []) as AccountBalance[]
   const monthlySummary =
     ((monthlySummaryRows ?? [])[0] as MonthlyDashboardSummary | undefined) ??
@@ -554,6 +562,13 @@ export default async function DashboardPage({
             <Button type="submit" variant="outline" size="sm">View</Button>
           </form>
         }
+      />
+
+      {/* ── Getting started ────────────────────────────────────────────── */}
+      <GettingStartedChecklist
+        hasAccounts={balances.length > 0}
+        hasTransactions={(nonOpeningTransactionCount ?? 0) > 0}
+        hasBudget={budgetLines.length > 0}
       />
 
       {/* ── Plain-language summary ─────────────────────────────────────── */}
