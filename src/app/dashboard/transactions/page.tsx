@@ -5,6 +5,7 @@ import { TransactionEditForm } from './transaction-edit-form'
 import { TransferEditForm } from './transfer-edit-form'
 import { TransactionFilters } from './transaction-filters'
 import { VoidTransactionForm } from './void-transaction-form'
+import { TransactionToasts } from './transaction-toasts'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
@@ -14,6 +15,9 @@ import { PageHeader } from '@/components/page-header'
 import { Callout } from '@/components/callout'
 import { StatusBadge } from '@/components/status-badge'
 import { createClient } from '@/lib/supabase/server'
+import { getLocale } from '@/lib/i18n/server'
+import { translate } from '@/lib/i18n/translate'
+import type { Locale } from '@/lib/i18n/dictionaries'
 
 type TransactionsPageProps = {
   searchParams: Promise<{
@@ -178,6 +182,49 @@ function formatCurrency(value: number | string, currencyCode: string) {
   }).format(Number(value))
 }
 
+type TransactionGroup = {
+  date: string
+  label: string
+  rows: TransactionRow[]
+}
+
+function formatGroupDateLabel(date: string, locale: Locale) {
+  const [yr, mo, dy] = date.split('-').map(Number)
+  return new Intl.DateTimeFormat(locale === 'es' ? 'es-ES' : 'en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date(Date.UTC(yr, mo - 1, dy)))
+}
+
+function groupRowsByDate(
+  rows: TransactionRow[],
+  locale: Locale,
+  t: (key: 'transactionsList.today' | 'transactionsList.yesterday') => string
+): TransactionGroup[] {
+  const todayStr = todayIsoDate()
+  const yesterdayStr = offsetDate(todayStr, -1)
+  const groups: TransactionGroup[] = []
+
+  for (const row of rows) {
+    const date = row.transaction.transaction_date
+    const lastGroup = groups[groups.length - 1]
+    if (lastGroup && lastGroup.date === date) {
+      lastGroup.rows.push(row)
+      continue
+    }
+    const label =
+      date === todayStr
+        ? t('transactionsList.today')
+        : date === yesterdayStr
+        ? t('transactionsList.yesterday')
+        : formatGroupDateLabel(date, locale)
+    groups.push({ date, label, rows: [row] })
+  }
+
+  return groups
+}
+
 function getTransactionTypeStyle(transactionType: string) {
   switch (transactionType) {
     case 'income':
@@ -235,10 +282,10 @@ export default async function TransactionsPage({
   searchParams,
 }: TransactionsPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
+  const t = (key: 'transactionsList.today' | 'transactionsList.yesterday') =>
+    translate(locale, key)
   const errorMessage = typeof params.error === 'string' ? params.error : null
-  const created = params.created === '1'
-  const voided = params.voided === '1'
-  const updated = params.updated === '1'
 
   const rawDateFrom = typeof params.date_from === 'string' ? params.date_from : ''
   const rawDateTo = typeof params.date_to === 'string' ? params.date_to : ''
@@ -578,6 +625,7 @@ export default async function TransactionsPage({
   const selectedEditRow = transactionRows.find(
     (row) => row.transaction.id === editTransactionId
   )
+  const transactionGroups = groupRowsByDate(transactionRows, locale, t)
   const visibleCount = transactionRows.length
   const pendingCount = transactionRows.filter((r) => r.transaction.status === 'pending').length
   const importedCount = transactionRows.filter((r) => r.isImported).length
@@ -641,10 +689,8 @@ export default async function TransactionsPage({
       />
 
       {/* ── Notifications ──────────────────────────────────────────────── */}
+      <TransactionToasts />
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
-      {created ? <Callout variant="success">Transaction created.</Callout> : null}
-      {voided ? <Callout variant="info">Transaction voided.</Callout> : null}
-      {updated ? <Callout variant="success">Transaction updated.</Callout> : null}
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
       <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
@@ -746,122 +792,129 @@ export default async function TransactionsPage({
         {transactionDetailsError ? (
           <Callout variant="error">Could not load transaction details.</Callout>
         ) : transactionRows.length ? (
-          <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
-            {transactionRows.map((row) => (
-              <div
-                key={row.transaction.id}
-                className={`space-y-1 p-4 transition-colors ${
-                  row.isVoided ? 'bg-muted/30 text-muted-foreground' : 'hover:bg-muted/30'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                    {(() => {
-                      const { icon: TypeIcon, colorClass } = getTransactionTypeStyle(
-                        row.transaction.transaction_type
-                      )
-                      return (
-                        <TypeIcon
-                          className={`mt-0.5 size-4 shrink-0 ${colorClass}`}
-                          aria-hidden="true"
-                        />
-                      )
-                    })()}
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <h2 className="font-medium leading-snug">{row.title}</h2>
-                      <Badge variant="secondary" className="text-xs">
-                        {row.isOpeningBalance
-                          ? 'Opening balance'
-                          : row.isTransfer
-                          ? 'Transfer'
-                          : row.isDebtPayment
-                          ? 'Debt payment'
-                          : formatValue(row.transaction.transaction_type)}
-                      </Badge>
-                      <StatusBadge status={row.transaction.status} />
-                      {row.isImported ? (
-                        <Badge variant="outline" className="text-xs">
-                          Imported
-                        </Badge>
-                      ) : null}
-                    </div>
+          <div className="overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
+            {transactionGroups.map((group) => (
+              <div key={group.date}>
+                <div className="border-b bg-muted/40 px-4 py-1.5 text-xs font-medium capitalize text-muted-foreground">
+                  {group.label}
+                </div>
+                <div className="divide-y">
+                  {group.rows.map((row) => (
+                    <div
+                      key={row.transaction.id}
+                      className={`space-y-1 p-4 transition-colors ${
+                        row.isVoided ? 'bg-muted/30 text-muted-foreground' : 'hover:bg-muted/30'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                          {(() => {
+                            const { icon: TypeIcon, colorClass } = getTransactionTypeStyle(
+                              row.transaction.transaction_type
+                            )
+                            return (
+                              <TypeIcon
+                                className={`mt-0.5 size-4 shrink-0 ${colorClass}`}
+                                aria-hidden="true"
+                              />
+                            )
+                          })()}
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <h2 className="font-medium leading-snug">{row.title}</h2>
+                            <Badge variant="secondary" className="text-xs">
+                              {row.isOpeningBalance
+                                ? 'Opening balance'
+                                : row.isTransfer
+                                ? 'Transfer'
+                                : row.isDebtPayment
+                                ? 'Debt payment'
+                                : formatValue(row.transaction.transaction_type)}
+                            </Badge>
+                            <StatusBadge status={row.transaction.status} />
+                            {row.isImported ? (
+                              <Badge variant="outline" className="text-xs">
+                                Imported
+                              </Badge>
+                            ) : null}
+                          </div>
 
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                      <span>{row.transaction.transaction_date}</span>
-                      <span>·</span>
-                      <span>{row.accountName}</span>
-                      <span>·</span>
-                      <span className="inline-flex items-center gap-1">
-                        {row.categoryColor ? (
-                          <span
-                            className="size-2 shrink-0 rounded-full border"
-                            style={{ backgroundColor: row.categoryColor }}
-                            aria-hidden="true"
-                          />
-                        ) : null}
-                        {row.categoryIcon ? (
-                          <span aria-hidden="true">{row.categoryIcon} </span>
-                        ) : null}
-                        {row.categoryName}
-                      </span>
-                      {row.amountEntry?.currency_code ? (
-                        <>
-                          <span>·</span>
-                          <span>{row.amountEntry.currency_code}</span>
-                        </>
-                      ) : null}
-                      {row.transaction.merchant_name ? (
-                        <>
-                          <span>·</span>
-                          <span>{row.transaction.merchant_name}</span>
-                        </>
-                      ) : null}
-                      {row.transaction.void_reason ? (
-                        <>
-                          <span>·</span>
-                          <span>Voided: {row.transaction.void_reason}</span>
-                        </>
-                      ) : null}
-                    </div>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                            <span>{row.accountName}</span>
+                            <span>·</span>
+                            <span className="inline-flex items-center gap-1">
+                              {row.categoryColor ? (
+                                <span
+                                  className="size-2 shrink-0 rounded-full border"
+                                  style={{ backgroundColor: row.categoryColor }}
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                              {row.categoryIcon ? (
+                                <span aria-hidden="true">{row.categoryIcon} </span>
+                              ) : null}
+                              {row.categoryName}
+                            </span>
+                            {row.amountEntry?.currency_code ? (
+                              <>
+                                <span>·</span>
+                                <span>{row.amountEntry.currency_code}</span>
+                              </>
+                            ) : null}
+                            {row.transaction.merchant_name ? (
+                              <>
+                                <span>·</span>
+                                <span>{row.transaction.merchant_name}</span>
+                              </>
+                            ) : null}
+                            {row.transaction.void_reason ? (
+                              <>
+                                <span>·</span>
+                                <span>Voided: {row.transaction.void_reason}</span>
+                              </>
+                            ) : null}
+                          </div>
 
-                    {row.transaction.notes ? (
-                      <p className="text-xs italic text-muted-foreground/70">
-                        {row.transaction.notes}
-                      </p>
-                    ) : null}
-                    </div>
-                  </div>
+                          {row.transaction.notes ? (
+                            <p className="text-xs italic text-muted-foreground/70">
+                              {row.transaction.notes}
+                            </p>
+                          ) : null}
+                          </div>
+                        </div>
 
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    {row.amountEntry && row.displayAmount !== undefined ? (
-                      <p
-                        className={`text-base font-semibold tabular-nums leading-snug ${
-                          row.transaction.transaction_type === 'income'
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : row.transaction.transaction_type === 'expense'
-                            ? 'text-red-600 dark:text-red-400'
-                            : ''
-                        }`}
-                      >
-                        {formatCurrency(row.displayAmount, row.amountEntry.currency_code)}
-                      </p>
-                    ) : null}
+                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          {row.amountEntry && row.displayAmount !== undefined ? (
+                            <p
+                              className={`text-base font-semibold tabular-nums leading-snug ${
+                                row.transaction.transaction_type === 'income'
+                                  ? 'text-emerald-600 dark:text-emerald-400'
+                                  : row.transaction.transaction_type === 'expense'
+                                  ? 'text-red-600 dark:text-red-400'
+                                  : ''
+                              }`}
+                            >
+                              {formatCurrency(row.displayAmount, row.amountEntry.currency_code)}
+                            </p>
+                          ) : null}
 
-                    <div className="flex flex-wrap justify-end gap-1.5">
-                      {row.canEdit || row.canEditTransfer ? (
-                        <Link
-                          href={transactionsPath(filters, { edit: row.transaction.id })}
-                          className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                        >
-                          Edit
-                        </Link>
-                      ) : null}
-                      {row.canVoid ? (
-                        <VoidTransactionForm transactionId={row.transaction.id} />
-                      ) : null}
+                          <div className="flex flex-wrap justify-end gap-1.5">
+                            {row.canEdit || row.canEditTransfer ? (
+                              <Link
+                                href={transactionsPath(filters, { edit: row.transaction.id })}
+                                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                              >
+                                Edit
+                              </Link>
+                            ) : null}
+                            {row.canVoid ? (
+                              <VoidTransactionForm transactionId={row.transaction.id} />
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
               </div>
             ))}

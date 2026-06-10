@@ -139,6 +139,13 @@ export const en = {
     saving: 'Saving…',
     cancel: 'Cancel',
   },
+  transactionsList: {
+    today: 'Today',
+    yesterday: 'Yesterday',
+    toastCreated: 'Transaction created.',
+    toastUpdated: 'Transaction updated.',
+    toastVoided: 'Transaction voided.',
+  },
 } as const
 
 export const es: DeepStringify<typeof en> = {
@@ -273,6 +280,13 @@ export const es: DeepStringify<typeof en> = {
     saveAndAddNext: 'Guardar y agregar otra',
     saving: 'Guardando…',
     cancel: 'Cancelar',
+  },
+  transactionsList: {
+    today: 'Hoy',
+    yesterday: 'Ayer',
+    toastCreated: 'Transacción creada.',
+    toastUpdated: 'Transacción actualizada.',
+    toastVoided: 'Transacción anulada.',
   },
 } as const
 
