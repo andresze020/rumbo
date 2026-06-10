@@ -7,6 +7,7 @@ import {
   createTransferTransactionAction,
 } from './actions'
 import { CategoryPicker } from './category-picker'
+import { AdvancedFields } from '@/components/advanced-fields'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -281,7 +282,14 @@ export function TransactionForm({
               Cross-currency transfers are not supported yet.
             </p>
           ) : isTransferNonBaseCurrency ? (
-            <div className="space-y-2">
+            <AdvancedFields
+              defaultOpen
+              summary={
+                rateIsValid
+                  ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${selectedFromAccount?.currency_code}`
+                  : undefined
+              }
+            >
               <Label htmlFor="user_rate">
                 Exchange rate: 1 {baseCurrency} = ? {selectedFromAccount?.currency_code}
                 {fetchingRate ? (
@@ -337,7 +345,7 @@ export function TransactionForm({
                 </p>
               ) : null}
               <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
-            </div>
+            </AdvancedFields>
           ) : (
             <input type="hidden" name="exchange_rate_to_base" value="1" />
           )}
@@ -418,7 +426,14 @@ export function TransactionForm({
 
       {!isTransfer ? (
         isMultiCurrency ? (
-          <div className="space-y-2">
+          <AdvancedFields
+            defaultOpen
+            summary={
+              rateIsValid
+                ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${selectedAccount?.currency_code}`
+                : undefined
+            }
+          >
             <Label htmlFor="user_rate">
               Exchange rate: 1 {baseCurrency} = ? {selectedAccount?.currency_code}
               {fetchingRate ? (
@@ -474,7 +489,7 @@ export function TransactionForm({
               </p>
             ) : null}
             <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
-          </div>
+          </AdvancedFields>
         ) : (
           <input type="hidden" name="exchange_rate_to_base" value="1" />
         )

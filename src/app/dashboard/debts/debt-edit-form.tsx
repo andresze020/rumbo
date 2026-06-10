@@ -1,4 +1,5 @@
 import { updateDebtAction } from './actions'
+import { AdvancedFields } from '@/components/advanced-fields'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -56,73 +57,77 @@ export function DebtEditForm({ debt }: { debt: Debt }) {
             defaultValue={debt.lender_name ?? ''}
           />
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="edit_original_principal">Original principal</Label>
-          <Input
-            id="edit_original_principal"
-            name="original_principal"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-            defaultValue={nullableNumber(debt.original_principal)}
-          />
-          <p className="text-xs text-muted-foreground">
-            Optional. Used for paydown progress tracking.
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="edit_interest_rate">Interest rate (%)</Label>
-          <Input
-            id="edit_interest_rate"
-            name="interest_rate"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-            defaultValue={nullableNumber(debt.interest_rate)}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="edit_interest_rate_period">Interest period</Label>
-          <select
-            id="edit_interest_rate_period"
-            name="interest_rate_period"
-            defaultValue={debt.interest_rate_period ?? ''}
-            className={selectClassName}
-          >
-            <option value="">Not set</option>
-            <option value="monthly">Monthly</option>
-            <option value="annual">Annual</option>
-          </select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="edit_minimum_payment">Minimum payment</Label>
-          <Input
-            id="edit_minimum_payment"
-            name="minimum_payment"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-            defaultValue={nullableNumber(debt.minimum_payment)}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="edit_payment_due_day">Due day</Label>
-          <Input
-            id="edit_payment_due_day"
-            name="payment_due_day"
-            type="number"
-            min="1"
-            max="31"
-            step="1"
-            defaultValue={nullableNumber(debt.payment_due_day)}
-          />
-        </div>
       </div>
+
+      <AdvancedFields label="Loan details (optional)">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="edit_original_principal">Original principal</Label>
+            <Input
+              id="edit_original_principal"
+              name="original_principal"
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+              defaultValue={nullableNumber(debt.original_principal)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional. Used for paydown progress tracking.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit_interest_rate">Interest rate (%)</Label>
+            <Input
+              id="edit_interest_rate"
+              name="interest_rate"
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+              defaultValue={nullableNumber(debt.interest_rate)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit_interest_rate_period">Interest period</Label>
+            <select
+              id="edit_interest_rate_period"
+              name="interest_rate_period"
+              defaultValue={debt.interest_rate_period ?? ''}
+              className={selectClassName}
+            >
+              <option value="">Not set</option>
+              <option value="monthly">Monthly</option>
+              <option value="annual">Annual</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit_minimum_payment">Minimum payment</Label>
+            <Input
+              id="edit_minimum_payment"
+              name="minimum_payment"
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+              defaultValue={nullableNumber(debt.minimum_payment)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit_payment_due_day">Due day</Label>
+            <Input
+              id="edit_payment_due_day"
+              name="payment_due_day"
+              type="number"
+              min="1"
+              max="31"
+              step="1"
+              defaultValue={nullableNumber(debt.payment_due_day)}
+            />
+          </div>
+        </div>
+      </AdvancedFields>
 
       <div className="space-y-2">
         <Label htmlFor="edit_notes">Notes</Label>

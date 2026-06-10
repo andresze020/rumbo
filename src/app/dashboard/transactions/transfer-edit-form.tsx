@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { updateTransferTransactionAction } from './actions'
+import { AdvancedFields } from '@/components/advanced-fields'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -252,7 +253,14 @@ export function TransferEditForm({
       ) : null}
 
       {isNonBaseCurrencyTransfer ? (
-        <div className="space-y-2">
+        <AdvancedFields
+          defaultOpen
+          summary={
+            rateIsValid
+              ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${selectedFromAccount?.currency_code}`
+              : undefined
+          }
+        >
           <Label htmlFor={`exchange_rate_${transactionId}`}>
             Exchange rate{' '}
             <span className="font-normal text-muted-foreground">
@@ -289,7 +297,7 @@ export function TransferEditForm({
           ) : (
             <input type="hidden" name="exchange_rate_to_base" value="" />
           )}
-        </div>
+        </AdvancedFields>
       ) : (
         <input type="hidden" name="exchange_rate_to_base" value="1" />
       )}
