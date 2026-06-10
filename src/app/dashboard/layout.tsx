@@ -4,6 +4,7 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { MobileNav } from '@/components/mobile-nav'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import { AssistantDrawer } from '@/components/assistant-drawer'
+import { InstallAppHint } from '@/components/install-app-hint'
 import { LanguageProvider } from '@/components/language-provider'
 import { getLocale } from '@/lib/i18n/server'
 
@@ -20,6 +21,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Mobile top bar */}
           <MobileNav className="lg:hidden" />
+
+          <InstallAppHint />
 
           <main className="flex-1 pb-24">
             {children}
