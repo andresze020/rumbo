@@ -4,34 +4,40 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { MobileNav } from '@/components/mobile-nav'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import { AssistantDrawer } from '@/components/assistant-drawer'
+import { LanguageProvider } from '@/components/language-provider'
+import { getLocale } from '@/lib/i18n/server'
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+export default async function DashboardLayout({ children }: { children: ReactNode }) {
+  const locale = await getLocale()
+
   return (
-    <div className="flex min-h-screen">
-      {/* Desktop sidebar */}
-      <AppSidebar className="hidden lg:flex" />
+    <LanguageProvider locale={locale}>
+      <div className="flex min-h-screen">
+        {/* Desktop sidebar */}
+        <AppSidebar className="hidden lg:flex" />
 
-      {/* Main content area */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile top bar */}
-        <MobileNav className="lg:hidden" />
+        {/* Main content area */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Mobile top bar */}
+          <MobileNav className="lg:hidden" />
 
-        <main className="flex-1 pb-24">
-          {children}
-        </main>
+          <main className="flex-1 pb-24">
+            {children}
+          </main>
+        </div>
+
+        {/* FABs — assistant + add transaction */}
+        <AssistantDrawer />
+        <Suspense>
+          <GlobalAddTransactionButton
+            aria-label="Add transaction"
+            title="Add transaction"
+            className="fixed bottom-6 right-6 z-50 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <Plus className="size-6" aria-hidden="true" />
+          </GlobalAddTransactionButton>
+        </Suspense>
       </div>
-
-      {/* FABs — assistant + add transaction */}
-      <AssistantDrawer />
-      <Suspense>
-        <GlobalAddTransactionButton
-          aria-label="Add transaction"
-          title="Add transaction"
-          className="fixed bottom-6 right-6 z-50 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          <Plus className="size-6" aria-hidden="true" />
-        </GlobalAddTransactionButton>
-      </Suspense>
-    </div>
+    </LanguageProvider>
   )
 }

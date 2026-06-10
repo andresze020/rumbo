@@ -13,6 +13,7 @@ import { PageHeader } from '@/components/page-header'
 import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
 import { AppearanceSection } from './appearance-section'
+import { LanguageSection } from './language-section'
 import {
   signOutAllAction,
   updateHouseholdAction,
@@ -167,6 +168,9 @@ export default async function SettingsPage({ searchParams }: Props) {
 
       {/* ── Appearance ──────────────────────────────────────────────── */}
       <AppearanceSection />
+
+      {/* ── Language ────────────────────────────────────────────────── */}
+      <LanguageSection />
 
       {/* ── Danger zone ─────────────────────────────────────────────── */}
       <Card className="border-destructive/30">

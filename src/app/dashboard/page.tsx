@@ -32,6 +32,9 @@ import { Callout } from '@/components/callout'
 import { AccountAvatar } from '@/components/account-avatar'
 import { AccountCardDetails } from './accounts/account-card-details'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
+import { getLocale } from '@/lib/i18n/server'
+import { translate, type TranslationKey } from '@/lib/i18n/translate'
+import type { Locale } from '@/lib/i18n/dictionaries'
 
 const ACCENT = {
   emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
@@ -123,23 +126,23 @@ function getPreviousMonthDate(month: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 
-function renderDelta(diff: number | null, currency: string, higherIsBad = false) {
+function renderDelta(diff: number | null, currency: string, locale: Locale, higherIsBad = false) {
   if (diff === null) return null
-  if (Math.abs(diff) < 0.01) return <span className="text-xs text-muted-foreground">No change vs last month</span>
+  if (Math.abs(diff) < 0.01) return <span className="text-xs text-muted-foreground">{translate(locale, 'common.noChangeVsLastMonth')}</span>
   const isUp = diff > 0
   const isGood = higherIsBad ? !isUp : isUp
   const arrow = isUp ? '↑' : '↓'
   const formatted = formatCurrency(Math.abs(diff), currency)
   return (
     <span className={`text-xs font-medium ${isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-      {arrow} {formatted} vs last month
+      {arrow} {formatted} {translate(locale, 'common.vsLastMonth')}
     </span>
   )
 }
 
-function renderRateDelta(diff: number | null) {
+function renderRateDelta(diff: number | null, locale: Locale) {
   if (diff === null) return null
-  if (Math.abs(diff) < 0.0001) return <span className="text-xs text-muted-foreground">No change vs last month</span>
+  if (Math.abs(diff) < 0.0001) return <span className="text-xs text-muted-foreground">{translate(locale, 'common.noChangeVsLastMonth')}</span>
   const isUp = diff > 0
   const isGood = isUp
   const arrow = isUp ? '↑' : '↓'
@@ -149,7 +152,7 @@ function renderRateDelta(diff: number | null) {
   }).format(Math.abs(diff * 100))
   return (
     <span className={`text-xs font-medium ${isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-      {arrow} {formatted} pp vs last month
+      {arrow} {formatted} {translate(locale, 'common.ppVsLastMonth')}
     </span>
   )
 }
@@ -201,9 +204,9 @@ function formatLabel(value: string) {
   return value.replaceAll('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
-function formatPercent(value: number | string | null) {
+function formatPercent(value: number | string | null, locale: Locale) {
   if (value === null) {
-    return 'N/A'
+    return translate(locale, 'common.notAvailable')
   }
 
   return new Intl.NumberFormat('en-CA', {
@@ -256,6 +259,8 @@ export default async function DashboardPage({
   const selectedMonthDate = `${selectedMonth}-01`
   const selectedMonthEndDate = getMonthEndDate(selectedMonth)
   const supabase = await createClient()
+  const locale = await getLocale()
+  const t = (key: TranslationKey, vars?: Record<string, string | number>) => translate(locale, key, vars)
 
   const {
     data: { user },
@@ -424,49 +429,49 @@ export default async function DashboardPage({
 
   const summaryCards = [
     {
-      label: 'Total assets',
+      label: t('dashboard.totalAssets'),
       value: totalAssets,
-      description: 'Posted asset balances at month end',
+      description: t('dashboard.totalAssetsDescription'),
       trendMetric: 'total-assets' as const,
       icon: <Wallet />,
       accent: ACCENT.emerald,
       valueClassName: undefined as string | undefined,
     },
     {
-      label: 'Total liabilities',
+      label: t('dashboard.totalLiabilities'),
       value: totalLiabilities,
-      description: 'Posted liability balances at month end',
+      description: t('dashboard.totalLiabilitiesDescription'),
       trendMetric: 'total-liabilities' as const,
       icon: <Scale />,
       accent: ACCENT.rose,
       valueClassName: undefined as string | undefined,
-      tooltip: <InfoTooltip term="liabilities" label="Total liabilities" />,
+      tooltip: <InfoTooltip term="liabilities" label={t('dashboard.totalLiabilities')} />,
     },
     {
-      label: 'Net worth',
+      label: t('dashboard.netWorth'),
       value: netWorth,
-      description: 'Posted included balances at month end',
+      description: t('dashboard.netWorthDescription'),
       trendMetric: 'net-worth' as const,
       icon: <TrendingUp />,
       accent: ACCENT.primary,
       valueClassName: netWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined,
-      tooltip: <InfoTooltip term="netWorth" label="Net worth" />,
+      tooltip: <InfoTooltip term="netWorth" label={t('dashboard.netWorth')} />,
     },
     {
-      label: 'Projected net worth',
+      label: t('dashboard.projectedNetWorth'),
       value: projectedNetWorth,
-      description: 'Posted plus pending at month end',
+      description: t('dashboard.projectedNetWorthDescription'),
       trendMetric: 'projected-net-worth' as const,
       icon: <Sparkles />,
       accent: ACCENT.violet,
       valueClassName: projectedNetWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined,
-      tooltip: <InfoTooltip term="projectedNetWorth" label="Projected net worth" />,
+      tooltip: <InfoTooltip term="projectedNetWorth" label={t('dashboard.projectedNetWorth')} />,
     },
   ]
   const monthlySavings = Number(monthlySummary?.monthly_savings ?? 0)
   const monthlyCards = [
     {
-      label: 'Monthly income',
+      label: t('dashboard.monthlyIncome'),
       value: monthlySummary
         ? formatCurrency(Number(monthlySummary.monthly_income), dashboardCurrency)
         : formatCurrency(0, dashboardCurrency),
@@ -474,14 +479,14 @@ export default async function DashboardPage({
         incomeTransactionCount,
         'posted income transaction'
       ),
-      delta: renderDelta(incomeDelta, dashboardCurrency, false),
+      delta: renderDelta(incomeDelta, dashboardCurrency, locale, false),
       trendMetric: 'monthly-income' as const,
       icon: <ArrowUpRight />,
       accent: ACCENT.emerald,
       valueClassName: undefined as string | undefined,
     },
     {
-      label: 'Monthly expenses',
+      label: t('dashboard.monthlyExpenses'),
       value: monthlySummary
         ? formatCurrency(
             Number(monthlySummary.monthly_expenses),
@@ -492,37 +497,37 @@ export default async function DashboardPage({
         expenseTransactionCount,
         'posted expense transaction'
       ),
-      delta: renderDelta(expensesDelta, dashboardCurrency, true),
+      delta: renderDelta(expensesDelta, dashboardCurrency, locale, true),
       trendMetric: 'monthly-expenses' as const,
       icon: <ArrowDownRight />,
       accent: ACCENT.rose,
       valueClassName: undefined as string | undefined,
     },
     {
-      label: 'Monthly savings',
+      label: t('dashboard.monthlySavings'),
       value: monthlySummary
         ? formatCurrency(
             Number(monthlySummary.monthly_savings),
             dashboardCurrency
           )
         : formatCurrency(0, dashboardCurrency),
-      description: 'Income minus expenses',
-      delta: renderDelta(savingsDelta, dashboardCurrency, false),
+      description: t('dashboard.monthlySavingsDescription'),
+      delta: renderDelta(savingsDelta, dashboardCurrency, locale, false),
       trendMetric: 'monthly-savings' as const,
       icon: <PiggyBank />,
       accent: ACCENT.sky,
       valueClassName: monthlySavings < 0 ? 'text-red-600 dark:text-red-400' : undefined,
     },
     {
-      label: 'Savings rate',
-      value: formatPercent(monthlySummary?.savings_rate ?? null),
-      description: 'Savings divided by income',
-      delta: renderRateDelta(savingsRateDelta),
+      label: t('dashboard.savingsRate'),
+      value: formatPercent(monthlySummary?.savings_rate ?? null, locale),
+      description: t('dashboard.savingsRateDescription'),
+      delta: renderRateDelta(savingsRateDelta, locale),
       trendMetric: 'savings-rate' as const,
       icon: <Percent />,
       accent: ACCENT.violet,
       valueClassName: undefined as string | undefined,
-      tooltip: <InfoTooltip term="savingsRate" label="Savings rate" />,
+      tooltip: <InfoTooltip term="savingsRate" label={t('dashboard.savingsRate')} />,
     },
   ]
   const largestExpenseCategory = expenseCategories.reduce(
@@ -545,12 +550,12 @@ export default async function DashboardPage({
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <PageHeader
         eyebrow={household.name}
-        title="Dashboard"
-        description={`Your money in ${formatMonthLabel(selectedMonth)}`}
+        title={t('dashboard.title')}
+        description={t('dashboard.yourMoneyIn', { month: formatMonthLabel(selectedMonth) })}
         actions={
           <form action="/dashboard" className="flex items-end gap-2">
             <div className="grid gap-1">
-              <Label htmlFor="month" className="text-xs text-muted-foreground">Month</Label>
+              <Label htmlFor="month" className="text-xs text-muted-foreground">{t('dashboard.month')}</Label>
               <Input
                 id="month"
                 type="month"
@@ -559,7 +564,7 @@ export default async function DashboardPage({
                 className="h-8 text-sm"
               />
             </div>
-            <Button type="submit" variant="outline" size="sm">View</Button>
+            <Button type="submit" variant="outline" size="sm">{t('dashboard.view')}</Button>
           </form>
         }
       />
@@ -579,13 +584,14 @@ export default async function DashboardPage({
           hasBudget={budgetLines.length > 0 && totalBudgetPlanned > 0}
           totalBudgetPercent={totalBudgetPercent}
           currency={dashboardCurrency}
+          locale={locale}
         />
       ) : null}
 
       {/* ── Errors ─────────────────────────────────────────────────────── */}
       {(accountBalancesError || monthlySummaryError || expenseCategoriesError || categoryLookupError) ? (
         <Callout variant="error">
-          Could not load some dashboard data. Try refreshing the page.
+          {t('dashboard.loadError')}
         </Callout>
       ) : null}
 
@@ -593,8 +599,8 @@ export default async function DashboardPage({
       {!accountBalancesError && balances.length ? (
         <section className="space-y-3">
           <SectionHeading
-            title="Financial position"
-            description="Where you stand at the end of the selected month."
+            title={t('dashboard.financialPositionTitle')}
+            description={t('dashboard.financialPositionDescription')}
           />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {summaryCards.map((summary) => (
@@ -619,14 +625,14 @@ export default async function DashboardPage({
       {!accountBalancesError && !balances.length ? (
         <Card>
           <CardHeader>
-            <CardTitle>Financial summary</CardTitle>
+            <CardTitle>{t('dashboard.summaryTitle')}</CardTitle>
             <CardDescription>
-              Create accounts to start building your financial summary.
+              {t('dashboard.summaryDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/dashboard/accounts" className={buttonVariants({ variant: 'default' })}>
-              Go to accounts
+              {t('dashboard.goToAccounts')}
             </Link>
           </CardContent>
         </Card>
@@ -637,8 +643,8 @@ export default async function DashboardPage({
         <>
           <section className="space-y-3">
             <SectionHeading
-              title="This month"
-              description="Income, spending and savings for the selected month."
+              title={t('dashboard.thisMonthTitle')}
+              description={t('dashboard.thisMonthDescription')}
             />
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {monthlyCards.map((summary) => (
@@ -662,7 +668,7 @@ export default async function DashboardPage({
 
           {!hasMonthlyActivity ? (
             <Callout variant="info" className="border-dashed text-muted-foreground">
-              No posted income or expense activity for {formatMonthLabel(selectedMonth)}.
+              {t('dashboard.noActivity', { month: formatMonthLabel(selectedMonth) })}
             </Callout>
           ) : null}
 
@@ -672,35 +678,35 @@ export default async function DashboardPage({
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <CardTitle>Budget vs Actual</CardTitle>
+                    <CardTitle>{t('dashboard.budgetTitle')}</CardTitle>
                     <CardDescription>
-                      Planned vs posted spend for {formatMonthLabel(selectedMonth)}.
+                      {t('dashboard.budgetDescription', { month: formatMonthLabel(selectedMonth) })}
                     </CardDescription>
                   </div>
                   <Link
                     href={`/dashboard/budgets?month=${selectedMonth}`}
                     className={buttonVariants({ variant: 'outline', size: 'sm' })}
                   >
-                    View budget
+                    {t('dashboard.viewBudget')}
                   </Link>
                 </div>
               </CardHeader>
               <CardContent>
                 {budgetLines.length === 0 ? (
                   <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                    No budget set up for {formatMonthLabel(selectedMonth)}.{' '}
+                    {t('dashboard.noBudget', { month: formatMonthLabel(selectedMonth) })}{' '}
                     <Link
                       href={`/dashboard/budgets?month=${selectedMonth}`}
                       className="underline underline-offset-2 hover:text-foreground"
                     >
-                      Create a budget
+                      {t('dashboard.createBudget')}
                     </Link>
                   </p>
                 ) : (
                   <div className="space-y-3">
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium">Total</span>
+                        <span className="font-medium">{t('dashboard.budgetTotal')}</span>
                         <span className="tabular-nums text-muted-foreground">
                           {formatCurrency(totalBudgetSpent, budgetCurrency)} of {formatCurrency(totalBudgetPlanned, budgetCurrency)}
                         </span>
@@ -761,9 +767,9 @@ export default async function DashboardPage({
           {/* ── Expenses by category ─────────────────────────────────── */}
           <Card>
             <CardHeader>
-              <CardTitle>Expenses by category</CardTitle>
+              <CardTitle>{t('dashboard.expensesByCategoryTitle')}</CardTitle>
               <CardDescription>
-                Posted expense allocations for {formatMonthLabel(selectedMonth)}.
+                {t('dashboard.expensesByCategoryDescription', { month: formatMonthLabel(selectedMonth) })}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -791,7 +797,7 @@ export default async function DashboardPage({
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="font-medium">{categoryPath.name}</p>
                               {categoryPath.isArchived ? (
-                                <Badge variant="outline">Archived</Badge>
+                                <Badge variant="outline">{t('common.archived')}</Badge>
                               ) : null}
                             </div>
                             <p className="text-sm text-muted-foreground">
@@ -810,7 +816,7 @@ export default async function DashboardPage({
                             {formatCurrency(amount, dashboardCurrency)}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {percentOfExpenses === null ? 'N/A' : formatPercent(percentOfExpenses)}
+                            {percentOfExpenses === null ? t('common.notAvailable') : formatPercent(percentOfExpenses, locale)}
                           </p>
                         </div>
                       </Link>
@@ -819,7 +825,7 @@ export default async function DashboardPage({
                 </div>
               ) : (
                 <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                  No expenses recorded for {formatMonthLabel(selectedMonth)}.
+                  {t('dashboard.expensesByCategoryEmpty', { month: formatMonthLabel(selectedMonth) })}
                 </p>
               )}
             </CardContent>
@@ -833,16 +839,16 @@ export default async function DashboardPage({
           <CardHeader>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <CardTitle>Accounts</CardTitle>
+                <CardTitle>{t('dashboard.accountsTitle')}</CardTitle>
                 <CardDescription>
-                  Active account balances at month end.
+                  {t('dashboard.accountsDescription')}
                 </CardDescription>
               </div>
               <Link
                 href="/dashboard/accounts"
                 className={buttonVariants({ variant: 'outline', size: 'sm' })}
               >
-                Manage accounts
+                {t('dashboard.manageAccounts')}
               </Link>
             </div>
           </CardHeader>
@@ -873,7 +879,7 @@ export default async function DashboardPage({
                               </Badge>
                               {isLiability ? (
                                 <Badge variant="outline" className="border-rose-200 text-[11px] text-rose-600 dark:border-rose-900 dark:text-rose-400">
-                                  Liability
+                                  {t('common.liability')}
                                 </Badge>
                               ) : null}
                             </div>
@@ -886,7 +892,7 @@ export default async function DashboardPage({
                           : Number(account.posted_balance_account_currency),
                         account.currency_code
                       )}
-                      balanceSubLabel={isLiability ? 'balance owed' : 'posted balance'}
+                      balanceSubLabel={isLiability ? t('dashboard.balanceOwed') : t('dashboard.postedBalance')}
                       postedLabel={formatCurrency(
                         isLiability
                           ? liabilityDisplay(account.posted_balance_account_currency)
@@ -914,7 +920,7 @@ export default async function DashboardPage({
                         className={buttonVariants({ variant: 'outline', size: 'sm' })}
                         defaultAccountId={account.account_id}
                       >
-                        Add transaction
+                        {t('common.addTransaction')}
                       </GlobalAddTransactionButton>
                     </AccountCardDetails>
                   </div>

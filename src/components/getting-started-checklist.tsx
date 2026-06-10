@@ -6,6 +6,7 @@ import { Check, Circle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
+import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
 
 const HIDE_KEY = 'af_hide_getting_started'
@@ -40,6 +41,7 @@ export function GettingStartedChecklist({
   hasTransactions: boolean
   hasBudget: boolean
 }) {
+  const { t } = useLanguage()
   const allDone = hasAccounts && hasTransactions && hasBudget
   const [dismissed, setDismissed] = useState(true)
 
@@ -58,37 +60,37 @@ export function GettingStartedChecklist({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Getting started</CardTitle>
-        <CardDescription>A few steps to set up your finances in App Finanzas.</CardDescription>
+        <CardTitle>{t('gettingStarted.title')}</CardTitle>
+        <CardDescription>{t('gettingStarted.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {hasAccounts ? (
-          <ChecklistStep done>Add your first account</ChecklistStep>
+          <ChecklistStep done>{t('gettingStarted.addAccount')}</ChecklistStep>
         ) : (
           <Link href="/dashboard/accounts?mode=create" className="block">
-            <ChecklistStep done={false}>Add your first account</ChecklistStep>
+            <ChecklistStep done={false}>{t('gettingStarted.addAccount')}</ChecklistStep>
           </Link>
         )}
 
         {hasTransactions ? (
-          <ChecklistStep done>Record a transaction</ChecklistStep>
+          <ChecklistStep done>{t('gettingStarted.addTransaction')}</ChecklistStep>
         ) : (
           <GlobalAddTransactionButton className="block w-full text-left">
-            <ChecklistStep done={false}>Record a transaction</ChecklistStep>
+            <ChecklistStep done={false}>{t('gettingStarted.addTransaction')}</ChecklistStep>
           </GlobalAddTransactionButton>
         )}
 
         {hasBudget ? (
-          <ChecklistStep done>Set up a budget for this month</ChecklistStep>
+          <ChecklistStep done>{t('gettingStarted.setBudget')}</ChecklistStep>
         ) : (
           <Link href="/dashboard/budgets" className="block">
-            <ChecklistStep done={false}>Set up a budget for this month</ChecklistStep>
+            <ChecklistStep done={false}>{t('gettingStarted.setBudget')}</ChecklistStep>
           </Link>
         )}
 
         <div className="pt-1">
           <Button type="button" variant="ghost" size="sm" onClick={handleHide}>
-            Hide this
+            {t('gettingStarted.hide')}
           </Button>
         </div>
       </CardContent>

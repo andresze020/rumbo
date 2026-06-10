@@ -22,21 +22,23 @@ import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { SubmitButton } from '@/components/submit-button'
 import { signOutAction } from '@/app/dashboard/session-actions'
+import { useLanguage } from '@/components/language-provider'
+import type { TranslationKey } from '@/lib/i18n/translate'
 
 const primaryLinks = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/accounts', label: 'Accounts', icon: Wallet },
-  { href: '/dashboard/transactions', label: 'Transactions', icon: ArrowLeftRight },
-  { href: '/dashboard/budgets', label: 'Budgets', icon: Target },
-  { href: '/dashboard/debts', label: 'Debts', icon: Scale },
-  { href: '/dashboard/net-worth', label: 'Net Worth', icon: TrendingUp },
+  { href: '/dashboard', labelKey: 'nav.dashboard' as TranslationKey, icon: LayoutDashboard },
+  { href: '/dashboard/accounts', labelKey: 'nav.accounts' as TranslationKey, icon: Wallet },
+  { href: '/dashboard/transactions', labelKey: 'nav.transactions' as TranslationKey, icon: ArrowLeftRight },
+  { href: '/dashboard/budgets', labelKey: 'nav.budgets' as TranslationKey, icon: Target },
+  { href: '/dashboard/debts', labelKey: 'nav.debts' as TranslationKey, icon: Scale },
+  { href: '/dashboard/net-worth', labelKey: 'nav.netWorth' as TranslationKey, icon: TrendingUp },
 ]
 
 const secondaryLinks = [
-  { href: '/dashboard/categories', label: 'Categories', icon: Tag },
-  { href: '/dashboard/transactions/import', label: 'Import CSV', icon: Upload },
-  { href: '/dashboard/export', label: 'Export', icon: Download },
-  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+  { href: '/dashboard/categories', labelKey: 'nav.categories' as TranslationKey, icon: Tag },
+  { href: '/dashboard/transactions/import', labelKey: 'nav.importCsv' as TranslationKey, icon: Upload },
+  { href: '/dashboard/export', labelKey: 'nav.export' as TranslationKey, icon: Download },
+  { href: '/dashboard/settings', labelKey: 'nav.settings' as TranslationKey, icon: Settings },
 ]
 
 type NavItemProps = {
@@ -68,6 +70,7 @@ function NavItem({ href, label, icon: Icon, active, collapsed }: NavItemProps) {
 
 export function AppSidebar({ className }: { className?: string }) {
   const pathname = usePathname()
+  const { t } = useLanguage()
   const [collapsed, setCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
 
@@ -102,20 +105,20 @@ export function AppSidebar({ className }: { className?: string }) {
         <Link
           href="/dashboard"
           className="flex min-w-0 items-center gap-2"
-          title={collapsed ? 'App Finanzas' : undefined}
+          title={collapsed ? t('nav.appName') : undefined}
         >
           <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Wallet className="size-4" aria-hidden="true" />
           </span>
           {!collapsed && (
-            <span className="truncate text-sm font-semibold">App Finanzas</span>
+            <span className="truncate text-sm font-semibold">{t('nav.appName')}</span>
           )}
         </Link>
         <button
           type="button"
           onClick={toggle}
           className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
         >
           {collapsed ? (
             <ChevronRight className="size-4" aria-hidden="true" />
@@ -127,11 +130,11 @@ export function AppSidebar({ className }: { className?: string }) {
 
       {/* Nav */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
-        {primaryLinks.map(({ href, label, icon }) => (
+        {primaryLinks.map(({ href, labelKey, icon }) => (
           <NavItem
             key={href}
             href={href}
-            label={label}
+            label={t(labelKey)}
             icon={icon}
             active={isActive(href)}
             collapsed={collapsed}
@@ -140,11 +143,11 @@ export function AppSidebar({ className }: { className?: string }) {
 
         <div className="my-2 h-px bg-border" />
 
-        {secondaryLinks.map(({ href, label, icon }) => (
+        {secondaryLinks.map(({ href, labelKey, icon }) => (
           <NavItem
             key={href}
             href={href}
-            label={label}
+            label={t(labelKey)}
             icon={icon}
             active={isActive(href)}
             collapsed={collapsed}
@@ -157,7 +160,7 @@ export function AppSidebar({ className }: { className?: string }) {
         <div className={cn('flex items-center', collapsed ? 'justify-center' : 'px-1')}>
           <ThemeToggle />
           {!collapsed && (
-            <span className="ml-2 text-sm text-muted-foreground">Theme</span>
+            <span className="ml-2 text-sm text-muted-foreground">{t('nav.theme')}</span>
           )}
         </div>
         <form action={signOutAction}>
@@ -166,14 +169,14 @@ export function AppSidebar({ className }: { className?: string }) {
             variant="ghost"
             size="sm"
             pendingText="..."
-            title={collapsed ? 'Sign out' : undefined}
+            title={collapsed ? t('nav.signOut') : undefined}
             className={cn(
               'w-full gap-3 text-muted-foreground',
               collapsed ? 'justify-center px-2' : 'justify-start'
             )}
           >
             <LogOut className="size-4 shrink-0" aria-hidden="true" />
-            {!collapsed && 'Sign out'}
+            {!collapsed && t('nav.signOut')}
           </SubmitButton>
         </form>
       </div>

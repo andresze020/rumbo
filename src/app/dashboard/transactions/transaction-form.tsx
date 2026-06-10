@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { fetchFxRate } from '@/lib/fx'
+import { useLanguage } from '@/components/language-provider'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
 
@@ -82,6 +83,7 @@ export function TransactionForm({
   defaultMerchantName,
   returnTo,
 }: TransactionFormProps) {
+  const { t } = useLanguage()
   const [transactionType, setTransactionType] = useState<TransactionType>(defaultType ?? 'expense')
   const [transactionDate, setTransactionDate] = useState(defaultDate)
   const [accountId, setAccountId] = useState(defaultAccountId ?? '')
@@ -192,8 +194,8 @@ export function TransactionForm({
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
       <div className="space-y-2">
         <Label htmlFor="transaction_type">
-          Type
-          <InfoTooltip term="transfer" label="Transfer" />
+          {t('transactionForm.type')}
+          <InfoTooltip term="transfer" label={t('transactionForm.typeTransfer')} />
         </Label>
         <select
           id="transaction_type"
@@ -202,14 +204,14 @@ export function TransactionForm({
           onChange={(e) => handleTransactionTypeChange(e.target.value as TransactionType)}
           className={selectCls}
         >
-          <option value="expense">Expense</option>
-          <option value="income">Income</option>
-          <option value="transfer">Transfer</option>
+          <option value="expense">{t('transactionForm.typeExpense')}</option>
+          <option value="income">{t('transactionForm.typeIncome')}</option>
+          <option value="transfer">{t('transactionForm.typeTransfer')}</option>
         </select>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="transaction_date">Date</Label>
+        <Label htmlFor="transaction_date">{t('transactionForm.date')}</Label>
         <Input
           id="transaction_date"
           name="transaction_date"
@@ -230,7 +232,7 @@ export function TransactionForm({
       {isTransfer ? (
         <>
           <div className="space-y-2">
-            <Label htmlFor="from_account_id">From account</Label>
+            <Label htmlFor="from_account_id">{t('transactionForm.fromAccount')}</Label>
             <select
               id="from_account_id"
               name="from_account_id"
@@ -243,7 +245,7 @@ export function TransactionForm({
               }}
               className={selectCls}
             >
-              <option value="" disabled>Select source</option>
+              <option value="" disabled>{t('transactionForm.selectSource')}</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id} disabled={a.id === toAccountId}>
                   {formatAccountLabel(a)}
@@ -253,7 +255,7 @@ export function TransactionForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="to_account_id">To account</Label>
+            <Label htmlFor="to_account_id">{t('transactionForm.toAccount')}</Label>
             <select
               id="to_account_id"
               name="to_account_id"
@@ -266,7 +268,7 @@ export function TransactionForm({
               }}
               className={selectCls}
             >
-              <option value="" disabled>Select destination</option>
+              <option value="" disabled>{t('transactionForm.selectDestination')}</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id} disabled={a.id === fromAccountId}>
                   {formatAccountLabel(a)}
@@ -277,13 +279,13 @@ export function TransactionForm({
 
           {accounts.length < 2 ? (
             <p className="text-sm text-muted-foreground">
-              Create at least two accounts to transfer between them.
+              {t('transactionForm.needTwoAccounts')}
             </p>
           ) : null}
 
           {isCrossCurrencyTransfer ? (
             <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-              Cross-currency transfers are not supported yet.
+              {t('transactionForm.crossCurrencyNotSupported')}
             </p>
           ) : isTransferNonBaseCurrency ? (
             <AdvancedFields
@@ -358,7 +360,7 @@ export function TransactionForm({
       ) : (
         <>
           <div className="space-y-2">
-            <Label htmlFor="account_id">Account</Label>
+            <Label htmlFor="account_id">{t('transactionForm.account')}</Label>
             <select
               id="account_id"
               name="account_id"
@@ -372,7 +374,7 @@ export function TransactionForm({
               }}
               className={selectCls}
             >
-              <option value="" disabled>Select account</option>
+              <option value="" disabled>{t('transactionForm.selectAccount')}</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {formatAccountLabel(a)}
@@ -391,7 +393,7 @@ export function TransactionForm({
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="amount">Amount</Label>
+        <Label htmlFor="amount">{t('transactionForm.amount')}</Label>
         <Input
           id="amount"
           name="amount"
@@ -405,27 +407,27 @@ export function TransactionForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="description">Description</Label>
+        <Label htmlFor="description">{t('transactionForm.description')}</Label>
         <Input id="description" name="description" defaultValue={defaultDescription} />
       </div>
 
       {!isTransfer ? (
         <div className="space-y-2">
-          <Label htmlFor="merchant_name">Merchant</Label>
+          <Label htmlFor="merchant_name">{t('transactionForm.merchant')}</Label>
           <Input id="merchant_name" name="merchant_name" defaultValue={defaultMerchantName} />
         </div>
       ) : null}
 
       <div className="space-y-2">
-        <Label htmlFor="notes">Notes</Label>
+        <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
         <Textarea id="notes" name="notes" />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="status">Status</Label>
+        <Label htmlFor="status">{t('transactionForm.status')}</Label>
         <select id="status" name="status" defaultValue={defaultStatus ?? 'posted'} className={selectCls}>
-          <option value="posted">Posted</option>
-          <option value="pending">Pending</option>
+          <option value="posted">{t('transactionForm.statusPosted')}</option>
+          <option value="pending">{t('transactionForm.statusPending')}</option>
         </select>
       </div>
 
@@ -505,9 +507,9 @@ export function TransactionForm({
         <SubmitButton
           type="submit"
           disabled={!canSubmit}
-          pendingText={isTransfer ? 'Creating transfer' : 'Creating transaction'}
+          pendingText={isTransfer ? t('transactionForm.creatingTransfer') : t('transactionForm.creatingTransaction')}
         >
-          {isTransfer ? 'Create transfer' : 'Create transaction'}
+          {isTransfer ? t('transactionForm.createTransfer') : t('transactionForm.createTransaction')}
         </SubmitButton>
         {!isTransfer ? (
           <SubmitButton
@@ -516,18 +518,18 @@ export function TransactionForm({
             value="true"
             variant="outline"
             disabled={!canSubmit}
-            pendingText="Saving…"
+            pendingText={t('transactionForm.saving')}
           >
-            Save & Add Next
+            {t('transactionForm.saveAndAddNext')}
           </SubmitButton>
         ) : null}
         {onCancel ? (
           <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
+            {t('transactionForm.cancel')}
           </Button>
         ) : cancelHref ? (
           <Link href={cancelHref} className={buttonVariants({ variant: 'outline' })}>
-            Cancel
+            {t('transactionForm.cancel')}
           </Link>
         ) : null}
       </div>
