@@ -2,8 +2,10 @@
 
 ## Status
 
-**Planned — not yet implemented.** This is the spec for 5 of the 6 ideas discussed for
-making App Finanzas usable by someone without a finance background:
+**Implemented.** All 5 items below have been built on
+`claude/repo-review-setup-p0u4jz`, one commit per item per the sequencing
+section. This was the spec for 5 of the 6 ideas discussed for making App
+Finanzas usable by someone without a finance background:
 
 1. Progressive disclosure in forms (hide advanced/jargon fields by default)
 2. Plain-language dashboard summary
