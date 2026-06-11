@@ -38,11 +38,11 @@ The product is an MVP Alpha. Keep scope small, usable, and aligned with the proj
 - If database changes are needed, create or prepare migrations only and list exact manual Supabase commands for the user.
 
 ## Validation expectations
-Before finishing a task, run or instruct the user to run the relevant checks:
+Before finishing a task, run the validation gate defined by the `app-finanzas-verify`
+skill (the single source of truth). In short:
 - npm run lint
-- npm run typecheck, if available
-- npm run build, if feasible
-- npm test, if available
+- npx tsc --noEmit  (there is no `typecheck` npm script)
+- npm run build, when feasible
 - Manual localhost tests for the touched flow
 
 ## Final response format

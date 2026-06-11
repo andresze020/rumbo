@@ -1,92 +1,89 @@
 # AGENTS.md — App Finanzas
 
+> Canonical project-state document. Keep this in sync at every sprint close
+> (see the `app-finanzas-state-sync` skill). If this file and the code disagree,
+> the code wins — and this file is the bug.
+
 ## Project context
 
 This is App Finanzas, a personal/family finance PWA.
 
 Stack:
-- Next.js
+- Next.js (App Router) + React 19
 - TypeScript
-- Tailwind CSS
-- shadcn/ui
-- Supabase Auth
-- Supabase/PostgreSQL
-- GitHub
-- Vercel
+- Tailwind CSS v4
+- shadcn/ui + Base UI + Recharts
+- Supabase Auth + Supabase/PostgreSQL (SSR configured)
+- Zod for validation
+- @anthropic-ai/sdk (AI assistant feature)
+- GitHub + Vercel
 
 The product is household-first. All financial data must belong to a household.
 
-Current completed sprint:
-- Sprint 2.1 — Auth + Profile + Household
+## Current status
 
-Already existing real Supabase tables:
+- Phase: **MVP Alpha — personal/family real-data usage (Sprint 12.x)**.
+- The MVP is feature-complete for personal use. Sprint 12 deliberately delays
+  post-MVP work until real Alpha usage proves what is actually missing or broken.
+- Recent sprints (12.4–12.7+) addressed alpha findings and UX friction:
+  date-grouped transaction list, toast feedback, smart form defaults, month
+  navigation, loading skeletons, PWA install hint, ES/EN localization foundation,
+  and the `FormDialog` migration for all create/edit/action forms.
+- See `docs/alpha/sprint-12-alpha-plan.md` for the live Alpha plan and
+  `docs/alpha-readiness-checklist.md` for the readiness gate.
+
+## Real Supabase tables (public schema)
+
 - profiles
 - households
 - household_members
 - currencies
+- accounts
+- categories
+- transactions
+- transaction_entries
+- transaction_allocations
+- budgets
+- budget_lines
+- debts
+- import_batches
+- import_rows
 
-Supabase SSR is already configured.
+Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
-Existing files include:
-- src/lib/supabase/client.ts
-- src/lib/supabase/server.ts
-- src/lib/supabase/middleware.ts
-- src/middleware.ts
-- src/app/login/page.tsx
-- src/app/login/actions.ts
-- src/app/onboarding/page.tsx
-- src/app/onboarding/actions.tsx
-- src/app/dashboard/page.tsx
+## Key areas of the app
 
-## Current sprint
-
-We are starting Sprint 2.2 — Accounts + Categories base.
-
-Do not build transactions yet.
-
-The sprint should add:
-- accounts table
-- categories table
-- indexes
-- updated_at triggers
-- RLS
-- policies by household
-- default categories per household
-- minimal accounts UI
-- minimal categories UI
-- server actions connected to the active household
+- `src/app/dashboard/` — accounts, categories, transactions, budgets, debts,
+  net-worth, export, settings, assistant (AI).
+- `src/lib/supabase/{client,server,middleware}.ts` + `src/middleware.ts` — auth/SSR.
+- `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `imports/`, `exports/`.
+- `src/components/` — shared design system (PageHeader, SectionHeading, Callout,
+  Money, AccountAvatar, FormDialog, etc.). Reuse these; do not re-roll primitives.
 
 ## Technical rules
 
-Use small, safe SQL migrations.
-
-Do not apply the full big schema yet.
-
-Do not introduce Java.
-
-Do not bypass RLS.
-
-Do not use Supabase service role key in app code.
-
-Use server actions for writes.
-
-Prefer simple readable code over abstractions.
-
-Use TypeScript types where practical.
-
-Run checks before final answer:
-- npm run lint
-- npm run build
+- Use small, safe, additive SQL migrations. Do not apply a big-bang schema.
+- Do not introduce Java.
+- Do not bypass RLS. Do not use the Supabase service-role key in app code.
+- Use server actions for writes.
+- Prefer simple, readable code over abstractions.
+- Use TypeScript types where practical.
+- Run checks before final answer (see the `app-finanzas-verify` skill):
+  - `npm run lint`
+  - `npx tsc --noEmit`  (there is no `typecheck` npm script)
+  - `npm run build` when feasible
 
 ## Git rules
 
-Work on a branch, not directly on main.
+- Work on a branch, not directly on main.
+- Use small, logically separable commits.
+- Before making code changes, explain the plan.
+- Before committing, show the diff summary.
+- Never run destructive git commands (`reset --hard`, `push --force`, `clean -f`,
+  `branch -D`) without explicit confirmation.
+- Only create branches, commit, push, merge, or tag when the user explicitly asks.
 
-Use small commits:
-1. database migration
-2. accounts UI/actions
-3. categories UI/actions
-4. onboarding/default categories integration if needed
+## Database/Supabase rules
 
-Before making code changes, explain the plan.
-Before committing, show the diff summary.
+- Do not run `npx supabase db push` automatically.
+- Prepare migrations only and list the exact manual Supabase command for the user.
