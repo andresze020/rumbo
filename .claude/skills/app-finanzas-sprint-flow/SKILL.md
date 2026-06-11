@@ -18,7 +18,15 @@ Use this skill when the user asks to continue, start, review, finish, or create 
 7. Preserve household-first/RLS architecture.
 8. Do not run Git write/history/remote commands.
 9. Do not run Supabase remote/write commands.
-10. End with validation and exact manual commands.
+10. Run the validation gate via the `app-finanzas-verify` skill before declaring done.
+11. End with validation and exact manual commands.
+
+## Closing a sprint
+
+When the user finishes or merges a sprint, invoke the `app-finanzas-state-sync`
+skill to update `AGENTS.md` and `docs/SPRINT-LOG.md`. A sprint is not "closed"
+until the canonical state reflects it — stale state docs are the project's main
+consistency failure.
 
 ## Branch hygiene
 
