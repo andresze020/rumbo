@@ -384,6 +384,7 @@ export default async function TransactionsPage({
     .select('id, name, currency_code, institution_name, is_archived')
     .eq('household_id', household.id)
     .is('deleted_at', null)
+    .order('sort_order', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
   if (accountsError) throw new Error('Could not load accounts.')
 
@@ -395,6 +396,7 @@ export default async function TransactionsPage({
     .eq('household_id', household.id)
     .is('deleted_at', null)
     .order('parent_category_id', { ascending: true, nullsFirst: true })
+    .order('sort_order', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
   if (categoriesError) throw new Error('Could not load categories.')
 

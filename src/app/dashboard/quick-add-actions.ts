@@ -61,6 +61,8 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
         .eq('household_id', householdId)
         .eq('is_archived', false)
         .is('deleted_at', null)
+        .order('parent_category_id', { ascending: true, nullsFirst: true })
+        .order('sort_order', { ascending: true, nullsFirst: false })
         .order('name', { ascending: true }),
     ])
 
