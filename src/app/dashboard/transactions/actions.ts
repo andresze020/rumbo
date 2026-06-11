@@ -180,6 +180,9 @@ export async function createManualTransactionAction(formData: FormData) {
     url.searchParams.set('next_type', transactionType)
     if (accountId) url.searchParams.set('next_account', accountId)
     if (status) url.searchParams.set('next_status', status)
+    // Unique per redirect so the dialog reopen effect fires even when the
+    // next entry reuses the same date/type/account as the previous one.
+    url.searchParams.set('next_seq', String(Date.now()))
     redirect(`${url.pathname}?${url.searchParams.toString()}`)
   }
 
