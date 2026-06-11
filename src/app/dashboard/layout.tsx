@@ -1,8 +1,9 @@
-import { Suspense, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Plus } from 'lucide-react'
 import { AppSidebar } from '@/components/app-sidebar'
 import { MobileNav } from '@/components/mobile-nav'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
+import { TransactionDialogProvider } from '@/components/transaction-dialog-provider'
 import { AssistantDrawer } from '@/components/assistant-drawer'
 import { InstallAppHint } from '@/components/install-app-hint'
 import { LanguageProvider } from '@/components/language-provider'
@@ -13,25 +14,25 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <LanguageProvider locale={locale}>
-      <div className="flex min-h-screen">
-        {/* Desktop sidebar */}
-        <AppSidebar className="hidden lg:flex" />
+      <TransactionDialogProvider>
+        <div className="flex min-h-screen">
+          {/* Desktop sidebar */}
+          <AppSidebar className="hidden lg:flex" />
 
-        {/* Main content area */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          {/* Mobile top bar */}
-          <MobileNav className="lg:hidden" />
+          {/* Main content area */}
+          <div className="flex min-w-0 flex-1 flex-col">
+            {/* Mobile top bar */}
+            <MobileNav className="lg:hidden" />
 
-          <InstallAppHint />
+            <InstallAppHint />
 
-          <main className="flex-1 pb-24">
-            {children}
-          </main>
-        </div>
+            <main className="flex-1 pb-24">
+              {children}
+            </main>
+          </div>
 
-        {/* FABs — assistant + add transaction */}
-        <AssistantDrawer />
-        <Suspense>
+          {/* FABs — assistant + add transaction */}
+          <AssistantDrawer />
           <GlobalAddTransactionButton
             aria-label="Add transaction"
             title="Add transaction"
@@ -39,8 +40,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           >
             <Plus className="size-6" aria-hidden="true" />
           </GlobalAddTransactionButton>
-        </Suspense>
-      </div>
+        </div>
+      </TransactionDialogProvider>
     </LanguageProvider>
   )
 }
