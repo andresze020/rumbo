@@ -29,8 +29,12 @@ import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { AccountAvatar } from '@/components/account-avatar'
 import { AccountCardDetails } from './accounts/account-card-details'
+import { AccountGroup } from '@/components/account-group'
+import { AccountsViewToggle } from '@/components/accounts-view-toggle'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import { MonthNav } from '@/components/month-nav'
+import { getAccountsView } from '@/lib/accounts-view/server'
+import { groupAccountsByType } from '@/lib/accounts-view/group'
 import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
@@ -259,6 +263,7 @@ export default async function DashboardPage({
   const selectedMonthEndDate = getMonthEndDate(selectedMonth)
   const supabase = await createClient()
   const locale = await getLocale()
+  const accountsView = await getAccountsView()
   const t = (key: TranslationKey, vars?: Record<string, string | number>) => translate(locale, key, vars)
 
   const {
@@ -542,6 +547,79 @@ export default async function DashboardPage({
   )
 
   const activeBalances = balances.filter((a) => !a.is_archived)
+
+  function renderDashboardAccountRow(account: AccountBalance) {
+    const meta = accountMetaById.get(account.account_id)
+    const isLiability = account.account_class === 'liability'
+    return (
+      <div key={account.account_id} className="p-3">
+        <AccountCardDetails
+          accountId={account.account_id}
+          summaryLeft={
+            <>
+              <AccountAvatar
+                accountType={account.account_type}
+                emoji={meta?.icon}
+                color={meta?.color}
+              />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{account.account_name}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <Badge variant="secondary" className="text-[11px]">
+                    {formatLabel(account.account_type)}
+                  </Badge>
+                  <Badge variant="outline" className="text-[11px]">
+                    {account.currency_code}
+                  </Badge>
+                  {isLiability ? (
+                    <Badge variant="outline" className="border-rose-200 text-[11px] text-rose-600 dark:border-rose-900 dark:text-rose-400">
+                      {t('common.liability')}
+                    </Badge>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          }
+          balanceLabel={formatCurrency(
+            isLiability
+              ? liabilityDisplay(account.posted_balance_account_currency)
+              : Number(account.posted_balance_account_currency),
+            account.currency_code
+          )}
+          balanceSubLabel={isLiability ? t('dashboard.balanceOwed') : t('dashboard.postedBalance')}
+          postedLabel={formatCurrency(
+            isLiability
+              ? liabilityDisplay(account.posted_balance_account_currency)
+              : Number(account.posted_balance_account_currency),
+            account.currency_code
+          )}
+          pendingLabel={formatCurrency(
+            isLiability
+              ? liabilityDisplay(account.pending_balance_account_currency)
+              : Number(account.pending_balance_account_currency),
+            account.currency_code
+          )}
+          projectedLabel={formatCurrency(
+            isLiability
+              ? liabilityDisplay(account.projected_balance_account_currency)
+              : Number(account.projected_balance_account_currency),
+            account.currency_code
+          )}
+          balanceType={isLiability ? 'owed' : 'posted'}
+          institutionName={meta?.institution_name ?? null}
+          lastFour={meta?.last_four ?? null}
+          includeInNetWorth={account.include_in_net_worth}
+        >
+          <GlobalAddTransactionButton
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            defaultAccountId={account.account_id}
+          >
+            {t('common.addTransaction')}
+          </GlobalAddTransactionButton>
+        </AccountCardDetails>
+      </div>
+    )
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
@@ -836,89 +914,42 @@ export default async function DashboardPage({
                   {t('dashboard.accountsDescription')}
                 </CardDescription>
               </div>
-              <Link
-                href="/dashboard/accounts"
-                className={buttonVariants({ variant: 'outline', size: 'sm' })}
-              >
-                {t('dashboard.manageAccounts')}
-              </Link>
+              <div className="flex flex-col items-end gap-2">
+                <Link
+                  href="/dashboard/accounts"
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                >
+                  {t('dashboard.manageAccounts')}
+                </Link>
+                <AccountsViewToggle view={accountsView} />
+              </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="divide-y rounded-lg border">
-              {activeBalances.map((account) => {
-                const meta = accountMetaById.get(account.account_id)
-                const isLiability = account.account_class === 'liability'
-                return (
-                  <div key={account.account_id} className="p-3">
-                    <AccountCardDetails
-                      accountId={account.account_id}
-                      summaryLeft={
-                        <>
-                          <AccountAvatar
-                            accountType={account.account_type}
-                            emoji={meta?.icon}
-                            color={meta?.color}
-                          />
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">{account.account_name}</p>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              <Badge variant="secondary" className="text-[11px]">
-                                {formatLabel(account.account_type)}
-                              </Badge>
-                              <Badge variant="outline" className="text-[11px]">
-                                {account.currency_code}
-                              </Badge>
-                              {isLiability ? (
-                                <Badge variant="outline" className="border-rose-200 text-[11px] text-rose-600 dark:border-rose-900 dark:text-rose-400">
-                                  {t('common.liability')}
-                                </Badge>
-                              ) : null}
-                            </div>
-                          </div>
-                        </>
-                      }
-                      balanceLabel={formatCurrency(
-                        isLiability
-                          ? liabilityDisplay(account.posted_balance_account_currency)
-                          : Number(account.posted_balance_account_currency),
-                        account.currency_code
-                      )}
-                      balanceSubLabel={isLiability ? t('dashboard.balanceOwed') : t('dashboard.postedBalance')}
-                      postedLabel={formatCurrency(
-                        isLiability
-                          ? liabilityDisplay(account.posted_balance_account_currency)
-                          : Number(account.posted_balance_account_currency),
-                        account.currency_code
-                      )}
-                      pendingLabel={formatCurrency(
-                        isLiability
-                          ? liabilityDisplay(account.pending_balance_account_currency)
-                          : Number(account.pending_balance_account_currency),
-                        account.currency_code
-                      )}
-                      projectedLabel={formatCurrency(
-                        isLiability
-                          ? liabilityDisplay(account.projected_balance_account_currency)
-                          : Number(account.projected_balance_account_currency),
-                        account.currency_code
-                      )}
-                      balanceType={isLiability ? 'owed' : 'posted'}
-                      institutionName={meta?.institution_name ?? null}
-                      lastFour={meta?.last_four ?? null}
-                      includeInNetWorth={account.include_in_net_worth}
-                    >
-                      <GlobalAddTransactionButton
-                        className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                        defaultAccountId={account.account_id}
-                      >
-                        {t('common.addTransaction')}
-                      </GlobalAddTransactionButton>
-                    </AccountCardDetails>
-                  </div>
-                )
-              })}
-            </div>
+            {accountsView === 'group' ? (
+              <div className="divide-y rounded-lg border">
+                {groupAccountsByType(activeBalances, {
+                  getType: (account) => account.account_type,
+                  getBaseAmount: (account) =>
+                    account.account_class === 'liability'
+                      ? getDisplayedLiabilityBalance(account.posted_balance_base_currency)
+                      : Number(account.posted_balance_base_currency),
+                }).map((group) => (
+                  <AccountGroup
+                    key={group.type}
+                    label={group.label}
+                    count={group.count}
+                    subtotalLabel={formatCurrency(group.subtotalBase, household.base_currency)}
+                  >
+                    {group.rows.map((account) => renderDashboardAccountRow(account))}
+                  </AccountGroup>
+                ))}
+              </div>
+            ) : (
+              <div className="divide-y rounded-lg border">
+                {activeBalances.map((account) => renderDashboardAccountRow(account))}
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : null}

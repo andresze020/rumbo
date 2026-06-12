@@ -11,6 +11,10 @@ import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { Money } from '@/components/money'
 import { AccountAvatar } from '@/components/account-avatar'
+import { AccountGroup } from '@/components/account-group'
+import { AccountsViewToggle } from '@/components/accounts-view-toggle'
+import { getAccountsView, type AccountsView } from '@/lib/accounts-view/server'
+import { groupAccountsByType } from '@/lib/accounts-view/group'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
@@ -148,16 +152,78 @@ function summarizeBalances(balances: AccountBalance[]): NetWorthSummary {
   }
 }
 
+function AccountRow({
+  account,
+  baseCurrency,
+  showInclusionBadge,
+}: {
+  account: AccountBalance
+  baseCurrency: string
+  showInclusionBadge?: boolean
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <AccountAvatar
+          accountType={account.account_type}
+          className={account.is_archived ? 'opacity-60 grayscale' : undefined}
+        />
+        <div className="min-w-0">
+          <p className={`truncate text-sm font-medium ${account.is_archived ? 'text-muted-foreground' : ''}`}>
+            {account.account_name}
+          </p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+            <Badge variant="secondary" className="text-[11px]">
+              {formatValue(account.account_type)}
+            </Badge>
+            <Badge variant="outline" className="text-[11px]">
+              {account.currency_code}
+            </Badge>
+            {showInclusionBadge ? (
+              <Badge variant="outline" className="text-[11px]">
+                {account.include_in_net_worth ? 'Included' : 'Excluded'}
+              </Badge>
+            ) : null}
+            {account.is_archived ? (
+              <Badge variant="outline" className="text-[11px] text-muted-foreground">
+                Archived
+              </Badge>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      <div className="shrink-0 text-right">
+        <Money
+          value={getDisplayBalance(account, account.posted_balance_account_currency)}
+          currency={account.currency_code}
+          className="text-sm font-semibold"
+        />
+        {account.currency_code !== baseCurrency ? (
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {formatCurrency(
+              getDisplayBalance(account, account.posted_balance_base_currency),
+              baseCurrency
+            )}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function AccountList({
   accounts,
   baseCurrency,
   emptyMessage,
   showInclusionBadge,
+  view,
 }: {
   accounts: AccountBalance[]
   baseCurrency: string
   emptyMessage: string
   showInclusionBadge?: boolean
+  view: AccountsView
 }) {
   if (!accounts.length) {
     return (
@@ -167,59 +233,45 @@ function AccountList({
     )
   }
 
+  if (view === 'group') {
+    const groups = groupAccountsByType(accounts, {
+      getType: (account) => account.account_type,
+      getBaseAmount: (account) =>
+        getDisplayBalance(account, account.posted_balance_base_currency),
+    })
+
+    return (
+      <div className="divide-y rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
+        {groups.map((group) => (
+          <AccountGroup
+            key={group.type}
+            label={group.label}
+            count={group.count}
+            subtotalLabel={formatCurrency(group.subtotalBase, baseCurrency)}
+          >
+            {group.rows.map((account) => (
+              <AccountRow
+                key={account.account_id}
+                account={account}
+                baseCurrency={baseCurrency}
+                showInclusionBadge={showInclusionBadge}
+              />
+            ))}
+          </AccountGroup>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="divide-y rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
       {accounts.map((account) => (
-        <div
+        <AccountRow
           key={account.account_id}
-          className="flex items-center justify-between gap-3 px-4 py-3"
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <AccountAvatar
-              accountType={account.account_type}
-              className={account.is_archived ? 'opacity-60 grayscale' : undefined}
-            />
-            <div className="min-w-0">
-              <p className={`truncate text-sm font-medium ${account.is_archived ? 'text-muted-foreground' : ''}`}>
-                {account.account_name}
-              </p>
-              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                <Badge variant="secondary" className="text-[11px]">
-                  {formatValue(account.account_type)}
-                </Badge>
-                <Badge variant="outline" className="text-[11px]">
-                  {account.currency_code}
-                </Badge>
-                {showInclusionBadge ? (
-                  <Badge variant="outline" className="text-[11px]">
-                    {account.include_in_net_worth ? 'Included' : 'Excluded'}
-                  </Badge>
-                ) : null}
-                {account.is_archived ? (
-                  <Badge variant="outline" className="text-[11px] text-muted-foreground">
-                    Archived
-                  </Badge>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          <div className="shrink-0 text-right">
-            <Money
-              value={getDisplayBalance(account, account.posted_balance_account_currency)}
-              currency={account.currency_code}
-              className="text-sm font-semibold"
-            />
-            {account.currency_code !== baseCurrency ? (
-              <p className="text-xs text-muted-foreground tabular-nums">
-                {formatCurrency(
-                  getDisplayBalance(account, account.posted_balance_base_currency),
-                  baseCurrency
-                )}
-              </p>
-            ) : null}
-          </div>
-        </div>
+          account={account}
+          baseCurrency={baseCurrency}
+          showInclusionBadge={showInclusionBadge}
+        />
       ))}
     </div>
   )
@@ -228,6 +280,7 @@ function AccountList({
 export default async function NetWorthPage({ searchParams }: NetWorthPageProps) {
   const params = await searchParams
   const locale = await getLocale()
+  const accountsView = await getAccountsView()
   const selectedMonth = parseMonth(params.month)
   const selectedMonthEndDate = getMonthEndDate(selectedMonth)
   const evolutionMonths = getPreviousMonths(selectedMonth, 6)
@@ -311,6 +364,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
               previousLabel={translate(locale, 'common.previousMonth')}
               nextLabel={translate(locale, 'common.nextMonth')}
             />
+            <AccountsViewToggle view={accountsView} />
           </>
         }
       />
@@ -410,6 +464,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
           accounts={includedAssets}
           baseCurrency={household.base_currency}
           emptyMessage="No included asset accounts."
+          view={accountsView}
         />
       </section>
 
@@ -420,6 +475,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
           accounts={includedLiabilities}
           baseCurrency={household.base_currency}
           emptyMessage="No included liability accounts."
+          view={accountsView}
         />
       </section>
 
@@ -435,6 +491,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
             baseCurrency={household.base_currency}
             emptyMessage="No accounts are excluded from net worth."
             showInclusionBadge
+            view={accountsView}
           />
         </section>
       ) : null}
