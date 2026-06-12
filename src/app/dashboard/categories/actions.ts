@@ -420,6 +420,53 @@ export async function updateCategoryAction(formData: FormData) {
   redirect(redirectPath)
 }
 
+export async function reorderCategoriesAction(orderedIds: string[]) {
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    return { error: 'No categories to reorder.' }
+  }
+
+  if (orderedIds.some((id) => typeof id !== 'string' || !id)) {
+    return { error: 'Invalid category list.' }
+  }
+
+  const { supabase, userId, householdId } = await getAuthenticatedHousehold()
+
+  const { data: ownedCategories, error: ownedError } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+    .in('id', orderedIds)
+
+  if (ownedError) {
+    return { error: 'Could not verify categories.' }
+  }
+
+  const ownedIds = new Set((ownedCategories ?? []).map((category) => category.id))
+
+  if (ownedIds.size !== orderedIds.length) {
+    return { error: 'Some categories do not belong to this household.' }
+  }
+
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase
+        .from('categories')
+        .update({ sort_order: index, updated_by: userId })
+        .eq('id', id)
+        .eq('household_id', householdId)
+        .is('deleted_at', null)
+    )
+  )
+
+  if (results.some((result) => result.error)) {
+    return { error: 'Could not save the new category order.' }
+  }
+
+  revalidateCategorySurfaces()
+  return { success: true }
+}
+
 export async function archiveCategoryAction(formData: FormData) {
   const categoryId = String(formData.get('category_id') ?? '').trim()
   const isArchived = String(formData.get('is_archived') ?? '') === 'true'

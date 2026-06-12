@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { FolderTree, Layers, Plus, Settings, Tag } from 'lucide-react'
 import { CategoryForm } from './category-form'
-import { CategoryRow } from './category-row'
+import { SortableCategoryList, type CategoryVM } from './sortable-category-list'
 import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
@@ -10,7 +10,6 @@ import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
 import { PageHeader } from '@/components/page-header'
 import { InfoTooltip } from '@/components/info-tooltip'
-import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 
 type CategoriesPageProps = {
@@ -49,12 +48,7 @@ type ParentCategoryOption = {
   reporting_type: string
   parent_category_id: string | null
   is_archived: boolean
-}
-
-type CategoryHierarchy = {
-  childrenByParentId: Map<string, Category[]>
-  roots: Category[]
-  unparented: Category[]
+  icon: string | null
 }
 
 const categoryTypes = [
@@ -93,32 +87,6 @@ function categoriesPath({
 
 function formatValue(value: string) {
   return value.replaceAll('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-}
-
-function buildCategoryHierarchy(categories: Category[]): CategoryHierarchy {
-  const categoryIds = new Set(categories.map((c) => c.id))
-  const childrenByParentId = new Map<string, Category[]>()
-  const roots: Category[] = []
-  const unparented: Category[] = []
-
-  for (const category of categories) {
-    if (!category.parent_category_id) {
-      roots.push(category)
-      continue
-    }
-    if (!categoryIds.has(category.parent_category_id)) {
-      unparented.push(category)
-      continue
-    }
-    const siblings = childrenByParentId.get(category.parent_category_id)
-    if (siblings) {
-      siblings.push(category)
-    } else {
-      childrenByParentId.set(category.parent_category_id, [category])
-    }
-  }
-
-  return { childrenByParentId, roots, unparented }
 }
 
 export default async function CategoriesPage({
@@ -176,6 +144,7 @@ export default async function CategoriesPage({
     reporting_type: c.reporting_type,
     parent_category_id: c.parent_category_id,
     is_archived: c.is_archived,
+    icon: c.icon,
   }))
   const categoriesByIdRecord: Record<string, ParentCategoryOption> =
     Object.fromEntries(categoriesById)
@@ -201,8 +170,20 @@ export default async function CategoriesPage({
       (t) => categoryTypeFilter === 'all' || t.value === categoryTypeFilter
     )
     .map((t) => ({
-      ...t,
-      categories: displayCategories.filter((c) => c.category_type === t.value),
+      value: t.value,
+      label: t.label,
+      categories: displayCategories
+        .filter((c) => c.category_type === t.value)
+        .map(
+          (c): CategoryVM => ({
+            ...c,
+            editHref: categoriesPath({
+              showArchived,
+              categoryType: categoryTypeFilter,
+              edit: c.id,
+            }),
+          })
+        ),
     }))
     .filter((g) => g.categories.length > 0)
 
@@ -344,91 +325,7 @@ export default async function CategoriesPage({
       {categoriesError ? (
         <Callout variant="error">Could not load categories. Try refreshing.</Callout>
       ) : categoryGroups.length ? (
-        <div className="space-y-6">
-          {categoryGroups.map((group) => {
-            const hierarchy = buildCategoryHierarchy(group.categories)
-
-            return (
-              <section key={group.value} className="space-y-3">
-                <SectionHeading title={group.label} />
-
-                <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
-                  {hierarchy.roots.map((category) => {
-                    const children =
-                      hierarchy.childrenByParentId.get(category.id) ?? []
-                    const parentName = category.parent_category_id
-                      ? (categoriesById.get(category.parent_category_id)?.name ?? null)
-                      : null
-
-                    return (
-                      <div key={category.id} className="divide-y">
-                        <CategoryRow
-                          category={category}
-                          parentName={parentName}
-                          childCount={children.length}
-                          editHref={categoriesPath({
-                            showArchived,
-                            categoryType: categoryTypeFilter,
-                            edit: category.id,
-                          })}
-                          showArchived={showArchived}
-                        />
-
-                        {children.length ? (
-                          <div className="divide-y border-l-2 border-muted ml-4">
-                            {children.map((child) => (
-                              <CategoryRow
-                                key={child.id}
-                                category={child}
-                                parentName={
-                                  categoriesById.get(
-                                    child.parent_category_id ?? ''
-                                  )?.name ?? null
-                                }
-                                childCount={0}
-                                editHref={categoriesPath({
-                                  showArchived,
-                                  categoryType: categoryTypeFilter,
-                                  edit: child.id,
-                                })}
-                                showArchived={showArchived}
-                              />
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    )
-                  })}
-
-                  {hierarchy.unparented.length ? (
-                    <div className="space-y-1 bg-muted/10 p-3">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        Unparented
-                      </p>
-                      <div className="divide-y rounded-lg border bg-background">
-                        {hierarchy.unparented.map((category) => (
-                          <CategoryRow
-                            key={category.id}
-                            category={category}
-                            parentName={null}
-                            parentUnavailable
-                            childCount={0}
-                            editHref={categoriesPath({
-                              showArchived,
-                              categoryType: categoryTypeFilter,
-                              edit: category.id,
-                            })}
-                            showArchived={showArchived}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </section>
-            )
-          })}
-        </div>
+        <SortableCategoryList groups={categoryGroups} showArchived={showArchived} />
       ) : (
         <EmptyState
           title={

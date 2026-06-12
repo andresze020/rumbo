@@ -64,6 +64,7 @@ type Category = {
   exclude_from_budget: boolean
   exclude_from_reports: boolean
   sort_order: number | null
+  icon: string | null
 }
 
 const selectClassName =
@@ -186,7 +187,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   const { data: categoryRows, error: categoriesError } = await supabase
     .from('categories')
     .select(
-      'id, name, category_type, reporting_type, parent_category_id, is_archived, exclude_from_budget, exclude_from_reports, sort_order'
+      'id, name, category_type, reporting_type, parent_category_id, is_archived, exclude_from_budget, exclude_from_reports, sort_order, icon'
     )
     .eq('household_id', household.id)
     .is('deleted_at', null)
@@ -383,6 +384,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                         </option>
                         {categoryOptions.map((c) => (
                           <option key={c.id} value={c.id}>
+                            {c.icon ? `${c.icon} ` : ''}
                             {getCategoryPath(c, categoriesById)}
                             {c.exclude_from_reports ? ' · no reports' : ''}
                           </option>
