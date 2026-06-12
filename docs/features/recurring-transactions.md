@@ -1,8 +1,40 @@
 # Recurring Transactions
 
 ## Status
-**Pending — not yet implemented.**
-Schema table `recurring_transactions` already exists in production.
+**Sprint A shipped (2026-06-12) — manual posting MVP.** Merged to `main`.
+
+- ✅ **Sprint A — Manual posting MVP** (UC-1, UC-2, UC-3, UC-5, UC-6, UC-7):
+  `/dashboard/recurring` list with Due/Upcoming/Inactive sections, create/edit
+  form (income + expense), one-click **Post** with confirmation dialog,
+  activate/deactivate, delete, and a sidebar/mobile-nav link (`Repeat` icon).
+- ⬜ **Sprint B — Auto-posting** (UC-4): `auto_post` toggle + scheduled job +
+  failure flag/notification. Pending. Blocked on the multi-currency FX strategy
+  for unattended posting (see Open Decision #3).
+- ⬜ **Sprint C — Dashboard widget + transfers** (UC-8, UC-9): "Due soon" widget
+  on `/dashboard`; recurring transfers require a schema migration to add
+  `to_account_id`. Pending.
+
+> **Note:** the table did **not** actually exist in this project's database —
+> it was only in the initial schema design doc and was never applied. Migration
+> `20260612162632_create_recurring_transactions.sql` creates it (table, index,
+> `updated_at` trigger, and all four RLS policies: select member /
+> insert+update+delete admin).
+
+### Sprint A implementation notes
+
+- **Files:** `src/app/dashboard/recurring/{page,actions,recurring-form,recurring-row,post-form,loading}.tsx`,
+  `src/lib/recurring/shared.ts` (frequency options + UTC-safe `computeNextRunDate`
+  with month-end clamping), plus the create-table migration. Nav links added to
+  `app-sidebar.tsx` + `mobile-nav.tsx`; `nav.recurring` i18n (en/es).
+- **Scope chosen:** income + expense only (the `create_manual_transaction` RPC
+  rejects other types); no auto-post, no transfers, no dashboard widget.
+- **Posting:** reuses `create_manual_transaction` (status `posted`), then
+  advances `next_run_date` by one frequency step and auto-deactivates once it
+  passes `end_date`. The post dialog collects an FX rate only when the account
+  currency ≠ household base currency.
+- **`next_run_date` semantics:** first occurrence = `start_date` (or the next
+  future occurrence if `start_date` is in the past). Reactivation recomputes
+  from today (no missed-entry backlog — Open Decision #6).
 
 ---
 

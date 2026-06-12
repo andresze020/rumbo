@@ -41,7 +41,7 @@ The product is household-first. All financial data must belong to a household.
   (green positive / red negative + minus sign — color-blind-aware). New code:
   `lib/accounts-view/*`, `components/{accounts-view-toggle,account-group,balance-amount}`,
   `accounts/sortable-accounts-list`.
-- Latest: **Categories drag-and-drop + style picker**. Siblings-only reorder
+- **Categories drag-and-drop + style picker**. Siblings-only reorder
   (roots within a type, children within a parent) via `@dnd-kit` +
   `reorderCategoriesAction` (`categories/sortable-category-list.tsx`,
   `CategoryRow` gained an optional `dragHandle`). New `CategoryStylePicker`
@@ -53,6 +53,16 @@ The product is household-first. All financial data must belong to a household.
   transaction filters, budget line selector). New code:
   `lib/categories/style.ts`, `components/category-style-picker`,
   `categories/sortable-category-list`.
+- Latest: **Recurring transactions — manual posting MVP (Sprint A)**.
+  `/dashboard/recurring` with Due/Upcoming/Inactive sections, income/expense
+  template CRUD, lifecycle (activate/deactivate/delete), and one-click **Post**
+  (reuses `create_manual_transaction`, advances `next_run_date`, auto-deactivates
+  past `end_date`). UTC-safe date math in `lib/recurring/shared.ts`. The
+  `recurring_transactions` table was created here — it had never actually been
+  applied to this project despite being in the initial schema doc. **Auto-posting
+  (Sprint B) and the dashboard widget + recurring transfers (Sprint C) are still
+  pending** — see `docs/features/recurring-transactions.md`. New code:
+  `app/dashboard/recurring/*`, `lib/recurring/shared.ts`.
 - See `docs/alpha/sprint-12-alpha-plan.md` for the live Alpha plan and
   `docs/alpha-readiness-checklist.md` for the readiness gate.
 
@@ -70,6 +80,7 @@ The product is household-first. All financial data must belong to a household.
 - budgets
 - budget_lines
 - debts
+- recurring_transactions
 - import_batches
 - import_rows
 
@@ -78,9 +89,9 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 ## Key areas of the app
 
 - `src/app/dashboard/` — accounts, categories, transactions, budgets, debts,
-  net-worth, export, settings, assistant (AI).
+  net-worth, recurring, export, settings, assistant (AI).
 - `src/lib/supabase/{client,server,middleware}.ts` + `src/middleware.ts` — auth/SSR.
-- `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `imports/`, `exports/`.
+- `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `recurring/`, `imports/`, `exports/`.
 - `src/components/` — shared design system (PageHeader, SectionHeading, Callout,
   Money, BalanceAmount, AccountAvatar, AccountGroup, AccountsViewToggle,
   CategoryStylePicker, FormDialog, AmountInput, etc.). Reuse these; do not
