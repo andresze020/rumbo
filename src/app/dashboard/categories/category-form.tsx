@@ -7,6 +7,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
+import { CategoryStylePicker } from '@/components/category-style-picker'
 
 type Category = {
   id: string
@@ -272,32 +273,13 @@ export function CategoryForm({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`color_${mode}`}>Color</Label>
-          <Input
-            id={`color_${mode}`}
-            name="color"
-            placeholder="#3b82f6"
-            defaultValue={category?.color ?? ''}
-          />
-          <p className="text-xs text-muted-foreground">
-            Any CSS color — hex, rgb, oklch, etc.
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor={`icon_${mode}`}>Icon</Label>
-          <Input
-            id={`icon_${mode}`}
-            name="icon"
-            placeholder="e.g. 🛒 🍽️ 🚗 🏠"
-            defaultValue={category?.icon ?? ''}
-          />
-          <p className="text-xs text-muted-foreground">
-            Paste any emoji — shown next to the category name.
-          </p>
-        </div>
       </div>
+
+      <CategoryStylePicker
+        mode={mode}
+        defaultColor={category?.color}
+        defaultIcon={category?.icon}
+      />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Label className="items-start gap-3 rounded-lg border p-3">

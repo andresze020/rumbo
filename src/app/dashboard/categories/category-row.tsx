@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -34,6 +34,7 @@ type CategoryRowProps = {
   childCount: number
   editHref: string
   showArchived: boolean
+  dragHandle?: ReactNode
 }
 
 export function CategoryRow({
@@ -43,6 +44,7 @@ export function CategoryRow({
   childCount,
   editHref,
   showArchived,
+  dragHandle,
 }: CategoryRowProps) {
   const [open, setOpen] = useState(false)
 
@@ -57,12 +59,14 @@ export function CategoryRow({
 
   return (
     <div className={category.is_archived ? 'bg-muted/20' : ''}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/50 -mx-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-expanded={open}
-      >
+      <div className="flex items-stretch">
+        {dragHandle}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full min-w-0 flex-1 items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/50 -mx-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-expanded={open}
+        >
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {category.color ? (
             <span
@@ -105,7 +109,8 @@ export function CategoryRow({
           className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           aria-hidden="true"
         />
-      </button>
+        </button>
+      </div>
 
       <div
         className={`grid transition-all duration-200 ease-in-out ${
