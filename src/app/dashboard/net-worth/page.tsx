@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/page-header'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
-import { Money } from '@/components/money'
+import { BalanceAmount } from '@/components/balance-amount'
 import { AccountAvatar } from '@/components/account-avatar'
 import { AccountGroup } from '@/components/account-group'
 import { AccountsViewToggle } from '@/components/accounts-view-toggle'
@@ -112,11 +112,6 @@ function formatValue(value: string) {
   return value.replaceAll('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
-function getDisplayBalance(account: AccountBalance, value: number | string) {
-  const numericValue = Number(value)
-  return account.account_class === 'liability' ? Math.max(0, -numericValue) : numericValue
-}
-
 function getDisplayedLiabilityBalance(value: number | string) {
   return Math.max(0, -Number(value))
 }
@@ -198,15 +193,18 @@ function AccountRow({
       </div>
 
       <div className="shrink-0 text-right">
-        <Money
-          value={getDisplayBalance(account, account.posted_balance_account_currency)}
-          currency={account.currency_code}
-          className="text-sm font-semibold"
+        <BalanceAmount
+          label={formatCurrency(
+            Number(account.posted_balance_account_currency),
+            account.currency_code
+          )}
+          amount={Number(account.posted_balance_account_currency)}
+          className="text-sm"
         />
         {account.currency_code !== baseCurrency ? (
           <p className="text-xs text-muted-foreground tabular-nums">
             {formatCurrency(
-              getDisplayBalance(account, account.posted_balance_base_currency),
+              Number(account.posted_balance_base_currency),
               baseCurrency
             )}
           </p>
@@ -240,8 +238,7 @@ function AccountList({
   if (view === 'group') {
     const groups = groupAccountsByType(accounts, {
       getType: (account) => account.account_type,
-      getBaseAmount: (account) =>
-        getDisplayBalance(account, account.posted_balance_base_currency),
+      getBaseAmount: (account) => Number(account.posted_balance_base_currency),
     })
 
     return (
@@ -252,6 +249,7 @@ function AccountList({
             label={group.label}
             count={group.count}
             subtotalLabel={formatCurrency(group.subtotalBase, baseCurrency)}
+            subtotalAmount={group.subtotalBase}
           >
             {group.rows.map((account) => (
               <AccountRow

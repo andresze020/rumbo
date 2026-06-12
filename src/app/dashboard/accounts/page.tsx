@@ -672,12 +672,10 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     const isLiability = metadata.account_class === 'liability'
     const displayAmount = (value: number | string) =>
       isLiability ? liabilityDisplay(value) : Number(value)
-    // Summary balance shows the raw signed value: liabilities are stored
-    // negative when owed, so this renders as e.g. −US$10.00 (tinted rose).
+    // Summary balance + group subtotals show the raw signed value: liabilities
+    // are stored negative when owed, so they render as e.g. −US$10.00 (rose chip).
     const signedPosted = Number(balance.posted_balance_account_currency)
-    const baseAmount = isLiability
-      ? Math.max(0, -Number(balance.posted_balance_base_currency))
-      : Number(balance.posted_balance_base_currency)
+    const baseAmount = Number(balance.posted_balance_base_currency)
 
     return {
       id: metadata.id,
@@ -694,7 +692,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       icon: metadata.icon ?? null,
       color: metadata.color ?? null,
       balanceLabel: formatCurrency(signedPosted, metadata.currency_code),
-      balanceNegative: signedPosted < 0,
+      balanceAmount: signedPosted,
       postedLabel: formatCurrency(
         displayAmount(balance.posted_balance_account_currency),
         metadata.currency_code

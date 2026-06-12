@@ -50,7 +50,7 @@ export type AccountRowVM = {
   icon: string | null
   color: string | null
   balanceLabel: string
-  balanceNegative: boolean
+  balanceAmount: number
   postedLabel: string
   pendingLabel: string
   projectedLabel: string
@@ -177,7 +177,7 @@ function AccountRowBody({
             </>
           }
           balanceLabel={row.balanceLabel}
-          balanceNegative={row.balanceNegative}
+          balanceAmount={row.balanceAmount}
           postedLabel={row.postedLabel}
           pendingLabel={row.pendingLabel}
           projectedLabel={row.projectedLabel}
@@ -338,6 +338,7 @@ export function SortableAccountsList({
                 label={group.label}
                 count={group.count}
                 subtotalLabel={formatCurrency(group.subtotalBase, baseCurrency)}
+                subtotalAmount={group.subtotalBase}
               >
                 {sortable ? (
                   <DndContext

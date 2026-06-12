@@ -585,7 +585,7 @@ export default async function DashboardPage({
             </>
           }
           balanceLabel={formatCurrency(signedPosted, account.currency_code)}
-          balanceNegative={signedPosted < 0}
+          balanceAmount={signedPosted}
           postedLabel={formatCurrency(
             isLiability
               ? liabilityDisplay(account.posted_balance_account_currency)
@@ -929,16 +929,14 @@ export default async function DashboardPage({
               <div className="divide-y rounded-lg border">
                 {groupAccountsByType(activeBalances, {
                   getType: (account) => account.account_type,
-                  getBaseAmount: (account) =>
-                    account.account_class === 'liability'
-                      ? getDisplayedLiabilityBalance(account.posted_balance_base_currency)
-                      : Number(account.posted_balance_base_currency),
+                  getBaseAmount: (account) => Number(account.posted_balance_base_currency),
                 }).map((group) => (
                   <AccountGroup
                     key={group.type}
                     label={group.label}
                     count={group.count}
                     subtotalLabel={formatCurrency(group.subtotalBase, household.base_currency)}
+                    subtotalAmount={group.subtotalBase}
                   >
                     {group.rows.map((account) => renderDashboardAccountRow(account, false))}
                   </AccountGroup>

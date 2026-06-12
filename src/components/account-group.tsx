@@ -2,11 +2,14 @@
 
 import { useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { BalanceAmount } from '@/components/balance-amount'
 
 type AccountGroupProps = {
   label: string
   count: number
   subtotalLabel: string
+  /** Signed group subtotal — drives green (positive) / red (negative) coloring. */
+  subtotalAmount: number
   defaultOpen?: boolean
   children: ReactNode
 }
@@ -20,6 +23,7 @@ export function AccountGroup({
   label,
   count,
   subtotalLabel,
+  subtotalAmount,
   defaultOpen = true,
   children,
 }: AccountGroupProps) {
@@ -45,9 +49,11 @@ export function AccountGroup({
             {count} {count === 1 ? 'account' : 'accounts'}
           </span>
         </div>
-        <span className="shrink-0 text-sm font-semibold tabular-nums">
-          {subtotalLabel}
-        </span>
+        <BalanceAmount
+          label={subtotalLabel}
+          amount={subtotalAmount}
+          className="shrink-0 text-sm"
+        />
       </button>
 
       <div
