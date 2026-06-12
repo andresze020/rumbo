@@ -10,6 +10,7 @@ import {
   Download,
   LayoutDashboard,
   LogOut,
+  Repeat,
   Scale,
   Settings,
   Tag,
@@ -32,6 +33,7 @@ const primaryLinks = [
   { href: '/dashboard/budgets', labelKey: 'nav.budgets' as TranslationKey, icon: Target },
   { href: '/dashboard/debts', labelKey: 'nav.debts' as TranslationKey, icon: Scale },
   { href: '/dashboard/net-worth', labelKey: 'nav.netWorth' as TranslationKey, icon: TrendingUp },
+  { href: '/dashboard/recurring', labelKey: 'nav.recurring' as TranslationKey, icon: Repeat },
 ]
 
 const secondaryLinks = [
