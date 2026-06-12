@@ -287,6 +287,54 @@ export async function archiveAccountAction(formData: FormData) {
   redirect(redirectPath)
 }
 
+export async function reorderAccountsAction(orderedIds: string[]) {
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    return { error: 'No accounts to reorder.' }
+  }
+
+  if (orderedIds.some((id) => typeof id !== 'string' || !id)) {
+    return { error: 'Invalid account list.' }
+  }
+
+  const { supabase, userId, householdId } = await getAuthenticatedHousehold()
+
+  // Verify every id belongs to this household before writing any order.
+  const { data: ownedAccounts, error: ownedError } = await supabase
+    .from('accounts')
+    .select('id')
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+    .in('id', orderedIds)
+
+  if (ownedError) {
+    return { error: 'Could not verify accounts.' }
+  }
+
+  const ownedIds = new Set((ownedAccounts ?? []).map((account) => account.id))
+
+  if (ownedIds.size !== orderedIds.length) {
+    return { error: 'Some accounts do not belong to this household.' }
+  }
+
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase
+        .from('accounts')
+        .update({ sort_order: index, updated_by: userId })
+        .eq('id', id)
+        .eq('household_id', householdId)
+        .is('deleted_at', null)
+    )
+  )
+
+  if (results.some((result) => result.error)) {
+    return { error: 'Could not save the new account order.' }
+  }
+
+  revalidateAccountSurfaces()
+  return { success: true }
+}
+
 export async function setOpeningBalanceAction(formData: FormData) {
   const accountId = String(formData.get('account_id') ?? '').trim()
   const openingBalanceDate = String(

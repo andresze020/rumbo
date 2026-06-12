@@ -2,16 +2,18 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Plus, Scale, TrendingUp, Wallet } from 'lucide-react'
 import {
-  archiveAccountAction,
   createAccountAction,
   updateAccountAction,
 } from './actions'
 import { OpeningBalanceForm } from './opening-balance-form'
-import { AccountCardDetails } from './account-card-details'
+import {
+  SortableAccountsList,
+  type AccountRowVM,
+} from './sortable-accounts-list'
 import { FormDialog } from '@/components/form-dialog'
-import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
+import { AccountsViewToggle } from '@/components/accounts-view-toggle'
+import { getAccountsView } from '@/lib/accounts-view/server'
 import { createClient } from '@/lib/supabase/server'
-import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import {
   Card,
@@ -27,7 +29,6 @@ import { EmptyState } from '@/components/empty-state'
 import { MetricCard } from '@/components/metric-card'
 import { PageHeader } from '@/components/page-header'
 import { Callout } from '@/components/callout'
-import { AccountAvatar } from '@/components/account-avatar'
 import { SubmitButton } from '@/components/submit-button'
 
 const ACCENT = {
@@ -544,6 +545,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const editAccountId = typeof params.edit === 'string' ? params.edit : null
   const openingBalanceAccountId =
     typeof params.openingBalance === 'string' ? params.openingBalance : null
+  const view = await getAccountsView()
   const supabase = await createClient()
 
   const {
@@ -664,6 +666,51 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const activeRows = accountRows.filter((row) => !row.metadata.is_archived)
   const archivedRows = accountRows.filter((row) => row.metadata.is_archived)
   const displayRows = showArchived ? archivedRows : activeRows
+
+  const accountRowVMs: AccountRowVM[] = displayRows.map((row) => {
+    const { balance, metadata } = row
+    const isLiability = metadata.account_class === 'liability'
+    const displayAmount = (value: number | string) =>
+      isLiability ? liabilityDisplay(value) : Number(value)
+    // Summary balance + group subtotals show the raw signed value: liabilities
+    // are stored negative when owed, so they render as e.g. −US$10.00 (rose chip).
+    const signedPosted = Number(balance.posted_balance_account_currency)
+    const baseAmount = Number(balance.posted_balance_base_currency)
+
+    return {
+      id: metadata.id,
+      name: metadata.name,
+      accountType: metadata.account_type,
+      accountTypeLabel: formatLabel(metadata.account_type),
+      accountClass: isLiability ? 'liability' : 'asset',
+      currencyCode: metadata.currency_code,
+      isArchived: metadata.is_archived,
+      includeInNetWorth: metadata.include_in_net_worth,
+      hasOpeningBalance: row.hasOpeningBalance,
+      institutionName: metadata.institution_name ?? null,
+      lastFour: metadata.last_four ?? null,
+      icon: metadata.icon ?? null,
+      color: metadata.color ?? null,
+      balanceLabel: formatCurrency(signedPosted, metadata.currency_code),
+      balanceAmount: signedPosted,
+      postedLabel: formatCurrency(
+        displayAmount(balance.posted_balance_account_currency),
+        metadata.currency_code
+      ),
+      pendingLabel: formatCurrency(
+        displayAmount(balance.pending_balance_account_currency),
+        metadata.currency_code
+      ),
+      projectedLabel: formatCurrency(
+        displayAmount(balance.projected_balance_account_currency),
+        metadata.currency_code
+      ),
+      balanceType: isLiability ? 'owed' : 'posted',
+      baseAmount,
+      editHref: accountsPath({ showArchived, edit: metadata.id }),
+      openingBalanceHref: accountsPath({ showArchived, openingBalance: metadata.id }),
+    }
+  })
   const selectedEditRow = displayRows.find(
     (row) => row.metadata.id === editAccountId
   )
@@ -830,143 +877,23 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
               <CardDescription>
                 {showArchived
                   ? 'Archived accounts remain available for history.'
-                  : 'Accounts connected to your active household.'}
+                  : 'Drag the handle to reorder. Switch between list and grouped views.'}
               </CardDescription>
             </div>
 
+            <AccountsViewToggle view={view} />
           </div>
         </CardHeader>
         <CardContent>
           {hasLoadError ? (
             <Callout variant="error">Could not load account balances.</Callout>
-          ) : displayRows.length ? (
-            <div className="divide-y rounded-lg border">
-              {displayRows.map((row) => {
-                const { balance, metadata } = row
-
-                return (
-                  <div
-                    key={metadata.id}
-                    className={`p-3 ${
-                      metadata.is_archived ? 'bg-muted/30' : ''
-                    }`}
-                  >
-                    <AccountCardDetails
-                      accountId={metadata.id}
-                      summaryLeft={
-                        <>
-                          <AccountAvatar
-                            accountType={metadata.account_type}
-                            emoji={metadata.icon}
-                            color={metadata.color}
-                            className={metadata.is_archived ? 'opacity-60 grayscale' : undefined}
-                          />
-                          <div className="min-w-0">
-                            <p
-                              className={`truncate text-sm font-medium ${
-                                metadata.is_archived ? 'text-muted-foreground' : ''
-                              }`}
-                            >
-                              {metadata.name}
-                            </p>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              <Badge variant="secondary" className="text-[11px]">
-                                {formatLabel(metadata.account_type)}
-                              </Badge>
-                              <Badge variant="outline" className="text-[11px]">
-                                {metadata.currency_code}
-                              </Badge>
-                              {metadata.account_class === 'liability' ? (
-                                <Badge variant="outline" className="border-rose-200 text-[11px] text-rose-600 dark:border-rose-900 dark:text-rose-400">
-                                  Liability
-                                </Badge>
-                              ) : null}
-                              {metadata.is_archived ? (
-                                <Badge variant="outline" className="text-[11px]">Archived</Badge>
-                              ) : null}
-                            </div>
-                          </div>
-                        </>
-                      }
-                      balanceLabel={formatCurrency(
-                        metadata.account_class === 'liability'
-                          ? liabilityDisplay(balance.posted_balance_account_currency)
-                          : balance.posted_balance_account_currency,
-                        metadata.currency_code
-                      )}
-                      balanceSubLabel={
-                        metadata.account_class === 'liability' ? 'balance owed' : 'posted balance'
-                      }
-                      postedLabel={formatCurrency(
-                        metadata.account_class === 'liability'
-                          ? liabilityDisplay(balance.posted_balance_account_currency)
-                          : balance.posted_balance_account_currency,
-                        metadata.currency_code
-                      )}
-                      pendingLabel={formatCurrency(
-                        metadata.account_class === 'liability'
-                          ? liabilityDisplay(balance.pending_balance_account_currency)
-                          : balance.pending_balance_account_currency,
-                        metadata.currency_code
-                      )}
-                      projectedLabel={formatCurrency(
-                        metadata.account_class === 'liability'
-                          ? liabilityDisplay(balance.projected_balance_account_currency)
-                          : balance.projected_balance_account_currency,
-                        metadata.currency_code
-                      )}
-                      balanceType={metadata.account_class === 'liability' ? 'owed' : 'posted'}
-                      institutionName={metadata.institution_name ?? null}
-                      lastFour={metadata.last_four ?? null}
-                      includeInNetWorth={metadata.include_in_net_worth}
-                      hasOpeningBalance={row.hasOpeningBalance}
-                    >
-                      {/* Action buttons — rendered server-side, shown inside expanded detail */}
-                      <div className="flex flex-wrap gap-2">
-                        <Link
-                          href={accountsPath({ showArchived, edit: metadata.id })}
-                          className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                        >
-                          Edit
-                        </Link>
-
-                        {!metadata.is_archived ? (
-                          <GlobalAddTransactionButton
-                            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                            defaultAccountId={metadata.id}
-                          >
-                            Add transaction
-                          </GlobalAddTransactionButton>
-                        ) : null}
-
-                        {!metadata.is_archived && !row.hasOpeningBalance ? (
-                          <Link
-                            href={accountsPath({ showArchived, openingBalance: metadata.id })}
-                            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                          >
-                            Set opening balance
-                          </Link>
-                        ) : null}
-
-                        <form action={archiveAccountAction}>
-                          <input type="hidden" name="account_id" value={metadata.id} />
-                          <input type="hidden" name="is_archived" value={metadata.is_archived ? 'false' : 'true'} />
-                          <input type="hidden" name="show_archived" value={showArchived ? 'true' : 'false'} />
-                          <SubmitButton
-                            type="submit"
-                            size="sm"
-                            variant={metadata.is_archived ? 'outline' : 'secondary'}
-                            pendingText={metadata.is_archived ? 'Restoring' : 'Archiving'}
-                          >
-                            {metadata.is_archived ? 'Restore account' : 'Archive account'}
-                          </SubmitButton>
-                        </form>
-                      </div>
-                    </AccountCardDetails>
-                  </div>
-                )
-              })}
-            </div>
+          ) : accountRowVMs.length ? (
+            <SortableAccountsList
+              rows={accountRowVMs}
+              view={view}
+              showArchived={showArchived}
+              baseCurrency={household.base_currency}
+            />
           ) : (
             <EmptyState
               title={

@@ -3,12 +3,14 @@
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowRight, ChevronDown } from 'lucide-react'
+import { BalanceAmount } from '@/components/balance-amount'
 
 type AccountCardDetailsProps = {
   accountId: string
   summaryLeft: ReactNode
   balanceLabel: string
-  balanceSubLabel: string
+  /** Signed numeric balance — drives green (positive) / red (negative) coloring. */
+  balanceAmount: number
   postedLabel: string
   pendingLabel: string
   projectedLabel: string
@@ -24,7 +26,7 @@ export function AccountCardDetails({
   accountId,
   summaryLeft,
   balanceLabel,
-  balanceSubLabel,
+  balanceAmount,
   postedLabel,
   pendingLabel,
   projectedLabel,
@@ -54,8 +56,11 @@ export function AccountCardDetails({
 
         <div className="flex shrink-0 items-center gap-2">
           <div className="text-right">
-            <p className="text-base font-semibold leading-snug tabular-nums">{balanceLabel}</p>
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{balanceSubLabel}</p>
+            <BalanceAmount
+              label={balanceLabel}
+              amount={balanceAmount}
+              className="text-base leading-snug"
+            />
           </div>
           <ChevronDown
             className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
