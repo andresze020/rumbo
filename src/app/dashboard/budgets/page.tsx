@@ -8,7 +8,7 @@ import {
 import { HandCoins, PieChart, Plus, Target, Wallet } from 'lucide-react'
 import { BudgetLineRow } from './budget-line-row'
 import { buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { AmountInput } from '@/components/amount-input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
@@ -392,12 +392,10 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
 
                     <div className="space-y-2">
                       <Label htmlFor="planned_amount">Planned amount</Label>
-                      <Input
+                      <AmountInput
                         id="planned_amount"
                         name="planned_amount"
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="0.00"
+                        currencyCode={budgetCurrency}
                         required
                       />
                     </div>
@@ -439,13 +437,11 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
 
                 <div className="space-y-2 sm:max-w-xs">
                   <Label htmlFor={`planned_${selectedEditLine.line_id}`}>Planned amount</Label>
-                  <Input
+                  <AmountInput
                     id={`planned_${selectedEditLine.line_id}`}
                     name="planned_amount"
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    defaultValue={Number(selectedEditLine.planned_amount ?? 0)}
+                    currencyCode={budgetCurrency}
+                    defaultValue={Number(selectedEditLine.planned_amount ?? 0).toFixed(2)}
                     required
                   />
                 </div>
