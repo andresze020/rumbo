@@ -672,6 +672,9 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     const isLiability = metadata.account_class === 'liability'
     const displayAmount = (value: number | string) =>
       isLiability ? liabilityDisplay(value) : Number(value)
+    // Summary balance shows the raw signed value: liabilities are stored
+    // negative when owed, so this renders as e.g. −US$10.00 (tinted rose).
+    const signedPosted = Number(balance.posted_balance_account_currency)
     const baseAmount = isLiability
       ? Math.max(0, -Number(balance.posted_balance_base_currency))
       : Number(balance.posted_balance_base_currency)
@@ -690,11 +693,8 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       lastFour: metadata.last_four ?? null,
       icon: metadata.icon ?? null,
       color: metadata.color ?? null,
-      balanceLabel: formatCurrency(
-        displayAmount(balance.posted_balance_account_currency),
-        metadata.currency_code
-      ),
-      balanceSubLabel: isLiability ? 'balance owed' : 'posted balance',
+      balanceLabel: formatCurrency(signedPosted, metadata.currency_code),
+      balanceNegative: signedPosted < 0,
       postedLabel: formatCurrency(
         displayAmount(balance.posted_balance_account_currency),
         metadata.currency_code

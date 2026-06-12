@@ -50,7 +50,7 @@ export type AccountRowVM = {
   icon: string | null
   color: string | null
   balanceLabel: string
-  balanceSubLabel: string
+  balanceNegative: boolean
   postedLabel: string
   pendingLabel: string
   projectedLabel: string
@@ -177,7 +177,7 @@ function AccountRowBody({
             </>
           }
           balanceLabel={row.balanceLabel}
-          balanceSubLabel={row.balanceSubLabel}
+          balanceNegative={row.balanceNegative}
           postedLabel={row.postedLabel}
           pendingLabel={row.pendingLabel}
           projectedLabel={row.projectedLabel}

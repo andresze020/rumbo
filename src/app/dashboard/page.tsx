@@ -551,6 +551,8 @@ export default async function DashboardPage({
   function renderDashboardAccountRow(account: AccountBalance, showTypeBadge: boolean) {
     const meta = accountMetaById.get(account.account_id)
     const isLiability = account.account_class === 'liability'
+    // Raw signed value: liabilities owed are stored negative → −US$10.00 (rose).
+    const signedPosted = Number(account.posted_balance_account_currency)
     return (
       <div key={account.account_id} className="p-3">
         <AccountCardDetails
@@ -582,13 +584,8 @@ export default async function DashboardPage({
               </div>
             </>
           }
-          balanceLabel={formatCurrency(
-            isLiability
-              ? liabilityDisplay(account.posted_balance_account_currency)
-              : Number(account.posted_balance_account_currency),
-            account.currency_code
-          )}
-          balanceSubLabel={isLiability ? t('dashboard.balanceOwed') : t('dashboard.postedBalance')}
+          balanceLabel={formatCurrency(signedPosted, account.currency_code)}
+          balanceNegative={signedPosted < 0}
           postedLabel={formatCurrency(
             isLiability
               ? liabilityDisplay(account.posted_balance_account_currency)
