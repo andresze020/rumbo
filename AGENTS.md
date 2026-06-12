@@ -29,6 +29,10 @@ The product is household-first. All financial data must belong to a household.
   date-grouped transaction list, toast feedback, smart form defaults, month
   navigation, loading skeletons, PWA install hint, ES/EN localization foundation,
   and the `FormDialog` migration for all create/edit/action forms.
+- Latest fix (PR #8): shared `AmountInput` component + `formatAmountForDisplay`/
+  `sanitizeAmountInput`/`getCurrencySymbol` helpers in `lib/format.ts`. Adopted in
+  budget line, debt, opening balance, and transaction/transfer edit forms, and the
+  AI assistant draft card now renders extracted amounts as currency.
 - See `docs/alpha/sprint-12-alpha-plan.md` for the live Alpha plan and
   `docs/alpha-readiness-checklist.md` for the readiness gate.
 
@@ -58,7 +62,8 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 - `src/lib/supabase/{client,server,middleware}.ts` + `src/middleware.ts` — auth/SSR.
 - `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `imports/`, `exports/`.
 - `src/components/` — shared design system (PageHeader, SectionHeading, Callout,
-  Money, AccountAvatar, FormDialog, etc.). Reuse these; do not re-roll primitives.
+  Money, AccountAvatar, FormDialog, AmountInput, etc.). Reuse these; do not re-roll
+  primitives.
 
 ## Technical rules
 
