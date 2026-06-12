@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Callout } from '@/components/callout'
+import { formatCurrency } from '@/lib/format'
 import {
   TransactionForm,
   type TransactionFormAccount,
@@ -150,7 +151,14 @@ export function AssistantChat({ baseCurrency, accounts, categories, returnTo }: 
             anything?”. You can also attach a receipt photo or a voice note to log a transaction.
           </p>
         ) : (
-          items.map((item) => <ChatBubble key={item.id} item={item} onReviewDraft={openDraftReview} />)
+          items.map((item) => (
+            <ChatBubble
+              key={item.id}
+              item={item}
+              baseCurrency={baseCurrency}
+              onReviewDraft={openDraftReview}
+            />
+          ))
         )}
         {pending ? <p className="text-xs text-muted-foreground">Thinking…</p> : null}
       </div>
@@ -249,9 +257,11 @@ export function AssistantChat({ baseCurrency, accounts, categories, returnTo }: 
 
 function ChatBubble({
   item,
+  baseCurrency,
   onReviewDraft,
 }: {
   item: ChatItem
+  baseCurrency: string
   onReviewDraft: (draft: TransactionDraft) => void
 }) {
   switch (item.kind) {
@@ -280,7 +290,14 @@ function ChatBubble({
         </Callout>
       )
     case 'draft':
-      return <DraftCard sourceLabel={item.sourceLabel} draft={item.draft} onReview={onReviewDraft} />
+      return (
+        <DraftCard
+          sourceLabel={item.sourceLabel}
+          draft={item.draft}
+          baseCurrency={baseCurrency}
+          onReview={onReviewDraft}
+        />
+      )
     default:
       return null
   }
@@ -289,10 +306,12 @@ function ChatBubble({
 function DraftCard({
   sourceLabel,
   draft,
+  baseCurrency,
   onReview,
 }: {
   sourceLabel: string
   draft: TransactionDraft
+  baseCurrency: string
   onReview: (draft: TransactionDraft) => void
 }) {
   return (
@@ -302,7 +321,7 @@ function DraftCard({
         <dt className="text-muted-foreground">Type</dt>
         <dd className="capitalize">{draft.transaction_type}</dd>
         <dt className="text-muted-foreground">Amount</dt>
-        <dd>{draft.amount}</dd>
+        <dd className="tabular-nums">{formatCurrency(draft.amount, baseCurrency)}</dd>
         <dt className="text-muted-foreground">Date</dt>
         <dd>{draft.transaction_date}</dd>
         {draft.merchant_name ? (
