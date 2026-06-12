@@ -662,7 +662,8 @@ export default async function TransactionsPage({
     id: c.id,
     label: (() => {
       const parent = c.parent_category_id ? categoryOptionsById.get(c.parent_category_id) : null
-      return parent ? `${parent.name} / ${c.name}` : c.name
+      const name = parent ? `${parent.name} / ${c.name}` : c.name
+      return c.icon ? `${c.icon} ${name}` : name
     })(),
     isArchived: c.is_archived,
   }))

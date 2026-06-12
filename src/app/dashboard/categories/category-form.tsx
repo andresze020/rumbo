@@ -29,6 +29,7 @@ type ParentCategoryOption = {
   reporting_type: string
   parent_category_id: string | null
   is_archived: boolean
+  icon: string | null
 }
 
 type CategoryTypeFilter = 'income' | 'expense' | 'financial' | 'adjustment' | 'all'
@@ -244,11 +245,13 @@ export function CategoryForm({
             <option value="">None</option>
             {currentParent && !includesCurrentParent ? (
               <option value={currentParent.id}>
+                {currentParent.icon ? `${currentParent.icon} ` : ''}
                 {currentParent.name} - parent unavailable
               </option>
             ) : null}
             {parentOptions.map((option) => (
               <option key={option.id} value={option.id}>
+                {option.icon ? `${option.icon} ` : ''}
                 {getCategoryPath(option, categoriesById)} -{' '}
                 {formatValue(option.category_type)} /{' '}
                 {formatValue(option.reporting_type)}

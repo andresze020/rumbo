@@ -48,6 +48,7 @@ type ParentCategoryOption = {
   reporting_type: string
   parent_category_id: string | null
   is_archived: boolean
+  icon: string | null
 }
 
 const categoryTypes = [
@@ -143,6 +144,7 @@ export default async function CategoriesPage({
     reporting_type: c.reporting_type,
     parent_category_id: c.parent_category_id,
     is_archived: c.is_archived,
+    icon: c.icon,
   }))
   const categoriesByIdRecord: Record<string, ParentCategoryOption> =
     Object.fromEntries(categoriesById)

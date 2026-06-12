@@ -10,6 +10,7 @@ export type CategoryPickerCategory = {
   name: string
   category_type: string
   parent_category_id: string | null
+  icon?: string | null
 }
 
 type CategoryPickerProps = {
@@ -113,6 +114,7 @@ export function CategoryPicker({
           </option>
           {parentCategories.map((category) => (
             <option key={category.id} value={category.id}>
+              {category.icon ? `${category.icon} ` : ''}
               {category.name}
             </option>
           ))}
@@ -133,6 +135,7 @@ export function CategoryPicker({
             <option value="">No subcategory / General</option>
             {childCategories.map((category) => (
               <option key={category.id} value={category.id}>
+                {category.icon ? `${category.icon} ` : ''}
                 {category.name}
               </option>
             ))}
