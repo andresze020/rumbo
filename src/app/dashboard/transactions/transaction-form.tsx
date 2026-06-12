@@ -15,6 +15,11 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { fetchFxRate } from '@/lib/fx'
+import {
+  formatAmountForDisplay,
+  getCurrencySymbol,
+  sanitizeAmountInput,
+} from '@/lib/format'
 import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
 
@@ -73,52 +78,6 @@ function formatCurrency(value: number | string, currencyCode: string) {
     style: 'currency',
     currency: currencyCode,
   }).format(Number(value))
-}
-
-function getCurrencySymbol(currencyCode: string) {
-  try {
-    const parts = new Intl.NumberFormat('en-CA', {
-      style: 'currency',
-      currency: currencyCode,
-      currencyDisplay: 'narrowSymbol',
-    }).formatToParts(0)
-    return parts.find((part) => part.type === 'currency')?.value ?? currencyCode
-  } catch {
-    return currencyCode
-  }
-}
-
-const thousandsFormatter = new Intl.NumberFormat('en-CA', {
-  maximumFractionDigits: 20,
-})
-
-/** Formats a raw numeric string (e.g. "1234567.5") with thousands separators while typing. */
-function formatAmountForDisplay(raw: string) {
-  if (!raw) return ''
-  const negative = raw.startsWith('-')
-  const unsigned = negative ? raw.slice(1) : raw
-  const [integerPart, ...rest] = unsigned.split('.')
-  const decimalPart = rest.length ? rest.join('') : undefined
-  const groupedInteger = integerPart
-    ? thousandsFormatter.format(BigInt(integerPart || '0'))
-    : ''
-  let result = groupedInteger
-  if (decimalPart !== undefined) {
-    result = `${result || '0'}.${decimalPart}`
-  }
-  return negative ? `-${result}` : result
-}
-
-/** Strips formatting back to a plain numeric string, allowing digits, one leading "-" and one ".". */
-function sanitizeAmountInput(value: string) {
-  let negative = value.trim().startsWith('-')
-  let digits = value.replace(/[^0-9.]/g, '')
-  const firstDot = digits.indexOf('.')
-  if (firstDot !== -1) {
-    digits = digits.slice(0, firstDot + 1) + digits.slice(firstDot + 1).replace(/\./g, '')
-  }
-  if (!digits) negative = false
-  return negative ? `-${digits}` : digits
 }
 
 export function TransactionForm({

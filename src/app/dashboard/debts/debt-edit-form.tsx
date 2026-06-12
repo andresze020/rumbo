@@ -1,5 +1,6 @@
 import { updateDebtAction } from './actions'
 import { AdvancedFields } from '@/components/advanced-fields'
+import { AmountInput } from '@/components/amount-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -25,7 +26,11 @@ function nullableNumber(value: number | string | null) {
   return value === null ? '' : String(value)
 }
 
-export function DebtEditForm({ debt }: { debt: Debt }) {
+function nullableMoney(value: number | string | null) {
+  return value === null ? '' : Number(value).toFixed(2)
+}
+
+export function DebtEditForm({ debt, currencyCode }: { debt: Debt; currencyCode: string }) {
   return (
     <form action={updateDebtAction} className="space-y-4">
       <input type="hidden" name="debt_id" value={debt.id} />
@@ -63,13 +68,11 @@ export function DebtEditForm({ debt }: { debt: Debt }) {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="edit_original_principal">Original principal</Label>
-            <Input
+            <AmountInput
               id="edit_original_principal"
               name="original_principal"
-              type="text"
-              inputMode="decimal"
-              placeholder="0.00"
-              defaultValue={nullableNumber(debt.original_principal)}
+              currencyCode={currencyCode}
+              defaultValue={nullableMoney(debt.original_principal)}
             />
             <p className="text-xs text-muted-foreground">
               Optional. Used for paydown progress tracking.
@@ -77,15 +80,21 @@ export function DebtEditForm({ debt }: { debt: Debt }) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit_interest_rate">Interest rate (%)</Label>
-            <Input
-              id="edit_interest_rate"
-              name="interest_rate"
-              type="text"
-              inputMode="decimal"
-              placeholder="0.00"
-              defaultValue={nullableNumber(debt.interest_rate)}
-            />
+            <Label htmlFor="edit_interest_rate">Interest rate</Label>
+            <div className="relative">
+              <Input
+                id="edit_interest_rate"
+                name="interest_rate"
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                defaultValue={nullableNumber(debt.interest_rate)}
+                className="pr-7"
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                %
+              </span>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -104,13 +113,11 @@ export function DebtEditForm({ debt }: { debt: Debt }) {
 
           <div className="space-y-2">
             <Label htmlFor="edit_minimum_payment">Minimum payment</Label>
-            <Input
+            <AmountInput
               id="edit_minimum_payment"
               name="minimum_payment"
-              type="text"
-              inputMode="decimal"
-              placeholder="0.00"
-              defaultValue={nullableNumber(debt.minimum_payment)}
+              currencyCode={currencyCode}
+              defaultValue={nullableMoney(debt.minimum_payment)}
             />
           </div>
 

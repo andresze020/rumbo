@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { setOpeningBalanceAction } from './actions'
 import { AdvancedFields } from '@/components/advanced-fields'
+import { AmountInput } from '@/components/amount-input'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -147,14 +148,12 @@ export function OpeningBalanceForm({
           <Label htmlFor={`opening_balance_amount_${accountId}`}>
             {accountClass === 'liability' ? 'Amount owed' : 'Amount'}
           </Label>
-          <Input
+          <AmountInput
             id={`opening_balance_amount_${accountId}`}
             name="opening_balance_amount"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
+            currencyCode={accountCurrency}
             value={balanceInput}
-            onChange={(e) => setBalanceInput(e.target.value)}
+            onValueChange={setBalanceInput}
           />
           {accountClass === 'asset' ? (
             <p className="text-xs text-muted-foreground">

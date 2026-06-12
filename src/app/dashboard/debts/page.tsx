@@ -5,6 +5,7 @@ import { createDebtPaymentAction } from './actions'
 import { DebtCreateForm } from './debt-create-form'
 import { DebtEditForm } from './debt-edit-form'
 import { DebtRow } from './debt-row'
+import { AmountInput } from '@/components/amount-input'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -344,7 +345,13 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
           cancelHref={debtsPath()}
           wide
         >
-          <DebtEditForm debt={selectedEditDebt} />
+          <DebtEditForm
+            debt={selectedEditDebt}
+            currencyCode={
+              accountsById.get(selectedEditDebt.account_id)?.currency_code ??
+              household.base_currency
+            }
+          />
         </FormDialog>
       ) : null}
 
@@ -407,12 +414,10 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="pay_payment_amount">Principal payment amount</Label>
-                  <Input
+                  <AmountInput
                     id="pay_payment_amount"
                     name="payment_amount"
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0.00"
+                    currencyCode={selectedPayAccount?.currency_code ?? household.base_currency}
                     required
                   />
                   <p className="text-xs text-muted-foreground">

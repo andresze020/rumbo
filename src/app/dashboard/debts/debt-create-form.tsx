@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createDebtAction } from './actions'
 import { AdvancedFields } from '@/components/advanced-fields'
+import { AmountInput } from '@/components/amount-input'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,6 +50,11 @@ export function DebtCreateForm({
 
   const isNewAccount = existingAccountId === ''
   const isMultiCurrency = isNewAccount && selectedCurrency !== baseCurrency
+  // Loan amounts (principal, minimum payment) live in the debt account's currency.
+  const debtCurrency = isNewAccount
+    ? selectedCurrency
+    : linkableLiabilityAccounts.find((a) => a.id === existingAccountId)?.currency_code ??
+      baseCurrency
   const parsedRate = Number(userRate)
   const rateIsValid =
     userRate.trim() !== '' && Number.isFinite(parsedRate) && parsedRate > 0
@@ -163,14 +169,12 @@ export function DebtCreateForm({
 
             <div className="space-y-2">
               <Label htmlFor="opening_balance_amount">Current outstanding balance</Label>
-              <Input
+              <AmountInput
                 id="opening_balance_amount"
                 name="opening_balance_amount"
-                type="text"
-                inputMode="decimal"
-                placeholder="0.00"
+                currencyCode={selectedCurrency}
                 value={openingBalanceInput}
-                onChange={(e) => setOpeningBalanceInput(e.target.value)}
+                onValueChange={setOpeningBalanceInput}
               />
               <p className="text-xs text-muted-foreground">
                 The amount you currently owe. This creates the opening liability balance.
@@ -280,12 +284,10 @@ export function DebtCreateForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="original_principal">Original principal</Label>
-            <Input
+            <AmountInput
               id="original_principal"
               name="original_principal"
-              type="text"
-              inputMode="decimal"
-              placeholder="0.00"
+              currencyCode={debtCurrency}
             />
             <p className="text-xs text-muted-foreground">
               Optional. The original amount borrowed, used for progress tracking.
@@ -293,14 +295,20 @@ export function DebtCreateForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="interest_rate">Interest rate (%)</Label>
-            <Input
-              id="interest_rate"
-              name="interest_rate"
-              type="text"
-              inputMode="decimal"
-              placeholder="0.00"
-            />
+            <Label htmlFor="interest_rate">Interest rate</Label>
+            <div className="relative">
+              <Input
+                id="interest_rate"
+                name="interest_rate"
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                className="pr-7"
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                %
+              </span>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -319,12 +327,10 @@ export function DebtCreateForm({
 
           <div className="space-y-2">
             <Label htmlFor="minimum_payment">Minimum payment</Label>
-            <Input
+            <AmountInput
               id="minimum_payment"
               name="minimum_payment"
-              type="text"
-              inputMode="decimal"
-              placeholder="0.00"
+              currencyCode={debtCurrency}
             />
           </div>
 

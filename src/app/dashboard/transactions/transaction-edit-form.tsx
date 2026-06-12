@@ -1,8 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
 import { updateManualTransactionAction } from './actions'
 import { CategoryPicker } from './category-picker'
+import { AmountInput } from '@/components/amount-input'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -68,6 +70,12 @@ export function TransactionEditForm({
   categories,
   returnTo,
 }: TransactionEditFormProps) {
+  const [selectedAccountId, setSelectedAccountId] = useState(accountId)
+  const amountCurrency =
+    accounts.find((a) => a.id === selectedAccountId)?.currency_code ??
+    accounts.find((a) => a.id === accountId)?.currency_code ??
+    'USD'
+
   return (
     <form action={updateManualTransactionAction} className="space-y-4">
       <input type="hidden" name="transaction_id" value={transactionId} />
@@ -103,7 +111,8 @@ export function TransactionEditForm({
           <select
             id={`edit_account_${transactionId}`}
             name="account_id"
-            defaultValue={accountId}
+            value={selectedAccountId}
+            onChange={(e) => setSelectedAccountId(e.target.value)}
             className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             required
           >
@@ -117,13 +126,11 @@ export function TransactionEditForm({
 
         <div className="space-y-2">
           <Label htmlFor={`edit_amount_${transactionId}`}>Amount</Label>
-          <Input
+          <AmountInput
             id={`edit_amount_${transactionId}`}
             name="amount"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-            defaultValue={amount}
+            currencyCode={amountCurrency}
+            defaultValue={amount.toFixed(2)}
             required
           />
         </div>
