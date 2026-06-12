@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { updateTransferTransactionAction } from './actions'
 import { AdvancedFields } from '@/components/advanced-fields'
+import { AmountInput } from '@/components/amount-input'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,7 +74,7 @@ export function TransferEditForm({
   const [selectedFromAccountId, setSelectedFromAccountId] = useState(fromAccountId)
   const [selectedToAccountId, setSelectedToAccountId] = useState(toAccountId)
   const [currentDate, setCurrentDate] = useState(transactionDate)
-  const [amountInput, setAmountInput] = useState(String(amount))
+  const [amountInput, setAmountInput] = useState(amount.toFixed(2))
 
   // userRate is expressed as "1 baseCurrency = X foreignCurrency" (what the user sees)
   // exchange_rate_to_base = 1 / userRate (what the DB stores)
@@ -234,14 +235,12 @@ export function TransferEditForm({
 
         <div className="space-y-2">
           <Label htmlFor={`transfer_amount_${transactionId}`}>Amount</Label>
-          <Input
+          <AmountInput
             id={`transfer_amount_${transactionId}`}
             name="amount"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
+            currencyCode={selectedFromAccount?.currency_code ?? baseCurrency}
             value={amountInput}
-            onChange={(e) => setAmountInput(e.target.value)}
+            onValueChange={setAmountInput}
             required
           />
         </div>

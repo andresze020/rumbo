@@ -14,8 +14,12 @@ type AmountInputProps = {
   /** Currency whose symbol is shown as a prefix (e.g. the budget's currency). */
   currencyCode: string
   id?: string
-  /** Raw initial value (e.g. "150.00"); shown formatted with thousands/decimal separators. */
+  /** Raw initial value (e.g. "150.00"); shown formatted with thousands/decimal separators. Ignored when `value` is provided. */
   defaultValue?: string
+  /** Controlled raw value. Pair with `onValueChange` when the parent needs the amount (e.g. FX conversion previews). */
+  value?: string
+  /** Called with the sanitized raw numeric string on every change (controlled mode). */
+  onValueChange?: (raw: string) => void
   placeholder?: string
   required?: boolean
 }
@@ -31,11 +35,20 @@ export function AmountInput({
   currencyCode,
   id,
   defaultValue = '',
+  value,
+  onValueChange,
   placeholder = '0.00',
   required,
 }: AmountInputProps) {
-  const [raw, setRaw] = useState(() => sanitizeAmountInput(defaultValue))
+  const [internalRaw, setInternalRaw] = useState(() => sanitizeAmountInput(defaultValue))
+  const raw = value !== undefined ? sanitizeAmountInput(value) : internalRaw
   const symbol = getCurrencySymbol(currencyCode)
+
+  function handleChange(next: string) {
+    const sanitized = sanitizeAmountInput(next)
+    if (value === undefined) setInternalRaw(sanitized)
+    onValueChange?.(sanitized)
+  }
 
   return (
     <div className="relative">
@@ -48,7 +61,7 @@ export function AmountInput({
         inputMode="decimal"
         placeholder={placeholder}
         value={formatAmountForDisplay(raw)}
-        onChange={(e) => setRaw(sanitizeAmountInput(e.target.value))}
+        onChange={(e) => handleChange(e.target.value)}
         className="pl-7"
         required={required}
       />
