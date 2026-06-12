@@ -15,6 +15,31 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Sprint 12.x — Category drag-and-drop, style picker, icon-only defaults (2026-06-12)
+- Goal: bring the categories page up to the same polish as accounts —
+  reorder by dragging, make picking a color/icon easy, and ensure system
+  default categories ship with a sensible icon.
+- Shipped: siblings-only drag-and-drop reorder (roots within a type, children
+  within a parent) via `@dnd-kit` + `reorderCategoriesAction` bulk-writing
+  `sort_order` (`categories/sortable-category-list.tsx`; `CategoryRow` gained
+  an optional `dragHandle`); new `CategoryStylePicker` (curated color swatches
+  + finance-emoji grid, plus a custom hex/emoji escape hatch) replacing the
+  old free-text color/icon inputs (`lib/categories/style.ts`,
+  `components/category-style-picker.tsx`); category icons now shown in every
+  category dropdown (transaction category/subcategory picker, category form
+  parent selector, transaction filters, budget line selector).
+- Migrations added: `20260612144936_category_default_colors_icons.sql`
+  (superseded in effect — see next) and `20260612180000_category_remove_default_colors.sql`.
+  Net effect: `create_default_categories_for_household` now seeds system
+  categories with a fitting **icon only** (color stays `null` — colored dots
+  read as too saturated next to icons); existing system categories are
+  backfilled the same way (icon filled if missing, any previously-seeded
+  default color reverted to `null` unless the user changed it).
+- Tables changed: none (schema already had `categories.color`/`icon`).
+- Follow-ups / known gaps: re-parenting categories still happens via the edit
+  form (DnD is siblings-only by design); archived view remains non-draggable.
+- Dependency: reuses `@dnd-kit` (already added in the accounts sprint).
+
 ## Sprint 12.x — Account view toggle + drag-and-drop sorting (2026-06-12)
 - Goal: Wealthsimple-style account presentation — choose list vs grouped view,
   and reorder accounts by dragging instead of a manual sort-order number.

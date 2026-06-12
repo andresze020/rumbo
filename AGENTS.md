@@ -34,13 +34,25 @@ The product is household-first. All financial data must belong to a household.
   `sanitizeAmountInput`/`getCurrencySymbol` helpers in `lib/format.ts`. Adopted in
   budget line, debt, opening balance, and transaction/transfer edit forms, and the
   AI assistant draft card now renders extracted amounts as currency.
-- Latest: Wealthsimple-style account **List/Group(by type) view toggle** across
+- Wealthsimple-style account **List/Group(by type) view toggle** across
   accounts, dashboard, and net-worth (cookie `af_accounts_view`, default group),
   plus **drag-and-drop reordering** on the accounts page via `@dnd-kit` (writes
   `accounts.sort_order`). Balances now use the shared `BalanceAmount` component
   (green positive / red negative + minus sign — color-blind-aware). New code:
   `lib/accounts-view/*`, `components/{accounts-view-toggle,account-group,balance-amount}`,
   `accounts/sortable-accounts-list`.
+- Latest: **Categories drag-and-drop + style picker**. Siblings-only reorder
+  (roots within a type, children within a parent) via `@dnd-kit` +
+  `reorderCategoriesAction` (`categories/sortable-category-list.tsx`,
+  `CategoryRow` gained an optional `dragHandle`). New `CategoryStylePicker`
+  (color swatches + finance-emoji grid, with a custom hex/emoji escape hatch)
+  replaces the old free-text color/icon inputs. System default categories now
+  seed with a fitting **icon only** (no default color — kept clean) via
+  `create_default_categories_for_household`; category icons also show in every
+  category dropdown (transaction picker, category form parent selector,
+  transaction filters, budget line selector). New code:
+  `lib/categories/style.ts`, `components/category-style-picker`,
+  `categories/sortable-category-list`.
 - See `docs/alpha/sprint-12-alpha-plan.md` for the live Alpha plan and
   `docs/alpha-readiness-checklist.md` for the readiness gate.
 
@@ -71,7 +83,8 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 - `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `imports/`, `exports/`.
 - `src/components/` — shared design system (PageHeader, SectionHeading, Callout,
   Money, BalanceAmount, AccountAvatar, AccountGroup, AccountsViewToggle,
-  FormDialog, AmountInput, etc.). Reuse these; do not re-roll primitives.
+  CategoryStylePicker, FormDialog, AmountInput, etc.). Reuse these; do not
+  re-roll primitives.
 
 ## Technical rules
 
