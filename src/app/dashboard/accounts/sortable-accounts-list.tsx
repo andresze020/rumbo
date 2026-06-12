@@ -119,10 +119,12 @@ function RowActions({
 function AccountRowBody({
   row,
   showArchived,
+  showTypeBadge,
   dragHandle,
 }: {
   row: AccountRowVM
   showArchived: boolean
+  showTypeBadge: boolean
   dragHandle?: ReactNode
 }) {
   return (
@@ -149,9 +151,11 @@ function AccountRowBody({
                   {row.name}
                 </p>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                  <Badge variant="secondary" className="text-[11px]">
-                    {row.accountTypeLabel}
-                  </Badge>
+                  {showTypeBadge ? (
+                    <Badge variant="secondary" className="text-[11px]">
+                      {row.accountTypeLabel}
+                    </Badge>
+                  ) : null}
                   <Badge variant="outline" className="text-[11px]">
                     {row.currencyCode}
                   </Badge>
@@ -193,9 +197,11 @@ function AccountRowBody({
 function SortableRow({
   row,
   showArchived,
+  showTypeBadge,
 }: {
   row: AccountRowVM
   showArchived: boolean
+  showTypeBadge: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -209,6 +215,7 @@ function SortableRow({
       <AccountRowBody
         row={row}
         showArchived={showArchived}
+        showTypeBadge={showTypeBadge}
         dragHandle={
           <button
             type="button"
@@ -309,9 +316,19 @@ export function SortableAccountsList({
           {groups.map((group) => {
             const groupBody = group.rows.map((row) =>
               sortable ? (
-                <SortableRow key={row.id} row={row} showArchived={showArchived} />
+                <SortableRow
+                  key={row.id}
+                  row={row}
+                  showArchived={showArchived}
+                  showTypeBadge={false}
+                />
               ) : (
-                <AccountRowBody key={row.id} row={row} showArchived={showArchived} />
+                <AccountRowBody
+                  key={row.id}
+                  row={row}
+                  showArchived={showArchived}
+                  showTypeBadge={false}
+                />
               )
             )
 
@@ -357,9 +374,19 @@ export function SortableAccountsList({
   // ── List view ────────────────────────────────────────────────────────────
   const listBody = items.map((row) =>
     sortable ? (
-      <SortableRow key={row.id} row={row} showArchived={showArchived} />
+      <SortableRow
+        key={row.id}
+        row={row}
+        showArchived={showArchived}
+        showTypeBadge
+      />
     ) : (
-      <AccountRowBody key={row.id} row={row} showArchived={showArchived} />
+      <AccountRowBody
+        key={row.id}
+        row={row}
+        showArchived={showArchived}
+        showTypeBadge
+      />
     )
   )
 

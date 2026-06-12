@@ -548,7 +548,7 @@ export default async function DashboardPage({
 
   const activeBalances = balances.filter((a) => !a.is_archived)
 
-  function renderDashboardAccountRow(account: AccountBalance) {
+  function renderDashboardAccountRow(account: AccountBalance, showTypeBadge: boolean) {
     const meta = accountMetaById.get(account.account_id)
     const isLiability = account.account_class === 'liability'
     return (
@@ -565,9 +565,11 @@ export default async function DashboardPage({
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{account.account_name}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                  <Badge variant="secondary" className="text-[11px]">
-                    {formatLabel(account.account_type)}
-                  </Badge>
+                  {showTypeBadge ? (
+                    <Badge variant="secondary" className="text-[11px]">
+                      {formatLabel(account.account_type)}
+                    </Badge>
+                  ) : null}
                   <Badge variant="outline" className="text-[11px]">
                     {account.currency_code}
                   </Badge>
@@ -941,13 +943,13 @@ export default async function DashboardPage({
                     count={group.count}
                     subtotalLabel={formatCurrency(group.subtotalBase, household.base_currency)}
                   >
-                    {group.rows.map((account) => renderDashboardAccountRow(account))}
+                    {group.rows.map((account) => renderDashboardAccountRow(account, false))}
                   </AccountGroup>
                 ))}
               </div>
             ) : (
               <div className="divide-y rounded-lg border">
-                {activeBalances.map((account) => renderDashboardAccountRow(account))}
+                {activeBalances.map((account) => renderDashboardAccountRow(account, true))}
               </div>
             )}
           </CardContent>

@@ -156,10 +156,12 @@ function AccountRow({
   account,
   baseCurrency,
   showInclusionBadge,
+  showTypeBadge,
 }: {
   account: AccountBalance
   baseCurrency: string
   showInclusionBadge?: boolean
+  showTypeBadge: boolean
 }) {
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -173,9 +175,11 @@ function AccountRow({
             {account.account_name}
           </p>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-            <Badge variant="secondary" className="text-[11px]">
-              {formatValue(account.account_type)}
-            </Badge>
+            {showTypeBadge ? (
+              <Badge variant="secondary" className="text-[11px]">
+                {formatValue(account.account_type)}
+              </Badge>
+            ) : null}
             <Badge variant="outline" className="text-[11px]">
               {account.currency_code}
             </Badge>
@@ -255,6 +259,7 @@ function AccountList({
                 account={account}
                 baseCurrency={baseCurrency}
                 showInclusionBadge={showInclusionBadge}
+                showTypeBadge={false}
               />
             ))}
           </AccountGroup>
@@ -271,6 +276,7 @@ function AccountList({
           account={account}
           baseCurrency={baseCurrency}
           showInclusionBadge={showInclusionBadge}
+          showTypeBadge
         />
       ))}
     </div>
