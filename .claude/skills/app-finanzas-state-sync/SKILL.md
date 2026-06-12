@@ -54,6 +54,12 @@ to make that impossible to leave stale.
 - Never invent state. Every claim must trace to a file you actually read.
 - Keep `AGENTS.md` short — it is loaded into context every session. Detail lives in
   `docs/SPRINT-LOG.md`, not in `AGENTS.md`.
-- Do not run git write commands here; this skill only edits docs. Hand the commit
-  back to the normal sprint-flow git template.
 - After updating, state explicitly what changed so the user can verify.
+
+## Committing state-sync changes
+
+If the change touches **only** doc/state files (`AGENTS.md`, `docs/**`,
+`.claude/**`), commit and push directly to main — no branch, no PR. These files
+can't affect build/runtime and the branch+PR ceremony is overhead for a small text
+diff. If the sync is bundled with code changes (e.g. part of a feature branch),
+follow the normal sprint-flow branch/merge process instead.
