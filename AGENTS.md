@@ -13,6 +13,7 @@ Stack:
 - TypeScript
 - Tailwind CSS v4
 - shadcn/ui + Base UI + Recharts
+- @dnd-kit (drag-and-drop account sorting)
 - Supabase Auth + Supabase/PostgreSQL (SSR configured)
 - Zod for validation
 - @anthropic-ai/sdk (AI assistant feature)
@@ -29,10 +30,17 @@ The product is household-first. All financial data must belong to a household.
   date-grouped transaction list, toast feedback, smart form defaults, month
   navigation, loading skeletons, PWA install hint, ES/EN localization foundation,
   and the `FormDialog` migration for all create/edit/action forms.
-- Latest fix (PR #8): shared `AmountInput` component + `formatAmountForDisplay`/
+- `AmountInput` (PR #8): shared component + `formatAmountForDisplay`/
   `sanitizeAmountInput`/`getCurrencySymbol` helpers in `lib/format.ts`. Adopted in
   budget line, debt, opening balance, and transaction/transfer edit forms, and the
   AI assistant draft card now renders extracted amounts as currency.
+- Latest: Wealthsimple-style account **List/Group(by type) view toggle** across
+  accounts, dashboard, and net-worth (cookie `af_accounts_view`, default group),
+  plus **drag-and-drop reordering** on the accounts page via `@dnd-kit` (writes
+  `accounts.sort_order`). Balances now use the shared `BalanceAmount` component
+  (green positive / red negative + minus sign — color-blind-aware). New code:
+  `lib/accounts-view/*`, `components/{accounts-view-toggle,account-group,balance-amount}`,
+  `accounts/sortable-accounts-list`.
 - See `docs/alpha/sprint-12-alpha-plan.md` for the live Alpha plan and
   `docs/alpha-readiness-checklist.md` for the readiness gate.
 
@@ -62,8 +70,8 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 - `src/lib/supabase/{client,server,middleware}.ts` + `src/middleware.ts` — auth/SSR.
 - `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `imports/`, `exports/`.
 - `src/components/` — shared design system (PageHeader, SectionHeading, Callout,
-  Money, AccountAvatar, FormDialog, AmountInput, etc.). Reuse these; do not re-roll
-  primitives.
+  Money, BalanceAmount, AccountAvatar, AccountGroup, AccountsViewToggle,
+  FormDialog, AmountInput, etc.). Reuse these; do not re-roll primitives.
 
 ## Technical rules
 
