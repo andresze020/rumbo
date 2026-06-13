@@ -5,9 +5,13 @@ import { cn } from '@/lib/utils'
 import { useLanguage } from '@/components/language-provider'
 import type { Locale } from '@/lib/i18n/dictionaries'
 
-const LANGUAGES: { value: Locale; labelKey: 'settings.language.english' | 'settings.language.spanish' }[] = [
+const LANGUAGES: {
+  value: Locale
+  labelKey: 'settings.language.english' | 'settings.language.spanish' | 'settings.language.french'
+}[] = [
   { value: 'en', labelKey: 'settings.language.english' },
   { value: 'es', labelKey: 'settings.language.spanish' },
+  { value: 'fr', labelKey: 'settings.language.french' },
 ]
 
 export function LanguageSection() {
