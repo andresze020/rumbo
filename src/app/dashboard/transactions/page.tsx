@@ -188,9 +188,15 @@ type TransactionGroup = {
   rows: TransactionRow[]
 }
 
+const GROUP_DATE_LOCALES: Record<Locale, string> = {
+  en: 'en-US',
+  es: 'es-ES',
+  fr: 'fr-FR',
+}
+
 function formatGroupDateLabel(date: string, locale: Locale) {
   const [yr, mo, dy] = date.split('-').map(Number)
-  return new Intl.DateTimeFormat(locale === 'es' ? 'es-ES' : 'en-US', {
+  return new Intl.DateTimeFormat(GROUP_DATE_LOCALES[locale], {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
