@@ -21,7 +21,7 @@ export function GlobalAddTransactionButton({
   return (
     <button
       type="button"
-      onClick={() => openDialog(defaultAccountId)}
+      onClick={() => openDialog({ accountId: defaultAccountId })}
       className={className}
       aria-label={ariaLabel}
       title={title}

@@ -2,6 +2,7 @@ import { type ReactNode } from 'react'
 import { Plus } from 'lucide-react'
 import { AppSidebar } from '@/components/app-sidebar'
 import { MobileNav } from '@/components/mobile-nav'
+import { MobileBottomNav } from '@/components/mobile-bottom-nav'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import { TransactionDialogProvider } from '@/components/transaction-dialog-provider'
 import { AssistantDrawer } from '@/components/assistant-drawer'
@@ -26,17 +27,20 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
             <InstallAppHint />
 
-            <main className="flex-1 pb-24">
+            <main className="flex-1 pb-24 lg:pb-24">
               {children}
             </main>
           </div>
 
-          {/* FABs — assistant + add transaction */}
+          {/* Mobile bottom nav (replaces the desktop add FAB on small screens) */}
+          <MobileBottomNav className="lg:hidden" />
+
+          {/* FABs — assistant + add transaction (desktop only for add) */}
           <AssistantDrawer />
           <GlobalAddTransactionButton
             aria-label="Add transaction"
             title="Add transaction"
-            className="fixed bottom-6 right-6 z-50 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="fixed bottom-6 right-6 z-50 hidden size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:flex"
           >
             <Plus className="size-6" aria-hidden="true" />
           </GlobalAddTransactionButton>

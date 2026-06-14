@@ -23,6 +23,7 @@ import {
 } from '@/app/dashboard/quick-add-actions'
 
 type TransactionType = 'income' | 'expense'
+type OpenDialogType = 'income' | 'expense' | 'transfer'
 
 type AddNextDefaults = {
   date: string
@@ -31,8 +32,13 @@ type AddNextDefaults = {
   status?: string
 }
 
+type OpenDialogOptions = {
+  accountId?: string
+  type?: OpenDialogType
+}
+
 type TransactionDialogContextValue = {
-  openDialog: (defaultAccountId?: string) => void
+  openDialog: (options?: OpenDialogOptions) => void
 }
 
 const TransactionDialogContext = createContext<TransactionDialogContextValue | null>(null)
@@ -76,6 +82,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
     readAddNextDefaults(searchParams)
   )
   const [triggerAccountId, setTriggerAccountId] = useState<string | undefined>()
+  const [triggerType, setTriggerType] = useState<OpenDialogType | undefined>()
 
   const nextDate = searchParams.get('next_date')
   const nextType = searchParams.get('next_type')
@@ -152,8 +159,9 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [created, hasPendingNext, addNextDefaults])
 
-  async function openDialog(defaultAccountId?: string) {
-    setTriggerAccountId(defaultAccountId)
+  async function openDialog(options?: OpenDialogOptions) {
+    setTriggerAccountId(options?.accountId)
+    setTriggerType(options?.type)
     setOpen(true)
     if (!loading) {
       setLoading(true)
@@ -211,7 +219,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
                 categories={formData.categories}
                 defaultDate={addNextDefaults?.date ?? todayIsoDate()}
                 defaultAccountId={addNextDefaults?.accountId ?? triggerAccountId}
-                defaultType={addNextDefaults?.type}
+                defaultType={addNextDefaults?.type ?? triggerType}
                 defaultStatus={addNextDefaults?.status}
                 returnTo={pathname}
                 onCancel={() => { setOpen(false); setAddNextDefaults(null) }}
