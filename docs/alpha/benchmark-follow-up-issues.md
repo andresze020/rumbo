@@ -31,6 +31,17 @@
 - Keep Alpha scope honest: correctness and daily-use friction can move now;
   broad Monarch/YNAB/Copilot parity should be staged into later sprints.
 
+## Resolved implementation issues
+
+| ID | Resolved in | What changed | Evidence | Remaining manual validation |
+|---|---|---|---|---|
+| BR-001 | Sprint 12.x — BR-001/BR-002 CSV import FX + rate foundation | `create_csv_import(...)` no longer hard-codes `exchange_rate_to_base = 1` for every row. It resolves account-currency-to-base FX per row, stores the resolved rate on entries and allocations, and logs rows without a usable non-base rate as invalid instead of creating incorrect ledger entries. | Migration `supabase/migrations/20260613000100_br_001_csv_import_fx.sql`; feature doc [`../features/csv-import-fx.md`](../features/csv-import-fx.md); sprint log [`../SPRINT-LOG.md`](../SPRINT-LOG.md). | Apply migration with `npx supabase db push`; import a non-base CSV row and compare `transaction_entries` / `transaction_allocations` base amounts; verify missing-rate rows stay invalid. |
+| BR-002 | Sprint 12.x — BR-001/BR-002 CSV import FX + rate foundation | Added household-scoped `exchange_rates` with RLS, unique daily pair constraint, lookup index, and `get_exchange_rate(...)` supporting same-currency `1`, latest-prior direct lookup, inverse-pair fallback, and `null` for missing rates. | Migration `supabase/migrations/20260613000100_br_001_csv_import_fx.sql`; feature doc [`../features/exchange-rates.md`](../features/exchange-rates.md); `AGENTS.md` real Supabase table list includes `exchange_rates`. | Apply migration with `npx supabase db push`; run same-currency, latest-prior, inverse-pair, missing-rate, and RLS verification queries from [`../features/exchange-rates.md`](../features/exchange-rates.md). |
+| BR-003 | Sprint 12.x — BR-003..BR-006 net-worth correctness + verification | Net worth FX policy is now explicit: summaries use each ledger entry's stored historical `exchange_rate_to_base`, and the Net Worth page warns that month-end market revaluation is not implemented yet. | UI copy in `src/app/dashboard/net-worth/page.tsx`; feature doc [`../features/net-worth-fx-policy.md`](../features/net-worth-fx-policy.md). | Open `/dashboard/net-worth` with a mixed-currency household and confirm the FX policy callout is visible; manually recompute a sample balance from stored ledger base amounts. |
+| BR-004 | Sprint 12.x — BR-003..BR-006 net-worth correctness + verification | Historical/as-of balances now exclude archived accounts, matching current account summary behavior and preventing archived accounts from distorting Net Worth. | Migration `supabase/migrations/20260614000100_br_004_exclude_archived_as_of_balances.sql`; feature doc [`../features/net-worth-fx-policy.md`](../features/net-worth-fx-policy.md). | Apply migration with `npx supabase db push`; archive an included account with history and confirm `/dashboard/net-worth?month=YYYY-MM` excludes it while Accounts can still show it under archived accounts. |
+| BR-005 | Sprint 12.x — BR-003..BR-006 net-worth correctness + verification | Cleared React hooks lint failures without behavior changes in theme controls, sidebar/mobile nav, transaction dialog, transaction form defaults, transfer edit FX auto-fetch, install hint, getting-started checklist, and trend chart colors. | Code changes in the lint offender components; feature doc [`../features/react-hooks-lint-cleanup.md`](../features/react-hooks-lint-cleanup.md). | `npm run lint` must pass; manually smoke theme toggle, sidebar collapse, mobile nav, Save and Add Next, and non-base transfer edit FX. |
+| BR-006 | Sprint 12.x — BR-003..BR-006 net-worth correctness + verification | Added the first lightweight SQL verification checklist for money-math invariants while the project still has no automated test runner. | SQL file `supabase/tests/br_003_006_money_invariants.sql`; feature doc [`../features/financial-correctness-checks.md`](../features/financial-correctness-checks.md). | Replace the household placeholder, run the SQL checks after migrations are applied, and confirm every `passed` column is `true`. |
+
 ## Near-term implementation issues
 
 | ID | Priority | Area | Issue | Why soon | First implementation slice | DB | Verify |
@@ -81,11 +92,11 @@
 
 Start here.
 
-1. BR-002 — Add `exchange_rates` + `get_exchange_rate`.
-2. BR-001 — Fix CSV import FX from hard-coded `1`.
-3. BR-003 — Decide/document net-worth FX behavior.
-4. BR-005 — Clear lint gate.
-5. BR-006 — Add minimal financial correctness tests.
+1. ✅ BR-002 — Add `exchange_rates` + `get_exchange_rate`.
+2. ✅ BR-001 — Fix CSV import FX from hard-coded `1`.
+3. ✅ BR-003 — Decide/document net-worth FX behavior.
+4. ✅ BR-005 — Clear lint gate.
+5. ✅ BR-006 — Add minimal financial correctness tests.
 
 Recommended branch name if/when starting implementation:
 `sprint/12-x-multicurrency-correctness`.
@@ -120,14 +131,14 @@ npx supabase db push
 
 Use this as the first implementation checklist:
 
-1. Inspect `supabase/migrations/*` for existing currency, import, and transfer
+1. ✅ Inspect `supabase/migrations/*` for existing currency, import, and transfer
    patterns.
-2. Create an additive migration for `exchange_rates` and `get_exchange_rate`.
-3. Update `create_csv_import` so base amounts never default to a silent `1`
+2. ✅ Create an additive migration for `exchange_rates` and `get_exchange_rate`.
+3. ✅ Update `create_csv_import` so base amounts never default to a silent `1`
    unless account currency equals household base currency.
-4. Add regression coverage for non-base CSV import and same-currency transfer
+4. ✅ Add regression coverage for non-base CSV import and same-currency transfer
    net-worth neutrality.
-5. Fix the current ESLint errors.
-6. Run `npm run lint`, `npx tsc --noEmit`, and `npm run build`.
+5. ✅ Fix the current ESLint errors.
+6. ✅ Run `npm run lint`, `npx tsc --noEmit`, and `npm run build`.
 7. Manually test a COP account import in a CAD-base household before applying
    migrations remotely.

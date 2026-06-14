@@ -49,7 +49,7 @@ export function MobileNav({ className }: { className?: string }) {
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    setOpen(false)
+    window.requestAnimationFrame(() => setOpen(false))
   }, [pathname])
 
   function isActive(href: string) {

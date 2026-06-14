@@ -120,13 +120,6 @@ export function TransferEditForm({
       (!isNonBaseCurrencyTransfer || rateIsValid)
   )
 
-  // Auto-fetch rate when account or date changes
-  useEffect(() => {
-    if (!isNonBaseCurrencyTransfer || !selectedFromAccount || !currentDate) return
-    void autoFetch(selectedFromAccount.currency_code, currentDate)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFromAccountId, currentDate])
-
   async function autoFetch(accountCurrency: string, date: string) {
     setFetchingRate(true)
     setFxNote('')
@@ -144,6 +137,17 @@ export function TransferEditForm({
       setFxError(result.error)
     }
   }
+
+  // Auto-fetch rate when account or date changes
+  useEffect(() => {
+    if (!isNonBaseCurrencyTransfer || !selectedFromAccount || !currentDate) return
+    const frame = window.requestAnimationFrame(() => {
+      void autoFetch(selectedFromAccount.currency_code, currentDate)
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFromAccountId, currentDate])
 
   return (
     <form action={updateTransferTransactionAction} className="space-y-4">

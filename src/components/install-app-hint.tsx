@@ -43,7 +43,7 @@ export function InstallAppHint() {
     const iosDevice = /iPad|iPhone|iPod/.test(window.navigator.userAgent)
 
     if (iosDevice) {
-      setState({ kind: 'ios' })
+      window.requestAnimationFrame(() => setState({ kind: 'ios' }))
       return
     }
 

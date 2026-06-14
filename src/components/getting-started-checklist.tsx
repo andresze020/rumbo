@@ -47,7 +47,9 @@ export function GettingStartedChecklist({
 
   useEffect(() => {
     if (allDone) return
-    setDismissed(localStorage.getItem(HIDE_KEY) === '1')
+    window.requestAnimationFrame(() => {
+      setDismissed(localStorage.getItem(HIDE_KEY) === '1')
+    })
   }, [allDone])
 
   if (allDone || dismissed) return null

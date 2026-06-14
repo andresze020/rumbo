@@ -380,6 +380,10 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
       {hasEvolutionError ? (
         <Callout variant="error">Could not load every monthly evolution point.</Callout>
       ) : null}
+      <Callout variant="info">
+        Net worth uses each ledger entry&apos;s stored historical exchange rate.
+        It does not revalue foreign-currency balances with month-end market rates yet.
+      </Callout>
 
       {/* ── Summary cards ──────────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
