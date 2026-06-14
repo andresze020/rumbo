@@ -10,6 +10,9 @@ CSV imports no longer default non-base currency rows to a 1:1 exchange rate. The
 migration also adds `get_exchange_rate(...)` and replaces `create_csv_import(...)`
 with the same app-facing signature.
 
+The shared exchange-rate foundation is documented in
+[exchange-rates.md](./exchange-rates.md).
+
 ---
 
 ## Behavior

@@ -15,16 +15,18 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
-## Sprint 12.x — BR-001 CSV import FX correctness (2026-06-13)
+## Sprint 12.x — BR-001/BR-002 CSV import FX + rate foundation (2026-06-13)
 - Goal: stop CSV imports from silently converting non-base account rows at a
-  hard-coded 1:1 rate.
+  hard-coded 1:1 rate, and add the shared FX rate foundation needed by
+  cross-currency flows.
 - Shipped: household-scoped `exchange_rates` table; `get_exchange_rate(...)`
   lookup RPC with same-currency `1`, latest-prior direct-pair lookup, and inverse
   pair fallback; replacement `create_csv_import(...)` that resolves per-row FX
   from account currency to household base currency and logs rows without a usable
   rate as invalid instead of creating incorrect ledger entries. The import screen
   now warns when non-base accounts require saved rates, and
-  `docs/features/csv-import-fx.md` documents the contract.
+  `docs/features/csv-import-fx.md` plus `docs/features/exchange-rates.md`
+  document the contracts.
 - Migrations added: `20260613000100_br_001_csv_import_fx.sql`.
 - Tables changed: **new table** `exchange_rates`.
 - Follow-ups / known gaps: no rate-management UI yet; rates must be seeded
