@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;} body{margin:0;}
+  @keyframes fadeUp{from{transform:translateY(6px)}to{transform:none}}
+  @keyframes fadeIn{from{opacity:0.01}to{opacity:1}}
+  @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+  .ps::-webkit-scrollbar{width:0;display:none}
+</style>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</helmet>
+
+<div style="{{ rootVars }} font-family:'Geist',system-ui,sans-serif; -webkit-font-smoothing:antialiased; min-height:100vh; background:{{ canvasBg }}; padding:28px 32px 52px;">
+
+  <!-- TOOLBAR -->
+  <div style="display:flex; align-items:center; gap:12px; max-width:1360px; margin:0 auto 24px;">
+    <div>
+      <div style="font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--accent);">{{ kicker }}</div>
+      <div style="font-size:20px; font-weight:700; letter-spacing:-.02em; color:{{ canvasText }}; margin-top:2px;">App Finanzas · Móvil / PWA</div>
+    </div>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:7px;">
+      <div style="display:flex; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:2px; gap:1px;">
+        <sc-for list="{{ langs }}" as="l" hint-placeholder-count="3"><span onClick="{{ l.onClick }}" style="padding:5px 8px; font-size:11.5px; font-weight:600; border-radius:6px; cursor:pointer; color:{{ l.fg }}; background:{{ l.bg }};">{{ l.code }}</span></sc-for>
+      </div>
+      <div style="display:flex; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:2px; gap:1px;">
+        <sc-for list="{{ currencies }}" as="c" hint-placeholder-count="3"><span onClick="{{ c.onClick }}" style="padding:5px 8px; font-size:11.5px; font-weight:600; border-radius:6px; cursor:pointer; color:{{ c.fg }}; background:{{ c.bg }};">{{ c.code }}</span></sc-for>
+      </div>
+      <span onClick="{{ onTheme }}" style="display:flex; align-items:center; gap:5px; padding:6px 11px; font-size:12px; font-weight:600; background:var(--surface); border:1px solid var(--border); border-radius:8px; cursor:pointer; color:var(--text2);"><span data-ic="{{ themeIcon }}" data-sz="14" style="display:flex;"></span> {{ themeLabel }}</span>
+    </div>
+  </div>
+
+  <!-- PHONES ROW -->
+  <div style="display:flex; gap:28px; justify-content:center; flex-wrap:wrap; align-items:flex-start; max-width:1360px; margin:0 auto;">
+    <sc-for list="{{ phones }}" as="p" hint-placeholder-count="3">
+      <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+        <div style="font-size:11.5px; font-weight:600; color:{{ canvasSub }}; letter-spacing:.01em;">{{ p.frameLabel }}</div>
+        <!-- device shell -->
+        <div style="width:376px; height:790px; background:#050505; border-radius:50px; padding:11px; box-shadow:0 0 0 1px rgba(0,0,0,.08),0 30px 60px -15px rgba(15,23,42,.45); position:relative; flex:none;">
+          <!-- dynamic island -->
+          <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:112px; height:30px; background:#050505; border-bottom-left-radius:18px; border-bottom-right-radius:18px; z-index:40;"></div>
+          <!-- screen -->
+          <div class="ps" style="width:100%; height:100%; background:var(--bg); border-radius:40px; overflow:hidden; display:flex; flex-direction:column; position:relative;">
+            <!-- status bar -->
+            <div style="height:50px; padding:14px 24px 0; display:flex; align-items:center; justify-content:space-between; flex:none;">
+              <span style="font-family:'Geist Mono',monospace; font-size:13px; font-weight:600; color:var(--text);">9:41</span>
+              <div style="display:flex; align-items:center; gap:5px; color:var(--text);"><span data-ic="signal" data-sz="14" style="display:flex;"></span><span data-ic="wifi" data-sz="14" style="display:flex;"></span><span data-ic="battery-full" data-sz="16" style="display:flex;"></span></div>
+            </div>
+            <!-- CONTENT AREA -->
+            <div class="ps" style="flex:1; overflow-y:auto;">
+
+              <!-- HOME SCREEN -->
+              <sc-if value="{{ p.isHome }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:4px 16px 120px; animation:fadeUp .3s ease;">
+                <!-- greeting row -->
+                <div style="display:flex; align-items:center; gap:11px; margin-bottom:16px;">
+                  <div style="width:38px; height:38px; border-radius:11px; background:var(--accent-weak); display:flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:700; color:var(--accent);">JD</div>
+                  <div style="flex:1;"><div style="font-size:11px; color:var(--text3);">{{ L.greet }}</div><div style="font-size:15px; font-weight:700; letter-spacing:-.01em;">Juan D.</div></div>
+                  <div style="display:flex; align-items:center; gap:6px; padding:6px 11px; background:var(--surface); border:1px solid var(--border); border-radius:20px; font-size:12px; font-weight:600; color:var(--text2);">Jun <span data-ic="chevron-down" data-sz="13" style="display:flex; color:var(--text3);"></span></div>
+                </div>
+                <!-- NET WORTH HERO -->
+                <div style="background:var(--accent); border-radius:22px; padding:18px 20px 16px; color:#fff; box-shadow:0 14px 28px -10px oklch(0.546 0.245 263 / 0.45); margin-bottom:12px; position:relative; overflow:hidden;">
+                  <div style="font-size:11.5px; opacity:.85; font-weight:500; letter-spacing:.01em;">{{ L.netWorth }}</div>
+                  <div style="font-family:'Geist Mono',monospace; font-size:{{ heroNWSize }}; font-weight:700; letter-spacing:-.025em; margin-top:5px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; line-height:1.2;">{{ heroNW }}</div>
+                  <div style="display:flex; align-items:center; gap:9px; margin-top:10px; margin-bottom:3px;">
+                    <span style="display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:700; padding:3px 10px; background:rgba(255,255,255,.22); border-radius:20px;"><span data-ic="arrow-up-right" data-sz="12" style="display:flex;"></span> 3.0%</span>
+                    <span style="font-size:11.5px; opacity:.8;">{{ L.vsPrev }}</span>
+                  </div>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:13px; padding-top:13px; border-top:1px solid rgba(255,255,255,.2);">
+                    <div><div style="font-size:10px; opacity:.75;">{{ L.assets }}</div><div style="font-family:'Geist Mono',monospace; font-size:12.5px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:2px; overflow-wrap:anywhere; line-height:1.3;">{{ heroAssets }}</div></div>
+                    <div><div style="font-size:10px; opacity:.75;">{{ L.liabilities }}</div><div style="font-family:'Geist Mono',monospace; font-size:12.5px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:2px; overflow-wrap:anywhere; line-height:1.3;">{{ heroLiabs }}</div></div>
+                  </div>
+                  <svg viewBox="0 0 300 50" preserveAspectRatio="none" style="position:absolute; right:0; bottom:0; width:48%; height:46px; opacity:.4;" ><polyline points="{{ heroSpark }}" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                </div>
+                <!-- 3 quick stats -->
+                <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:9px; margin-bottom:12px;">
+                  <sc-for list="{{ quickStats }}" as="q" hint-placeholder-count="3">
+                    <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px 11px 10px; box-shadow:var(--shadow); min-width:0;">
+                      <div style="width:24px; height:24px; border-radius:7px; background:{{ q.bg }}; display:flex; align-items:center; justify-content:center; margin-bottom:7px;"><span data-ic="{{ q.icon }}" data-sz="13" style="display:flex; color:{{ q.fg }};"></span></div>
+                      <div style="font-size:10px; color:var(--text3);">{{ q.label }}</div>
+                      <div style="font-family:'Geist Mono',monospace; font-size:11.5px; font-weight:600; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; line-height:1.3; color:{{ q.color }}; margin-top:2px;">{{ q.value }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <!-- month health -->
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:13px 14px; box-shadow:var(--shadow); margin-bottom:12px; display:flex; align-items:center; gap:13px;">
+                  <div style="width:44px; height:44px; border-radius:50%; border:3px solid var(--accent); display:flex; align-items:center; justify-content:center; background:var(--accent-weak); flex:none;"><span style="font-size:14px; font-weight:700; color:var(--accent);">B+</span></div>
+                  <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:700;">{{ L.monthHealth }}</div><div style="font-size:11px; color:var(--text3); margin-top:2px;">78/100 · Presupuesto OK · Ahorro excelente</div></div>
+                  <span data-ic="chevron-right" data-sz="16" style="display:flex; color:var(--text3);"></span>
+                </div>
+                <!-- insight strip -->
+                <div style="background:var(--accent-weak); border:1px solid oklch(0.92 0.03 264); border-radius:14px; padding:12px 14px; margin-bottom:12px; display:flex; align-items:flex-start; gap:10px;">
+                  <span data-ic="sparkles" data-sz="16" style="display:flex; color:var(--accent); flex:none; margin-top:1px;"></span>
+                  <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:600; color:var(--accent); margin-bottom:3px;">{{ L.insights }}</div><div style="font-size:12px; color:var(--text2); line-height:1.45;">Restaurantes 38% sobre presupuesto · Flujo positivo · 4 pagos esta semana</div></div>
+                </div>
+                <!-- budget -->
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:13px 14px; box-shadow:var(--shadow); margin-bottom:12px;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:11px;"><div style="font-size:13px; font-weight:700;">{{ L.budget }}</div><span onClick="{{ p.goPlan }}" style="font-size:11px; font-weight:600; color:var(--accent); cursor:pointer;">{{ L.seeAll }}</span></div>
+                  <sc-for list="{{ budgetMini }}" as="b" hint-placeholder-count="3">
+                    <div style="margin-bottom:9px;"><div style="display:flex; align-items:center; gap:7px; font-size:11.5px; margin-bottom:4px;"><span style="width:7px; height:7px; border-radius:3px; background:{{ b.color }};"></span><span style="flex:1; color:var(--text2);">{{ b.name }}</span><span style="font-family:'Geist Mono',monospace; font-weight:600; color:{{ b.fg }}; font-size:11px; font-variant-numeric:tabular-nums;">{{ b.actual }}</span></div><div style="height:5px; border-radius:3px; background:var(--surface3); overflow:hidden;"><div style="height:100%; width:{{ b.w }}; background:{{ b.bar }}; border-radius:3px;"></div></div></div>
+                  </sc-for>
+                </div>
+                <!-- upcoming -->
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; padding:0 2px;"><div style="font-size:13px; font-weight:700;">{{ L.upcoming }}</div><span style="font-size:11px; font-weight:600; color:var(--accent);">{{ L.seeAll }}</span></div>
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:12px;">
+                  <sc-for list="{{ billsMini }}" as="bl" hint-placeholder-count="3">
+                    <div style="display:flex; align-items:center; gap:10px; padding:10px 13px; border-bottom:1px solid var(--border);">
+                      <div style="width:30px; height:30px; border-radius:9px; background:{{ bl.bg }}; display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ bl.icon }}" data-sz="14" style="display:flex; color:{{ bl.fg }};"></span></div>
+                      <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ bl.name }}</div><div style="font-size:10.5px; color:var(--text3);">{{ bl.due }}</div></div>
+                      <div style="text-align:right; flex:none;"><div style="font-family:'Geist Mono',monospace; font-size:12.5px; font-weight:600; font-variant-numeric:tabular-nums; color:{{ bl.color }}; white-space:nowrap;">{{ bl.amount }}</div><div style="font-size:10px; color:{{ bl.tagFg }}; font-weight:700; text-transform:uppercase; letter-spacing:.03em;">{{ bl.tag }}</div></div>
+                    </div>
+                  </sc-for>
+                </div>
+                <!-- recent -->
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; padding:0 2px;"><div style="font-size:13px; font-weight:700;">{{ L.recent }}</div><span onClick="{{ p.goTx }}" style="font-size:11px; font-weight:600; color:var(--accent); cursor:pointer;">{{ L.seeAll }}</span></div>
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden;">
+                  <sc-for list="{{ recentMini }}" as="r" hint-placeholder-count="4">
+                    <div style="display:flex; align-items:center; gap:10px; padding:10px 13px; border-bottom:1px solid var(--border);">
+                      <div style="width:32px; height:32px; border-radius:9px; background:{{ r.bg }}; display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ r.icon }}" data-sz="15" style="display:flex; color:{{ r.fg }};"></span></div>
+                      <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.name }}</div><div style="font-size:10.5px; color:var(--text3);">{{ r.cat }} · {{ r.date }}</div></div>
+                      <div style="font-family:'Geist Mono',monospace; font-size:12.5px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; color:{{ r.color }};">{{ r.amount }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              </sc-if>
+
+              <!-- MOVEMENTS SCREEN -->
+              <sc-if value="{{ p.isTx }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:4px 14px 120px; animation:fadeUp .3s ease;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                  <div style="flex:1; display:flex; align-items:center; gap:8px; padding:0 12px; height:40px; background:var(--surface); border:1px solid var(--border); border-radius:12px;"><span data-ic="search" data-sz="15" style="display:flex; color:var(--text3);"></span><span style="font-size:13px; color:var(--text3);">{{ L.search }}</span></div>
+                  <div style="width:40px; height:40px; border-radius:12px; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center;"><span data-ic="sliders-horizontal" data-sz="16" style="display:flex; color:var(--text2);"></span></div>
+                </div>
+                <!-- chips -->
+                <div style="display:flex; gap:7px; margin-bottom:14px; overflow:hidden; padding-bottom:2px;">
+                  <sc-for list="{{ p.txChips }}" as="c" hint-placeholder-count="4"><span style="padding:6px 12px; font-size:11.5px; font-weight:600; border-radius:20px; white-space:nowrap; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }};">{{ c.label }}</span></sc-for>
+                </div>
+                <!-- tx list flat -->
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); overflow:hidden;">
+                  <sc-for list="{{ p.txFlat }}" as="r" hint-placeholder-count="7">
+                    <sc-if value="{{ r.isHeader }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 14px 6px; background:var(--surface2); font-size:11px; font-weight:600; color:var(--text3); border-bottom:1px solid var(--border); letter-spacing:.02em;">{{ r.label }}</div></sc-if>
+                    <sc-if value="{{ r.isRow }}" hint-placeholder-val="{{ true }}">
+                      <div onClick="{{ r.onTap }}" style="display:flex; align-items:center; gap:10px; padding:11px 13px; border-bottom:1px solid var(--border); background:{{ r.rowBg }}; cursor:pointer;">
+                        <div style="width:34px; height:34px; border-radius:10px; background:{{ r.bg }}; display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ r.icon }}" data-sz="15" style="display:flex; color:{{ r.fg }};"></span></div>
+                        <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.name }}</div><div style="display:flex; align-items:center; gap:6px; margin-top:2px;"><span style="font-size:10px; color:var(--text3);">{{ r.cat }}</span><span style="font-size:9px; font-weight:700; padding:1px 6px; border-radius:10px; color:{{ r.stFg }}; background:{{ r.stBg }}; text-transform:uppercase; letter-spacing:.02em;">{{ r.stLabel }}</span></div></div>
+                        <div style="font-family:'Geist Mono',monospace; font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; color:{{ r.color }}; white-space:nowrap;">{{ r.amount }}</div>
+                      </div>
+                      <sc-if value="{{ r.expanded }}" hint-placeholder-val="{{ false }}">
+                        <div style="padding:4px 13px 12px 57px; border-bottom:1px solid var(--border); background:var(--surface2); animation:fadeUp .18s ease;">
+                          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                            <span style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:6px 10px; background:var(--accent); color:#fff; border-radius:8px; cursor:pointer;"><span data-ic="pencil" data-sz="11" style="display:flex;"></span> {{ L.edit }}</span>
+                            <span style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:6px 10px; background:var(--surface); border:1px solid var(--border); color:var(--text2); border-radius:8px; cursor:pointer;"><span data-ic="tag" data-sz="11" style="display:flex;"></span> {{ L.category }}</span>
+                            <span style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:6px 10px; background:var(--surface); border:1px solid var(--border); color:var(--pos); border-radius:8px; cursor:pointer;"><span data-ic="check" data-sz="11" style="display:flex;"></span> {{ L.review }}</span>
+                          </div>
+                        </div>
+                      </sc-if>
+                    </sc-if>
+                  </sc-for>
+                </div>
+              </div>
+              </sc-if>
+
+              <!-- PLAN SCREEN -->
+              <sc-if value="{{ p.isPlan }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:4px 14px 120px; animation:fadeUp .3s ease;">
+                <!-- budgets summary -->
+                <div style="font-size:13px; font-weight:700; margin-bottom:10px;">{{ L.budget }}</div>
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:14px;">
+                  <sc-for list="{{ planBudget }}" as="b" hint-placeholder-count="4">
+                    <div style="padding:11px 14px; border-bottom:1px solid var(--border);">
+                      <div style="display:flex; align-items:center; gap:9px; margin-bottom:5px;"><span style="width:7px; height:7px; border-radius:3px; background:{{ b.color }};"></span><span style="flex:1; font-size:12.5px; font-weight:500; color:var(--text2);">{{ b.name }}</span><span style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:600; font-variant-numeric:tabular-nums; color:{{ b.fg }};">{{ b.actual }}</span><span style="font-size:11px; color:{{ b.fg }}; font-weight:700;">{{ b.pct }}%</span></div>
+                      <div style="height:5px; border-radius:3px; background:var(--surface3); overflow:hidden;"><div style="height:100%; width:{{ b.w }}; background:{{ b.bar }}; border-radius:3px;"></div></div>
+                    </div>
+                  </sc-for>
+                </div>
+                <!-- goals -->
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><div style="font-size:13px; font-weight:700;">{{ L.goals }}</div><span style="font-size:9.5px; font-weight:700; text-transform:uppercase; padding:2px 7px; border-radius:5px; color:oklch(0.50 0.14 78); background:oklch(0.96 0.05 80);">Beta</span></div>
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:14px;">
+                  <sc-for list="{{ planGoals }}" as="g" hint-placeholder-count="3">
+                    <div style="padding:12px 14px; border-bottom:1px solid var(--border);">
+                      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                        <div style="width:32px; height:32px; border-radius:9px; background:{{ g.iconBg }}; display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ g.icon }}" data-sz="15" style="display:flex; color:{{ g.color }};"></span></div>
+                        <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ g.name }}</div><div style="font-size:10.5px; color:var(--text3);">ETA: {{ g.eta }} · +{{ g.monthly }}/mes</div></div>
+                        <div style="font-size:14px; font-weight:700; color:{{ g.color }};">{{ g.pct }}%</div>
+                      </div>
+                      <div style="height:6px; border-radius:4px; background:var(--surface3); overflow:hidden;"><div style="height:100%; width:{{ g.barW }}; background:{{ g.color }}; border-radius:4px;"></div></div>
+                    </div>
+                  </sc-for>
+                </div>
+                <!-- debts -->
+                <div style="font-size:13px; font-weight:700; margin-bottom:10px;">{{ L.debts }}</div>
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:14px;">
+                  <sc-for list="{{ planDebts }}" as="d" hint-placeholder-count="3">
+                    <div style="padding:11px 14px; border-bottom:1px solid var(--border);">
+                      <div style="display:flex; align-items:center; gap:10px; margin-bottom:7px;">
+                        <div style="width:30px; height:30px; border-radius:8px; background:{{ d.bg }}; display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ d.icon }}" data-sz="14" style="display:flex; color:{{ d.fg }};"></span></div>
+                        <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:600;">{{ d.name }}</div><div style="font-size:10.5px; color:var(--text3);">{{ d.rate }}% APR · Pago: {{ d.payment }}/mes</div></div>
+                        <div style="font-family:'Geist Mono',monospace; font-size:12.5px; font-weight:600; color:var(--neg); font-variant-numeric:tabular-nums;">{{ d.balance }}</div>
+                      </div>
+                      <div style="height:5px; border-radius:3px; background:var(--surface3); overflow:hidden;"><div style="height:100%; width:{{ d.paidPct }}%; background:var(--pos); border-radius:3px;"></div></div>
+                    </div>
+                  </sc-for>
+                </div>
+                <!-- recurring upcoming -->
+                <div style="font-size:13px; font-weight:700; margin-bottom:10px;">{{ L.upcoming }}</div>
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden;">
+                  <sc-for list="{{ planUpcoming }}" as="u" hint-placeholder-count="3">
+                    <div style="display:flex; align-items:center; gap:10px; padding:10px 13px; border-bottom:1px solid var(--border);">
+                      <div style="width:30px; height:30px; border-radius:9px; background:{{ u.bg }}; display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ u.icon }}" data-sz="14" style="display:flex; color:{{ u.fg }};"></span></div>
+                      <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ u.name }}</div><div style="font-size:10.5px; color:var(--text3);">{{ u.due }}</div></div>
+                      <div style="font-family:'Geist Mono',monospace; font-size:12.5px; font-weight:600; font-variant-numeric:tabular-nums; color:{{ u.color }}; white-space:nowrap;">{{ u.amount }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              </sc-if>
+
+              <!-- MORE SCREEN -->
+              <sc-if value="{{ p.isMore }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:4px 14px 120px; animation:fadeUp .3s ease;">
+                <div style="font-size:15px; font-weight:700; margin-bottom:14px;">{{ L.more }}</div>
+                <!-- in-app modules -->
+                <div style="font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text3); margin-bottom:9px;">{{ L.available }}</div>
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:16px;">
+                  <sc-for list="{{ moreItems }}" as="m" hint-placeholder-count="5">
+                    <div style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-bottom:1px solid var(--border);">
+                      <div style="width:36px; height:36px; border-radius:10px; background:{{ m.iconBg }}; display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ m.icon }}" data-sz="17" style="display:flex; color:{{ m.iconFg }};"></span></div>
+                      <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:600;">{{ m.name }}</div><div style="font-size:11.5px; color:var(--text3);">{{ m.desc }}</div></div>
+                      <div style="display:flex; align-items:center; gap:6px;"><sc-if value="{{ m.hasBadge }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px; font-weight:700; text-transform:uppercase; padding:2px 6px; border-radius:5px; color:{{ m.badgeFg }}; background:{{ m.badgeBg }};">{{ m.badge }}</span></sc-if><span data-ic="chevron-right" data-sz="15" style="display:flex; color:{{ m.arrowColor }};"></span></div>
+                    </div>
+                  </sc-for>
+                </div>
+                <!-- future modules -->
+                <div style="font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text3); margin-bottom:9px;">{{ L.comingSoon }}</div>
+                <div style="background:var(--surface); border:1px dashed var(--border-strong); border-radius:14px; overflow:hidden;">
+                  <sc-for list="{{ moreFuture }}" as="m" hint-placeholder-count="4">
+                    <div style="display:flex; align-items:center; gap:12px; padding:11px 14px; border-bottom:1px solid var(--border); opacity:{{ m.opacity }};">
+                      <div style="width:32px; height:32px; border-radius:9px; background:var(--surface3); display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ m.icon }}" data-sz="15" style="display:flex; color:var(--text3);"></span></div>
+                      <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:500; color:var(--text2);">{{ m.name }}</div><div style="font-size:10.5px; color:var(--text3);">{{ m.desc }}</div></div>
+                      <span style="font-size:9px; font-weight:700; text-transform:uppercase; padding:2px 7px; border-radius:5px; color:{{ m.badgeFg }}; background:{{ m.badgeBg }};">{{ m.badge }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <!-- profile -->
+                <div style="margin-top:18px; background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:14px;">
+                  <div style="display:flex; align-items:center; gap:11px; margin-bottom:13px;">
+                    <div style="width:44px; height:44px; border-radius:13px; background:var(--accent-weak); display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; color:var(--accent);">JD</div>
+                    <div><div style="font-size:14px; font-weight:700;">Juan D.</div><div style="font-size:11.5px; color:var(--text3);">Plan Personal · 3 cuentas</div></div>
+                  </div>
+                  <div style="display:flex; gap:8px;"><span style="flex:1; text-align:center; padding:8px; font-size:12px; font-weight:600; background:var(--surface2); border:1px solid var(--border); border-radius:9px; color:var(--text2);">Ajustes</span><span style="flex:1; text-align:center; padding:8px; font-size:12px; font-weight:600; background:var(--surface2); border:1px solid var(--border); border-radius:9px; color:var(--text2);">Exportar</span><span style="flex:1; text-align:center; padding:8px; font-size:12px; font-weight:600; background:var(--accent); border-radius:9px; color:#fff;">Actualizar plan</span></div>
+                </div>
+              </div>
+              </sc-if>
+
+            </div>
+
+            <!-- FAB OVERLAY -->
+            <sc-if value="{{ p.fabOpen }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ p.onFabClose }}" style="position:absolute; inset:0; background:rgba(0,0,0,.55); z-index:50; animation:fadeIn .18s ease;">
+                <div onClick="{{ p.onFabClose }}" style="position:absolute; bottom:82px; left:50%; transform:translateX(-50%); width:260px; display:flex; flex-direction:column; gap:9px; animation:slideUp .22s ease;">
+                  <sc-for list="{{ p.fabItems }}" as="fi" hint-placeholder-count="5">
+                    <div style="display:flex; align-items:center; gap:13px; padding:12px 16px; background:var(--surface); border-radius:14px; cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,.25);">
+                      <div style="width:36px; height:36px; border-radius:10px; background:{{ fi.iconBg }}; display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ fi.icon }}" data-sz="17" style="display:flex; color:{{ fi.iconFg }};"></span></div>
+                      <span style="font-size:13.5px; font-weight:600; color:var(--text);">{{ fi.label }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- BOTTOM NAV -->
+            <div style="position:absolute; bottom:0; left:0; right:0; height:78px; background:var(--surface); border-top:1px solid var(--border); display:flex; align-items:flex-start; padding:8px 4px 0; z-index:30;">
+              <sc-for list="{{ p.tabs }}" as="tb" hint-placeholder-count="5">
+                <sc-if value="{{ tb.isFab }}" hint-placeholder-val="{{ false }}">
+                  <div style="flex:1; display:flex; justify-content:center;">
+                    <div onClick="{{ tb.onClick }}" style="width:54px; height:54px; border-radius:18px; background:var(--accent); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 20px -6px var(--accent); margin-top:-12px; cursor:pointer;">
+                      <span data-ic="{{ tb.icon }}" data-sz="24" style="display:flex; color:#fff;"></span>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ tb.isTab }}" hint-placeholder-val="{{ true }}">
+                  <div onClick="{{ tb.onClick }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; padding-top:3px;">
+                    <span data-ic="{{ tb.icon }}" data-sz="22" style="display:flex; color:{{ tb.color }};"></span>
+                    <span style="font-size:9.5px; font-weight:{{ tb.weight }}; color:{{ tb.color }};">{{ tb.label }}</span>
+                  </div>
+                </sc-if>
+              </sc-for>
+            </div>
+            <!-- home indicator -->
+            <div style="position:absolute; bottom:6px; left:50%; transform:translateX(-50%); width:128px; height:4px; border-radius:3px; background:var(--text); opacity:.22; z-index:40;"></div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = { theme:'light', lang:'es', currency:'COP', tabs:['home','tx','plan','more'], expanded:{}, fabOpen:{} };
+
+  componentDidMount(){ this.paintIcons(); }
+  componentDidUpdate(){ this.paintIcons(); }
+  paintIcons(){
+    const Lc=(typeof window!=='undefined')&&window.lucide;
+    if(!Lc||!Lc.icons){if(!this._ir){this._ir=setInterval(()=>{if(window.lucide&&window.lucide.icons){clearInterval(this._ir);this._ir=null;this.paintIcons();}},120);}return;}
+    document.querySelectorAll('[data-ic]:not([data-ic-done])').forEach(el=>{
+      const name=el.getAttribute('data-ic');if(!name)return;
+      const p=name.split('-').map(s=>s[0].toUpperCase()+s.slice(1)).join('');
+      const node=Lc.icons[p];el.setAttribute('data-ic-done','1');if(!node)return;
+      const sz=el.getAttribute('data-sz')||'16',sw=el.getAttribute('data-sw')||'2';
+      el.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" width="'+sz+'" height="'+sz+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="'+sw+'" stroke-linecap="round" stroke-linejoin="round">'+node.map(c=>'<'+c[0]+' '+Object.entries(c[1]||{}).map(([k,v])=>k+'="'+v+'"').join(' ')+'/>').join('')+'</svg>';
+    });
+  }
+
+  L={
+    es:{kicker:'Variación móvil',greet:'Buenos días',netWorth:'Patrimonio neto',assets:'Activos',liabilities:'Pasivos',vsPrev:'vs. mes anterior',insights:'Perspectiva del día',budget:'Presupuesto · Junio',goals:'Metas y fondos',debts:'Deudas',upcoming:'Próximos pagos',recent:'Actividad reciente',seeAll:'Ver todo',search:'Buscar comercio…',edit:'Editar',category:'Categoría',review:'Revisar',home:'Inicio',movements:'Movimientos',plan:'Planear',more:'Más',available:'Disponible ahora',comingSoon:'Próximamente',monthHealth:'Salud del mes',light:'Claro',dark:'Oscuro'},
+    en:{kicker:'Mobile variation',greet:'Good morning',netWorth:'Net worth',assets:'Assets',liabilities:'Liabilities',vsPrev:'vs last month',insights:"Today's insight",budget:'Budget · June',goals:'Goals & funds',debts:'Debts',upcoming:'Upcoming',recent:'Recent activity',seeAll:'See all',search:'Search merchant…',edit:'Edit',category:'Category',review:'Review',home:'Home',movements:'Activity',plan:'Plan',more:'More',available:'Available now',comingSoon:'Coming soon',monthHealth:'Month health',light:'Light',dark:'Dark'},
+    fr:{kicker:'Variation mobile',greet:'Bonjour',netWorth:'Valeur nette',assets:'Actifs',liabilities:'Passifs',vsPrev:'vs mois préc.',insights:"Perspective du jour",budget:'Budget · Juin',goals:'Objectifs',debts:'Dettes',upcoming:'Échéances',recent:'Activité récente',seeAll:'Tout voir',search:'Rechercher…',edit:'Modifier',category:'Catégorie',review:'Réviser',home:'Accueil',movements:'Activité',plan:'Planifier',more:'Plus',available:'Disponible',comingSoon:'Bientôt',monthHealth:'Santé du mois',light:'Clair',dark:'Sombre'}
+  };
+  t(k){return (this.L[this.state.lang]||this.L.es)[k]||k;}
+
+  rate(){const c=this.state.currency;return c==='COP'?1:(c==='CAD'?1/3000:1/4100);}
+  group(n,th,ds,dec){const f=dec?Number(n).toFixed(dec):String(Math.round(n));let p=f.split('.');let i=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,th);return p[1]?i+ds+p[1]:i;}
+  fmt(cop,plus){const cur=this.state.currency,v=Math.abs(cop)*this.rate();let b;if(cur==='COP')b='COP$ '+this.group(Math.round(v),'.',',',0);else if(cur==='CAD')b='CA$ '+this.group(v,',','.',2);else b='US$ '+this.group(v,',','.',2);const sign=cop<0?'\u2212':(plus&&cop>0?'+':'');return sign+b;}
+  money(cop){return cop<0?'var(--neg)':(cop>0?'var(--pos)':'var(--text)');}
+  hexA(h,a){if(!h.startsWith('#'))return h;const n=parseInt(h.slice(1),16);return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';}
+
+  setTab(i,screen){this.setState(p=>{const t=[...p.tabs];t[i]=screen;return{tabs:t};});}
+  toggleExp(i,id){this.setState(p=>{const e={...p.expanded};const k=i+':'+id;if(e[k])delete e[k];else e[k]=true;return{expanded:e};});}
+  toggleFab(i){this.setState(p=>{const f={...p.fabOpen};if(f[i])delete f[i];else f[i]=true;return{fabOpen:f};});}
+  closeFab(i){this.setState(p=>{const f={...p.fabOpen};delete f[i];return{fabOpen:f};});}
+
+  txRowsData=[{g:'today',id:'t1',name:'Éxito',cat:'Mercado',cop:-182300,icon:'shopping-cart',c:'#1f9d63',st:'reviewed'},{g:'today',id:'t2',name:'Uber',cat:'Transporte',cop:-18400,icon:'car',c:'#c98a2b',st:'review'},{g:'today',id:'t3',name:'Salario nómina',cat:'Ingreso',cop:4250000,icon:'briefcase',c:'#1f9d63',st:'reviewed'},{g:'yest',id:'t4',name:'Rappi',cat:'Restaurantes',cop:-47600,icon:'utensils',c:'#d65450',st:'flagged'},{g:'yest',id:'t5',name:'Spotify',cat:'Suscripción',cop:-16900,icon:'music',c:'#1f9d63',st:'review'},{g:'wed',id:'t6',name:'Claro',cat:'Servicios',cop:-125000,icon:'wifi',c:'#2f86c2',st:'reviewed'}];
+
+  buildTxFlat(i){
+    const lg=this.state.lang;
+    const gl={today:{es:'Hoy · 13 jun',en:'Today · Jun 13',fr:"Auj · 13 juin"},yest:{es:'Ayer · 12 jun',en:'Yesterday · Jun 12',fr:'Hier · 12 juin'},wed:{es:'Mié · 11 jun',en:'Wed · Jun 11',fr:'Mer · 11 juin'}};
+    const sm={review:{es:'Por revisar',en:'Review',fr:'À réviser'},reviewed:{es:'Revisada',en:'Done',fr:'OK'},flagged:{es:'Marcada',en:'Flag',fr:'Marquée'}};
+    const smc={review:['var(--warn)','var(--warn-weak)'],reviewed:['var(--text3)','var(--surface3)'],flagged:['var(--neg)','var(--neg-weak)']};
+    const flat=[];const seen={};
+    this.txRowsData.forEach(r=>{
+      if(!seen[r.g]){seen[r.g]=true;flat.push({isHeader:true,isRow:false,key:'h'+r.g,label:gl[r.g][lg]||gl[r.g].es});}
+      const exp=!!this.state.expanded[i+':'+r.id];
+      flat.push({isHeader:false,isRow:true,key:r.id,id:r.id,name:r.name,cat:r.cat,icon:r.icon,amount:this.fmt(r.cop,r.cop>0),color:this.money(r.cop),bg:this.hexA(r.c,.16),fg:r.c,stLabel:sm[r.st][lg]||sm[r.st].es,stFg:smc[r.st][0],stBg:smc[r.st][1],expanded:exp,rowBg:exp?'var(--accent-weak)':'transparent',onTap:()=>this.toggleExp(i,r.id)});
+    });
+    return flat;
+  }
+
+  buildTabs(i){
+    const cur=this.state.tabs[i],lg=this.state.lang;
+    const L=this.L[lg]||this.L.es;
+    const defs=[{id:'home',icon:'house',label:L.home},{id:'tx',icon:'arrow-left-right',label:L.movements},{id:'__fab',icon:this.state.fabOpen[i]?'x':'plus',label:''},{id:'plan',icon:'target',label:L.plan},{id:'more',icon:'menu',label:L.more}];
+    return defs.map(d=>{
+      if(d.id==='__fab'){const fabOpen=!!this.state.fabOpen[i];return{isFab:true,isTab:false,icon:d.icon,onClick:()=>this.toggleFab(i),fabOpen};}
+      const active=cur===d.id;
+      return{isFab:false,isTab:true,icon:d.icon,label:d.label,color:active?'var(--accent)':'var(--text3)',weight:active?700:500,onClick:()=>{if(d.id!=='more')this.setTab(i,d.id);else this.setTab(i,'more');}};
+    });
+  }
+
+  fabItemsData(i){
+    const lg=this.state.lang;
+    const P=o=>o[lg]||o.es;
+    return [
+      {icon:'minus-circle',iconBg:'var(--neg-weak)',iconFg:'var(--neg)',label:P({es:'Gasto',en:'Expense',fr:'Dépense'})},
+      {icon:'plus-circle',iconBg:'var(--pos-weak)',iconFg:'var(--pos)',label:P({es:'Ingreso',en:'Income',fr:'Revenu'})},
+      {icon:'arrow-left-right',iconBg:'var(--accent-weak)',iconFg:'var(--accent)',label:P({es:'Transferencia',en:'Transfer',fr:'Virement'})},
+      {icon:'credit-card',iconBg:'oklch(0.96 0.05 80)',iconFg:'oklch(0.50 0.14 78)',label:P({es:'Pago de deuda',en:'Debt payment',fr:'Paiement dette'})},
+      {icon:'file-up',iconBg:'var(--surface3)',iconFg:'var(--text2)',label:P({es:'Importar CSV',en:'Import CSV',fr:'Import CSV'})},
+    ];
+  }
+
+  phoneVM(i){
+    const screen=this.state.tabs[i],lg=this.state.lang;
+    const L=this.L[lg]||this.L.es;
+    const chipDefs=[[L.movements,'all'],[{es:'Gastos',en:'Expenses',fr:'Dépenses'}[lg]||'Gastos','exp'],[{es:'Ingresos',en:'Income',fr:'Revenus'}[lg]||'Ingresos','inc'],[{es:'Por revisar',en:'Review',fr:'À réviser'}[lg]||'Por revisar','rev']];
+    const txChips=chipDefs.map((c,idx)=>({label:typeof c[0]==='string'?c[0]:c[0],fg:idx===0?'#fff':'var(--text2)',bg:idx===0?'var(--accent)':'var(--surface)',bd:idx===0?'var(--accent)':'var(--border)'}));
+    const repTabDefs=[{es:'Cat.',en:'Cat.',fr:'Cat.'},{es:'Comers.',en:'Merch.',fr:'Commer.'},{es:'Moneda',en:'Currency',fr:'Devise'}].map((t,idx)=>({label:t[lg]||t.es,fg:idx===0?'var(--text)':'var(--text2)',bg:idx===0?'var(--surface)':'transparent',sh:idx===0?'var(--shadow)':'none'}));
+    const fl={home:'Inicio',tx:L.movements,plan:L.plan,more:L.more}[screen];
+    return {
+      frameLabel:fl,isHome:screen==='home',isTx:screen==='tx',isPlan:screen==='plan',isMore:screen==='more',
+      goTx:()=>this.setTab(i,'tx'),goPlan:()=>this.setTab(i,'plan'),
+      tabs:this.buildTabs(i),txChips,repTabs:repTabDefs,
+      txFlat:this.buildTxFlat(i),
+      fabOpen:!!this.state.fabOpen[i],
+      onFabClose:()=>this.closeFab(i),
+      fabItems:this.fabItemsData(i)
+    };
+  }
+
+  renderVals(){
+    const s=this.state,lg=s.lang;
+    const L=this.L[lg]||this.L.es;
+    // theme vars
+    const dark='--bg:oklch(0.145 0 0);--surface:oklch(0.205 0 0);--surface2:oklch(0.269 0 0);--surface3:oklch(0.31 0 0);--border:oklch(1 0 0/0.10);--border-strong:oklch(1 0 0/0.18);--text:oklch(0.985 0 0);--text2:oklch(0.708 0 0);--text3:oklch(0.556 0 0);--accent:oklch(0.748 0.177 261);--accent-weak:oklch(0.325 0.07 263);--pos:oklch(0.74 0.15 162);--pos-weak:oklch(0.33 0.06 162);--neg:oklch(0.704 0.191 22);--neg-weak:oklch(0.34 0.08 25);--warn:oklch(0.80 0.13 80);--warn-weak:oklch(0.34 0.05 80);--info:oklch(0.70 0.12 235);--shadow:0 1px 2px oklch(0 0 0/.5),0 4px 14px oklch(0 0 0/.3);';
+    const light='--bg:oklch(0.984 0.003 250);--surface:oklch(1 0 0);--surface2:oklch(0.972 0 0);--surface3:oklch(0.946 0 0);--border:oklch(0.920 0 0);--border-strong:oklch(0.860 0 0);--text:oklch(0.205 0 0);--text2:oklch(0.55 0 0);--text3:oklch(0.66 0 0);--accent:oklch(0.546 0.245 262.881);--accent-weak:oklch(0.948 0.033 264);--pos:oklch(0.55 0.14 160);--pos-weak:oklch(0.952 0.04 162);--neg:oklch(0.545 0.245 27);--neg-weak:oklch(0.949 0.045 25);--warn:oklch(0.65 0.13 75);--warn-weak:oklch(0.96 0.06 82);--info:oklch(0.55 0.13 235);--shadow:0 1px 2px oklch(0.2 0 0/.07),0 3px 10px oklch(0.2 0 0/.05);';
+
+    // quick stats
+    const quickStats=[{label:L.income||'Ingresos',icon:'arrow-down-left',fg:'var(--pos)',bg:'var(--pos-weak)',value:this.fmt(8500000,true),color:'var(--pos)'},{label:L.expenses||'Gastos',icon:'arrow-up-right',fg:'var(--neg)',bg:'var(--neg-weak)',value:this.fmt(-5920000),color:'var(--neg)'},{label:'Tasa ahorro',icon:'percent',fg:'var(--text2)',bg:'var(--surface3)',value:'30.4%',color:'var(--text)'}];
+
+    // hero spark (12 points for cleaner curve)
+    const heroSparkPts=[60,56,50,45,40,36,32,27,22,19,15,12].map((v,i)=>`${(i/11)*300},${v}`).join(' ');
+
+    // bills mini
+    const bills=[{name:'Arriendo',cop:-2180000,icon:'home',c:'#4f63e0',due:{es:'Vence en 2 días',en:'Due in 2 days',fr:'Dans 2 jours'},tag:{es:'Pendiente',en:'Pending',fr:'En attente'},tagFg:'var(--warn)'},{name:'Salario',cop:4250000,icon:'briefcase',c:'#1f9d63',due:{es:'En 4 días',en:'In 4 days',fr:'Dans 4 jours'},tag:{es:'Programado',en:'Scheduled',fr:'Programmé'},tagFg:'var(--pos)'},{name:'Internet Claro',cop:-125000,icon:'wifi',c:'#2f86c2',due:{es:'En 6 días',en:'In 6 days',fr:'Dans 6 jours'},tag:{es:'Auto',en:'Auto',fr:'Auto'},tagFg:'var(--text3)'}];
+    const billsMini=bills.map(b=>({name:b.name,icon:b.icon,bg:this.hexA(b.c,.16),fg:b.c,due:b.due[lg]||b.due.es,amount:this.fmt(b.cop,b.cop>0),color:this.money(b.cop),tag:b.tag[lg]||b.tag.es,tagFg:b.tagFg}));
+
+    // recent mini
+    const recent=[{name:'Éxito',cat:'Mercado',cop:-182300,icon:'shopping-cart',c:'#1f9d63',date:{es:'Hoy',en:'Today',fr:"Auj."}},{name:'Uber',cat:'Transporte',cop:-18400,icon:'car',c:'#c98a2b',date:{es:'Hoy',en:'Today',fr:"Auj."}},{name:'Rappi',cat:'Restaurantes',cop:-47600,icon:'utensils',c:'#d65450',date:{es:'Ayer',en:'Yesterday',fr:'Hier'}},{name:'Transferencia',cat:'Ahorros',cop:500000,icon:'arrow-left-right',c:'#4f63e0',date:{es:'Ayer',en:'Yesterday',fr:'Hier'}}];
+    const recentMini=recent.map(r=>({name:r.name,cat:r.cat,icon:r.icon,bg:this.hexA(r.c,.16),fg:r.c,date:r.date[lg]||r.date.es,amount:this.fmt(r.cop,r.cop>0),color:this.money(r.cop)}));
+
+    // budget mini
+    const bm=[{name:'Vivienda',cop:2180000,plan:2200000,color:'#4f63e0'},{name:'Restaurantes',cop:690000,plan:500000,color:'#d65450'},{name:'Mercado',cop:1340000,plan:1200000,color:'#1f9d63'},{name:'Servicios',cop:640000,plan:700000,color:'#2f86c2'}];
+    const budgetMini=bm.map(b=>{const over=b.cop>b.plan,pct=Math.round(b.cop/b.plan*100);return{name:b.name,color:b.color,actual:this.fmt(b.cop),fg:over?'var(--neg)':'var(--text)',w:Math.min(100,pct)+'%',bar:over?'var(--neg)':b.color,pct};});
+
+    // plan screen data
+    const planBudget=bm.map(b=>{const over=b.cop>b.plan,pct=Math.round(b.cop/b.plan*100);return{name:b.name,color:b.color,actual:this.fmt(b.cop),fg:over?'var(--neg)':'var(--text)',w:Math.min(100,pct)+'%',bar:over?'var(--neg)':b.color,pct};});
+    const planGoals=[{name:{es:'Fondo de emergencia',en:'Emergency fund',fr:'Fonds urgence'}[lg]||'Fondo de emergencia',icon:'shield',color:'var(--pos)',iconBg:'var(--pos-weak)',pct:33,barW:'33%',eta:'Oct 2030',monthly:this.fmt(400000)},{name:{es:'Viaje Cartagena',en:'Travel Cartagena',fr:'Voyage Cartagena'}[lg]||'Viaje',icon:'plane',color:'var(--accent)',iconBg:'var(--accent-weak)',pct:40,barW:'40%',eta:'Nov 2026',monthly:this.fmt(200000)},{name:{es:'Tarjeta Visa',en:'Visa Card',fr:'Carte Visa'}[lg]||'Tarjeta Visa',icon:'credit-card',color:'oklch(0.50 0.14 78)',iconBg:'oklch(0.96 0.05 80)',pct:49,barW:'49%',eta:'Jun 2027',monthly:this.fmt(350000)}];
+    const planDebts=[{name:'Tarjeta Visa',icon:'credit-card',rate:28,balance:this.fmt(-2100000),payment:this.fmt(350000),paidPct:5,bg:'var(--neg-weak)',fg:'var(--neg)'},{name:{es:'Préstamo estudiantil',en:'Student loan',fr:"Prêt étudiant"}[lg]||'Préstamo',icon:'graduation-cap',rate:12,balance:this.fmt(-18200000),payment:this.fmt(450000),paidPct:35,bg:'var(--accent-weak)',fg:'var(--accent)'},{name:'Vehículo',icon:'car',rate:8,balance:this.fmt(-17900000),payment:this.fmt(650000),paidPct:42,bg:'var(--surface3)',fg:'var(--text2)'}];
+    const planUpcoming=billsMini.slice(0,3);
+
+    // more screen
+    const pFg=(p)=>({beta:'oklch(0.50 0.14 78)',future:'var(--text3)',premium:'oklch(0.50 0.10 55)'}[p]||'var(--text3)');
+    const pBg=(p)=>({beta:'oklch(0.96 0.05 80)',future:'var(--surface3)',premium:'oklch(0.96 0.04 58)'}[p]||'var(--surface3)');
+    const moreItems=[{name:{es:'Cuentas',en:'Accounts',fr:'Comptes'}[lg]||'Cuentas',desc:{es:'3 cuentas activas',en:'3 active accounts',fr:'3 comptes actifs'}[lg]||'3 cuentas',icon:'wallet',iconBg:'var(--accent-weak)',iconFg:'var(--accent)',hasBadge:false,badge:'',badgeFg:'',badgeBg:'',arrowColor:'var(--text3)'},{name:{es:'Categorías',en:'Categories',fr:'Catégories'}[lg]||'Categorías',desc:{es:'23 categorías',en:'23 categories',fr:'23 catégories'}[lg]||'23 categorías',icon:'tag',iconBg:'var(--surface3)',iconFg:'var(--text2)',hasBadge:false,badge:'',badgeFg:'',badgeBg:'',arrowColor:'var(--text3)'},{name:{es:'Importar CSV',en:'Import CSV',fr:'Import CSV'}[lg]||'CSV',desc:{es:'Últimos 86 movimientos',en:'Last 86 transactions',fr:'86 dernières opérations'}[lg]||'86 movimientos',icon:'file-up',iconBg:'var(--surface3)',iconFg:'var(--text2)',hasBadge:false,badge:'',badgeFg:'',badgeBg:'',arrowColor:'var(--text3)'},{name:{es:'Exportar datos',en:'Export data',fr:'Exporter'}[lg]||'Exportar',desc:'CSV / JSON',icon:'download',iconBg:'var(--surface3)',iconFg:'var(--text2)',hasBadge:false,badge:'',badgeFg:'',badgeBg:'',arrowColor:'var(--text3)'},{name:{es:'Ajustes',en:'Settings',fr:'Paramètres'}[lg]||'Ajustes',desc:{es:'Idioma, moneda, tema',en:'Language, currency, theme',fr:'Langue, devise, thème'}[lg]||'Ajustes',icon:'settings',iconBg:'var(--surface3)',iconFg:'var(--text2)',hasBadge:false,badge:'',badgeFg:'',badgeBg:'',arrowColor:'var(--text3)'}];
+    const moreFuture=[{name:{es:'Mes en revisión',en:'Month review',fr:'Mois en revue'}[lg]||'Mes en revisión',desc:{es:'Health score + acciones',en:'Health score + actions',fr:'Score santé + actions'}[lg]||'',icon:'calendar-check',badge:'Beta',badgeFg:pFg('beta'),badgeBg:pBg('beta'),opacity:.75},{name:{es:'Colaboración hogar',en:'Household sharing',fr:'Partage foyer'}[lg]||'Hogar',desc:{es:'Invitar miembros',en:'Invite members',fr:'Inviter membres'}[lg]||'',icon:'users',badge:'Futuro',badgeFg:pFg('future'),badgeBg:pBg('future'),opacity:.6},{name:{es:'Notificaciones',en:'Notifications',fr:'Notifications'}[lg]||'Notis',desc:{es:'Pagos próximos + alertas',en:'Upcoming + alerts',fr:'Paiements + alertes'}[lg]||'',icon:'bell',badge:'Futuro',badgeFg:pFg('future'),badgeBg:pBg('future'),opacity:.6},{name:{es:'Plan y facturación',en:'Plan & billing',fr:'Plan et facturation'}[lg]||'Plan',desc:{es:'Actualizar a Pro',en:'Upgrade to Pro',fr:'Passer en Pro'}[lg]||'',icon:'credit-card',badge:'Pro',badgeFg:pFg('premium'),badgeBg:pBg('premium'),opacity:.7}];
+
+    return {
+      rootVars:s.theme==='dark'?dark:light,
+      canvasBg:s.theme==='dark'?'oklch(0.21 0.005 270)':'oklch(0.955 0.004 250)',
+      canvasText:s.theme==='dark'?'#fff':'oklch(0.205 0 0)',
+      canvasSub:s.theme==='dark'?'oklch(0.75 0 0)':'oklch(0.45 0 0)',
+      kicker:L.kicker||'Variación móvil',
+      L:{...L,income:{es:'Ingresos',en:'Income',fr:'Revenus'}[lg]||'Ingresos',expenses:{es:'Gastos',en:'Expenses',fr:'Dépenses'}[lg]||'Gastos'},
+      langs:['es','en','fr'].map(l=>({code:l.toUpperCase(),onClick:()=>this.setState({lang:l}),fg:s.lang===l?'#fff':'var(--text2)',bg:s.lang===l?'var(--accent)':'transparent'})),
+      currencies:['COP','CAD','USD'].map(c=>({code:c,onClick:()=>this.setState({currency:c}),fg:s.currency===c?'#fff':'var(--text2)',bg:s.currency===c?'var(--accent)':'transparent'})),
+      onTheme:()=>this.setState(p=>({theme:p.theme==='dark'?'light':'dark'})),
+      themeIcon:s.theme==='dark'?'moon':'sun',themeLabel:s.theme==='dark'?(L.dark||'Oscuro'):(L.light||'Claro'),
+      phones:[0,1,2,3].map(i=>this.phoneVM(i)),
+      heroNW:this.fmt(104150000),heroAssets:this.fmt(142350000),heroLiabs:this.fmt(38200000),heroSpark:heroSparkPts,
+      heroNWSize:(()=>{const v=this.fmt(104150000);return v.length<=12?'31px':v.length<=16?'26px':v.length<=20?'22px':'18px';})(),
+      quickStats,recentMini,billsMini,budgetMini,
+      planBudget,planGoals,planDebts,planUpcoming,
+      moreItems,moreFuture
+    };
+  }
+}
+</script>
+</body>
+</html>
