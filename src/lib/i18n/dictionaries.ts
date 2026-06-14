@@ -26,6 +26,27 @@ export const en = {
     expandSidebar: 'Expand sidebar',
     collapseSidebar: 'Collapse sidebar',
     navigation: 'Navigation',
+    groupOverview: 'Overview',
+    groupMoney: 'Money',
+    groupPlanning: 'Planning',
+    groupAnalysis: 'Analysis',
+    groupAutomation: 'Automation',
+    groupSettings: 'Settings',
+    monthReview: 'Month review',
+    goals: 'Goals & funds',
+    debtPlanner: 'Debt planner',
+    reports: 'Reports',
+    trends: 'Trends',
+    cashFlow: 'Cash flow',
+    rules: 'Rules',
+    reviewQueue: 'Review queue',
+    aiAssistant: 'AI Assistant',
+    household: 'Household',
+    privacy: 'Privacy',
+    planBilling: 'Plan & billing',
+    phaseBeta: 'Beta',
+    phaseSoon: 'Soon',
+    phasePro: 'Pro',
   },
   common: {
     save: 'Save',
@@ -158,6 +179,37 @@ export const en = {
     toastUpdated: 'Transaction updated.',
     toastVoided: 'Transaction voided.',
   },
+  comingSoon: {
+    back: 'Back to dashboard',
+    calloutBody:
+      "This feature is on our roadmap and isn't available yet. We'll let you know when it ships.",
+    descriptions: {
+      monthReview:
+        'A guided summary of your month with budget highlights, a health score and suggested actions before you close the books.',
+      goals:
+        'Set savings goals and funds, track progress toward each target, and see your monthly contribution and ETA.',
+      debtPlanner:
+        'Compare avalanche and snowball payoff strategies across your debts and see how much interest you could save.',
+      reports:
+        'Deeper reports by category, merchant and household member, with exportable views.',
+      trends:
+        'Track how spending and income evolve month over month by category, merchant and household member.',
+      cashFlow:
+        'A Sankey-style view of how money flows from income into categories, savings and debt payoff.',
+      rules:
+        'Create automatic categorization rules based on merchant, amount or account so new transactions sort themselves.',
+      reviewQueue:
+        "A focused queue of transactions that need a category, merchant or confirmation before they're marked reviewed.",
+      aiAssistant:
+        'A dedicated assistant module that answers questions about your finances, with voice note support.',
+      household:
+        'Invite household members, see a per-person view, and grant read-only access to an accountant.',
+      privacy:
+        'Manage your data, review an audit log, and control account deletion and encryption settings.',
+      planBilling:
+        'View your current plan, billing history, and upgrade to Pro for advanced features.',
+    },
+  },
 } as const
 
 export const es: DeepStringify<typeof en> = {
@@ -180,6 +232,27 @@ export const es: DeepStringify<typeof en> = {
     expandSidebar: 'Expandir barra lateral',
     collapseSidebar: 'Contraer barra lateral',
     navigation: 'Navegación',
+    groupOverview: 'Visión general',
+    groupMoney: 'Dinero',
+    groupPlanning: 'Planeación',
+    groupAnalysis: 'Análisis',
+    groupAutomation: 'Automatización',
+    groupSettings: 'Configuración',
+    monthReview: 'Mes en revisión',
+    goals: 'Metas y fondos',
+    debtPlanner: 'Planificador de deuda',
+    reports: 'Reportes',
+    trends: 'Tendencias',
+    cashFlow: 'Flujo de caja',
+    rules: 'Reglas',
+    reviewQueue: 'Cola de revisión',
+    aiAssistant: 'Asistente IA',
+    household: 'Hogar',
+    privacy: 'Privacidad',
+    planBilling: 'Plan y facturación',
+    phaseBeta: 'Beta',
+    phaseSoon: 'Pronto',
+    phasePro: 'Pro',
   },
   common: {
     save: 'Guardar',
@@ -312,6 +385,37 @@ export const es: DeepStringify<typeof en> = {
     toastUpdated: 'Transacción actualizada.',
     toastVoided: 'Transacción anulada.',
   },
+  comingSoon: {
+    back: 'Volver al panel',
+    calloutBody:
+      'Esta función está en nuestra hoja de ruta y todavía no está disponible. Te avisaremos cuando esté lista.',
+    descriptions: {
+      monthReview:
+        'Un resumen guiado de tu mes con aspectos destacados del presupuesto, un puntaje de salud y acciones sugeridas antes de cerrar el mes.',
+      goals:
+        'Define metas de ahorro y fondos, sigue el progreso de cada objetivo y consulta tu aporte mensual y la fecha estimada.',
+      debtPlanner:
+        'Compara las estrategias de pago avalancha y bola de nieve para tus deudas y descubre cuánto interés podrías ahorrar.',
+      reports:
+        'Reportes más detallados por categoría, comercio y miembro del hogar, con vistas exportables.',
+      trends:
+        'Observa cómo evolucionan tus gastos e ingresos mes a mes por categoría, comercio y miembro del hogar.',
+      cashFlow:
+        'Una vista tipo Sankey de cómo fluye tu dinero desde los ingresos hacia categorías, ahorro y pago de deudas.',
+      rules:
+        'Crea reglas de categorización automática según comercio, monto o cuenta para que las nuevas transacciones se clasifiquen solas.',
+      reviewQueue:
+        'Una cola enfocada de transacciones que necesitan categoría, comercio o confirmación antes de marcarse como revisadas.',
+      aiAssistant:
+        'Un módulo de asistente dedicado que responde preguntas sobre tus finanzas, con soporte para notas de voz.',
+      household:
+        'Invita a miembros del hogar, consulta una vista por persona y otorga acceso de solo lectura a un contador.',
+      privacy:
+        'Administra tus datos, revisa un registro de auditoría y controla la eliminación de cuenta y el cifrado.',
+      planBilling:
+        'Consulta tu plan actual, el historial de facturación y actualiza a Pro para acceder a funciones avanzadas.',
+    },
+  },
 } as const
 
 export const fr: DeepStringify<typeof en> = {
@@ -334,6 +438,27 @@ export const fr: DeepStringify<typeof en> = {
     expandSidebar: 'Développer la barre latérale',
     collapseSidebar: 'Réduire la barre latérale',
     navigation: 'Navigation',
+    groupOverview: "Vue d'ensemble",
+    groupMoney: 'Argent',
+    groupPlanning: 'Planification',
+    groupAnalysis: 'Analyse',
+    groupAutomation: 'Automatisation',
+    groupSettings: 'Paramètres',
+    monthReview: 'Mois en revue',
+    goals: 'Objectifs et fonds',
+    debtPlanner: 'Planificateur de dette',
+    reports: 'Rapports',
+    trends: 'Tendances',
+    cashFlow: 'Flux de trésorerie',
+    rules: 'Règles',
+    reviewQueue: 'File de révision',
+    aiAssistant: 'Assistant IA',
+    household: 'Foyer',
+    privacy: 'Confidentialité',
+    planBilling: 'Forfait et facturation',
+    phaseBeta: 'Bêta',
+    phaseSoon: 'Bientôt',
+    phasePro: 'Pro',
   },
   common: {
     save: 'Enregistrer',
@@ -465,6 +590,37 @@ export const fr: DeepStringify<typeof en> = {
     toastCreated: 'Transaction créée.',
     toastUpdated: 'Transaction mise à jour.',
     toastVoided: 'Transaction annulée.',
+  },
+  comingSoon: {
+    back: 'Retour au tableau de bord',
+    calloutBody:
+      'Cette fonctionnalité est sur notre feuille de route et n’est pas encore disponible. Nous vous préviendrons dès qu’elle sera prête.',
+    descriptions: {
+      monthReview:
+        'Un résumé guidé de votre mois avec les points clés du budget, un score de santé et des actions suggérées avant de clôturer le mois.',
+      goals:
+        'Définissez des objectifs d’épargne et des fonds, suivez la progression de chacun et consultez votre contribution mensuelle et la date estimée.',
+      debtPlanner:
+        'Comparez les stratégies de remboursement avalanche et boule de neige pour vos dettes et découvrez combien d’intérêts vous pourriez économiser.',
+      reports:
+        'Des rapports plus détaillés par catégorie, commerçant et membre du foyer, avec des vues exportables.',
+      trends:
+        'Suivez l’évolution de vos dépenses et revenus mois après mois par catégorie, commerçant et membre du foyer.',
+      cashFlow:
+        'Une vue de type Sankey montrant comment l’argent circule des revenus vers les catégories, l’épargne et le remboursement des dettes.',
+      rules:
+        'Créez des règles de catégorisation automatique selon le commerçant, le montant ou le compte pour que les nouvelles transactions se classent toutes seules.',
+      reviewQueue:
+        'Une file dédiée aux transactions qui nécessitent une catégorie, un commerçant ou une confirmation avant d’être marquées comme révisées.',
+      aiAssistant:
+        'Un module d’assistant dédié qui répond aux questions sur vos finances, avec prise en charge des notes vocales.',
+      household:
+        'Invitez des membres du foyer, consultez une vue par personne et accordez un accès en lecture seule à un comptable.',
+      privacy:
+        'Gérez vos données, consultez un journal d’audit et contrôlez la suppression de compte et le chiffrement.',
+      planBilling:
+        'Consultez votre forfait actuel, l’historique de facturation et passez à Pro pour des fonctionnalités avancées.',
+    },
   },
 } as const
 
