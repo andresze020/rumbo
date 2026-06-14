@@ -53,16 +53,18 @@ The product is household-first. All financial data must belong to a household.
   transaction filters, budget line selector). New code:
   `lib/categories/style.ts`, `components/category-style-picker`,
   `categories/sortable-category-list`.
-- Latest: **Recurring transactions — manual posting MVP (Sprint A)**.
-  `/dashboard/recurring` with Due/Upcoming/Inactive sections, income/expense
-  template CRUD, lifecycle (activate/deactivate/delete), and one-click **Post**
-  (reuses `create_manual_transaction`, advances `next_run_date`, auto-deactivates
-  past `end_date`). UTC-safe date math in `lib/recurring/shared.ts`. The
-  `recurring_transactions` table was created here — it had never actually been
-  applied to this project despite being in the initial schema doc. **Auto-posting
-  (Sprint B) and the dashboard widget + recurring transfers (Sprint C) are still
-  pending** — see `docs/features/recurring-transactions.md`. New code:
-  `app/dashboard/recurring/*`, `lib/recurring/shared.ts`.
+- Latest: **BR-001 CSV import FX correctness / BR-002 FX rate foundation**.
+  CSV imports now resolve per-row FX from account currency to household base
+  currency instead of defaulting to 1:1. New `exchange_rates` table plus
+  `get_exchange_rate(...)` support same-currency `1`, latest-prior lookup, and
+  inverse-pair fallback. Missing non-base rates make rows invalid rather than
+  creating incorrect ledger entries. See `docs/features/csv-import-fx.md`.
+- **Recurring transactions — manual posting MVP (Sprint A)** shipped earlier in
+  Sprint 12.x. `/dashboard/recurring` has Due/Upcoming/Inactive sections,
+  income/expense template CRUD, lifecycle (activate/deactivate/delete), and
+  one-click **Post**. **Auto-posting (Sprint B) and the dashboard widget +
+  recurring transfers (Sprint C) are still pending** — see
+  `docs/features/recurring-transactions.md`.
 - See `docs/alpha/sprint-12-alpha-plan.md` for the live Alpha plan and
   `docs/alpha-readiness-checklist.md` for the readiness gate.
 
@@ -80,6 +82,7 @@ The product is household-first. All financial data must belong to a household.
 - budgets
 - budget_lines
 - debts
+- exchange_rates
 - recurring_transactions
 - import_batches
 - import_rows

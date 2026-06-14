@@ -121,6 +121,9 @@ export function CsvImportClient({
   const validRows = previewRows.filter((row) => row.status === 'valid')
   const invalidRows = previewRows.filter((row) => row.status === 'invalid')
   const duplicateRows = previewRows.filter((row) => row.status === 'duplicate')
+  const hasNonBaseAccounts = accounts.some(
+    (account) => account.currency_code !== baseCurrency
+  )
   const canImport =
     Boolean(fileName) &&
     Boolean(mapping.transaction_date) &&
@@ -211,6 +214,14 @@ export function CsvImportClient({
       {!categories.length ? (
         <Callout variant="error">
           Create active income and expense categories before importing.
+        </Callout>
+      ) : null}
+
+      {hasNonBaseAccounts ? (
+        <Callout>
+          Non-{baseCurrency} account rows use saved exchange rates for the row
+          date. Rows without a usable rate are kept in the import log as
+          invalid instead of being converted at 1:1.
         </Callout>
       ) : null}
 
