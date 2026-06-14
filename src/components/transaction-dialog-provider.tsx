@@ -100,47 +100,55 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
     if (processedSeqRef.current === seqKey) return
     processedSeqRef.current = seqKey
 
-    setAddNextDefaults(readAddNextDefaults(searchParams))
-    setFormKey((k) => k + 1)
-    setOpen(true)
+    const frame = window.requestAnimationFrame(() => {
+      setAddNextDefaults(readAddNextDefaults(searchParams))
+      setFormKey((k) => k + 1)
+      setOpen(true)
 
-    // Fetch the form data BEFORE calling router.replace() below — issuing the
-    // replace first hangs the server action's request (it never resolves nor
-    // rejects), leaving the dialog stuck on "Loading form...".
-    setLoading(true)
-    getQuickAddFormData()
-      .then((data) => {
-        if (data) {
-          setFormData(data)
-          setLoadError(false)
-        } else {
-          setLoadError(true)
-        }
-      })
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false))
+      // Fetch the form data BEFORE calling router.replace() below — issuing the
+      // replace first hangs the server action's request (it never resolves nor
+      // rejects), leaving the dialog stuck on "Loading form...".
+      setLoading(true)
+      getQuickAddFormData()
+        .then((data) => {
+          if (data) {
+            setFormData(data)
+            setLoadError(false)
+          } else {
+            setLoadError(true)
+          }
+        })
+        .catch(() => setLoadError(true))
+        .finally(() => setLoading(false))
 
-    const cleaned = new URLSearchParams(searchParams.toString())
-    cleaned.delete('next_date')
-    cleaned.delete('next_type')
-    cleaned.delete('next_account')
-    cleaned.delete('next_status')
-    cleaned.delete('next_seq')
-    cleaned.delete('created') // prevent the auto-close effect from firing after the URL is cleaned
-    const qs = cleaned.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname)
+      const cleaned = new URLSearchParams(searchParams.toString())
+      cleaned.delete('next_date')
+      cleaned.delete('next_type')
+      cleaned.delete('next_account')
+      cleaned.delete('next_status')
+      cleaned.delete('next_seq')
+      cleaned.delete('created') // prevent the auto-close effect from firing after the URL is cleaned
+      const qs = cleaned.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname)
+    })
+
+    return () => window.cancelAnimationFrame(frame)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasPendingNext, nextDate, nextType, nextAccount, nextStatus, nextSeq])
 
   // Auto-close the dialog after the final "Create transaction" in an add-next session.
   useEffect(() => {
     if (created !== '1' || hasPendingNext || !addNextDefaults) return
-    setOpen(false)
-    setAddNextDefaults(null)
-    const cleaned = new URLSearchParams(searchParams.toString())
-    cleaned.delete('created')
-    const qs = cleaned.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname)
+    const frame = window.requestAnimationFrame(() => {
+      setOpen(false)
+      setAddNextDefaults(null)
+      const cleaned = new URLSearchParams(searchParams.toString())
+      cleaned.delete('created')
+      const qs = cleaned.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname)
+    })
+
+    return () => window.cancelAnimationFrame(frame)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [created, hasPendingNext, addNextDefaults])
 

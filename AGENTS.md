@@ -53,12 +53,17 @@ The product is household-first. All financial data must belong to a household.
   transaction filters, budget line selector). New code:
   `lib/categories/style.ts`, `components/category-style-picker`,
   `categories/sortable-category-list`.
-- Latest: **BR-001 CSV import FX correctness / BR-002 FX rate foundation**.
-  CSV imports now resolve per-row FX from account currency to household base
-  currency instead of defaulting to 1:1. New `exchange_rates` table plus
-  `get_exchange_rate(...)` support same-currency `1`, latest-prior lookup, and
-  inverse-pair fallback. Missing non-base rates make rows invalid rather than
-  creating incorrect ledger entries. See `docs/features/csv-import-fx.md`.
+- Latest: **BR-003..BR-006 net-worth correctness + verification**. Net Worth now
+  documents its stored-historical-rate FX policy in the UI, as-of balances exclude
+  archived accounts, the React hooks lint gate is clean, and
+  `supabase/tests/br_003_006_money_invariants.sql` provides first lightweight SQL
+  money-invariant checks. See `docs/features/net-worth-fx-policy.md` and
+  `docs/features/financial-correctness-checks.md`.
+- **BR-001 CSV import FX correctness / BR-002 FX rate foundation** shipped earlier
+  in Sprint 12.x. CSV imports resolve per-row FX instead of defaulting to 1:1.
+  New `exchange_rates` table plus `get_exchange_rate(...)` support same-currency
+  `1`, latest-prior lookup, and inverse-pair fallback. See
+  `docs/features/csv-import-fx.md`.
 - **Recurring transactions — manual posting MVP (Sprint A)** shipped earlier in
   Sprint 12.x. `/dashboard/recurring` has Due/Upcoming/Inactive sections,
   income/expense template CRUD, lifecycle (activate/deactivate/delete), and

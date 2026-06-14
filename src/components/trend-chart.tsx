@@ -22,13 +22,17 @@ function useChartColors() {
   })
 
   useEffect(() => {
-    const style = getComputedStyle(document.documentElement)
-    const primary = style.getPropertyValue('--primary').trim()
-    const muted = style.getPropertyValue('--muted-foreground').trim()
-    setColors({
-      primary: primary || 'oklch(0.546 0.245 262.881)',
-      muted: muted || 'oklch(0.556 0 0)',
+    const frame = window.requestAnimationFrame(() => {
+      const style = getComputedStyle(document.documentElement)
+      const primary = style.getPropertyValue('--primary').trim()
+      const muted = style.getPropertyValue('--muted-foreground').trim()
+      setColors({
+        primary: primary || 'oklch(0.546 0.245 262.881)',
+        muted: muted || 'oklch(0.556 0 0)',
+      })
     })
+
+    return () => window.cancelAnimationFrame(frame)
   }, [resolvedTheme])
 
   return colors

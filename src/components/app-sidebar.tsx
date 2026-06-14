@@ -77,9 +77,11 @@ export function AppSidebar({ className }: { className?: string }) {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
-    const stored = localStorage.getItem('sidebar-collapsed')
-    if (stored !== null) setCollapsed(stored === 'true')
+    window.requestAnimationFrame(() => {
+      setMounted(true)
+      const stored = localStorage.getItem('sidebar-collapsed')
+      if (stored !== null) setCollapsed(stored === 'true')
+    })
   }, [])
 
   function toggle() {

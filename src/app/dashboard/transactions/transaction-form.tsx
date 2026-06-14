@@ -113,18 +113,22 @@ export function TransactionForm({
   // only when the caller hasn't supplied explicit defaults of their own.
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (!defaultAccountId) {
-      const lastAccountId = window.localStorage.getItem(LAST_ACCOUNT_KEY)
-      if (lastAccountId && accounts.some((a) => a.id === lastAccountId)) {
-        setAccountId((current) => current || lastAccountId)
+    const frame = window.requestAnimationFrame(() => {
+      if (!defaultAccountId) {
+        const lastAccountId = window.localStorage.getItem(LAST_ACCOUNT_KEY)
+        if (lastAccountId && accounts.some((a) => a.id === lastAccountId)) {
+          setAccountId((current) => current || lastAccountId)
+        }
       }
-    }
-    if (!defaultCategoryId) {
-      const lastCategoryId = window.localStorage.getItem(lastCategoryKey(transactionType))
-      if (lastCategoryId && categories.some((c) => c.id === lastCategoryId)) {
-        setCategoryId((current) => current || lastCategoryId)
+      if (!defaultCategoryId) {
+        const lastCategoryId = window.localStorage.getItem(lastCategoryKey(transactionType))
+        if (lastCategoryId && categories.some((c) => c.id === lastCategoryId)) {
+          setCategoryId((current) => current || lastCategoryId)
+        }
       }
-    }
+    })
+
+    return () => window.cancelAnimationFrame(frame)
     // Only run on initial mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -158,21 +162,25 @@ export function TransactionForm({
   const [frequentCategories, setFrequentCategories] = useState<TransactionFormCategory[]>([])
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (compatibleCategories.length < 2) {
-      setFrequentCategories([])
-      return
-    }
-    try {
-      const raw = window.localStorage.getItem(CATEGORY_USAGE_KEY)
-      const usage: Record<string, number> = raw ? JSON.parse(raw) : {}
-      const ranked = compatibleCategories
-        .filter((c) => usage[c.id] > 0)
-        .sort((a, b) => (usage[b.id] ?? 0) - (usage[a.id] ?? 0))
-        .slice(0, 4)
-      setFrequentCategories(ranked)
-    } catch {
-      setFrequentCategories([])
-    }
+    const frame = window.requestAnimationFrame(() => {
+      if (compatibleCategories.length < 2) {
+        setFrequentCategories([])
+        return
+      }
+      try {
+        const raw = window.localStorage.getItem(CATEGORY_USAGE_KEY)
+        const usage: Record<string, number> = raw ? JSON.parse(raw) : {}
+        const ranked = compatibleCategories
+          .filter((c) => usage[c.id] > 0)
+          .sort((a, b) => (usage[b.id] ?? 0) - (usage[a.id] ?? 0))
+          .slice(0, 4)
+        setFrequentCategories(ranked)
+      } catch {
+        setFrequentCategories([])
+      }
+    })
+
+    return () => window.cancelAnimationFrame(frame)
   }, [compatibleCategories])
   const isTransfer = transactionType === 'transfer'
   const selectedFromAccount = accounts.find((a) => a.id === fromAccountId)

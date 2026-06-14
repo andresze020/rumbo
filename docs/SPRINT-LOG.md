@@ -15,6 +15,27 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Sprint 12.x — BR-003..BR-006 net-worth correctness + verification (2026-06-14)
+- Goal: make Net Worth's FX policy explicit, prevent archived accounts from
+  distorting historical/as-of net-worth totals, clear the lint gate, and add a
+  first repeatable money-invariant check file.
+- Shipped: Net Worth now shows an FX policy callout explaining that stored
+  historical ledger rates are used and month-end revaluation is not implemented
+  yet; `get_account_balances(p_household_id, p_as_of_date)` now filters archived
+  accounts; React hooks lint failures were removed without intended behavior
+  changes; `supabase/tests/br_003_006_money_invariants.sql` documents read-only
+  SQL checks for FX, archived-account, transfer, voided, and allocation-based
+  reporting invariants. New docs:
+  `docs/features/net-worth-fx-policy.md`,
+  `docs/features/react-hooks-lint-cleanup.md`, and
+  `docs/features/financial-correctness-checks.md`.
+- Migrations added:
+  `20260614000100_br_004_exclude_archived_as_of_balances.sql`.
+- Tables changed: none.
+- Follow-ups / known gaps: no market-rate net-worth revaluation yet; SQL checks
+  remain manual until the project adopts a real automated test runner. Manual
+  Supabase apply still required: `npx supabase db push`.
+
 ## Sprint 12.x — BR-001/BR-002 CSV import FX + rate foundation (2026-06-13)
 - Goal: stop CSV imports from silently converting non-base account rows at a
   hard-coded 1:1 rate, and add the shared FX rate foundation needed by
