@@ -3,55 +3,27 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import {
-  ArrowLeftRight,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  LayoutDashboard,
-  LogOut,
-  Repeat,
-  Scale,
-  Settings,
-  Tag,
-  Target,
-  TrendingUp,
-  Upload,
-  Wallet,
-} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LogOut, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { SubmitButton } from '@/components/submit-button'
+import { PhaseBadge } from '@/components/phase-badge'
 import { signOutAction } from '@/app/dashboard/session-actions'
 import { useLanguage } from '@/components/language-provider'
-import type { TranslationKey } from '@/lib/i18n/translate'
+import { navGroups, PHASE_LABEL_KEY, type Phase } from '@/lib/nav/config'
 
-const primaryLinks = [
-  { href: '/dashboard', labelKey: 'nav.dashboard' as TranslationKey, icon: LayoutDashboard },
-  { href: '/dashboard/accounts', labelKey: 'nav.accounts' as TranslationKey, icon: Wallet },
-  { href: '/dashboard/transactions', labelKey: 'nav.transactions' as TranslationKey, icon: ArrowLeftRight },
-  { href: '/dashboard/budgets', labelKey: 'nav.budgets' as TranslationKey, icon: Target },
-  { href: '/dashboard/debts', labelKey: 'nav.debts' as TranslationKey, icon: Scale },
-  { href: '/dashboard/net-worth', labelKey: 'nav.netWorth' as TranslationKey, icon: TrendingUp },
-  { href: '/dashboard/recurring', labelKey: 'nav.recurring' as TranslationKey, icon: Repeat },
-]
-
-const secondaryLinks = [
-  { href: '/dashboard/categories', labelKey: 'nav.categories' as TranslationKey, icon: Tag },
-  { href: '/dashboard/transactions/import', labelKey: 'nav.importCsv' as TranslationKey, icon: Upload },
-  { href: '/dashboard/export', labelKey: 'nav.export' as TranslationKey, icon: Download },
-  { href: '/dashboard/settings', labelKey: 'nav.settings' as TranslationKey, icon: Settings },
-]
-
-type NavItemProps = {
+type SidebarLinkProps = {
   href: string
   label: string
-  icon: React.ElementType
+  icon: LucideIcon
   active: boolean
   collapsed: boolean
+  phase: Phase
+  phaseLabel?: string
 }
 
-function NavItem({ href, label, icon: Icon, active, collapsed }: NavItemProps) {
+function SidebarLink({ href, label, icon: Icon, active, collapsed, phase, phaseLabel }: SidebarLinkProps) {
   return (
     <Link
       href={href}
@@ -65,7 +37,12 @@ function NavItem({ href, label, icon: Icon, active, collapsed }: NavItemProps) {
       )}
     >
       <Icon className="size-4 shrink-0" aria-hidden="true" />
-      {!collapsed && <span className="truncate">{label}</span>}
+      {!collapsed && (
+        <>
+          <span className="truncate">{label}</span>
+          {phaseLabel && <PhaseBadge phase={phase} label={phaseLabel} className="ml-auto" />}
+        </>
+      )}
     </Link>
   )
 }
@@ -133,29 +110,27 @@ export function AppSidebar({ className }: { className?: string }) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
-        {primaryLinks.map(({ href, labelKey, icon }) => (
-          <NavItem
-            key={href}
-            href={href}
-            label={t(labelKey)}
-            icon={icon}
-            active={isActive(href)}
-            collapsed={collapsed}
-          />
-        ))}
-
-        <div className="my-2 h-px bg-border" />
-
-        {secondaryLinks.map(({ href, labelKey, icon }) => (
-          <NavItem
-            key={href}
-            href={href}
-            label={t(labelKey)}
-            icon={icon}
-            active={isActive(href)}
-            collapsed={collapsed}
-          />
+      <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
+        {navGroups.map((group) => (
+          <div key={group.titleKey} className="space-y-0.5">
+            {!collapsed && (
+              <h3 className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                {t(group.titleKey)}
+              </h3>
+            )}
+            {group.items.map((item) => (
+              <SidebarLink
+                key={item.href}
+                href={item.href}
+                label={t(item.labelKey)}
+                icon={item.icon}
+                active={isActive(item.href)}
+                collapsed={collapsed}
+                phase={item.phase}
+                phaseLabel={item.phase === 'alpha' ? undefined : t(PHASE_LABEL_KEY[item.phase])}
+              />
+            ))}
+          </div>
         ))}
       </nav>
 
