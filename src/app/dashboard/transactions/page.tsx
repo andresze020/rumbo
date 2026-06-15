@@ -1,19 +1,21 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight } from 'lucide-react'
 import { TransactionEditForm } from './transaction-edit-form'
 import { TransferEditForm } from './transfer-edit-form'
 import { TransactionFilters } from './transaction-filters'
-import { VoidTransactionForm } from './void-transaction-form'
+import {
+  TransactionList,
+  type TransactionListCategory,
+  type TransactionListGroup,
+  type ReviewStatus,
+} from './transaction-list'
 import { TransactionToasts } from './transaction-toasts'
-import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import { PageHeader } from '@/components/page-header'
 import { Callout } from '@/components/callout'
-import { StatusBadge } from '@/components/status-badge'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
@@ -30,6 +32,7 @@ type TransactionsPageProps = {
     date_to?: string
     type?: string
     status?: string
+    review?: string
     account_id?: string | string[]
     category_id?: string | string[]
     search?: string
@@ -61,6 +64,7 @@ type Transaction = {
   transaction_date: string
   transaction_type: string
   status: string
+  review_status: string
   description: string | null
   merchant_name: string | null
   notes: string | null
@@ -98,6 +102,7 @@ type TransactionFilters = {
   dateTo: string
   search: string
   status: string
+  review: string
   type: string
 }
 
@@ -231,17 +236,6 @@ function groupRowsByDate(
   return groups
 }
 
-function getTransactionTypeStyle(transactionType: string) {
-  switch (transactionType) {
-    case 'income':
-      return { icon: ArrowDownLeft, colorClass: 'text-emerald-600 dark:text-emerald-400' }
-    case 'expense':
-      return { icon: ArrowUpRight, colorClass: 'text-red-600 dark:text-red-400' }
-    default:
-      return { icon: ArrowLeftRight, colorClass: 'text-foreground' }
-  }
-}
-
 function getCategoryPath(
   category: { name: string; parent_category_id: string | null },
   categoriesById: Map<string, { name: string }>
@@ -267,6 +261,7 @@ function transactionsPath(
 
   if (filters.type !== 'all') params.set('type', filters.type)
   if (filters.status !== 'all') params.set('status', filters.status)
+  if (filters.review !== 'all') params.set('review', filters.review)
   for (const id of filters.accountIds) params.append('account_id', id)
   for (const id of filters.categoryIds) params.append('category_id', id)
   if (filters.search) params.set('search', filters.search)
@@ -327,6 +322,11 @@ export default async function TransactionsPage({
     'pending',
     'voided',
   ])
+  const selectedReview = normalizeOption(params.review, [
+    'unreviewed',
+    'reviewed',
+    'flagged',
+  ])
   const rawAccountIds = params.account_id
   const selectedAccountIds: string[] = Array.isArray(rawAccountIds)
     ? rawAccountIds
@@ -349,6 +349,7 @@ export default async function TransactionsPage({
     dateTo: hasCustomDateRange ? resolvedDateTo : '',
     search: searchText,
     status: selectedStatus,
+    review: selectedReview,
     type: selectedType,
   }
 
@@ -357,6 +358,7 @@ export default async function TransactionsPage({
     params.month !== undefined ||
     selectedType !== 'all' ||
     selectedStatus !== 'all' ||
+    selectedReview !== 'all' ||
     selectedAccountIds.length > 0 ||
     selectedCategoryIds.length > 0 ||
     searchText.length > 0
@@ -409,7 +411,7 @@ export default async function TransactionsPage({
   let transactionsQuery = supabase
     .from('transactions')
     .select(
-      'id, transaction_date, transaction_type, status, description, merchant_name, notes, source, void_reason'
+      'id, transaction_date, transaction_type, status, review_status, description, merchant_name, notes, source, void_reason'
     )
     .eq('household_id', household.id)
     .gte('transaction_date', resolvedDateFrom)
@@ -423,6 +425,9 @@ export default async function TransactionsPage({
   }
   if (selectedStatus !== 'all') {
     transactionsQuery = transactionsQuery.eq('status', selectedStatus)
+  }
+  if (selectedReview !== 'all') {
+    transactionsQuery = transactionsQuery.eq('review_status', selectedReview)
   }
   if (searchText) {
     const escaped = searchText.replaceAll('%', '\\%').replaceAll('_', '\\_')
@@ -674,6 +679,86 @@ export default async function TransactionsPage({
     isArchived: c.is_archived,
   }))
 
+  // ── Sprint 4: review chips + serialized rows for the client list ──────────
+  const reviewChips = [
+    { label: 'All', value: 'all' },
+    { label: 'To review', value: 'unreviewed' },
+    { label: 'Reviewed', value: 'reviewed' },
+    { label: 'Flagged', value: 'flagged' },
+  ].map((chip) => ({
+    label: chip.label,
+    value: chip.value,
+    href: transactionsPath({ ...filters, review: chip.value }),
+    isActive: selectedReview === chip.value,
+  }))
+
+  const inlineCategories: TransactionListCategory[] = activeCategories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    category_type: c.category_type,
+    parent_category_id: c.parent_category_id,
+    icon: c.icon,
+  }))
+
+  const toReviewStatus = (value: string): ReviewStatus =>
+    value === 'reviewed' || value === 'flagged' ? value : 'unreviewed'
+
+  const serializedGroups: TransactionListGroup[] = transactionGroups.map((group) => ({
+    date: group.date,
+    label: group.label,
+    rows: group.rows.map((row) => ({
+      id: row.transaction.id,
+      title: row.title,
+      transactionType: row.transaction.transaction_type,
+      status: row.transaction.status,
+      reviewStatus: toReviewStatus(row.transaction.review_status),
+      isVoided: row.isVoided,
+      isImported: row.isImported,
+      isOpeningBalance: row.isOpeningBalance,
+      isTransfer: row.isTransfer,
+      isDebtPayment: row.isDebtPayment,
+      typeBadgeLabel: row.isOpeningBalance
+        ? 'Opening balance'
+        : row.isTransfer
+        ? 'Transfer'
+        : row.isDebtPayment
+        ? 'Debt payment'
+        : formatValue(row.transaction.transaction_type),
+      accountName: row.accountName,
+      categoryName: row.categoryName,
+      categoryIcon: row.categoryIcon,
+      categoryColor: row.categoryColor,
+      merchantName: row.transaction.merchant_name,
+      notes: row.transaction.notes,
+      voidReason: row.transaction.void_reason,
+      currencyCode: row.amountEntry?.currency_code ?? null,
+      amountFormatted:
+        row.amountEntry && row.displayAmount !== undefined
+          ? formatCurrency(row.displayAmount, row.amountEntry.currency_code)
+          : null,
+      canEdit: row.canEdit,
+      canEditTransfer: row.canEditTransfer,
+      canVoid: row.canVoid,
+      editHref: transactionsPath(filters, { edit: row.transaction.id }),
+      transactionDate: row.transaction.transaction_date,
+      accountId: row.entry?.account_id ?? null,
+      categoryId: row.allocation?.category_id ?? null,
+      amountRaw:
+        row.canEdit && row.entry
+          ? Math.abs(Number(row.entry.amount_account_currency)).toFixed(2)
+          : null,
+      description: row.transaction.description,
+    })),
+  }))
+
+  const merchantSuggestions = Array.from(
+    new Set(
+      transactionRows
+        .map((row) => row.transaction.merchant_name)
+        .filter((name): name is string => Boolean(name && name.trim()))
+    )
+  ).sort((a, b) => a.localeCompare(b))
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
 
@@ -707,6 +792,7 @@ export default async function TransactionsPage({
           searchText={searchText}
           selectedType={selectedType}
           selectedStatus={selectedStatus}
+          selectedReview={selectedReview}
           selectedAccountIds={selectedAccountIds}
           selectedCategoryIds={selectedCategoryIds}
           resolvedDateFrom={resolvedDateFrom}
@@ -798,136 +884,31 @@ export default async function TransactionsPage({
           </GlobalAddTransactionButton>
         </div>
 
+        {/* ── Review-status filter chips ──────────────────────────────── */}
+        <div className="flex flex-wrap gap-1.5 px-1 pb-1">
+          {reviewChips.map((chip) => (
+            <Link
+              key={chip.value}
+              href={chip.href}
+              className={buttonVariants({
+                variant: chip.isActive ? 'secondary' : 'outline',
+                size: 'sm',
+              })}
+            >
+              {chip.label}
+            </Link>
+          ))}
+        </div>
+
         {transactionDetailsError ? (
           <Callout variant="error">Could not load transaction details.</Callout>
-        ) : transactionRows.length ? (
-          <div className="overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
-            {transactionGroups.map((group) => (
-              <div key={group.date}>
-                <div className="border-b bg-muted/40 px-4 py-1.5 text-xs font-medium capitalize text-muted-foreground">
-                  {group.label}
-                </div>
-                <div className="divide-y">
-                  {group.rows.map((row) => (
-                    <div
-                      key={row.transaction.id}
-                      className={`space-y-1 p-4 transition-colors ${
-                        row.isVoided ? 'bg-muted/30 text-muted-foreground' : 'hover:bg-muted/30'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                          {(() => {
-                            const { icon: TypeIcon, colorClass } = getTransactionTypeStyle(
-                              row.transaction.transaction_type
-                            )
-                            return (
-                              <TypeIcon
-                                className={`mt-0.5 size-4 shrink-0 ${colorClass}`}
-                                aria-hidden="true"
-                              />
-                            )
-                          })()}
-                          <div className="min-w-0 flex-1 space-y-0.5">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <h2 className="font-medium leading-snug">{row.title}</h2>
-                            <Badge variant="secondary" className="text-xs">
-                              {row.isOpeningBalance
-                                ? 'Opening balance'
-                                : row.isTransfer
-                                ? 'Transfer'
-                                : row.isDebtPayment
-                                ? 'Debt payment'
-                                : formatValue(row.transaction.transaction_type)}
-                            </Badge>
-                            <StatusBadge status={row.transaction.status} />
-                            {row.isImported ? (
-                              <Badge variant="outline" className="text-xs">
-                                Imported
-                              </Badge>
-                            ) : null}
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                            <span>{row.accountName}</span>
-                            <span>·</span>
-                            <span className="inline-flex items-center gap-1">
-                              {row.categoryColor ? (
-                                <span
-                                  className="size-2 shrink-0 rounded-full border"
-                                  style={{ backgroundColor: row.categoryColor }}
-                                  aria-hidden="true"
-                                />
-                              ) : null}
-                              {row.categoryIcon ? (
-                                <span aria-hidden="true">{row.categoryIcon} </span>
-                              ) : null}
-                              {row.categoryName}
-                            </span>
-                            {row.amountEntry?.currency_code ? (
-                              <>
-                                <span>·</span>
-                                <span>{row.amountEntry.currency_code}</span>
-                              </>
-                            ) : null}
-                            {row.transaction.merchant_name ? (
-                              <>
-                                <span>·</span>
-                                <span>{row.transaction.merchant_name}</span>
-                              </>
-                            ) : null}
-                            {row.transaction.void_reason ? (
-                              <>
-                                <span>·</span>
-                                <span>Voided: {row.transaction.void_reason}</span>
-                              </>
-                            ) : null}
-                          </div>
-
-                          {row.transaction.notes ? (
-                            <p className="text-xs italic text-muted-foreground/70">
-                              {row.transaction.notes}
-                            </p>
-                          ) : null}
-                          </div>
-                        </div>
-
-                        <div className="flex shrink-0 flex-col items-end gap-1.5">
-                          {row.amountEntry && row.displayAmount !== undefined ? (
-                            <p
-                              className={`text-base font-semibold tabular-nums leading-snug ${
-                                row.transaction.transaction_type === 'income'
-                                  ? 'text-emerald-600 dark:text-emerald-400'
-                                  : row.transaction.transaction_type === 'expense'
-                                  ? 'text-red-600 dark:text-red-400'
-                                  : ''
-                              }`}
-                            >
-                              {formatCurrency(row.displayAmount, row.amountEntry.currency_code)}
-                            </p>
-                          ) : null}
-
-                          <div className="flex flex-wrap justify-end gap-1.5">
-                            {row.canEdit || row.canEditTransfer ? (
-                              <Link
-                                href={transactionsPath(filters, { edit: row.transaction.id })}
-                                className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                              >
-                                Edit
-                              </Link>
-                            ) : null}
-                            {row.canVoid ? (
-                              <VoidTransactionForm transactionId={row.transaction.id} />
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+        ) : serializedGroups.length ? (
+          <TransactionList
+            groups={serializedGroups}
+            categories={inlineCategories}
+            merchantSuggestions={merchantSuggestions}
+            returnTo={returnTo}
+          />
         ) : (
           <EmptyState
             title={

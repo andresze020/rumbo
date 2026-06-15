@@ -15,6 +15,32 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Sprint 4 — Transactions redesign: inline/bulk edit + review workflow (2026-06-15)
+- Goal: rebuild `/dashboard/transactions` per
+  `docs/design/handoff-2026-06/prompts/sprint-4-transactions.md` — inline
+  quick-edit, bulk actions, and a review-status workflow, as part of the
+  multi-sprint UI redesign (Sprints 1–3 covered nav, mobile bottom nav, and
+  the dashboard).
+- Shipped: inline per-row quick-edit (merchant, category, amount) reusing
+  `updateManualTransactionAction`; row selection with a sticky bulk action
+  bar (mark reviewed via new `updateReviewStatusAction`, bulk recategorize
+  via new `bulkCategorizeAction`); review-status badges and filter chips
+  (To review / Reviewed / Flagged); kept date-grouped list (Today/Yesterday)
+  and existing filters/CSV-import/transfer/void flows unchanged. New
+  component: `transaction-list.tsx`. Filter bar redesigned into an
+  always-visible toolbar: type segmented control (All/Income/Expense/
+  Transfer), search, multi-select Account/Category chips, Status chip,
+  date-range presets plus From/To inputs, and a mobile "Filters" collapse
+  toggle.
+- Migrations added: `20260614120000_sprint_4_transaction_review_status.sql`
+  (additive — adds `transactions.review_status` text column, default
+  `'unreviewed'`, check constraint `unreviewed|reviewed|flagged`, and a
+  `(household_id, review_status)` index).
+- Tables changed: `transactions` (new `review_status` column + index).
+- Follow-ups / known gaps: migration not yet applied — review badges/chips
+  will not reflect real data until `npx supabase db push` is run. No i18n
+  yet for the new Sprint 4 labels (page remains English-hardcoded).
+
 ## Sprint 3 — Dashboard redesign: Financial Control Center (2026-06-14)
 - Goal: rebuild `/dashboard` to match the `docs/design/handoff-2026-06` mockups
   (desktop "Centro de control" + mobile views), as part of the multi-sprint UI

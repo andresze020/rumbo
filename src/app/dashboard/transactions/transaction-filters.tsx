@@ -1,12 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
-import { SlidersHorizontal } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Search, SlidersHorizontal } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 type AccountOption = {
   id: string
@@ -30,6 +29,7 @@ type TransactionFiltersProps = {
   searchText: string
   selectedType: string
   selectedStatus: string
+  selectedReview: string
   selectedAccountIds: string[]
   selectedCategoryIds: string[]
   resolvedDateFrom: string
@@ -40,13 +40,79 @@ type TransactionFiltersProps = {
   presetLinks: PresetLink[]
 }
 
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+const TYPE_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'income', label: 'Income' },
+  { value: 'expense', label: 'Expense' },
+  { value: 'transfer', label: 'Transfer' },
+] as const
+
+const chipSelectClassName =
+  'max-w-[150px] cursor-pointer truncate bg-transparent text-sm font-medium text-foreground outline-none'
+
+const chipLabelClassName =
+  'flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-background px-2.5'
+
+function MultiSelectChip({
+  label,
+  name,
+  options,
+  selectedIds,
+}: {
+  label: string
+  name: string
+  options: { id: string; label: string; isArchived?: boolean }[]
+  selectedIds: string[]
+}) {
+  const summary =
+    selectedIds.length === 0
+      ? 'All'
+      : selectedIds.length === 1
+        ? options.find((o) => o.id === selectedIds[0])?.label ?? '1 selected'
+        : `${selectedIds.length} selected`
+
+  return (
+    <details className="relative shrink-0">
+      <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg border bg-background px-2.5 [&::-webkit-details-marker]:hidden">
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        <span className="max-w-[120px] truncate text-sm font-medium text-foreground">
+          {summary}
+        </span>
+      </summary>
+      <div className="absolute z-20 mt-1 max-h-60 w-56 overflow-auto rounded-lg border bg-popover p-1 shadow-md">
+        {options.length === 0 ? (
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">No options</p>
+        ) : (
+          options.map((option) => (
+            <label
+              key={option.id}
+              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
+            >
+              <input
+                type="checkbox"
+                name={name}
+                value={option.id}
+                defaultChecked={selectedIds.includes(option.id)}
+                onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                className="size-3.5 accent-primary"
+              />
+              <span className="truncate">
+                {option.label}
+                {option.isArchived ? ' (archived)' : ''}
+              </span>
+            </label>
+          ))
+        )}
+      </div>
+    </details>
+  )
+}
 
 export function TransactionFilters({
   searchText,
   selectedType,
   selectedStatus,
+  selectedReview,
   selectedAccountIds,
   selectedCategoryIds,
   resolvedDateFrom,
@@ -56,47 +122,124 @@ export function TransactionFilters({
   categoryOptions,
   presetLinks,
 }: TransactionFiltersProps) {
-  const advancedActiveCount = [
-    selectedType !== 'all',
-    selectedStatus !== 'all',
-    selectedAccountIds.length > 0,
-    selectedCategoryIds.length > 0,
-  ].filter(Boolean).length
+  const typeRef = useRef<HTMLInputElement>(null)
+  const [moreOpen, setMoreOpen] = useState(false)
 
-  const [expanded, setExpanded] = useState(false)
+  function selectType(form: HTMLFormElement | null, value: string) {
+    if (!form) return
+    // The chip selects auto-submit without a submitter, so `type` is carried by
+    // this single hidden input rather than per-button submit values.
+    if (typeRef.current) typeRef.current.value = value
+    form.requestSubmit()
+  }
+
+  const moreFiltersCount =
+    selectedAccountIds.length +
+    selectedCategoryIds.length +
+    (selectedStatus !== 'all' ? 1 : 0)
 
   return (
-    <div className="space-y-2.5">
-      <form method="get" action="/dashboard/transactions">
+    <form method="get" action="/dashboard/transactions" className="space-y-2.5">
+      <input type="hidden" name="type" ref={typeRef} defaultValue={selectedType} />
+      {selectedReview !== 'all' ? (
+        <input type="hidden" name="review" value={selectedReview} />
+      ) : null}
 
-        {/* ── Always-visible row: search + toggle ───────────────────── */}
-        <div className="flex gap-2">
+      {/* ── Primary bar: type toggle · search · mobile filters toggle ──── */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Type segmented control */}
+        <div className="flex shrink-0 rounded-lg border bg-background p-0.5">
+          {TYPE_OPTIONS.map((option) => {
+            const isActive = selectedType === option.value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={(e) => selectType(e.currentTarget.form, option.value)}
+                aria-pressed={isActive}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {option.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Search */}
+        <div className="relative min-w-[140px] flex-1">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
           <Input
             name="search"
             defaultValue={searchText}
             placeholder="Search transactions…"
-            className="flex-1"
+            className="pl-9"
+            aria-label="Search transactions"
           />
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors hover:bg-muted/50 ${
-              expanded || advancedActiveCount > 0 ? 'bg-muted/50' : ''
-            }`}
-            aria-label="Toggle advanced filters"
-            aria-expanded={expanded}
-          >
-            <SlidersHorizontal className="size-4" aria-hidden="true" />
-            {advancedActiveCount > 0 ? (
-              <Badge variant="secondary" className="h-4 px-1 text-xs">
-                {advancedActiveCount}
-              </Badge>
-            ) : null}
-          </button>
         </div>
 
-        {/* ── Date presets — always visible ─────────────────────────── */}
-        <div className="flex flex-wrap gap-1.5 pt-2">
+        {/* Mobile-only toggle for the secondary filter row */}
+        <button
+          type="button"
+          onClick={() => setMoreOpen((v) => !v)}
+          aria-expanded={moreOpen}
+          className={cn(
+            buttonVariants({ variant: moreFiltersCount > 0 ? 'secondary' : 'outline', size: 'sm' }),
+            'gap-1.5 sm:hidden'
+          )}
+        >
+          <SlidersHorizontal className="size-4" aria-hidden="true" />
+          Filters
+          {moreFiltersCount > 0 ? (
+            <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+              {moreFiltersCount}
+            </span>
+          ) : null}
+        </button>
+      </div>
+
+      {/* ── Secondary bar: account/category/status + date range ─────────── */}
+      <div className={cn('flex-col gap-2.5 sm:flex', moreOpen ? 'flex' : 'hidden')}>
+        <div className="flex flex-wrap items-center gap-2">
+          <MultiSelectChip
+            label="Account"
+            name="account_id"
+            options={accountOptions}
+            selectedIds={selectedAccountIds}
+          />
+
+          <MultiSelectChip
+            label="Category"
+            name="category_id"
+            options={categoryOptions}
+            selectedIds={selectedCategoryIds}
+          />
+
+          <label className={chipLabelClassName}>
+            <span className="text-xs font-medium text-muted-foreground">Status</span>
+            <select
+              name="status"
+              value={selectedStatus}
+              onChange={(e) => e.currentTarget.form?.requestSubmit()}
+              className={chipSelectClassName}
+              aria-label="Filter by status"
+            >
+              <option value="all">All</option>
+              <option value="posted">Posted</option>
+              <option value="pending">Pending</option>
+              <option value="voided">Voided</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
           {presetLinks.map((link) => (
             <Link
               key={link.label}
@@ -109,150 +252,46 @@ export function TransactionFilters({
               {link.label}
             </Link>
           ))}
+
+          <label className={chipLabelClassName}>
+            <span className="text-xs font-medium text-muted-foreground">From</span>
+            <input
+              type="date"
+              name="date_from"
+              defaultValue={resolvedDateFrom}
+              onChange={(e) => e.currentTarget.form?.requestSubmit()}
+              className="bg-transparent text-sm text-foreground outline-none"
+              aria-label="From date"
+            />
+          </label>
+
+          <label className={chipLabelClassName}>
+            <span className="text-xs font-medium text-muted-foreground">To</span>
+            <input
+              type="date"
+              name="date_to"
+              defaultValue={resolvedDateTo}
+              onChange={(e) => e.currentTarget.form?.requestSubmit()}
+              className="bg-transparent text-sm text-foreground outline-none"
+              aria-label="To date"
+            />
+          </label>
+
+          {hasActiveFilters ? (
+            <Link
+              href="/dashboard/transactions"
+              className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'ml-auto')}
+            >
+              Clear all
+            </Link>
+          ) : null}
         </div>
+      </div>
 
-        {/* ── Advanced filters — collapsible ────────────────────────── */}
-        {expanded ? (
-          <div className="space-y-3 pt-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="date_from" className="text-xs text-muted-foreground">
-                  From
-                </Label>
-                <Input
-                  id="date_from"
-                  name="date_from"
-                  type="date"
-                  defaultValue={resolvedDateFrom}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="date_to" className="text-xs text-muted-foreground">
-                  To
-                </Label>
-                <Input
-                  id="date_to"
-                  name="date_to"
-                  type="date"
-                  defaultValue={resolvedDateTo}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="type" className="text-xs text-muted-foreground">
-                  Type
-                </Label>
-                <select
-                  id="type"
-                  name="type"
-                  defaultValue={selectedType}
-                  className={selectClassName}
-                >
-                  <option value="all">All types</option>
-                  <option value="income">Income</option>
-                  <option value="expense">Expense</option>
-                  <option value="transfer">Transfer</option>
-                  <option value="opening_balance">Opening balance</option>
-                  <option value="debt_payment">Debt payment</option>
-                  <option value="adjustment">Adjustment</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="status" className="text-xs text-muted-foreground">
-                  Status
-                </Label>
-                <select
-                  id="status"
-                  name="status"
-                  defaultValue={selectedStatus}
-                  className={selectClassName}
-                >
-                  <option value="all">All statuses</option>
-                  <option value="posted">Posted</option>
-                  <option value="pending">Pending</option>
-                  <option value="voided">Voided</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">
-                  Account{' '}
-                  <span className="font-normal">(Ctrl/⌘ for multiple)</span>
-                </Label>
-                <select
-                  name="account_id"
-                  multiple
-                  size={3}
-                  defaultValue={selectedAccountIds}
-                  className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  {accountOptions.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">
-                  Category{' '}
-                  <span className="font-normal">(Ctrl/⌘ for multiple)</span>
-                </Label>
-                <select
-                  name="category_id"
-                  multiple
-                  size={3}
-                  defaultValue={selectedCategoryIds}
-                  className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  {categoryOptions.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                      {c.isArchived ? ' (archived)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" size="sm">
-                Apply
-              </Button>
-              {hasActiveFilters ? (
-                <Link
-                  href="/dashboard/transactions"
-                  className={buttonVariants({ variant: 'ghost', size: 'sm' })}
-                >
-                  Clear all
-                </Link>
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          /* Hidden inputs preserve active filters when submitting via search */
-          <>
-            <input type="hidden" name="date_from" value={resolvedDateFrom} />
-            <input type="hidden" name="date_to" value={resolvedDateTo} />
-            {selectedType !== 'all' && (
-              <input type="hidden" name="type" value={selectedType} />
-            )}
-            {selectedStatus !== 'all' && (
-              <input type="hidden" name="status" value={selectedStatus} />
-            )}
-            {selectedAccountIds.map((id) => (
-              <input key={id} type="hidden" name="account_id" value={id} />
-            ))}
-            {selectedCategoryIds.map((id) => (
-              <input key={id} type="hidden" name="category_id" value={id} />
-            ))}
-          </>
-        )}
-      </form>
-    </div>
+      {/* Submit fallback for keyboard users editing the search field */}
+      <button type="submit" className="sr-only">
+        Apply filters
+      </button>
+    </form>
   )
 }
