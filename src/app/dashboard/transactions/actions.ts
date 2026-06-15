@@ -7,9 +7,15 @@ import { cleanSupabaseActionError as cleanRpcError } from '@/lib/supabase/errors
 
 const TRANSACTION_TYPES = ['income', 'expense'] as const
 const STATUSES = ['posted', 'pending'] as const
+const REVIEW_STATUSES = ['unreviewed', 'reviewed', 'flagged'] as const
 
 type TransactionType = (typeof TRANSACTION_TYPES)[number]
 type Status = (typeof STATUSES)[number]
+type ReviewStatus = (typeof REVIEW_STATUSES)[number]
+
+function isReviewStatus(value: string): value is ReviewStatus {
+  return REVIEW_STATUSES.includes(value as ReviewStatus)
+}
 
 function redirectWithError(message: string): never {
   redirect(`/dashboard/transactions?error=${encodeURIComponent(message)}`)
@@ -512,4 +518,183 @@ export async function voidTransactionAction(formData: FormData) {
   revalidatePath('/dashboard/accounts')
   revalidatePath('/dashboard')
   redirect('/dashboard/transactions?voided=1')
+}
+
+// ── Sprint 4: review workflow + bulk editing ────────────────────────────────
+// review_status is a workflow flag only. It is independent from the posting
+// `status` and never affects balances or reports, so it is updated directly
+// (under RLS) rather than through a ledger RPC.
+
+export async function updateReviewStatusAction(formData: FormData) {
+  const transactionIds = formData
+    .getAll('transaction_id')
+    .map((value) => String(value).trim())
+    .filter(Boolean)
+  const reviewStatus = String(formData.get('review_status') ?? '').trim()
+  const returnTo = String(formData.get('return_to') ?? '').trim()
+
+  if (transactionIds.length === 0) {
+    redirectWithTransactionError('Select at least one transaction.', returnTo)
+  }
+
+  if (!isReviewStatus(reviewStatus)) {
+    redirectWithTransactionError('Invalid review status.', returnTo)
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    redirect('/login')
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('default_household_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    redirectWithTransactionError('Could not load your household.', returnTo)
+  }
+
+  if (!profile?.default_household_id) {
+    redirect('/onboarding')
+  }
+
+  const { error: updateError } = await supabase
+    .from('transactions')
+    .update({ review_status: reviewStatus, updated_by: user.id })
+    .eq('household_id', profile.default_household_id)
+    .in('id', transactionIds)
+    .is('deleted_at', null)
+
+  if (updateError) {
+    redirectWithTransactionError(
+      'Could not update the review status. Please try again.',
+      returnTo
+    )
+  }
+
+  revalidatePath('/dashboard/transactions')
+  redirectWithTransactionInfo('updated', returnTo)
+}
+
+export async function bulkCategorizeAction(formData: FormData) {
+  const transactionIds = formData
+    .getAll('transaction_id')
+    .map((value) => String(value).trim())
+    .filter(Boolean)
+  const categoryId = String(formData.get('category_id') ?? '').trim()
+  const returnTo = String(formData.get('return_to') ?? '').trim()
+
+  if (transactionIds.length === 0) {
+    redirectWithTransactionError('Select at least one transaction.', returnTo)
+  }
+
+  if (!categoryId) {
+    redirectWithTransactionError('Select a category.', returnTo)
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    redirect('/login')
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('default_household_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    redirectWithTransactionError('Could not load your household.', returnTo)
+  }
+
+  if (!profile?.default_household_id) {
+    redirect('/onboarding')
+  }
+
+  const { data: category, error: categoryError } = await supabase
+    .from('categories')
+    .select('id, category_type')
+    .eq('id', categoryId)
+    .eq('household_id', profile.default_household_id)
+    .eq('is_archived', false)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (categoryError || !category) {
+    redirectWithTransactionError(
+      'Select an active category for this household.',
+      returnTo
+    )
+  }
+
+  if (category.category_type !== 'income' && category.category_type !== 'expense') {
+    redirectWithTransactionError(
+      'Bulk categorize only supports income and expense categories.',
+      returnTo
+    )
+  }
+
+  // Only transactions whose type matches the category type are eligible, so an
+  // expense category never lands on an income transaction (and vice versa).
+  // Voided/deleted transactions are skipped.
+  const { data: eligible, error: eligibleError } = await supabase
+    .from('transactions')
+    .select('id')
+    .eq('household_id', profile.default_household_id)
+    .in('id', transactionIds)
+    .eq('transaction_type', category.category_type)
+    .not('status', 'in', '(voided,deleted_soft)')
+    .is('deleted_at', null)
+
+  if (eligibleError) {
+    redirectWithTransactionError(
+      'Could not categorize the selected transactions. Please try again.',
+      returnTo
+    )
+  }
+
+  const eligibleIds = (eligible ?? []).map((row) => row.id)
+
+  if (eligibleIds.length === 0) {
+    redirectWithTransactionError(
+      'None of the selected transactions can use this category.',
+      returnTo
+    )
+  }
+
+  // Classification only — amounts and entries are untouched, so balances stay
+  // correct and reports/budgets re-derive from the new allocation category.
+  const { error: allocationError } = await supabase
+    .from('transaction_allocations')
+    .update({ category_id: categoryId })
+    .eq('household_id', profile.default_household_id)
+    .in('transaction_id', eligibleIds)
+    .eq('allocation_type', category.category_type)
+
+  if (allocationError) {
+    redirectWithTransactionError(
+      'Could not categorize the selected transactions. Please try again.',
+      returnTo
+    )
+  }
+
+  revalidatePath('/dashboard/transactions')
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/reports')
+  revalidatePath('/dashboard/budgets')
+  redirectWithTransactionInfo('updated', returnTo)
 }
