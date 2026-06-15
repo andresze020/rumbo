@@ -23,6 +23,18 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **UI redesign — Sprint 3: Dashboard "Centro de control"** (2026-06-14).
+  `/dashboard` was rebuilt to match `docs/design/handoff-2026-06`: a net-worth
+  hero (real assets/liabilities/projected + 6-month sparkline + a clearly-marked
+  DEMO month-health score), monthly metric cards with vs-prev-month deltas,
+  budget-vs-actual bars, a category donut whose legend rows link to
+  `/dashboard/transactions` filtered by category+month, upcoming recurring
+  payments, a right rail (live insights, debts mini, Beta goals-mini teaser), and
+  a recent-activity feed. The standalone Accounts summary card was removed from
+  the dashboard (still available at `/dashboard/accounts`). New components:
+  `category-donut`, `financial-hero-card`, `insight-card`, `recent-activity`.
+  Sprints 1–2 of this redesign (sidebar nav, mobile bottom nav) are already
+  merged; see `docs/SPRINT-LOG.md`.
 - Phase: **MVP Alpha — personal/family real-data usage (Sprint 12.x)**.
 - The MVP is feature-complete for personal use. Sprint 12 deliberately delays
   post-MVP work until real Alpha usage proves what is actually missing or broken.

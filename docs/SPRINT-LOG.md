@@ -15,6 +15,29 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Sprint 3 — Dashboard redesign: Financial Control Center (2026-06-14)
+- Goal: rebuild `/dashboard` to match the `docs/design/handoff-2026-06` mockups
+  (desktop "Centro de control" + mobile views), as part of the multi-sprint UI
+  redesign (Sprints 1–2 covered sidebar nav and the mobile bottom nav).
+- Shipped: net-worth hero with real assets/liabilities/projected balances, a
+  6-month sparkline, and a month-health score clearly marked as a DEMO; four
+  monthly metric cards with vs-previous-month deltas; budget-vs-actual bars;
+  a pure-SVG category donut whose legend rows link to `/dashboard/transactions`
+  filtered by category + month; an upcoming-recurring-payments list with
+  Due/Scheduled/Auto tags; a right rail with live insights, a debts mini summary,
+  and a Beta goals-mini teaser; and a recent-activity feed (transaction
+  description as the title, "category · merchant" subtitle, fixed-width columns
+  for row alignment). Removed the standalone Accounts summary card from the
+  dashboard (account management remains at `/dashboard/accounts`). New
+  components: `category-donut.tsx`, `financial-hero-card.tsx`,
+  `insight-card.tsx`, `recent-activity.tsx`.
+- Migrations added: none.
+- Tables changed: none.
+- Follow-ups / known gaps: the month-health score is a MOCK/DEMO heuristic
+  (clearly labeled, not financial advice); "Metas y fondos" shows a hardcoded
+  illustrative teaser because Goals has no backend yet, and links to the locked
+  `/dashboard/coming-soon/goals` page.
+
 ## Sprint 12.x — BR-003..BR-006 net-worth correctness + verification (2026-06-14)
 - Goal: make Net Worth's FX policy explicit, prevent archived accounts from
   distorting historical/as-of net-worth totals, clear the lint gate, and add a
