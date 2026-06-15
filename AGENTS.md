@@ -23,6 +23,22 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **UI redesign — Sprint 4: Transactions inline/bulk edit + review workflow**
+  (2026-06-15). `/dashboard/transactions` now supports inline per-row
+  quick-edit (merchant, category, amount) via `updateManualTransactionAction`,
+  row selection with a sticky bulk action bar (mark reviewed via new
+  `updateReviewStatusAction`, bulk recategorize via new
+  `bulkCategorizeAction`), and review-status badges/filter chips (To review /
+  Reviewed / Flagged). Date-grouped list (Today/Yesterday) and existing
+  filters/CSV-import/transfer/void flows are unchanged. New component:
+  `transaction-list.tsx`. The filter bar was redesigned into an
+  always-visible toolbar: type segmented control, search, multi-select
+  Account/Category chips, Status chip, date-range presets + From/To inputs,
+  and a mobile "Filters" collapse. Backed by an additive migration
+  `20260614120000_sprint_4_transaction_review_status.sql` (adds
+  `transactions.review_status`, **not yet applied** — run
+  `npx supabase db push`). Sprints 1–3 of this redesign (sidebar nav, mobile
+  bottom nav, dashboard) are already merged; see `docs/SPRINT-LOG.md`.
 - **UI redesign — Sprint 3: Dashboard "Centro de control"** (2026-06-14).
   `/dashboard` was rebuilt to match `docs/design/handoff-2026-06`: a net-worth
   hero (real assets/liabilities/projected + 6-month sparkline + a clearly-marked
