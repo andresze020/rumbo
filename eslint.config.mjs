@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated design handoff artifacts, not application source.
+    "docs/design/**",
   ]),
 ]);
 

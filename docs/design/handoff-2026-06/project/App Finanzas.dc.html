@@ -678,6 +678,356 @@
       </div>
       </sc-if>
 
+
+      <!-- ======== PATRIMONIO NETO ======== -->
+      <sc-if value="{{ isPatrimonio }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:fadeUp .35s ease; max-width:1100px;">
+        <div style="background:var(--accent); border-radius:16px; padding:20px 26px; color:#fff; margin-bottom:16px; display:grid; grid-template-columns:1fr auto auto; gap:0; align-items:center; box-shadow:0 14px 36px -10px oklch(0.546 0.245 263/.42);">
+          <div style="padding-right:28px;">
+            <div style="font-size:11px; opacity:.72; font-weight:600; letter-spacing:.07em; text-transform:uppercase;">Patrimonio neto · {{ monthLabel }}</div>
+            <div style="font-family:var(--mono); font-size:36px; font-weight:700; letter-spacing:-.025em; margin-top:6px; font-variant-numeric:tabular-nums;">{{ patrimonioNW }}</div>
+            <div style="display:flex; align-items:center; gap:9px; margin-top:8px;"><span style="display:inline-flex; align-items:center; gap:4px; padding:3px 10px; background:rgba(255,255,255,.2); border-radius:20px; font-size:12.5px; font-weight:700;"><span data-ic="arrow-up-right" data-sz="12" style="display:flex;"></span> +3.0%</span><span style="font-size:12px; opacity:.8;">vs. mes anterior</span></div>
+            <svg viewBox="0 0 260 30" width="220" height="24" preserveAspectRatio="none" style="margin-top:9px; overflow:visible; opacity:.6;"><polyline points="{{ patrimonioSpark }}" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+          </div>
+          <div style="padding:8px 28px; border-left:1px solid rgba(255,255,255,.2); text-align:right;">
+            <div style="font-size:11px; opacity:.72; margin-bottom:5px;">Activos</div>
+            <div style="font-family:var(--mono); font-size:20px; font-weight:700; font-variant-numeric:tabular-nums;">{{ patrimonioAssets }}</div>
+          </div>
+          <div style="padding:8px 0 8px 28px; border-left:1px solid rgba(255,255,255,.2); text-align:right;">
+            <div style="font-size:11px; opacity:.72; margin-bottom:5px;">Pasivos</div>
+            <div style="font-family:var(--mono); font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; opacity:.88;">{{ patrimonioLiabs }}</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+          <div>
+            <div style="font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--pos); margin-bottom:10px;">Activos</div>
+            <sc-for list="{{ patrimonioAssetGroups }}" as="ag" hint-placeholder-count="3">
+              <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:12px;">
+                <div style="padding:9px 15px; background:var(--surface2); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+                  <div style="display:flex; align-items:center; gap:8px;"><span data-ic="{{ ag.icon }}" data-sz="14" style="display:flex; color:{{ ag.color }};"></span><span style="font-size:12.5px; font-weight:700;">{{ ag.name }}</span></div>
+                  <span style="font-family:var(--mono); font-size:13px; font-weight:700; color:var(--pos); font-variant-numeric:tabular-nums;">{{ ag.total }}</span>
+                </div>
+                <sc-for list="{{ ag.items }}" as="it" hint-placeholder-count="2">
+                  <div style="display:flex; align-items:center; gap:10px; padding:10px 15px; border-bottom:1px solid var(--border);">
+                    <div style="width:7px; height:7px; border-radius:2px; flex:none; background:{{ ag.color }};"></div>
+                    <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ it.name }}</div><div style="font-size:10.5px; color:var(--text3); margin-top:1px;">{{ it.sub }}</div></div>
+                    <div style="font-family:var(--mono); font-size:13px; font-weight:600; color:var(--pos); white-space:nowrap;">{{ it.value }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+          <div>
+            <div style="font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--neg); margin-bottom:10px;">Pasivos</div>
+            <sc-for list="{{ patrimonioLiabGroups }}" as="lg" hint-placeholder-count="2">
+              <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:12px;">
+                <div style="padding:9px 15px; background:var(--surface2); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+                  <div style="display:flex; align-items:center; gap:8px;"><span data-ic="{{ lg.icon }}" data-sz="14" style="display:flex; color:var(--neg);"></span><span style="font-size:12.5px; font-weight:700;">{{ lg.name }}</span></div>
+                  <span style="font-family:var(--mono); font-size:13px; font-weight:700; color:var(--neg); font-variant-numeric:tabular-nums;">{{ lg.total }}</span>
+                </div>
+                <sc-for list="{{ lg.items }}" as="it" hint-placeholder-count="2">
+                  <div style="display:flex; align-items:center; gap:10px; padding:10px 15px; border-bottom:1px solid var(--border);">
+                    <div style="width:7px; height:7px; border-radius:2px; flex:none; background:var(--neg);"></div>
+                    <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ it.name }}</div><div style="font-size:10.5px; color:var(--text3); margin-top:1px;">{{ it.sub }}</div></div>
+                    <div style="font-family:var(--mono); font-size:13px; font-weight:600; color:var(--neg); white-space:nowrap;">{{ it.value }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:16px 18px;">
+              <div style="font-size:13px; font-weight:700; margin-bottom:11px;">Ratio pasivo / activo</div>
+              <div style="height:10px; border-radius:6px; background:var(--surface3); overflow:hidden; margin-bottom:8px;"><div style="height:100%; width:{{ patrimonioRatio }}%; background:var(--neg); border-radius:6px;"></div></div>
+              <div style="display:flex; justify-content:space-between; font-size:11.5px;"><span style="color:var(--text3);">{{ patrimonioRatio }}% de los activos son deuda</span><span style="color:var(--pos); font-weight:600;">Saludable</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ======== CUENTAS ======== -->
+      <sc-if value="{{ isCuentas }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:fadeUp .35s ease; max-width:900px;">
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:16px 20px; margin-bottom:18px; display:flex; align-items:center; gap:20px;">
+          <div style="flex:1;">
+            <div style="font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text3); margin-bottom:5px;">Balance total · {{ monthLabel }}</div>
+            <div style="font-family:var(--mono); font-size:30px; font-weight:700; letter-spacing:-.02em; font-variant-numeric:tabular-nums; color:var(--pos);">{{ cuentasTotal }}</div>
+          </div>
+          <span style="display:flex; align-items:center; gap:6px; padding:9px 15px; font-size:13px; font-weight:600; background:var(--accent); color:#fff; border-radius:9px; cursor:pointer;"><span data-ic="plus" data-sz="14" style="display:flex;"></span> Conectar cuenta</span>
+        </div>
+        <sc-for list="{{ cuentasGroups }}" as="cg" hint-placeholder-count="3">
+          <div style="margin-bottom:18px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:9px; padding:0 2px;">
+              <div style="font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text3);">{{ cg.type }}</div>
+              <div style="font-family:var(--mono); font-size:12px; font-weight:700; color:{{ cg.totalColor }};">{{ cg.total }}</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden;">
+              <sc-for list="{{ cg.items }}" as="ac" hint-placeholder-count="2">
+                <div style="display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:14px; padding:12px 16px; border-bottom:1px solid var(--border);">
+                  <div style="width:38px; height:38px; border-radius:11px; background:{{ ac.iconBg }}; display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ ac.icon }}" data-sz="17" style="display:flex; color:{{ ac.iconFg }};"></span></div>
+                  <div style="min-width:0;">
+                    <div style="font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ac.name }}</div>
+                    <div style="font-size:11px; color:var(--text3); margin-top:2px;">{{ ac.bank }} · ···· {{ ac.last4 }} · <span style="color:var(--pos);">{{ ac.lastSync }}</span></div>
+                  </div>
+                  <div style="text-align:right; flex:none;">
+                    <div style="font-family:var(--mono); font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; color:{{ ac.balColor }};">{{ ac.balance }}</div>
+                    <div style="font-size:10px; color:var(--text3); margin-top:2px;">{{ ac.balLabel }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      </sc-if>
+
+      <!-- ======== TRANSFERENCIAS ======== -->
+      <sc-if value="{{ isTransferencias }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:fadeUp .35s ease; max-width:840px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); padding:20px 22px;">
+            <div style="font-size:14px; font-weight:700; margin-bottom:16px; display:flex; align-items:center; gap:8px;"><span data-ic="arrow-left-right" data-sz="16" style="display:flex; color:var(--accent);"></span> Nueva transferencia</div>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div><label style="font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text3); display:block; margin-bottom:5px;">Desde</label><select style="width:100%; height:38px; padding:0 12px; border:1.5px solid var(--border-strong); border-radius:9px; background:var(--surface); color:var(--text); font-size:13px; font-family:inherit; outline:none;"><option>Corriente Bancolombia · COP$ 8.2M</option><option>Nequi Ahorros · COP$ 1.84M</option></select></div>
+              <div><label style="font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text3); display:block; margin-bottom:5px;">Hacia</label><select style="width:100%; height:38px; padding:0 12px; border:1.5px solid var(--border-strong); border-radius:9px; background:var(--surface); color:var(--text); font-size:13px; font-family:inherit; outline:none;"><option>Nequi Ahorros · COP$ 1.84M</option><option>ETF Renta 4 · COP$ 12.3M</option></select></div>
+              <div><label style="font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text3); display:block; margin-bottom:5px;">Monto</label><div style="position:relative;"><span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:12px; font-weight:600; color:var(--text3); font-family:var(--mono); pointer-events:none;">COP$</span><input type="number" placeholder="0" style="width:100%; height:38px; padding:0 12px 0 58px; border:1.5px solid var(--accent); border-radius:9px; background:var(--surface); color:var(--text); font-size:15px; font-family:var(--mono); font-weight:600; outline:none;"/></div></div>
+              <div><label style="font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text3); display:block; margin-bottom:5px;">Fecha</label><input type="date" value="2026-06-14" style="width:100%; height:38px; padding:0 12px; border:1.5px solid var(--border-strong); border-radius:9px; background:var(--surface); color:var(--text); font-size:13px; font-family:inherit; outline:none;"/></div>
+              <div><label style="font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text3); display:block; margin-bottom:5px;">Notas (opcional)</label><input type="text" placeholder="Aporte mensual a ahorros…" style="width:100%; height:38px; padding:0 12px; border:1.5px solid var(--border-strong); border-radius:9px; background:var(--surface); color:var(--text); font-size:13px; font-family:inherit; outline:none;"/></div>
+              <span style="display:flex; align-items:center; justify-content:center; gap:7px; padding:11px; font-size:13.5px; font-weight:600; background:var(--accent); color:#fff; border-radius:9px; cursor:pointer; margin-top:4px; box-shadow:0 4px 14px -4px var(--accent);"><span data-ic="send" data-sz="15" style="display:flex;"></span> Registrar transferencia</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:13px; font-weight:700; margin-bottom:10px; padding:0 2px;">Historial</div>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden;">
+              <sc-for list="{{ transHistoria }}" as="tr" hint-placeholder-count="5">
+                <div style="display:flex; align-items:center; gap:11px; padding:11px 15px; border-bottom:1px solid var(--border);">
+                  <div style="width:32px; height:32px; border-radius:9px; background:var(--accent-weak); display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="arrow-left-right" data-sz="14" style="display:flex; color:var(--accent);"></span></div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ tr.from }} <span style="color:var(--text3);">→</span> {{ tr.to }}</div>
+                    <div style="font-size:10.5px; color:var(--text3); margin-top:2px;">{{ tr.date }}<sc-if value="{{ tr.hasNotes }}" hint-placeholder-val="{{ false }}"> · {{ tr.notes }}</sc-if></div>
+                  </div>
+                  <div style="font-family:var(--mono); font-size:13px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap;">{{ tr.amount }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ======== CATEGORÍAS ======== -->
+      <sc-if value="{{ isCategorias }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:fadeUp .35s ease; max-width:1000px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+          <div style="display:flex; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:2px;">
+            <span style="padding:5px 12px; font-size:12.5px; font-weight:600; border-radius:6px; background:var(--accent); color:#fff;">Gastos</span>
+            <span style="padding:5px 12px; font-size:12.5px; font-weight:600; border-radius:6px; color:var(--text2); cursor:pointer;">Ingresos</span>
+          </div>
+          <span style="margin-left:auto; display:flex; align-items:center; gap:6px; padding:7px 13px; font-size:12.5px; font-weight:600; background:var(--accent); color:#fff; border-radius:8px; cursor:pointer;"><span data-ic="plus" data-sz="13" style="display:flex;"></span> Nueva categoría</span>
+        </div>
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden;">
+          <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr auto; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid var(--border); font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3);">
+            <span>Categoría</span><span style="text-align:right;">Presupuesto</span><span style="text-align:right;">Gastado jun.</span><span style="text-align:right;">% Uso</span><span></span>
+          </div>
+          <sc-for list="{{ catList }}" as="cat" hint-placeholder-count="6">
+            <div style="border-bottom:1px solid var(--border);">
+              <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr auto; align-items:center; gap:12px; padding:11px 16px; background:{{ cat.rowBg }};">
+                <div style="display:flex; align-items:center; gap:11px; min-width:0;">
+                  <div style="width:28px; height:28px; border-radius:8px; background:{{ cat.iconBg }}; display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ cat.icon }}" data-sz="13" style="display:flex; color:{{ cat.color }};"></span></div>
+                  <div style="min-width:0;"><div style="font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ cat.name }}</div><div style="font-size:10.5px; color:var(--text3);">{{ cat.subCount }} subcategorías</div></div>
+                </div>
+                <div style="text-align:right; font-family:var(--mono); font-size:12px; color:var(--text2); font-variant-numeric:tabular-nums;">{{ cat.budget }}</div>
+                <div style="text-align:right; font-family:var(--mono); font-size:12px; font-weight:600; color:{{ cat.spentColor }}; font-variant-numeric:tabular-nums;">{{ cat.spent }}</div>
+                <div style="text-align:right;"><span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; color:{{ cat.pctFg }}; background:{{ cat.pctBg }};">{{ cat.pct }}%</span></div>
+                <div style="display:flex; gap:4px;"><span style="width:24px; height:24px; border-radius:6px; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer;"><span data-ic="pencil" data-sz="12" style="display:flex; color:var(--text3);"></span></span></div>
+              </div>
+              <sc-for list="{{ cat.subs }}" as="sub" hint-placeholder-count="2">
+                <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr auto; align-items:center; gap:12px; padding:7px 16px 7px 55px; background:var(--surface2); border-top:1px solid var(--border);">
+                  <div style="display:flex; align-items:center; gap:8px; min-width:0;"><div style="width:5px; height:5px; border-radius:2px; background:{{ cat.color }}; flex:none;"></div><span style="font-size:12px; color:var(--text2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ sub.name }}</span></div>
+                  <div style="text-align:right; font-family:var(--mono); font-size:11px; color:var(--text3); font-variant-numeric:tabular-nums;">{{ sub.budget }}</div>
+                  <div style="text-align:right; font-family:var(--mono); font-size:11px; font-weight:600; color:{{ sub.spentColor }}; font-variant-numeric:tabular-nums;">{{ sub.spent }}</div>
+                  <div></div><div></div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ======== IMPORTAR CSV ======== -->
+      <sc-if value="{{ isCsvimport }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:fadeUp .35s ease; max-width:900px;">
+        <div style="display:flex; align-items:center; gap:0; margin-bottom:24px;">
+          <sc-for list="{{ csvSteps }}" as="step" hint-placeholder-count="3">
+            <div style="display:flex; align-items:center; gap:0;">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:5px;">
+                <div style="width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; background:{{ step.circleBg }}; color:{{ step.circleFg }}; border:2px solid {{ step.circleBorder }};">{{ step.n }}</div>
+                <div style="font-size:11.5px; font-weight:{{ step.weight }}; color:{{ step.fg }}; white-space:nowrap;">{{ step.label }}</div>
+              </div>
+              <sc-if value="{{ step.hasConnector }}" hint-placeholder-val="{{ true }}"><div style="width:90px; height:2px; background:{{ step.connectorBg }}; margin-bottom:16px; flex:none;"></div></sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <div style="border:2px dashed var(--border-strong); border-radius:16px; padding:36px; text-align:center; margin-bottom:16px; background:var(--surface); display:flex; flex-direction:column; align-items:center; gap:12px;">
+          <div style="width:52px; height:52px; border-radius:14px; background:var(--accent-weak); display:flex; align-items:center; justify-content:center;"><span data-ic="file-up" data-sz="24" style="display:flex; color:var(--accent);"></span></div>
+          <div><div style="font-size:15px; font-weight:700; margin-bottom:4px;">Arrastra tu extracto aquí</div><div style="font-size:13px; color:var(--text3);">O elige tu banco para descarga directa · CSV, OFX, XLS</div></div>
+          <div style="display:flex; justify-content:center; gap:7px; flex-wrap:wrap; margin-top:4px;">
+            <sc-for list="{{ csvBanks }}" as="bk" hint-placeholder-count="5"><span style="padding:6px 14px; font-size:12.5px; font-weight:600; background:var(--surface2); border:1px solid var(--border); border-radius:8px; cursor:pointer; color:var(--text2);">{{ bk }}</span></sc-for>
+          </div>
+        </div>
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:14px;">
+          <div style="padding:12px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;"><div style="font-size:13px; font-weight:700;">Mapeo de columnas</div><span style="font-size:11px; color:var(--text3);">extracto-junio-2026.csv · 86 filas</span></div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:0; padding:8px 16px; border-bottom:1px solid var(--border); font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3);"><span>Col. archivo</span><span>Campo app</span><span>Muestra</span><span>Estado</span></div>
+          <sc-for list="{{ csvColumns }}" as="col" hint-placeholder-count="4">
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:0; align-items:center; padding:10px 16px; border-bottom:1px solid var(--border);">
+              <span style="font-family:var(--mono); font-size:12px; color:var(--text2);">{{ col.raw }}</span>
+              <select style="height:30px; padding:0 8px; border:1.5px solid var(--border-strong); border-radius:7px; background:var(--surface); color:var(--text); font-size:12px; font-family:inherit; outline:none; max-width:140px;"><option>{{ col.mapped }}</option></select>
+              <span style="font-size:12px; color:var(--text3); font-family:var(--mono);">{{ col.sample }}</span>
+              <span style="font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 7px; border-radius:5px; color:{{ col.statusFg }}; background:{{ col.statusBg }}; display:inline-block; width:fit-content;">{{ col.status }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:16px;">
+          <div style="padding:12px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;"><div style="font-size:13px; font-weight:700;">Previsualización · 86 movimientos</div><span style="font-size:11px; padding:2px 8px; border-radius:5px; color:var(--warn); background:var(--warn-weak); font-weight:700;">3 duplicados</span></div>
+          <div style="display:grid; grid-template-columns:auto 1.5fr 1fr 1fr auto; gap:12px; padding:7px 16px; border-bottom:1px solid var(--border); font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3);"><span></span><span>Comercio</span><span>Categoría</span><span style="text-align:right;">Monto</span><span></span></div>
+          <sc-for list="{{ csvPreview }}" as="row" hint-placeholder-count="5">
+            <div style="display:grid; grid-template-columns:auto 1.5fr 1fr 1fr auto; gap:12px; align-items:center; padding:9px 16px; border-bottom:1px solid var(--border); background:{{ row.rowBg }};">
+              <span style="width:7px; height:7px; border-radius:50%; background:{{ row.dotColor }};"></span>
+              <div style="min-width:0;"><div style="font-size:12.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ row.name }}</div><div style="font-size:10.5px; color:var(--text3);">{{ row.date }}</div></div>
+              <span style="font-size:11.5px; padding:2px 9px; background:var(--surface3); border-radius:20px; color:var(--text2);">{{ row.cat }}</span>
+              <div style="font-family:var(--mono); font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; color:{{ row.amtColor }}; text-align:right; white-space:nowrap;">{{ row.amount }}</div>
+              <span style="font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 7px; border-radius:5px; color:{{ row.statusFg }}; background:{{ row.statusBg }}; white-space:nowrap;">{{ row.status }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex; gap:8px;"><span style="display:flex; align-items:center; gap:7px; padding:10px 18px; font-size:13px; font-weight:600; background:var(--accent); color:#fff; border-radius:9px; cursor:pointer; box-shadow:0 4px 14px -4px var(--accent);"><span data-ic="file-up" data-sz="14" style="display:flex;"></span> Importar 83 movimientos</span><span style="padding:10px 15px; font-size:13px; font-weight:600; background:var(--surface); border:1px solid var(--border); color:var(--text2); border-radius:9px; cursor:pointer;">Cancelar</span></div>
+      </div>
+      </sc-if>
+
+      <!-- ======== PRESUPUESTOS ======== -->
+      <sc-if value="{{ isPresupuestos }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:fadeUp .35s ease; max-width:1000px;">
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px;">
+          <sc-for list="{{ presupuestosKPIs }}" as="k" hint-placeholder-count="4">
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow);">
+              <div style="font-size:11.5px; color:var(--text3); margin-bottom:7px;">{{ k.label }}</div>
+              <div style="font-family:var(--mono); font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; color:{{ k.color }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ k.value }}</div>
+              <sc-if value="{{ k.hasSub }}" hint-placeholder-val="{{ false }}"><div style="margin-top:7px; height:5px; border-radius:3px; background:var(--surface3); overflow:hidden;"><div style="height:100%; width:{{ k.barW }}; background:{{ k.barColor }}; border-radius:3px;"></div></div></sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 18px; border-bottom:1px solid var(--border);">
+            <div style="font-size:13px; font-weight:700;">Líneas de presupuesto · {{ monthLabel }}</div>
+            <div style="display:flex; align-items:center; gap:9px;"><span style="font-size:12px; color:var(--text2);">Rollover</span><div style="width:36px; height:20px; border-radius:10px; background:var(--accent); position:relative; cursor:pointer;"><div style="width:16px; height:16px; border-radius:50%; background:#fff; position:absolute; top:2px; right:2px; box-shadow:0 1px 3px rgba(0,0,0,.25);"></div></div></div>
+          </div>
+          <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr 130px; align-items:center; gap:12px; padding:8px 18px; border-bottom:1px solid var(--border); font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3);"><span>Categoría</span><span style="text-align:right;">Planeado</span><span style="text-align:right;">Gastado</span><span style="text-align:right;">Restante</span><span>Progreso</span></div>
+          <sc-for list="{{ presupuestosItems }}" as="b" hint-placeholder-count="6">
+            <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr 130px; align-items:center; gap:12px; padding:11px 18px; border-bottom:1px solid var(--border); background:{{ b.rowBg }};">
+              <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+                <div style="width:8px; height:28px; border-radius:3px; background:{{ b.color }}; flex:none;"></div>
+                <div style="display:flex; align-items:center; gap:8px;"><span data-ic="{{ b.icon }}" data-sz="14" style="display:flex; color:{{ b.color }};"></span><span style="font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ b.name }}</span></div>
+              </div>
+              <div style="text-align:right; font-family:var(--mono); font-size:12.5px; color:var(--text2); font-variant-numeric:tabular-nums;">{{ b.planned }}</div>
+              <div style="text-align:right; font-family:var(--mono); font-size:12.5px; font-weight:600; color:{{ b.spentColor }}; font-variant-numeric:tabular-nums;">{{ b.actual }}</div>
+              <div style="text-align:right; font-family:var(--mono); font-size:12.5px; font-weight:600; color:{{ b.remColor }}; font-variant-numeric:tabular-nums;">{{ b.remaining }}</div>
+              <div><div style="height:6px; border-radius:3px; background:var(--surface3); overflow:hidden; margin-bottom:3px;"><div style="height:100%; width:{{ b.barW }}; background:{{ b.barColor }}; border-radius:3px;"></div></div><div style="font-size:10px; color:{{ b.spentColor }}; font-weight:600; text-align:right;">{{ b.pct }}%</div></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex; gap:8px;"><span style="display:flex; align-items:center; gap:6px; padding:8px 14px; font-size:12.5px; font-weight:600; background:var(--surface); border:1px solid var(--border); color:var(--text2); border-radius:8px; cursor:pointer;"><span data-ic="plus" data-sz="13" style="display:flex;"></span> Agregar línea</span><span style="margin-left:auto; display:flex; align-items:center; gap:6px; padding:8px 14px; font-size:12.5px; font-weight:600; background:var(--accent); color:#fff; border-radius:8px; cursor:pointer;"><span data-ic="copy" data-sz="13" style="display:flex;"></span> Copiar desde mayo</span></div>
+      </div>
+      </sc-if>
+
+      <!-- ======== DEUDAS ======== -->
+      <sc-if value="{{ isDeudas }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:fadeUp .35s ease; max-width:1000px;">
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:16px 22px; margin-bottom:16px; display:grid; grid-template-columns:1fr auto auto auto; gap:24px; align-items:center;">
+          <div>
+            <div style="font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text3); margin-bottom:5px;">Total de deudas</div>
+            <div style="font-family:var(--mono); font-size:28px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--neg);">{{ deudasTotal }}</div>
+            <div style="height:8px; border-radius:5px; background:var(--surface3); overflow:hidden; margin-top:10px; max-width:280px;"><div style="height:100%; width:{{ deudasPaidPct }}%; background:var(--pos); border-radius:5px;"></div></div>
+            <div style="font-size:11.5px; color:var(--text3); margin-top:5px;">{{ deudasPaidPct }}% liquidado del saldo original</div>
+          </div>
+          <div style="text-align:right; padding-left:20px; border-left:1px solid var(--border);">
+            <div style="font-size:10.5px; color:var(--text3); margin-bottom:3px;">Pago mensual</div>
+            <div style="font-family:var(--mono); font-size:17px; font-weight:700; color:var(--neg); font-variant-numeric:tabular-nums;">{{ deudasMonthly }}</div>
+          </div>
+          <div style="text-align:right; padding-left:20px; border-left:1px solid var(--border);">
+            <div style="font-size:10.5px; color:var(--text3); margin-bottom:3px;">Tasa promedio</div>
+            <div style="font-family:var(--mono); font-size:17px; font-weight:700; color:var(--warn); font-variant-numeric:tabular-nums;">{{ deudasAvgRate }}%</div>
+          </div>
+          <span onClick="{{ goPlanner }}" style="display:flex; align-items:center; gap:6px; padding:9px 14px; font-size:12.5px; font-weight:600; background:var(--accent); color:#fff; border-radius:9px; cursor:pointer; white-space:nowrap; box-shadow:0 4px 14px -4px var(--accent);"><span data-ic="calculator" data-sz="14" style="display:flex;"></span> Planificador</span>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:14px;">
+          <sc-for list="{{ deudasList }}" as="d" hint-placeholder-count="3">
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); padding:18px 20px;">
+              <div style="display:flex; align-items:flex-start; gap:12px; margin-bottom:14px;">
+                <div style="width:40px; height:40px; border-radius:11px; background:{{ d.iconBg }}; display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ d.icon }}" data-sz="19" style="display:flex; color:{{ d.iconFg }};"></span></div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:14px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.name }}</div>
+                  <div style="font-size:11.5px; color:{{ d.rateColor }}; font-weight:600; margin-top:2px;">{{ d.rate }}% APR · Vence {{ d.nextDate }}</div>
+                </div>
+              </div>
+              <div style="font-family:var(--mono); font-size:22px; font-weight:700; color:var(--neg); font-variant-numeric:tabular-nums; margin-bottom:10px;">{{ d.balance }}</div>
+              <div style="height:8px; border-radius:5px; background:var(--surface3); overflow:hidden; margin-bottom:6px;"><div style="height:100%; width:{{ d.paidPct }}%; background:var(--pos); border-radius:5px;"></div></div>
+              <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text3); margin-bottom:12px;"><span>{{ d.paidPct }}% liquidado</span><span>Mín: {{ d.minPayment }}</span></div>
+              <div style="padding-top:11px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;"><div style="font-size:11.5px; color:var(--text3);">Payoff est.:<span style="font-weight:600; color:var(--text); margin-left:4px;">{{ d.payoffDate }}</span></div><span style="font-size:11.5px; font-weight:600; padding:5px 10px; background:var(--surface3); border-radius:7px; cursor:pointer; color:var(--text2);">Editar</span></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;"><span style="display:flex; align-items:center; gap:6px; padding:8px 14px; font-size:12.5px; font-weight:600; background:var(--surface); border:1px solid var(--border); color:var(--text2); border-radius:8px; cursor:pointer;"><span data-ic="plus" data-sz="13" style="display:flex;"></span> Agregar deuda</span></div>
+      </div>
+      </sc-if>
+
+      <!-- ======== RECURRENTES ======== -->
+      <sc-if value="{{ isRecurrentes }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:fadeUp .35s ease; max-width:1000px;">
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:14px 16px; margin-bottom:16px;">
+          <div style="font-size:13px; font-weight:700; margin-bottom:12px;">Próximos 14 días</div>
+          <div style="display:flex; gap:5px;">
+            <sc-for list="{{ recCalendar }}" as="day" hint-placeholder-count="14">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:4px; flex:1; min-width:0;">
+                <div style="font-size:9px; color:var(--text3); font-weight:700; text-transform:uppercase; letter-spacing:.04em;">{{ day.dow }}</div>
+                <div style="width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; background:{{ day.bg }}; color:{{ day.fg }}; flex:none;">{{ day.d }}</div>
+                <sc-if value="{{ day.hasDot }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; gap:2px; flex-wrap:wrap; justify-content:center;">
+                    <sc-for list="{{ day.dots }}" as="dot" hint-placeholder-count="2"><div style="width:5px; height:5px; border-radius:50%; background:{{ dot.color }};"></div></sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ day.hasDot }}" hint-placeholder-val="{{ false }}"><div style="font-family:var(--mono); font-size:8px; font-weight:600; color:var(--neg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:48px; text-align:center;">{{ day.amt }}</div></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <div style="font-size:13px; font-weight:700;">Plantillas recurrentes</div>
+          <span style="display:flex; align-items:center; gap:6px; padding:7px 13px; font-size:12.5px; font-weight:600; background:var(--accent); color:#fff; border-radius:8px; cursor:pointer;"><span data-ic="plus" data-sz="13" style="display:flex;"></span> Nueva plantilla</span>
+        </div>
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden;">
+          <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr auto; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid var(--border); font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3);">
+            <span>Plantilla</span><span>Monto</span><span>Frecuencia</span><span>Próximo</span><span>Auto-post</span><span></span>
+          </div>
+          <sc-for list="{{ recList }}" as="r" hint-placeholder-count="6">
+            <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr auto; align-items:center; gap:12px; padding:11px 16px; border-bottom:1px solid var(--border); opacity:{{ r.opacity }};">
+              <div style="display:flex; align-items:center; gap:11px; min-width:0;">
+                <div style="width:34px; height:34px; border-radius:10px; background:{{ r.iconBg }}; display:flex; align-items:center; justify-content:center; flex:none;"><span data-ic="{{ r.icon }}" data-sz="16" style="display:flex; color:{{ r.iconFg }};"></span></div>
+                <div style="min-width:0;"><div style="font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.name }}</div><div style="font-size:10.5px; color:var(--text3); margin-top:1px;">{{ r.cat }}</div></div>
+              </div>
+              <div style="font-family:var(--mono); font-size:13px; font-weight:700; font-variant-numeric:tabular-nums; color:{{ r.amtColor }};">{{ r.amount }}</div>
+              <div style="font-size:12px; color:var(--text2);">{{ r.freq }}</div>
+              <div>
+                <div style="font-size:12.5px; font-weight:600; color:{{ r.urgencyColor }};">{{ r.nextDate }}</div>
+                <div style="font-size:10.5px; color:var(--text3);">{{ r.daysLabel }}</div>
+              </div>
+              <div><div style="width:36px; height:20px; border-radius:10px; background:{{ r.toggleBg }}; position:relative; cursor:pointer;"><div style="width:16px; height:16px; border-radius:50%; background:#fff; position:absolute; top:2px; right:{{ r.toggleRight }}; box-shadow:0 1px 3px rgba(0,0,0,.3);"></div></div></div>
+              <div style="display:flex; gap:4px;"><span style="width:26px; height:26px; border-radius:6px; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer;"><span data-ic="pencil" data-sz="12" style="display:flex; color:var(--text3);"></span></span><span style="width:26px; height:26px; border-radius:6px; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer;"><span data-ic="send" data-sz="12" style="display:flex; color:var(--accent);"></span></span></div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
       <!-- COMING SOON -->
       <sc-if value="{{ isComing }}" hint-placeholder-val="{{ false }}">
       <div style="animation:fadeUp .35s ease; max-width:680px; margin:40px auto 0; text-align:center;">
@@ -754,7 +1104,7 @@ class Component extends DCLogic {
   pageHeader(){
     const lg=this.state.lang,s=this.state.screen;
     const p=(o)=>o[lg]||o.es;
-    const map={dashboard:{eyebrow:p({es:'Hola, Juan ·',en:'Hi, Juan ·',fr:'Bonjour, Juan ·'})+' '+this.months[this.state.monthIdx],title:p({es:'Centro de control',en:'Control center',fr:'Centre de contrôle'})},transacciones:{eyebrow:p({es:'86 movimientos · Junio',en:'86 transactions · June',fr:'86 transactions · Juin'}),title:p({es:'Transacciones',en:'Transactions',fr:'Transactions'})},reportes:{eyebrow:p({es:'Análisis',en:'Analytics',fr:'Analyse'}),title:p({es:'Hub de Reportes',en:'Reports Hub',fr:'Hub de Rapports'})},metas:{eyebrow:'Beta',title:p({es:'Metas y fondos',en:'Goals & funds',fr:'Objectifs & fonds'})},planificador:{eyebrow:'Beta',title:p({es:'Planificador de deuda',en:'Debt planner',fr:'Planificateur de dette'})},revision:{eyebrow:'Beta',title:p({es:'Mes en revisión',en:'Month review',fr:'Mois en revue'})},automatizacion:{eyebrow:p({es:'Perspectivas + Future',en:'Insights + Future',fr:'Perspectives + Futur'}),title:p({es:'Automatización',en:'Automation',fr:'Automatisation'})},sistema:{eyebrow:p({es:'Tokens + Componentes + Handoff',en:'Tokens + Components + Handoff',fr:'Tokens + Composants'}),title:p({es:'Sistema de diseño',en:'Design system',fr:'Système de design'})}};
+    const map={dashboard:{eyebrow:p({es:'Hola, Juan ·',en:'Hi, Juan ·',fr:'Bonjour, Juan ·'})+' '+this.months[this.state.monthIdx],title:p({es:'Centro de control',en:'Control center',fr:'Centre de contrôle'})},transacciones:{eyebrow:p({es:'86 movimientos · Junio',en:'86 transactions · June',fr:'86 transactions · Juin'}),title:p({es:'Transacciones',en:'Transactions',fr:'Transactions'})},reportes:{eyebrow:p({es:'Análisis',en:'Analytics',fr:'Analyse'}),title:p({es:'Hub de Reportes',en:'Reports Hub',fr:'Hub de Rapports'})},metas:{eyebrow:'Beta',title:p({es:'Metas y fondos',en:'Goals & funds',fr:'Objectifs & fonds'})},planificador:{eyebrow:'Beta',title:p({es:'Planificador de deuda',en:'Debt planner',fr:'Planificateur de dette'})},revision:{eyebrow:'Beta',title:p({es:'Mes en revisión',en:'Month review',fr:'Mois en revue'})},automatizacion:{eyebrow:p({es:'Perspectivas + Future',en:'Insights + Future',fr:'Perspectives + Futur'}),title:p({es:'Automatización',en:'Automation',fr:'Automatisation'})},sistema:{eyebrow:p({es:'Tokens + Componentes + Handoff',en:'Tokens + Components + Handoff',fr:'Tokens + Composants'}),title:p({es:'Sistema de diseño',en:'Design system',fr:'Système de design'})},patrimonio:{eyebrow:p({es:'Activos · Pasivos · Tendencia 6m',en:'Assets · Liabilities · 6m trend',fr:'Actifs · Passifs · Tendance 6m'}),title:p({es:'Patrimonio neto',en:'Net worth',fr:'Valeur nette'})},cuentas:{eyebrow:p({es:'4 tipos · 6 cuentas activas',en:'4 types · 6 active accounts',fr:'4 types · 6 comptes actifs'}),title:p({es:'Cuentas',en:'Accounts',fr:'Comptes'})},transferencias:{eyebrow:p({es:'Entre cuentas propias',en:'Between your accounts',fr:'Entre vos comptes'}),title:p({es:'Transferencias',en:'Transfers',fr:'Virements'})},categorias:{eyebrow:p({es:'7 categorías · 17 subcategorías',en:'7 categories · 17 subcategories',fr:'7 catégories · 17 sous-catégories'}),title:p({es:'Categorías',en:'Categories',fr:'Catégories'})},csvimport:{eyebrow:p({es:'Paso 2 de 3 · 86 filas detectadas',en:'Step 2 of 3 · 86 rows detected',fr:'Étape 2 de 3 · 86 lignes'}),title:p({es:'Importar CSV',en:'CSV Import',fr:'Import CSV'})},presupuestos:{eyebrow:p({es:'Planeado vs. real · Rollover activo',en:'Planned vs. actual · Rollover on',fr:'Prévu vs. réel · Report actif'}),title:p({es:'Presupuestos',en:'Budgets',fr:'Budgets'})},deudas:{eyebrow:p({es:'3 deudas · Payoff est. Ene 2029',en:'3 debts · Payoff est. Jan 2029',fr:'3 dettes · Fin janv. 2029'}),title:p({es:'Deudas',en:'Debts',fr:'Dettes'})},recurrentes:{eyebrow:p({es:'6 plantillas · 5 activas',en:'6 templates · 5 active',fr:'6 modèles · 5 actifs'}),title:p({es:'Recurrentes',en:'Recurring',fr:'Récurrentes'})}}};
     if(map[s])return map[s];
     const found=this.nav().flatMap(g=>g.items).find(i=>i.id===s);
     const ph=found?found.phase:null;
@@ -886,6 +1236,148 @@ class Component extends DCLogic {
     return {autoInsights,autoRules};
   }
 
+  // --- PATRIMONIO ---
+  patrimonioView(){
+    const f=n=>this.fmt(n),fN=n=>this.fmt(-n);
+    const assetGroups=[
+      {icon:'wallet',color:'var(--pos)',name:'Cuentas bancarias',total:f(10040000),items:[{name:'Bancolombia Corriente',sub:'···· 4512',value:f(8200000)},{name:'Nequi Ahorros',sub:'···· 8823',value:f(1840000)}]},
+      {icon:'bar-chart-2',color:'var(--accent)',name:'Inversiones',total:f(12310000),items:[{name:'ETF Renta Fija Renta4',sub:'23 unidades',value:f(7800000)},{name:'CDT Bancolombia 90d',sub:'Vence 15 sep',value:f(4510000)}]},
+      {icon:'building-2',color:'var(--info)',name:'Activos fijos',total:f(120000000),items:[{name:'Apartamento Los Andes',sub:'Valoración 2025',value:f(120000000)}]},
+    ];
+    const liabGroups=[
+      {icon:'credit-card',name:'Tarjetas de crédito',total:fN(2100000),items:[{name:'Visa Platinum Davivienda',sub:'28% APR',value:fN(2100000)}]},
+      {icon:'landmark',name:'Préstamos',total:fN(36100000),items:[{name:'Préstamo estudiantil',sub:'12% APR · Vence 2031',value:fN(18200000)},{name:'Vehículo Mazda CX-5',sub:'8% APR · Vence 2029',value:fN(17900000)}]},
+    ];
+    return {patrimonioNW:f(104150000),patrimonioAssets:f(142350000),patrimonioLiabs:fN(38200000),patrimonioSpark:this.spark([78,80,82,85,88,92,96,101,104],260,30),patrimonioAssetGroups:assetGroups,patrimonioLiabGroups:liabGroups,patrimonioRatio:Math.round(38200000/142350000*100)};
+  }
+
+  // --- CUENTAS ---
+  cuentasView(){
+    const groups=[
+      {type:'Corriente y ahorros',totalColor:'var(--pos)',total:this.fmt(10040000,true),items:[
+        {name:'Cuenta Corriente',bank:'Bancolombia',last4:'4512',balance:this.fmt(8200000,true),balColor:'var(--pos)',balLabel:'Disponible',lastSync:'Hace 2 min',icon:'landmark',iconBg:'oklch(0.95 0.04 230)',iconFg:'oklch(0.50 0.14 230)'},
+        {name:'Cuenta de Ahorros',bank:'Nequi',last4:'8823',balance:this.fmt(1840000,true),balColor:'var(--pos)',balLabel:'Disponible',lastSync:'Hace 5 min',icon:'piggy-bank',iconBg:'var(--accent-weak)',iconFg:'var(--accent)'},
+      ]},
+      {type:'Tarjetas de crédito',totalColor:'var(--neg)',total:this.fmt(-2100000),items:[
+        {name:'Visa Platinum',bank:'Davivienda',last4:'7891',balance:this.fmt(-2100000),balColor:'var(--neg)',balLabel:'Saldo a pagar',lastSync:'Hace 10 min',icon:'credit-card',iconBg:'var(--neg-weak)',iconFg:'var(--neg)'},
+      ]},
+      {type:'Inversiones',totalColor:'var(--accent)',total:this.fmt(12310000,true),items:[
+        {name:'ETF Renta Fija',bank:'Renta 4',last4:'——',balance:this.fmt(7800000,true),balColor:'var(--accent)',balLabel:'Valor mercado',lastSync:'Cierre ayer',icon:'bar-chart-2',iconBg:'var(--accent-weak)',iconFg:'var(--accent)'},
+        {name:'CDT 90 días',bank:'Bancolombia',last4:'——',balance:this.fmt(4510000,true),balColor:'var(--accent)',balLabel:'Vence 15 sep',lastSync:'Al vencimiento',icon:'timer',iconBg:'oklch(0.96 0.04 58)',iconFg:'oklch(0.50 0.10 55)'},
+      ]},
+      {type:'Efectivo',totalColor:'var(--text2)',total:this.fmt(150000,true),items:[
+        {name:'Billetera',bank:'Efectivo',last4:'——',balance:this.fmt(150000,true),balColor:'var(--text2)',balLabel:'Ingresado manual',lastSync:'Manual',icon:'wallet',iconBg:'var(--surface3)',iconFg:'var(--text2)'},
+      ]},
+    ];
+    return {cuentasTotal:this.fmt(20500000,true),cuentasGroups:groups};
+  }
+
+  // --- TRANSFERENCIAS ---
+  transferenciasView(){
+    const hist=[
+      {from:'Corriente',to:'Nequi Ahorros',amount:this.fmt(500000),date:'Hoy · 12:30',notes:'Aporte mensual',hasNotes:true},
+      {from:'Corriente',to:'ETF Renta4',amount:this.fmt(300000),date:'1 jun',notes:'',hasNotes:false},
+      {from:'Nequi',to:'Corriente',amount:this.fmt(250000),date:'25 may',notes:'Devolución',hasNotes:true},
+      {from:'Corriente',to:'Nequi Ahorros',amount:this.fmt(500000),date:'1 may',notes:'Aporte mensual',hasNotes:true},
+      {from:'Corriente',to:'CDT',amount:this.fmt(2000000),date:'15 abr',notes:'Renovación',hasNotes:true},
+    ];
+    return {transHistoria:hist};
+  }
+
+  // --- CATEGORÍAS ---
+  categoriasView(){
+    const mk=(icon,color,name,subCount,budgetCOP,spentCOP,subs)=>{
+      const over=spentCOP>budgetCOP,pct=Math.round(spentCOP/budgetCOP*100);
+      return {icon,color,iconBg:this.hexA(color,.15),name,subCount,budget:this.fmt(budgetCOP),spent:this.fmt(spentCOP),pct,pctFg:over?'var(--neg)':'var(--pos)',pctBg:over?'var(--neg-weak)':'var(--pos-weak)',rowBg:over?'var(--neg-weak)':'transparent',spentColor:over?'var(--neg)':'var(--text)',subs:subs.map(s=>({name:s[0],budget:this.fmt(s[1]),spent:this.fmt(s[2]),spentColor:s[2]>s[1]?'var(--neg)':'var(--text)'}))};
+    };
+    return {catList:[
+      mk('home','#4f63e0','Vivienda',3,2200000,2180000,[['Arriendo',1800000,1800000],['Servicios públicos',300000,255000],['Internet/Cable',100000,125000]]),
+      mk('shopping-cart','#1f9d63','Mercado',2,1200000,1340000,[['Supermercado',900000,1050000],['Frutas y verduras',300000,290000]]),
+      mk('utensils','#d65450','Restaurantes',2,500000,690000,[['Almuerzo trabajo',300000,420000],['Salidas sociales',200000,270000]]),
+      mk('wifi','#2f86c2','Servicios',3,700000,640000,[['Internet Claro',120000,125000],['Celular',80000,79000],['Suscripciones',500000,436000]]),
+      mk('car','#c98a2b','Transporte',2,600000,470000,[['Gasolina',400000,320000],['Uber / Taxi',200000,150000]]),
+      mk('heart-pulse','#e05fa0','Salud',2,300000,34200,[['Farmacia',100000,34200],['Consultas',200000,0]]),
+      mk('music','#8b5cf6','Ocio y cultura',3,400000,360000,[['Spotify / Netflix',100000,55800],['Cine / eventos',200000,190000],['Libros',100000,114200]]),
+    ]};
+  }
+
+  // --- CSV IMPORT ---
+  csvImportView(){
+    const steps=[
+      {n:1,label:'Subir archivo',circleBg:'var(--pos)',circleFg:'#fff',circleBorder:'var(--pos)',fg:'var(--text)',weight:700,hasConnector:true,connectorBg:'var(--pos)'},
+      {n:2,label:'Mapear columnas',circleBg:'var(--accent)',circleFg:'#fff',circleBorder:'var(--accent)',fg:'var(--text)',weight:700,hasConnector:true,connectorBg:'var(--border-strong)'},
+      {n:3,label:'Revisar e importar',circleBg:'var(--surface)',circleFg:'var(--text3)',circleBorder:'var(--border-strong)',fg:'var(--text3)',weight:500,hasConnector:false,connectorBg:'transparent'},
+    ];
+    const cols=[
+      {raw:'Fecha',mapped:'Fecha',sample:'2026-06-13',status:'Mapeado',statusFg:'var(--pos)',statusBg:'var(--pos-weak)'},
+      {raw:'Descripcion',mapped:'Comercio',sample:'EXITO LAURELES',status:'Mapeado',statusFg:'var(--pos)',statusBg:'var(--pos-weak)'},
+      {raw:'Valor',mapped:'Monto',sample:'-182,300',status:'Mapeado',statusFg:'var(--pos)',statusBg:'var(--pos-weak)'},
+      {raw:'Tipo',mapped:'—',sample:'COMPRA',status:'Ignorar',statusFg:'var(--text3)',statusBg:'var(--surface3)'},
+    ];
+    const prev=[
+      {name:'Éxito Laureles',date:'13 jun',cat:'Mercado',amount:this.fmt(-182300),amtColor:'var(--neg)',status:'Nuevo',statusFg:'var(--pos)',statusBg:'var(--pos-weak)',dotColor:'var(--pos)',rowBg:'transparent'},
+      {name:'Uber Technologies',date:'13 jun',cat:'Transporte',amount:this.fmt(-18400),amtColor:'var(--neg)',status:'Nuevo',statusFg:'var(--pos)',statusBg:'var(--pos-weak)',dotColor:'var(--pos)',rowBg:'transparent'},
+      {name:'Nómina Empresa XYZ',date:'13 jun',cat:'Ingreso',amount:this.fmt(4250000,true),amtColor:'var(--pos)',status:'Nuevo',statusFg:'var(--pos)',statusBg:'var(--pos-weak)',dotColor:'var(--pos)',rowBg:'transparent'},
+      {name:'Rappi Colombia SAS',date:'12 jun',cat:'Restaurantes',amount:this.fmt(-47600),amtColor:'var(--neg)',status:'Duplicado',statusFg:'var(--warn)',statusBg:'var(--warn-weak)',dotColor:'var(--warn)',rowBg:'var(--warn-weak)'},
+      {name:'Spotify AB',date:'12 jun',cat:'Suscripción',amount:this.fmt(-16900),amtColor:'var(--neg)',status:'Nuevo',statusFg:'var(--pos)',statusBg:'var(--pos-weak)',dotColor:'var(--pos)',rowBg:'transparent'},
+    ];
+    return {csvSteps:steps,csvBanks:['Bancolombia','Davivienda','Nequi','BBVA','Scotiabank'],csvColumns:cols,csvPreview:prev};
+  }
+
+  // --- PRESUPUESTOS ---
+  presupuestosView(){
+    const rows=[
+      {color:'#4f63e0',icon:'home',name:'Vivienda',pC:2200000,pA:2180000},
+      {color:'#d65450',icon:'utensils',name:'Restaurantes',pC:500000,pA:690000},
+      {color:'#1f9d63',icon:'shopping-cart',name:'Mercado',pC:1200000,pA:1340000},
+      {color:'#2f86c2',icon:'wifi',name:'Servicios',pC:700000,pA:640000},
+      {color:'#c98a2b',icon:'car',name:'Transporte',pC:600000,pA:470000},
+      {color:'#e05fa0',icon:'heart-pulse',name:'Salud',pC:300000,pA:34200},
+      {color:'#8b5cf6',icon:'music',name:'Ocio',pC:400000,pA:360000},
+    ].map(r=>{const over=r.pA>r.pC,pct=Math.round(r.pA/r.pC*100),rem=r.pC-r.pA;return{color:r.color,icon:r.icon,name:r.name,planned:this.fmt(r.pC),actual:this.fmt(r.pA),remaining:this.fmt(Math.abs(rem)),pct,barW:Math.min(100,pct)+'%',barColor:over?'var(--neg)':r.color,spentColor:over?'var(--neg)':'var(--text)',remColor:rem<0?'var(--neg)':rem>0?'var(--pos)':'var(--text3)',rowBg:over?'var(--neg-weak)':'transparent'};});
+    const plannedCOP=5900000,actualCOP=5714200,pct=Math.round(actualCOP/plannedCOP*100);
+    const kpis=[
+      {label:'Total presupuestado',value:this.fmt(plannedCOP),color:'var(--text)',hasSub:false,barW:'100%',barColor:'var(--accent)'},
+      {label:'Total gastado',value:this.fmt(actualCOP),color:'var(--text)',hasSub:true,barW:Math.min(100,pct)+'%',barColor:pct>100?'var(--neg)':'var(--accent)'},
+      {label:'Restante este mes',value:this.fmt(plannedCOP-actualCOP),color:'var(--pos)',hasSub:false,barW:'',barColor:''},
+      {label:'Uso total',value:pct+'%',color:pct>100?'var(--neg)':pct>85?'var(--warn)':'var(--pos)',hasSub:true,barW:Math.min(100,pct)+'%',barColor:pct>100?'var(--neg)':pct>85?'var(--warn)':'var(--pos)'},
+    ];
+    return {presupuestosItems:rows,presupuestosKPIs:kpis};
+  }
+
+  // --- DEUDAS ---
+  deudasView(){
+    const list=[
+      {name:'Tarjeta Visa',icon:'credit-card',iconBg:'var(--neg-weak)',iconFg:'var(--neg)',rate:28,rateColor:'var(--neg)',balance:this.fmt(-2100000),minPayment:this.fmt(350000),nextDate:'20 jun',payoffDate:'Nov 2026',paidPct:5},
+      {name:'Préstamo Estudiantil',icon:'graduation-cap',iconBg:'var(--accent-weak)',iconFg:'var(--accent)',rate:12,rateColor:'var(--accent)',balance:this.fmt(-18200000),minPayment:this.fmt(450000),nextDate:'1 jul',payoffDate:'Mar 2029',paidPct:35},
+      {name:'Vehículo Mazda CX-5',icon:'car',iconBg:'var(--surface3)',iconFg:'var(--text2)',rate:8,rateColor:'var(--text2)',balance:this.fmt(-17900000),minPayment:this.fmt(650000),nextDate:'5 jul',payoffDate:'Ene 2029',paidPct:42},
+    ];
+    return {deudasTotal:this.fmt(38200000),deudasMonthly:this.fmt(1450000),deudasAvgRate:'15.3',deudasPaidPct:32,deudasList:list};
+  }
+
+  // --- RECURRENTES ---
+  recurrentesView(){
+    const payMap={15:[{n:'Arriendo',c:'var(--neg)'}],20:[{n:'Visa',c:'var(--neg)'}],5:[{n:'Claro',c:'var(--accent)'}],1:[{n:'Salario',c:'var(--pos)'}],12:[{n:'Spotify',c:'#8b5cf6'},{n:'Netflix',c:'var(--neg)'}]};
+    const dows=['D','L','M','X','J','V','S'];
+    const cal=[];
+    for(let i=0;i<14;i++){
+      const d=new Date(2026,5,14+i);
+      const dayNum=d.getDate(),dow=dows[d.getDay()],isToday=i===0;
+      const pmts=payMap[dayNum]||[];
+      const totalCOP=pmts.length*200000;
+      cal.push({d:dayNum,dow,bg:isToday?'var(--accent)':'var(--surface2)',fg:isToday?'#fff':'var(--text)',hasDot:pmts.length>0,dots:pmts.map(p=>({color:p.c})),amt:pmts.length>0?this.fmt(-totalCOP):''});
+    }
+    const list=[
+      {name:'Salario nómina',cat:'Ingreso',icon:'briefcase',iconBg:'var(--pos-weak)',iconFg:'var(--pos)',amount:this.fmt(4250000,true),amtColor:'var(--pos)',freq:'Mensual · día 1',nextDate:'1 jul',daysLabel:'en 17 días',urgencyColor:'var(--text2)',toggleBg:'var(--accent)',toggleRight:'2px',opacity:'1'},
+      {name:'Arriendo',cat:'Vivienda',icon:'home',iconBg:'rgba(79,99,224,.15)',iconFg:'#4f63e0',amount:this.fmt(-2180000),amtColor:'var(--neg)',freq:'Mensual · día 15',nextDate:'15 jun',daysLabel:'en 1 día',urgencyColor:'var(--neg)',toggleBg:'var(--accent)',toggleRight:'2px',opacity:'1'},
+      {name:'Internet Claro',cat:'Servicios',icon:'wifi',iconBg:'rgba(47,134,194,.15)',iconFg:'#2f86c2',amount:this.fmt(-125000),amtColor:'var(--neg)',freq:'Mensual · día 5',nextDate:'5 jul',daysLabel:'en 21 días',urgencyColor:'var(--text2)',toggleBg:'var(--accent)',toggleRight:'2px',opacity:'1'},
+      {name:'Spotify',cat:'Entretenimiento',icon:'music',iconBg:'rgba(139,92,246,.15)',iconFg:'#8b5cf6',amount:this.fmt(-16900),amtColor:'var(--neg)',freq:'Mensual · día 12',nextDate:'12 jul',daysLabel:'en 28 días',urgencyColor:'var(--text2)',toggleBg:'var(--accent)',toggleRight:'2px',opacity:'1'},
+      {name:'Netflix',cat:'Entretenimiento',icon:'play',iconBg:'var(--neg-weak)',iconFg:'var(--neg)',amount:this.fmt(-38900),amtColor:'var(--neg)',freq:'Mensual · día 12',nextDate:'12 jul',daysLabel:'en 28 días',urgencyColor:'var(--text2)',toggleBg:'var(--accent)',toggleRight:'2px',opacity:'1'},
+      {name:'Gym (inactivo)',cat:'Salud',icon:'dumbbell',iconBg:'var(--surface3)',iconFg:'var(--text3)',amount:this.fmt(-95000),amtColor:'var(--text3)',freq:'Mensual · día 1',nextDate:'—',daysLabel:'inactivo',urgencyColor:'var(--text3)',toggleBg:'var(--surface3)',toggleRight:'18px',opacity:'0.45'},
+    ];
+    return {recCalendar:cal,recList:list};
+  }
+
   // --- SISTEMA / HANDOFF ---
   sysView(){
     const gS=(name,vn,d,l)=>({name,vn,dark:d,light:l,sw:'var('+vn+')'});
@@ -897,9 +1389,10 @@ class Component extends DCLogic {
 
   renderVals(){
     const s=this.state;
-    const builtScreens=new Set(['dashboard','transacciones','reportes','metas','planificador','revision','automatizacion','sistema']);
+    const builtScreens=new Set(['dashboard','transacciones','reportes','metas','planificador','revision','automatizacion','sistema','patrimonio','cuentas','transferencias','categorias','csvimport','presupuestos','deudas','recurrentes']);
     const ph=this.pageHeader(),ci=this.comingInfo();
     const d=this.dashboard(),tx=this.txView(),rep=this.repView(),gs=this.goalsView(),pl=this.plannerView(),rv=this.revisionView(),at=this.automationView(),sy=this.sysView();
+    const pat=this.patrimonioView(),ctas=this.cuentasView(),trans=this.transferenciasView(),catsV=this.categoriasView(),csvi=this.csvImportView(),pres=this.presupuestosView(),deu=this.deudasView(),rec=this.recurrentesView();
     return {
       themeVars:s.theme==='dark'?'--bg:oklch(0.145 0 0); --surface:oklch(0.205 0 0); --surface2:oklch(0.269 0 0); --surface3:oklch(0.31 0 0); --border:oklch(1 0 0/0.10); --border-strong:oklch(1 0 0/0.18); --text:oklch(0.985 0 0); --text2:oklch(0.708 0 0); --text3:oklch(0.556 0 0); --accent:oklch(0.748 0.177 261); --accent-weak:oklch(0.325 0.07 263); --pos:oklch(0.74 0.15 162); --pos-weak:oklch(0.33 0.06 162); --neg:oklch(0.704 0.191 22); --neg-weak:oklch(0.34 0.08 25); --warn:oklch(0.80 0.13 80); --warn-weak:oklch(0.34 0.05 80); --info:oklch(0.70 0.12 235); --shadow:0 1px 2px oklch(0 0 0/.5),0 6px 22px oklch(0 0 0/.35);':'--border-strong:oklch(0.860 0 0);',
       appName:'App Finanzas',workspaceName:'Hogar · Personal',
@@ -909,10 +1402,12 @@ class Component extends DCLogic {
       currencies:['COP','CAD','USD'].map(c=>({code:c,onClick:()=>this.setState({currency:c}),fg:s.currency===c?'#fff':'var(--text2)',bg:s.currency===c?'var(--accent)':'transparent'})),
       langs:['es','en','fr'].map(l=>({code:l.toUpperCase(),onClick:()=>this.setState({lang:l}),fg:s.lang===l?'#fff':'var(--text2)',bg:s.lang===l?'var(--accent)':'transparent'})),
       onTheme:()=>this.toggleTheme(),themeLabel:this.t(s.theme==='dark'?'dark':'light'),themeIcon:s.theme==='dark'?'moon':'sun',
-      isDashboard:s.screen==='dashboard',isTx:s.screen==='transacciones',isReports:s.screen==='reportes',isMetas:s.screen==='metas',isPlanificador:s.screen==='planificador',isRevision:s.screen==='revision',isAutomatizacion:s.screen==='automatizacion',isSystem:s.screen==='sistema',isComing:!builtScreens.has(s.screen),
+      isDashboard:s.screen==='dashboard',isTx:s.screen==='transacciones',isReports:s.screen==='reportes',isMetas:s.screen==='metas',isPlanificador:s.screen==='planificador',isRevision:s.screen==='revision',isAutomatizacion:s.screen==='automatizacion',isSystem:s.screen==='sistema',
+      isPatrimonio:s.screen==='patrimonio',isCuentas:s.screen==='cuentas',isTransferencias:s.screen==='transferencias',isCategorias:s.screen==='categorias',isCsvimport:s.screen==='csvimport',isPresupuestos:s.screen==='presupuestos',isDeudas:s.screen==='deudas',isRecurrentes:s.screen==='recurrentes',
+      isComing:!builtScreens.has(s.screen),
       goDash:()=>this.go('dashboard'),goTx:()=>this.go('transacciones'),goMetas:()=>this.go('metas'),goPlanner:()=>this.go('planificador'),
       comingIcon:ci.icon,comingTitle:ci.title,comingPhase:ci.phase,comingPhaseFg:ci.phaseFg,comingPhaseBg:ci.phaseBg,comingDesc:ci.desc,
-      ...d,...tx,...rep,...gs,...pl,...rv,...at,...sy
+      ...d,...tx,...rep,...gs,...pl,...rv,...at,...sy,...pat,...ctas,...trans,...catsV,...csvi,...pres,...deu,...rec
     };
   }
 }
