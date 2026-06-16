@@ -68,6 +68,7 @@ Ver `IMPLEMENTATION-PLAN.md` para el detalle. Resumen:
 | **2** | Bottom-nav móvil + FAB + pantallas Más/Planear | medio | no |
 | **3** | Dashboard "Centro de control" | medio | no (datos existentes) |
 | **4** | Transacciones inline + selección masiva | medio | no |
+| **5** | Cuentas: hero "Balance total" + meta real por fila | bajo | no |
 | **Futuro** | Metas, Planificador, Mes en revisión, Reportes, Automatización | — | sí (no en este plan) |
 
 ## Matriz de fases (badges en la nav)

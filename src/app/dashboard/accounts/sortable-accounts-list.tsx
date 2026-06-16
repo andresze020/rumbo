@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type ReactNode } from 'react'
 import Link from 'next/link'
-import { GripVertical } from 'lucide-react'
+import { ArrowRight, GripVertical, Plus, Settings } from 'lucide-react'
 import {
   DndContext,
   KeyboardSensor,
@@ -22,17 +22,17 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { AccountAvatar } from '@/components/account-avatar'
-import { AccountGroup } from '@/components/account-group'
+import { BalanceAmount } from '@/components/balance-amount'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
-import { SubmitButton } from '@/components/submit-button'
 import { Callout } from '@/components/callout'
+import { useLanguage } from '@/components/language-provider'
 import { groupAccountsByType } from '@/lib/accounts-view/group'
 import { formatCurrency } from '@/lib/format'
 import type { AccountsView } from '@/lib/accounts-view/server'
 import { cn } from '@/lib/utils'
-import { archiveAccountAction, reorderAccountsAction } from './actions'
+import { reorderAccountsAction } from './actions'
 import { AccountCardDetails } from './account-card-details'
 
 export type AccountRowVM = {
@@ -57,6 +57,8 @@ export type AccountRowVM = {
   balanceType: 'posted' | 'owed'
   /** Display amount in base currency (positive for assets, owed for liabilities). */
   baseAmount: number
+  /** Pre-formatted base-currency equivalent — set when account currency ≠ household base currency. */
+  baseCurrencyLabel: string | null
   editHref: string
   openingBalanceHref: string
 }
@@ -68,65 +70,17 @@ type SortableAccountsListProps = {
   baseCurrency: string
 }
 
-function RowActions({
-  row,
-  showArchived,
-}: {
-  row: AccountRowVM
-  showArchived: boolean
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      <Link href={row.editHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-        Edit
-      </Link>
-
-      {!row.isArchived ? (
-        <GlobalAddTransactionButton
-          className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          defaultAccountId={row.id}
-        >
-          Add transaction
-        </GlobalAddTransactionButton>
-      ) : null}
-
-      {!row.isArchived && !row.hasOpeningBalance ? (
-        <Link
-          href={row.openingBalanceHref}
-          className={buttonVariants({ variant: 'outline', size: 'sm' })}
-        >
-          Set opening balance
-        </Link>
-      ) : null}
-
-      <form action={archiveAccountAction}>
-        <input type="hidden" name="account_id" value={row.id} />
-        <input type="hidden" name="is_archived" value={row.isArchived ? 'false' : 'true'} />
-        <input type="hidden" name="show_archived" value={showArchived ? 'true' : 'false'} />
-        <SubmitButton
-          type="submit"
-          size="sm"
-          variant={row.isArchived ? 'outline' : 'secondary'}
-          pendingText={row.isArchived ? 'Restoring' : 'Archiving'}
-        >
-          {row.isArchived ? 'Restore account' : 'Archive account'}
-        </SubmitButton>
-      </form>
-    </div>
-  )
-}
-
 function AccountRowBody({
   row,
-  showArchived,
   showTypeBadge,
   dragHandle,
 }: {
   row: AccountRowVM
-  showArchived: boolean
   showTypeBadge: boolean
   dragHandle?: ReactNode
 }) {
+  const { t } = useLanguage()
+
   return (
     <div className={cn('flex items-start gap-2 p-3', row.isArchived && 'bg-muted/30')}>
       {dragHandle}
@@ -150,26 +104,30 @@ function AccountRowBody({
                 >
                   {row.name}
                 </p>
+                {row.institutionName || row.lastFour ? (
+                  <p className="truncate text-xs text-muted-foreground">
+                    {row.institutionName}
+                    {row.institutionName && row.lastFour ? ' · ' : ''}
+                    {row.lastFour ? `···· ${row.lastFour}` : ''}
+                  </p>
+                ) : null}
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   {showTypeBadge ? (
                     <Badge variant="secondary" className="text-[11px]">
                       {row.accountTypeLabel}
                     </Badge>
                   ) : null}
-                  <Badge variant="outline" className="text-[11px]">
-                    {row.currencyCode}
-                  </Badge>
                   {row.accountClass === 'liability' ? (
                     <Badge
                       variant="outline"
                       className="border-rose-200 text-[11px] text-rose-600 dark:border-rose-900 dark:text-rose-400"
                     >
-                      Liability
+                      {t('accounts.classLiability')}
                     </Badge>
                   ) : null}
                   {row.isArchived ? (
                     <Badge variant="outline" className="text-[11px]">
-                      Archived
+                      {t('common.archived')}
                     </Badge>
                   ) : null}
                 </div>
@@ -182,13 +140,34 @@ function AccountRowBody({
           pendingLabel={row.pendingLabel}
           projectedLabel={row.projectedLabel}
           balanceType={row.balanceType}
-          institutionName={row.institutionName}
-          lastFour={row.lastFour}
-          includeInNetWorth={row.includeInNetWorth}
-          hasOpeningBalance={row.hasOpeningBalance}
-        >
-          <RowActions row={row} showArchived={showArchived} />
-        </AccountCardDetails>
+          baseCurrencyLabel={row.baseCurrencyLabel}
+        />
+        {/* Row action icons */}
+        <div className="-mx-2 mt-1 flex items-center justify-end gap-0.5 border-t pt-1">
+          {!row.isArchived ? (
+            <GlobalAddTransactionButton
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7')}
+              defaultAccountId={row.id}
+              aria-label={`Add transaction for ${row.name}`}
+            >
+              <Plus className="size-3.5" aria-hidden="true" />
+            </GlobalAddTransactionButton>
+          ) : null}
+          <Link
+            href={`/dashboard/transactions?account_id=${row.id}`}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7')}
+            aria-label={`View transactions for ${row.name}`}
+          >
+            <ArrowRight className="size-3.5" aria-hidden="true" />
+          </Link>
+          <Link
+            href={row.editHref}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7')}
+            aria-label={`Edit ${row.name}`}
+          >
+            <Settings className="size-3.5" aria-hidden="true" />
+          </Link>
+        </div>
       </div>
     </div>
   )
@@ -196,11 +175,9 @@ function AccountRowBody({
 
 function SortableRow({
   row,
-  showArchived,
   showTypeBadge,
 }: {
   row: AccountRowVM
-  showArchived: boolean
   showTypeBadge: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -214,7 +191,6 @@ function SortableRow({
     >
       <AccountRowBody
         row={row}
-        showArchived={showArchived}
         showTypeBadge={showTypeBadge}
         dragHandle={
           <button
@@ -232,6 +208,90 @@ function SortableRow({
   )
 }
 
+function AccountCard({ row }: { row: AccountRowVM }) {
+  const { t } = useLanguage()
+  const isOwed = row.balanceType === 'owed'
+
+  return (
+    <div
+      className={cn(
+        'flex flex-col gap-2 rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]',
+        row.isArchived && 'opacity-80'
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <AccountAvatar
+          accountType={row.accountType}
+          emoji={row.icon}
+          color={row.color}
+          className={row.isArchived ? 'opacity-60 grayscale' : undefined}
+        />
+        <div className="min-w-0 flex-1">
+          <p className={cn('truncate text-sm font-medium', row.isArchived && 'text-muted-foreground')}>
+            {row.name}
+          </p>
+          {row.institutionName || row.lastFour ? (
+            <p className="truncate text-xs text-muted-foreground">
+              {row.institutionName}
+              {row.institutionName && row.lastFour ? ' · ' : ''}
+              {row.lastFour ? `···· ${row.lastFour}` : ''}
+            </p>
+          ) : null}
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {row.accountClass === 'liability' ? (
+              <Badge
+                variant="outline"
+                className="border-rose-200 text-[11px] text-rose-600 dark:border-rose-900 dark:text-rose-400"
+              >
+                {t('accounts.classLiability')}
+              </Badge>
+            ) : null}
+            {row.isArchived ? (
+              <Badge variant="outline" className="text-[11px]">
+                {t('common.archived')}
+              </Badge>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1">
+        <BalanceAmount label={row.balanceLabel} amount={row.balanceAmount} className="text-base" />
+        {row.baseCurrencyLabel ? (
+          <p className="text-[11px] text-muted-foreground">≈ {row.baseCurrencyLabel}</p>
+        ) : null}
+        <p className="text-[11px] text-muted-foreground">{isOwed ? t('accounts.owed') : t('accounts.available')}</p>
+      </div>
+
+      <div className="-mx-3 flex items-center justify-end gap-0.5 border-t px-2 pt-2">
+        {!row.isArchived ? (
+          <GlobalAddTransactionButton
+            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7')}
+            defaultAccountId={row.id}
+            aria-label={`Add transaction for ${row.name}`}
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+          </GlobalAddTransactionButton>
+        ) : null}
+        <Link
+          href={`/dashboard/transactions?account_id=${row.id}`}
+          className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7')}
+          aria-label={`View transactions for ${row.name}`}
+        >
+          <ArrowRight className="size-3.5" aria-hidden="true" />
+        </Link>
+        <Link
+          href={row.editHref}
+          className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7')}
+          aria-label={`Edit ${row.name}`}
+        >
+          <Settings className="size-3.5" aria-hidden="true" />
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 export function SortableAccountsList({
   rows,
   view,
@@ -241,6 +301,7 @@ export function SortableAccountsList({
   const [items, setItems] = useState(rows)
   const [, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const { t } = useLanguage()
 
   // Adopt a fresh server list when its set/order actually changes (archived
   // toggle, account created/archived) without an effect, so optimistic drag
@@ -270,23 +331,6 @@ export function SortableAccountsList({
     })
   }
 
-  function reorderWithinGroup(groupType: string, activeId: string, overId: string) {
-    const groupIndexes = items
-      .map((row, index) => ({ row, index }))
-      .filter(({ row }) => row.accountType === groupType)
-    const groupRows = groupIndexes.map(({ row }) => row)
-    const oldIndex = groupRows.findIndex((row) => row.id === activeId)
-    const newIndex = groupRows.findIndex((row) => row.id === overId)
-    if (oldIndex === -1 || newIndex === -1) return
-
-    const reordered = arrayMove(groupRows, oldIndex, newIndex)
-    const next = [...items]
-    groupIndexes.forEach(({ index }, position) => {
-      next[index] = reordered[position]
-    })
-    persist(next)
-  }
-
   function handleListDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -302,7 +346,7 @@ export function SortableAccountsList({
     </Callout>
   ) : null
 
-  // ── Group view ───────────────────────────────────────────────────────────
+  // ── Card-grid group view ─────────────────────────────────────────────────
   if (view === 'group') {
     const groups = groupAccountsByType(items, {
       getType: (row) => row.accountType,
@@ -312,61 +356,29 @@ export function SortableAccountsList({
     return (
       <div>
         {errorCallout}
-        <div className="divide-y rounded-lg border">
-          {groups.map((group) => {
-            const groupBody = group.rows.map((row) =>
-              sortable ? (
-                <SortableRow
-                  key={row.id}
-                  row={row}
-                  showArchived={showArchived}
-                  showTypeBadge={false}
+        <div className="space-y-6">
+          {groups.map((group) => (
+            <div key={group.type}>
+              <div className="mb-3 flex items-center justify-between px-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {group.label}{' '}
+                  <span className="font-normal">
+                    · {group.count} {group.count === 1 ? t('accounts.account') : t('accounts.accountsPlural')}
+                  </span>
+                </span>
+                <BalanceAmount
+                  label={formatCurrency(group.subtotalBase, baseCurrency)}
+                  amount={group.subtotalBase}
+                  className="text-sm"
                 />
-              ) : (
-                <AccountRowBody
-                  key={row.id}
-                  row={row}
-                  showArchived={showArchived}
-                  showTypeBadge={false}
-                />
-              )
-            )
-
-            return (
-              <AccountGroup
-                key={group.type}
-                label={group.label}
-                count={group.count}
-                subtotalLabel={formatCurrency(group.subtotalBase, baseCurrency)}
-                subtotalAmount={group.subtotalBase}
-              >
-                {sortable ? (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={(event) => {
-                      const { active, over } = event
-                      if (!over || active.id === over.id) return
-                      reorderWithinGroup(
-                        group.type,
-                        String(active.id),
-                        String(over.id)
-                      )
-                    }}
-                  >
-                    <SortableContext
-                      items={group.rows.map((row) => row.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {groupBody}
-                    </SortableContext>
-                  </DndContext>
-                ) : (
-                  groupBody
-                )}
-              </AccountGroup>
-            )
-          })}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {group.rows.map((row) => (
+                  <AccountCard key={row.id} row={row} />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     )
@@ -378,14 +390,12 @@ export function SortableAccountsList({
       <SortableRow
         key={row.id}
         row={row}
-        showArchived={showArchived}
         showTypeBadge
       />
     ) : (
       <AccountRowBody
         key={row.id}
         row={row}
-        showArchived={showArchived}
         showTypeBadge
       />
     )
@@ -394,7 +404,7 @@ export function SortableAccountsList({
   return (
     <div>
       {errorCallout}
-      <div className="divide-y rounded-lg border">
+      <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
         {sortable ? (
           <DndContext
             sensors={sensors}

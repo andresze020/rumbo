@@ -114,6 +114,43 @@ nuevos `components/{financial-hero-card,insight-card}.tsx`.
 
 ---
 
+## Sprint 5 — Cuentas: hero "Balance total" + meta real por fila
+**Objetivo:** alinear `/dashboard/accounts` con la pantalla `isCuentas` del
+prototipo actualizado (`App Finanzas.dc.html`, actualizado 2026-06-15), reusando
+toda la funcionalidad existente (crear/editar/archivar, saldo de apertura, drag
+& reorder, alternancia lista/agrupada).
+
+**Mapeo diseño → implementación**
+
+| Pieza del diseño (`isCuentas`) | Cómo se adapta |
+|---|---|
+| Hero "Balance total · {{ monthLabel }}" | Nueva tarjeta hero con el total firmado (suma de `baseAmount` de las cuentas activas mostradas), sin scope de mes — los balances son un snapshot. |
+| Botón "Conectar cuenta" | Se mapea al "Create account" ya existente en `PageHeader`. Sin bank-sync en el MVP. |
+| `cuentasGroups` (grupos con subtotal) | Ya existe vía `groupAccountsByType` + `AccountGroup`. Se mantiene 1 grupo por `account_type` (más granular que el mock, que junta Corriente+Ahorros). |
+| Fila: ícono + nombre + `{{ ac.bank }} · ···· {{ ac.last4 }}` | Línea de meta (institución · últimos 4) bajo el nombre en la fila colapsada — dato real ya presente en `AccountRowVM`, hoy solo visible al expandir. |
+| `{{ ac.balLabel }}` bajo el balance | Etiqueta derivada de `account_class`: "Available" (activo) / "Owed" (pasivo). No es mock. |
+| `{{ ac.lastSync }}` ("Hace 2 min", "Cierre ayer"...) | **No se implementa** — implicaría sync bancario en vivo fuera de alcance MVP, sin dato real que lo respalde. |
+| Contenedor de lista | `<Card>` shadcn → `rounded-xl border bg-card shadow-sm shadow-black/[0.03]` + `SectionHeading`, como en dashboard/transacciones/deudas/recurrentes. |
+
+**Archivos:** `app/dashboard/accounts/page.tsx`,
+`app/dashboard/accounts/sortable-accounts-list.tsx`,
+`app/dashboard/accounts/account-card-details.tsx`.
+**Backend:** ninguno (visual-only, reusa acciones existentes). **Riesgo:** bajo.
+**Responsive:** misma página sirve desktop y móvil (sidebar vs. "More → Accounts");
+hero y KPIs a 1 columna en móvil; sin overflow en COP/CAD/USD.
+
+---
+
+## Nota — actualización del prototipo (2026-06-15)
+`project/App Finanzas.dc.html` fue reemplazado por una versión ampliada del
+prototipo que ahora incluye, además de las 9 pantallas originales, bloques para
+`isPatrimonio`, `isCuentas`, `isTransferencias`, `isCategorias`, `isCsvimport`,
+`isPresupuestos`, `isDeudas` e `isRecurrentes`. Sprint 5 solo cubre `isCuentas`;
+el resto queda disponible como referencia para sprints futuros (no planificados
+aquí todavía).
+
+---
+
 ## Futuro (diseñado, NO implementar en este plan)
 Metas y fondos · Planificador de deuda · Mes en revisión · Reportes /
 Tendencias / Flujo de caja · Automatización / Reglas / Cola de revisión ·

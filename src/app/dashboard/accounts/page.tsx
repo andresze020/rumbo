@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { Plus, Scale, TrendingUp, Wallet } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import {
+  archiveAccountAction,
   createAccountAction,
   updateAccountAction,
 } from './actions'
@@ -15,28 +16,18 @@ import { AccountsViewToggle } from '@/components/accounts-view-toggle'
 import { getAccountsView } from '@/lib/accounts-view/server'
 import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { BalanceAmount } from '@/components/balance-amount'
 import { EmptyState } from '@/components/empty-state'
-import { MetricCard } from '@/components/metric-card'
 import { PageHeader } from '@/components/page-header'
+import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
-
-const ACCENT = {
-  emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
-  rose: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
-  primary: 'bg-primary/10 text-primary',
-  muted: 'bg-muted text-muted-foreground',
-}
+import { getLocale } from '@/lib/i18n/server'
+import { translate } from '@/lib/i18n/translate'
+import type { Locale } from '@/lib/i18n/dictionaries'
 
 type AccountsPageProps = {
   searchParams: Promise<{
@@ -114,20 +105,24 @@ type TransactionEntryBalance = {
       }[]
 }
 
-const accountTypes = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'checking', label: 'Checking' },
-  { value: 'savings', label: 'Savings' },
-  { value: 'credit_card', label: 'Credit card' },
-  { value: 'debt', label: 'Debt' },
-  { value: 'investment', label: 'Investment' },
-  { value: 'other', label: 'Other' },
-]
+function getAccountTypes(locale: Locale) {
+  return [
+    { value: 'cash', label: translate(locale, 'accounts.typeCash') },
+    { value: 'checking', label: translate(locale, 'accounts.typeChecking') },
+    { value: 'savings', label: translate(locale, 'accounts.typeSavings') },
+    { value: 'credit_card', label: translate(locale, 'accounts.typeCreditCard') },
+    { value: 'debt', label: translate(locale, 'accounts.typeDebt') },
+    { value: 'investment', label: translate(locale, 'accounts.typeInvestment') },
+    { value: 'other', label: translate(locale, 'accounts.typeOther') },
+  ]
+}
 
-const accountClasses = [
-  { value: 'asset', label: 'Asset' },
-  { value: 'liability', label: 'Liability' },
-]
+function getAccountClasses(locale: Locale) {
+  return [
+    { value: 'asset', label: translate(locale, 'accounts.classAsset') },
+    { value: 'liability', label: translate(locale, 'accounts.classLiability') },
+  ]
+}
 
 const selectClassName =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
@@ -242,53 +237,28 @@ function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
 }
 
-function sumIncludedSignedBase(rows: AccountRow[], accountClass: string) {
-  return rows
-    .filter(
-      (row) =>
-        row.metadata.include_in_net_worth &&
-        row.metadata.account_class === accountClass
-    )
-    .reduce(
-      (total, row) =>
-        total + Number(row.balance.posted_balance_base_currency),
-      0
-    )
-}
-
-function sumIncludedDisplayedLiabilities(rows: AccountRow[]) {
-  return rows
-    .filter(
-      (row) =>
-        row.metadata.include_in_net_worth &&
-        row.metadata.account_class === 'liability'
-    )
-    .reduce((total, row) => {
-      const signedBalance = Number(row.balance.posted_balance_base_currency)
-
-      return total + Math.max(0, -signedBalance)
-    }, 0)
-}
-
 function CreateAccountForm({
   activeCurrencies,
   defaultCurrency,
   showArchived,
+  locale,
 }: {
   activeCurrencies: Currency[]
   defaultCurrency: string
   showArchived: boolean
+  locale: Locale
 }) {
+  const accountTypes = getAccountTypes(locale)
   return (
     <form action={createAccountAction} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="name">Name</Label>
+          <Label htmlFor="name">{translate(locale, 'accounts.name')}</Label>
           <Input id="name" name="name" required />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="account_type">Type</Label>
+          <Label htmlFor="account_type">{translate(locale, 'accounts.type')}</Label>
           <select
             id="account_type"
             name="account_type"
@@ -304,7 +274,7 @@ function CreateAccountForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="currency_code">Currency</Label>
+          <Label htmlFor="currency_code">{translate(locale, 'accounts.currency')}</Label>
           <select
             id="currency_code"
             name="currency_code"
@@ -320,12 +290,12 @@ function CreateAccountForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="institution_name">Institution</Label>
+          <Label htmlFor="institution_name">{translate(locale, 'accounts.institution')}</Label>
           <Input id="institution_name" name="institution_name" />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="last_four">Last four</Label>
+          <Label htmlFor="last_four">{translate(locale, 'accounts.lastFour')}</Label>
           <Input
             id="last_four"
             name="last_four"
@@ -337,7 +307,7 @@ function CreateAccountForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="notes">Notes</Label>
+        <Label htmlFor="notes">{translate(locale, 'accounts.notes')}</Label>
         <Textarea id="notes" name="notes" />
       </div>
 
@@ -349,22 +319,22 @@ function CreateAccountForm({
           className="mt-0.5 size-4"
         />
         <span className="space-y-1">
-          <span className="block">Include in net worth</span>
+          <span className="block">{translate(locale, 'accounts.includeInNetWorth')}</span>
           <span className="block text-sm font-normal text-muted-foreground">
-            Counts this account in household totals.
+            {translate(locale, 'accounts.includeInNetWorthDesc')}
           </span>
         </span>
       </Label>
 
       <div className="flex flex-wrap gap-2">
-        <SubmitButton type="submit" pendingText="Creating account">
-          Create account
+        <SubmitButton type="submit" pendingText={translate(locale, 'accounts.creatingAccount')}>
+          {translate(locale, 'accounts.createAccount')}
         </SubmitButton>
         <Link
           href={accountsPath({ showArchived })}
           className={buttonVariants({ variant: 'outline' })}
         >
-          Cancel
+          {translate(locale, 'common.cancel')}
         </Link>
       </div>
     </form>
@@ -374,13 +344,22 @@ function CreateAccountForm({
 function EditAccountForm({
   row,
   showArchived,
+  hasOpeningBalance,
+  openingBalanceHref,
+  locale,
 }: {
   row: AccountRow
   showArchived: boolean
+  hasOpeningBalance: boolean
+  openingBalanceHref: string
+  locale: Locale
 }) {
   const account = row.metadata
+  const accountTypes = getAccountTypes(locale)
+  const accountClasses = getAccountClasses(locale)
 
   return (
+    <>
     <form action={updateAccountAction} className="space-y-4">
       <input type="hidden" name="account_id" value={account.id} />
       <input
@@ -391,7 +370,7 @@ function EditAccountForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor={`name_${account.id}`}>Name</Label>
+          <Label htmlFor={`name_${account.id}`}>{translate(locale, 'accounts.name')}</Label>
           <Input
             id={`name_${account.id}`}
             name="name"
@@ -401,7 +380,7 @@ function EditAccountForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`institution_${account.id}`}>Institution</Label>
+          <Label htmlFor={`institution_${account.id}`}>{translate(locale, 'accounts.institution')}</Label>
           <Input
             id={`institution_${account.id}`}
             name="institution_name"
@@ -410,7 +389,7 @@ function EditAccountForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`account_type_${account.id}`}>Type</Label>
+          <Label htmlFor={`account_type_${account.id}`}>{translate(locale, 'accounts.type')}</Label>
           <select
             id={`account_type_${account.id}`}
             name="account_type"
@@ -426,7 +405,7 @@ function EditAccountForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`account_class_${account.id}`}>Class</Label>
+          <Label htmlFor={`account_class_${account.id}`}>{translate(locale, 'accounts.class')}</Label>
           <select
             id={`account_class_${account.id}`}
             name="account_class"
@@ -442,7 +421,7 @@ function EditAccountForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`last_four_${account.id}`}>Last four</Label>
+          <Label htmlFor={`last_four_${account.id}`}>{translate(locale, 'accounts.lastFour')}</Label>
           <Input
             id={`last_four_${account.id}`}
             name="last_four"
@@ -454,7 +433,7 @@ function EditAccountForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`sort_order_${account.id}`}>Sort order</Label>
+          <Label htmlFor={`sort_order_${account.id}`}>{translate(locale, 'accounts.sortOrder')}</Label>
           <Input
             id={`sort_order_${account.id}`}
             name="sort_order"
@@ -465,7 +444,7 @@ function EditAccountForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`color_${account.id}`}>Color</Label>
+          <Label htmlFor={`color_${account.id}`}>{translate(locale, 'accounts.color')}</Label>
           <Input
             id={`color_${account.id}`}
             name="color"
@@ -478,7 +457,7 @@ function EditAccountForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`icon_${account.id}`}>Icon</Label>
+          <Label htmlFor={`icon_${account.id}`}>{translate(locale, 'accounts.icon')}</Label>
           <Input
             id={`icon_${account.id}`}
             name="icon"
@@ -492,7 +471,7 @@ function EditAccountForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor={`account_notes_${account.id}`}>Notes</Label>
+        <Label htmlFor={`account_notes_${account.id}`}>{translate(locale, 'accounts.notes')}</Label>
         <Textarea
           id={`account_notes_${account.id}`}
           name="notes"
@@ -508,25 +487,46 @@ function EditAccountForm({
           className="mt-0.5 size-4"
         />
         <span className="space-y-1">
-          <span className="block">Include in net worth</span>
+          <span className="block">{translate(locale, 'accounts.includeInNetWorth')}</span>
           <span className="block text-sm font-normal text-muted-foreground">
-            Currency and balances stay controlled by the ledger.
+            {translate(locale, 'accounts.includeInNetWorthEditDesc')}
           </span>
         </span>
       </Label>
 
       <div className="flex flex-wrap gap-2">
-        <SubmitButton type="submit" pendingText="Saving account">
-          Save account
+        <SubmitButton type="submit" pendingText={translate(locale, 'accounts.savingAccount')}>
+          {translate(locale, 'accounts.saveAccount')}
         </SubmitButton>
         <Link
           href={accountsPath({ showArchived })}
           className={buttonVariants({ variant: 'outline' })}
         >
-          Cancel
+          {translate(locale, 'common.cancel')}
         </Link>
       </div>
     </form>
+    <div className="mt-4 flex flex-wrap gap-2 border-t pt-4">
+      {!account.is_archived && !hasOpeningBalance ? (
+        <Link href={openingBalanceHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          {translate(locale, 'accounts.setOpeningBalance')}
+        </Link>
+      ) : null}
+      <form action={archiveAccountAction}>
+        <input type="hidden" name="account_id" value={account.id} />
+        <input type="hidden" name="is_archived" value={account.is_archived ? 'false' : 'true'} />
+        <input type="hidden" name="show_archived" value={showArchived ? 'true' : 'false'} />
+        <SubmitButton
+          type="submit"
+          size="sm"
+          variant={account.is_archived ? 'outline' : 'secondary'}
+          pendingText={account.is_archived ? translate(locale, 'accounts.restoringAccount') : translate(locale, 'accounts.archivingAccount')}
+        >
+          {account.is_archived ? translate(locale, 'accounts.restoreAccount') : translate(locale, 'accounts.archiveAccount')}
+        </SubmitButton>
+      </form>
+    </div>
+    </>
   )
 }
 
@@ -546,6 +546,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const openingBalanceAccountId =
     typeof params.openingBalance === 'string' ? params.openingBalance : null
   const view = await getAccountsView()
+  const locale = await getLocale()
   const supabase = await createClient()
 
   const {
@@ -633,6 +634,30 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     accountEntriesError = Boolean(entriesError)
   }
 
+  const activeAccountIds = allAccounts.filter((a) => !a.is_archived).map((a) => a.id)
+  let prevMonthBalance: number | null = null
+
+  if (activeAccountIds.length) {
+    const prevMonthEnd = (() => {
+      const d = new Date()
+      d.setDate(0)
+      return d.toISOString().slice(0, 10)
+    })()
+    const { data: prevEntries } = await supabase
+      .from('transaction_entries')
+      .select('amount_base_currency, transactions!inner(status, deleted_at, transaction_date)')
+      .eq('household_id', household.id)
+      .in('account_id', activeAccountIds)
+      .is('transactions.deleted_at', null)
+      .eq('transactions.status', 'posted')
+      .lte('transactions.transaction_date', prevMonthEnd)
+
+    if (prevEntries && prevEntries.length > 0) {
+      prevMonthBalance = (prevEntries as { amount_base_currency: number | string }[])
+        .reduce((sum, e) => sum + Number(e.amount_base_currency), 0)
+    }
+  }
+
   const accountBalancesById = new Map(
     ((accountBalances ?? []) as AccountBalance[]).map((balance) => [
       balance.account_id,
@@ -666,6 +691,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const activeRows = accountRows.filter((row) => !row.metadata.is_archived)
   const archivedRows = accountRows.filter((row) => row.metadata.is_archived)
   const displayRows = showArchived ? archivedRows : activeRows
+  const accountTypeLabelMap = new Map(getAccountTypes(locale).map((at) => [at.value, at.label]))
 
   const accountRowVMs: AccountRowVM[] = displayRows.map((row) => {
     const { balance, metadata } = row
@@ -681,7 +707,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       id: metadata.id,
       name: metadata.name,
       accountType: metadata.account_type,
-      accountTypeLabel: formatLabel(metadata.account_type),
+      accountTypeLabel: accountTypeLabelMap.get(metadata.account_type) ?? formatLabel(metadata.account_type),
       accountClass: isLiability ? 'liability' : 'asset',
       currencyCode: metadata.currency_code,
       isArchived: metadata.is_archived,
@@ -709,8 +735,17 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       baseAmount,
       editHref: accountsPath({ showArchived, edit: metadata.id }),
       openingBalanceHref: accountsPath({ showArchived, openingBalance: metadata.id }),
+      baseCurrencyLabel: metadata.currency_code !== household.base_currency
+        ? formatCurrency(baseAmount, household.base_currency)
+        : null,
     }
   })
+  const totalBalance = accountRowVMs.reduce((sum, row) => sum + row.baseAmount, 0)
+  const prevMonthDelta =
+    prevMonthBalance !== null && prevMonthBalance !== 0
+      ? ((totalBalance - prevMonthBalance) / Math.abs(prevMonthBalance)) * 100
+      : null
+  const monthLabel = new Date().toLocaleDateString(locale, { month: 'short', year: 'numeric' })
   const selectedEditRow = displayRows.find(
     (row) => row.metadata.id === editAccountId
   )
@@ -726,61 +761,18 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       ?.code ??
     activeCurrencies[0]?.code ??
     'CAD'
-  const includedAccountCount = activeRows.filter(
-    (row) => row.metadata.include_in_net_worth
-  ).length
-  const totalAssets = sumIncludedSignedBase(activeRows, 'asset')
-  const signedLiabilities = sumIncludedSignedBase(activeRows, 'liability')
-  const totalLiabilities = sumIncludedDisplayedLiabilities(activeRows)
-  const netWorthImpact = totalAssets + signedLiabilities
   const hasLoadError =
     accountBalancesError ||
     accountMetadataError ||
     openingBalanceEntriesError ||
     accountEntriesError
-  const summaryCards = [
-    {
-      label: 'Total assets',
-      value: formatCurrency(totalAssets, household.base_currency),
-      description: 'Included active asset accounts',
-      icon: <Wallet />,
-      accent: ACCENT.emerald,
-      valueClassName: undefined as string | undefined,
-    },
-    {
-      label: 'Total liabilities',
-      value: formatCurrency(totalLiabilities, household.base_currency),
-      description: 'Included active liability accounts',
-      icon: <Scale />,
-      accent: ACCENT.rose,
-      valueClassName: undefined as string | undefined,
-    },
-    {
-      label: 'Net worth impact',
-      value: formatCurrency(netWorthImpact, household.base_currency),
-      description: `${includedAccountCount} included accounts`,
-      icon: <TrendingUp />,
-      accent: ACCENT.primary,
-      valueClassName: netWorthImpact < 0 ? 'text-red-600 dark:text-red-400' : undefined,
-    },
-    {
-      label: showArchived ? 'Archived accounts' : 'Active accounts',
-      value: String(showArchived ? archivedRows.length : activeRows.length),
-      description: showArchived
-        ? `${activeRows.length} active accounts`
-        : `${archivedRows.length} archived accounts`,
-      icon: <Plus />,
-      accent: ACCENT.muted,
-      valueClassName: undefined as string | undefined,
-    },
-  ]
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <PageHeader
         eyebrow={household.name}
-        title="Accounts"
-        description="Manage household accounts and balances."
+        title={translate(locale, 'nav.accounts')}
+        description={translate(locale, 'accounts.pageDescription')}
         actions={
           <>
             <Link
@@ -788,46 +780,62 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
               className={buttonVariants({ size: 'sm' })}
             >
               <Plus aria-hidden="true" />
-              Create account
+              {translate(locale, 'accounts.createAccount')}
             </Link>
             <Link
               href={accountsPath({ showArchived: !showArchived })}
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
-              {showArchived ? 'Hide archived' : 'Show archived'}
+              {showArchived ? translate(locale, 'accounts.hideArchived') : translate(locale, 'accounts.showArchived')}
             </Link>
           </>
         }
       />
 
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
-      {created ? <Callout variant="success">Account created.</Callout> : null}
-      {updated ? <Callout variant="success">Account updated.</Callout> : null}
-      {archived ? <Callout variant="info">Account archived.</Callout> : null}
-      {unarchived ? <Callout variant="success">Account restored.</Callout> : null}
+      {created ? <Callout variant="success">{translate(locale, 'accounts.accountCreated')}</Callout> : null}
+      {updated ? <Callout variant="success">{translate(locale, 'accounts.accountUpdated')}</Callout> : null}
+      {archived ? <Callout variant="info">{translate(locale, 'accounts.accountArchived')}</Callout> : null}
+      {unarchived ? <Callout variant="success">{translate(locale, 'accounts.accountRestored')}</Callout> : null}
       {infoMessage ? <Callout variant="info">{infoMessage}</Callout> : null}
       {openingBalanceSet ? (
-        <Callout variant="success">Opening balance set.</Callout>
+        <Callout variant="success">{translate(locale, 'accounts.openingBalanceSet')}</Callout>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {summaryCards.map((card) => (
-          <MetricCard
-            key={card.label}
-            label={card.label}
-            value={card.value}
-            description={card.description}
-            icon={card.icon}
-            accent={card.accent}
-            valueClassName={card.valueClassName}
+      <div className="rounded-2xl border bg-card p-5 shadow-sm shadow-black/[0.03]">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {showArchived ? translate(locale, 'accounts.archivedBalance') : `${translate(locale, 'accounts.totalBalance')} · ${monthLabel}`}
+        </p>
+        <div className="mt-1">
+          <BalanceAmount
+            label={formatCurrency(totalBalance, household.base_currency)}
+            amount={totalBalance}
+            className="text-3xl tracking-tight sm:text-4xl"
           />
-        ))}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          {!showArchived && prevMonthDelta !== null ? (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                prevMonthDelta >= 0
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+                  : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+              }`}
+            >
+              {prevMonthDelta >= 0 ? '↑' : '↓'}{' '}
+              {Math.abs(prevMonthDelta).toFixed(1)}% {translate(locale, 'accounts.vsPrevMonth')}
+            </span>
+          ) : null}
+          <span className="text-xs text-muted-foreground">
+            {activeRows.length} {activeRows.length === 1 ? translate(locale, 'accounts.activeAccount') : translate(locale, 'accounts.activeAccounts')}
+          </span>
+        </div>
       </div>
 
       {isCreating ? (
         <FormDialog
-          title="Create account"
-          description="Add a basic household account."
+          title={translate(locale, 'accounts.createAccount')}
+          description={translate(locale, 'accounts.createDialogDesc')}
           cancelHref={accountsPath({ showArchived })}
           wide
         >
@@ -835,25 +843,32 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
             activeCurrencies={activeCurrencies}
             defaultCurrency={defaultCurrency}
             showArchived={showArchived}
+            locale={locale}
           />
         </FormDialog>
       ) : null}
 
       {selectedEditRow ? (
         <FormDialog
-          title="Edit account"
-          description={`Update metadata for ${selectedEditRow.metadata.name}. Balances stay controlled by ledger entries.`}
+          title={translate(locale, 'accounts.editAccount')}
+          description={translate(locale, 'accounts.editDialogDesc', { name: selectedEditRow.metadata.name })}
           cancelHref={accountsPath({ showArchived })}
           wide
         >
-          <EditAccountForm row={selectedEditRow} showArchived={showArchived} />
+          <EditAccountForm
+            row={selectedEditRow}
+            showArchived={showArchived}
+            hasOpeningBalance={selectedEditRow.hasOpeningBalance}
+            openingBalanceHref={accountsPath({ showArchived, openingBalance: selectedEditRow.metadata.id })}
+            locale={locale}
+          />
         </FormDialog>
       ) : null}
 
       {selectedOpeningBalanceRow ? (
         <FormDialog
-          title="Opening balance"
-          description={`Set the starting ledger balance for ${selectedOpeningBalanceRow.metadata.name}.`}
+          title={translate(locale, 'accounts.openingBalanceLabel')}
+          description={translate(locale, 'accounts.openingBalanceDialogDesc', { name: selectedOpeningBalanceRow.metadata.name })}
           cancelHref={accountsPath({ showArchived })}
         >
           <OpeningBalanceForm
@@ -867,55 +882,35 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
         </FormDialog>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <CardTitle>
-                {showArchived ? 'Archived accounts' : 'Active accounts'}
-              </CardTitle>
-              <CardDescription>
-                {showArchived
-                  ? 'Archived accounts remain available for history.'
-                  : 'Drag the handle to reorder. Switch between list and grouped views.'}
-              </CardDescription>
-            </div>
+      <section className="space-y-3">
+        <SectionHeading
+          title={translate(locale, showArchived ? 'accounts.archivedSection' : 'accounts.activeSection')}
+          description={translate(locale, showArchived ? 'accounts.archivedSectionDesc' : 'accounts.sectionDesc')}
+          action={<AccountsViewToggle view={view} />}
+        />
 
-            <AccountsViewToggle view={view} />
-          </div>
-        </CardHeader>
-        <CardContent>
-          {hasLoadError ? (
-            <Callout variant="error">Could not load account balances.</Callout>
-          ) : accountRowVMs.length ? (
-            <SortableAccountsList
-              rows={accountRowVMs}
-              view={view}
-              showArchived={showArchived}
-              baseCurrency={household.base_currency}
-            />
-          ) : (
-            <EmptyState
-              title={
-                showArchived
-                  ? 'No archived accounts yet'
-                  : 'No active accounts yet'
-              }
-              description={
-                showArchived
-                  ? 'Archived accounts will appear here after you archive one.'
-                  : 'Create your first account to start tracking balances.'
-              }
-              actionHref={
-                showArchived
-                  ? undefined
-                  : accountsPath({ showArchived, mode: 'create' })
-              }
-              actionLabel={showArchived ? undefined : 'Create account'}
-            />
-          )}
-        </CardContent>
-      </Card>
+        {hasLoadError ? (
+          <Callout variant="error">{translate(locale, 'accounts.loadError')}</Callout>
+        ) : accountRowVMs.length ? (
+          <SortableAccountsList
+            rows={accountRowVMs}
+            view={view}
+            showArchived={showArchived}
+            baseCurrency={household.base_currency}
+          />
+        ) : (
+          <EmptyState
+            title={translate(locale, showArchived ? 'accounts.noArchivedTitle' : 'accounts.noActiveTitle')}
+            description={translate(locale, showArchived ? 'accounts.noArchivedDesc' : 'accounts.noActiveDesc')}
+            actionHref={
+              showArchived
+                ? undefined
+                : accountsPath({ showArchived, mode: 'create' })
+            }
+            actionLabel={showArchived ? undefined : translate(locale, 'accounts.createAccount')}
+          />
+        )}
+      </section>
     </main>
   )
 }

@@ -2,19 +2,21 @@
 
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { LayoutList, Rows3 } from 'lucide-react'
+import { LayoutGrid, LayoutList } from 'lucide-react'
 import { setAccountsViewAction } from '@/lib/accounts-view/actions'
 import type { AccountsView } from '@/lib/accounts-view/server'
+import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
-
-const OPTIONS: { value: AccountsView; label: string; icon: typeof Rows3 }[] = [
-  { value: 'group', label: 'Group', icon: Rows3 },
-  { value: 'list', label: 'List', icon: LayoutList },
-]
 
 export function AccountsViewToggle({ view }: { view: AccountsView }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const { t } = useLanguage()
+
+  const options: { value: AccountsView; label: string; icon: typeof LayoutGrid }[] = [
+    { value: 'group', label: t('accounts.cardsView'), icon: LayoutGrid },
+    { value: 'list', label: t('accounts.listView'), icon: LayoutList },
+  ]
 
   function select(next: AccountsView) {
     if (next === view) return
@@ -30,7 +32,7 @@ export function AccountsViewToggle({ view }: { view: AccountsView }) {
       role="group"
       aria-label="Account view"
     >
-      {OPTIONS.map(({ value, label, icon: Icon }) => (
+      {options.map(({ value, label, icon: Icon }) => (
         <button
           key={value}
           type="button"
