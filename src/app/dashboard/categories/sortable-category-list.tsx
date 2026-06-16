@@ -38,6 +38,7 @@ export type CategoryVM = {
   color: string | null
   icon: string | null
   sort_order: number | null
+  childCount: number
   editHref: string
 }
 
@@ -99,11 +100,13 @@ function SortableCategoryRow({
   parentName,
   childCount,
   showArchived,
+  level = 0,
 }: {
   category: CategoryVM
   parentName: string | null
   childCount: number
   showArchived: boolean
+  level?: number
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: category.id })
@@ -120,6 +123,7 @@ function SortableCategoryRow({
         childCount={childCount}
         editHref={category.editHref}
         showArchived={showArchived}
+        level={level}
         dragHandle={<DragHandle name={category.name} {...attributes} {...listeners} />}
       />
     </div>
@@ -190,7 +194,7 @@ export function SortableCategoryList({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 md:space-y-6">
       {error ? <Callout variant="error">{error}</Callout> : null}
 
       {state.map((group) => {
@@ -200,10 +204,16 @@ export function SortableCategoryList({
         const rootIds = roots.map((r) => r.id)
 
         return (
-          <section key={group.value} className="space-y-3">
-            <SectionHeading title={group.label} />
+          <section key={group.value} className="space-y-2 md:space-y-3">
+            {state.length > 1 ? (
+              <SectionHeading title={group.label} className="px-1 md:px-0" />
+            ) : null}
 
-            <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
+            <div className="md:overflow-hidden md:rounded-xl md:border md:bg-card md:shadow-sm md:shadow-black/[0.03]">
+              <div className="hidden grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b bg-muted/20 px-4 py-2 text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground md:grid">
+                <span>Category</span>
+                <span className="sr-only">Actions</span>
+              </div>
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
@@ -226,7 +236,10 @@ export function SortableCategoryList({
                     const childIds = children.map((c) => c.id)
 
                     return (
-                      <div key={category.id} className="divide-y">
+                      <div
+                        key={category.id}
+                        className="mb-2 divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03] last:mb-0 md:mb-0 md:rounded-none md:border-0 md:shadow-none"
+                      >
                         {sortable ? (
                           <SortableCategoryRow
                             category={category}
@@ -241,11 +254,12 @@ export function SortableCategoryList({
                             childCount={children.length}
                             editHref={category.editHref}
                             showArchived={showArchived}
+                            level={0}
                           />
                         )}
 
                         {children.length ? (
-                          <div className="ml-4 divide-y border-l-2 border-muted">
+                          <div className="divide-y bg-muted/20 md:bg-muted/[0.08]">
                             <DndContext
                               sensors={sensors}
                               collisionDetection={closestCenter}
@@ -271,6 +285,7 @@ export function SortableCategoryList({
                                       parentName={category.name}
                                       childCount={0}
                                       showArchived={showArchived}
+                                      level={1}
                                     />
                                   ) : (
                                     <CategoryRow
@@ -280,6 +295,7 @@ export function SortableCategoryList({
                                       childCount={0}
                                       editHref={child.editHref}
                                       showArchived={showArchived}
+                                      level={1}
                                     />
                                   )
                                 )}
@@ -308,6 +324,7 @@ export function SortableCategoryList({
                         childCount={0}
                         editHref={category.editHref}
                         showArchived={showArchived}
+                        level={0}
                       />
                     ))}
                   </div>
