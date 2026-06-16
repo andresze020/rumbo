@@ -27,7 +27,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
             <InstallAppHint />
 
-            <main className="flex-1 pb-24 lg:pb-24">
+            <main className="flex-1 pt-14 pb-24 lg:pt-0 lg:pb-24">
               {children}
             </main>
           </div>

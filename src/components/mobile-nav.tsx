@@ -17,7 +17,7 @@ export function MobileNav({ className }: { className?: string }) {
   return (
     <header
       className={cn(
-        'sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70',
+        'fixed inset-x-0 top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70',
         className
       )}
     >
