@@ -1,10 +1,11 @@
+import type { ReactNode } from 'react'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { CalendarDays, CircleDollarSign, HandCoins, Plus, Scale } from 'lucide-react'
+import { CalendarDays, HandCoins, Percent, Plus } from 'lucide-react'
 import { createDebtPaymentAction } from './actions'
 import { DebtCreateForm } from './debt-create-form'
 import { DebtEditForm } from './debt-edit-form'
-import { DebtRow } from './debt-row'
+import { DebtCard } from './debt-card'
 import { AmountInput } from '@/components/amount-input'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +13,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
-import { MetricCard } from '@/components/metric-card'
 import { PageHeader } from '@/components/page-header'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
@@ -132,6 +132,33 @@ function getPaydownPercent(debt: Debt, balance: number) {
   return Math.min(Math.max((originalPrincipal - balance) / originalPrincipal, 0), 1)
 }
 
+function DebtSummaryStat({
+  icon,
+  accent,
+  label,
+  value,
+}: {
+  icon: ReactNode
+  accent: string
+  label: string
+  value: string
+}) {
+  return (
+    <div className="lg:border-l lg:pl-7">
+      <div className="flex items-center gap-2">
+        <span
+          className={`flex size-6 shrink-0 items-center justify-center rounded-md ${accent}`}
+          aria-hidden="true"
+        >
+          {icon}
+        </span>
+        <span className="text-[11px] text-muted-foreground">{label}</span>
+      </div>
+      <p className="mt-1.5 font-mono text-base font-semibold tabular-nums">{value}</p>
+    </div>
+  )
+}
+
 export default async function DebtsPage({ searchParams }: DebtsPageProps) {
   const params = await searchParams
   const created = params.created === '1'
@@ -225,6 +252,29 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
     .filter((d) => d.payment_due_day)
     .sort((a, b) => Number(a.payment_due_day ?? 0) - Number(b.payment_due_day ?? 0))[0]
 
+  // Overall paydown across active debts with a recorded original principal.
+  const totalOriginalPrincipal = activeDebts.reduce(
+    (sum, d) => sum + Number(d.original_principal ?? 0),
+    0
+  )
+  const overallPaidPercent =
+    totalOriginalPrincipal > 0
+      ? Math.min(Math.max((totalOriginalPrincipal - totalDebtBase) / totalOriginalPrincipal, 0), 1)
+      : null
+
+  // Average interest rate, weighted by outstanding balance.
+  const ratedDebts = activeDebts
+    .map((d) => ({
+      rate: Number(d.interest_rate ?? 0),
+      balance: getBaseDebtBalance(d, balancesByAccountId),
+    }))
+    .filter((d) => d.rate > 0 && d.balance > 0)
+  const ratedBalanceTotal = ratedDebts.reduce((sum, d) => sum + d.balance, 0)
+  const averageRate =
+    ratedBalanceTotal > 0
+      ? ratedDebts.reduce((sum, d) => sum + d.rate * d.balance, 0) / ratedBalanceTotal
+      : null
+
   const defaultCurrency =
     currencyOptions.find((c) => c.code === household.base_currency)?.code ??
     currencyOptions[0]?.code ??
@@ -289,36 +339,58 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
         <Callout variant="error">Could not load debt data. Try refreshing.</Callout>
       ) : null}
 
-      {/* ── Summary cards ──────────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          label="Active debts"
-          value={String(activeDebts.length)}
-          description={`${inactiveDebts.length} inactive`}
-          icon={<Scale />}
-          accent="bg-primary/10 text-primary"
-        />
-        <MetricCard
-          label="Outstanding debt"
-          value={formatCurrency(totalDebtBase, household.base_currency)}
-          description="Posted liability balances"
-          icon={<CircleDollarSign />}
-          accent="bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400"
-        />
-        <MetricCard
-          label="Minimum payments"
-          value={formatCurrency(totalMinimumPayment, household.base_currency)}
-          description="Monthly metadata total"
-          icon={<HandCoins />}
-          accent="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
-        />
-        <MetricCard
-          label="Next due day"
-          value={nextDueDebt ? formatDueDay(nextDueDebt.payment_due_day) : 'N/A'}
-          description={nextDueDebt?.name ?? 'No due days set'}
-          icon={<CalendarDays />}
-          accent="bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400"
-        />
+      {/* ── Summary ────────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border bg-card p-5 shadow-sm shadow-black/[0.03] sm:p-6">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-center lg:gap-0">
+          <div className="min-w-0 lg:pr-7">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Total debt · {String(activeDebts.length)} active
+            </p>
+            <p className="mt-1.5 font-mono text-3xl font-bold tabular-nums text-rose-600 dark:text-rose-400">
+              {formatCurrency(totalDebtBase, household.base_currency)}
+            </p>
+            {overallPaidPercent !== null ? (
+              <>
+                <div className="mt-3 h-2 max-w-xs overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{ width: `${Math.round(overallPaidPercent * 100)}%` }}
+                  />
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">
+                  {Math.round(overallPaidPercent * 100)}% paid off the original balance
+                </p>
+              </>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Add an original principal to track paydown progress.
+              </p>
+            )}
+          </div>
+
+          <DebtSummaryStat
+            icon={<HandCoins className="size-3.5" />}
+            accent="bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400"
+            label="Monthly payment"
+            value={formatCurrency(totalMinimumPayment, household.base_currency)}
+          />
+          <DebtSummaryStat
+            icon={<Percent className="size-3.5" />}
+            accent="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
+            label="Average rate"
+            value={
+              averageRate !== null
+                ? `${new Intl.NumberFormat('en-CA', { maximumFractionDigits: 1 }).format(averageRate)}%`
+                : 'N/A'
+            }
+          />
+          <DebtSummaryStat
+            icon={<CalendarDays className="size-3.5" />}
+            accent="bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400"
+            label="Next due day"
+            value={nextDueDebt ? formatDueDay(nextDueDebt.payment_due_day) : 'N/A'}
+          />
+        </div>
       </div>
 
       {/* ── Dialogs ────────────────────────────────────────────────────── */}
@@ -492,7 +564,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
           {activeDebts.length > 0 ? (
             <section className="space-y-3">
               <SectionHeading title="Active" description="Debts you are currently paying down." />
-              <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {activeDebts.map((debt) => {
                   const account = accountsById.get(debt.account_id)
                   const currentBalance = getDebtBalance(debt, balancesByAccountId)
@@ -503,7 +575,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                   const canRegisterPayment = currentBalance > 0 && sourceAccounts.length > 0
 
                   return (
-                    <DebtRow
+                    <DebtCard
                       key={debt.id}
                       debt={debt}
                       account={account}
@@ -524,14 +596,14 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
           {inactiveDebts.length > 0 ? (
             <section className="space-y-3">
               <SectionHeading title="Inactive" description="Closed or paused debts." />
-              <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {inactiveDebts.map((debt) => {
                   const account = accountsById.get(debt.account_id)
                   const currentBalance = getDebtBalance(debt, balancesByAccountId)
                   const paydownPercent = getPaydownPercent(debt, currentBalance)
 
                   return (
-                    <DebtRow
+                    <DebtCard
                       key={debt.id}
                       debt={debt}
                       account={account}

@@ -1,9 +1,8 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Scale, Sparkles, TrendingUp, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
-import { MetricCard } from '@/components/metric-card'
+import { NetWorthHero } from '@/components/net-worth-hero'
 import { MonthNav } from '@/components/month-nav'
 import { PageHeader } from '@/components/page-header'
 import { InfoTooltip } from '@/components/info-tooltip'
@@ -18,13 +17,6 @@ import { groupAccountsByType } from '@/lib/accounts-view/group'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
-
-const ACCENT = {
-  emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
-  rose: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
-  primary: 'bg-primary/10 text-primary',
-  violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
-}
 
 type NetWorthPageProps = {
   searchParams: Promise<{
@@ -341,6 +333,25 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
   )
   const hasEvolutionError = evolution.some((p) => p.hasError)
 
+  // Sparkline + month-over-month delta come from the same evolution series.
+  const sparkValues = evolution.map((point) => point.netWorth)
+  const previousNetWorth = evolution.length >= 2 ? evolution[evolution.length - 2].netWorth : null
+  const netWorthDeltaPct =
+    previousNetWorth !== null && Math.abs(previousNetWorth) > 0
+      ? (summary.netWorth - previousNetWorth) / Math.abs(previousNetWorth)
+      : null
+
+  // Liability-to-asset ratio — a simple leverage health read.
+  const liabilityRatio = summary.totalAssets > 0 ? summary.totalLiabilities / summary.totalAssets : 0
+  const liabilityRatioPct = Math.round(liabilityRatio * 100)
+  const ratioBarWidth = Math.min(Math.max(liabilityRatio, 0), 1) * 100
+  const ratioHealth =
+    liabilityRatio < 0.35
+      ? { label: 'Healthy', className: 'text-emerald-600 dark:text-emerald-400' }
+      : liabilityRatio < 0.6
+        ? { label: 'Moderate', className: 'text-amber-600 dark:text-amber-400' }
+        : { label: 'High', className: 'text-rose-600 dark:text-rose-400' }
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
 
@@ -385,41 +396,68 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
         It does not revalue foreign-currency balances with month-end market rates yet.
       </Callout>
 
-      {/* ── Summary cards ──────────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          label="Total assets"
-          value={formatCurrency(summary.totalAssets, household.base_currency)}
-          description="Posted included asset balances"
-          icon={<Wallet />}
-          accent={ACCENT.emerald}
-        />
-        <MetricCard
-          label="Total liabilities"
-          value={formatCurrency(summary.totalLiabilities, household.base_currency)}
-          description="Posted included liability balances"
-          icon={<Scale />}
-          accent={ACCENT.rose}
-          tooltip={<InfoTooltip term="liabilities" label="Total liabilities" />}
-        />
-        <MetricCard
-          label="Net worth"
-          value={formatCurrency(summary.netWorth, household.base_currency)}
-          description="Assets minus liabilities"
-          icon={<TrendingUp />}
-          accent={ACCENT.primary}
-          valueClassName={summary.netWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined}
-          tooltip={<InfoTooltip term="netWorth" label="Net worth" />}
-        />
-        <MetricCard
-          label="Projected net worth"
-          value={formatCurrency(summary.projectedNetWorth, household.base_currency)}
-          description="Posted plus pending balances"
-          icon={<Sparkles />}
-          accent={ACCENT.violet}
-          valueClassName={summary.projectedNetWorth < 0 ? 'text-red-600 dark:text-red-400' : undefined}
-          tooltip={<InfoTooltip term="projectedNetWorth" label="Projected net worth" />}
-        />
+      {/* ── Net-worth hero ─────────────────────────────────────────────── */}
+      <NetWorthHero
+        netWorth={summary.netWorth}
+        assets={summary.totalAssets}
+        liabilities={summary.totalLiabilities}
+        projected={summary.projectedNetWorth}
+        deltaPct={netWorthDeltaPct}
+        currency={household.base_currency}
+        spark={sparkValues}
+        monthLabel={formatMonthLabel(selectedMonth)}
+        labels={{
+          netWorth: 'Net worth',
+          assets: 'Assets',
+          liabilities: 'Liabilities',
+          projected: 'Projected',
+          vsPrev: 'vs. last month',
+        }}
+      />
+
+      {/* ── Assets / Liabilities ───────────────────────────────────────── */}
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        <section className="space-y-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+            Assets
+          </p>
+          <AccountList
+            accounts={includedAssets}
+            baseCurrency={household.base_currency}
+            emptyMessage="No included asset accounts."
+            view={accountsView}
+          />
+        </section>
+
+        <div className="space-y-3">
+          <p className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+            Liabilities
+            <InfoTooltip term="liabilities" label="Liabilities" />
+          </p>
+          <AccountList
+            accounts={includedLiabilities}
+            baseCurrency={household.base_currency}
+            emptyMessage="No included liability accounts."
+            view={accountsView}
+          />
+
+          {/* Liability-to-asset ratio */}
+          <div className="rounded-xl border bg-card p-4 shadow-sm shadow-black/[0.03]">
+            <p className="text-sm font-semibold">Liability-to-asset ratio</p>
+            <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-rose-500 transition-all"
+                style={{ width: `${ratioBarWidth}%` }}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between text-xs">
+              <span className="text-muted-foreground tabular-nums">
+                {liabilityRatioPct}% of assets are debt
+              </span>
+              <span className={`font-semibold ${ratioHealth.className}`}>{ratioHealth.label}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Monthly evolution ──────────────────────────────────────────── */}
@@ -463,28 +501,6 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
             )
           })}
         </div>
-      </section>
-
-      {/* ── Assets ─────────────────────────────────────────────────────── */}
-      <section className="space-y-3">
-        <SectionHeading title="Assets" description="Included asset accounts." />
-        <AccountList
-          accounts={includedAssets}
-          baseCurrency={household.base_currency}
-          emptyMessage="No included asset accounts."
-          view={accountsView}
-        />
-      </section>
-
-      {/* ── Liabilities ────────────────────────────────────────────────── */}
-      <section className="space-y-3">
-        <SectionHeading title="Liabilities" description="Included liability accounts." />
-        <AccountList
-          accounts={includedLiabilities}
-          baseCurrency={household.base_currency}
-          emptyMessage="No included liability accounts."
-          view={accountsView}
-        />
       </section>
 
       {/* ── Excluded ───────────────────────────────────────────────────── */}
