@@ -253,14 +253,13 @@ function AccountCard({ row }: { row: AccountRowVM }) {
             ) : null}
           </div>
         </div>
-      </div>
-
-      <div className="flex-1">
-        <BalanceAmount label={row.balanceLabel} amount={row.balanceAmount} className="text-base" />
-        {row.baseCurrencyLabel ? (
-          <p className="text-[11px] text-muted-foreground">≈ {row.baseCurrencyLabel}</p>
-        ) : null}
-        <p className="text-[11px] text-muted-foreground">{isOwed ? t('accounts.owed') : t('accounts.available')}</p>
+        <div className="shrink-0 text-right">
+          <BalanceAmount label={row.balanceLabel} amount={row.balanceAmount} className="text-sm font-semibold" />
+          {row.baseCurrencyLabel ? (
+            <p className="text-[11px] text-muted-foreground">≈ {row.baseCurrencyLabel}</p>
+          ) : null}
+          <p className="text-[11px] text-muted-foreground">{isOwed ? t('accounts.owed') : t('accounts.available')}</p>
+        </div>
       </div>
 
       <div className="-mx-3 flex items-center justify-end gap-0.5 border-t px-2 pt-2">
