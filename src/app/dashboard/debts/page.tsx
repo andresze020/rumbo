@@ -144,19 +144,23 @@ function DebtSummaryStat({
   value: string
 }) {
   return (
-    <div className="lg:border-l lg:pl-7">
-      <div className="flex items-center gap-2">
+    <div className="lg:flex-1 lg:px-6 lg:text-center">
+      <div className="flex items-center gap-2 lg:justify-center">
         <span
           className={`flex size-6 shrink-0 items-center justify-center rounded-md ${accent}`}
           aria-hidden="true"
         >
           {icon}
         </span>
-        <span className="text-[11px] text-muted-foreground">{label}</span>
+        <span className="whitespace-nowrap text-[11px] text-muted-foreground">{label}</span>
       </div>
-      <p className="mt-1.5 font-mono text-base font-semibold tabular-nums">{value}</p>
+      <p className="mt-1.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums">{value}</p>
     </div>
   )
+}
+
+function DebtSummaryDivider() {
+  return <div className="hidden w-px self-stretch bg-border lg:block" aria-hidden="true" />
 }
 
 export default async function DebtsPage({ searchParams }: DebtsPageProps) {
@@ -341,39 +345,40 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
 
       {/* ── Summary ────────────────────────────────────────────────────── */}
       <div className="rounded-2xl border bg-card p-5 shadow-sm shadow-black/[0.03] sm:p-6">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-center lg:gap-0">
-          <div className="min-w-0 lg:pr-7">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Total debt · {String(activeDebts.length)} active
-            </p>
-            <p className="mt-1.5 font-mono text-3xl font-bold tabular-nums text-rose-600 dark:text-rose-400">
-              {formatCurrency(totalDebtBase, household.base_currency)}
-            </p>
-            {overallPaidPercent !== null ? (
-              <>
-                <div className="mt-3 h-2 max-w-xs overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-emerald-500 transition-all"
-                    style={{ width: `${Math.round(overallPaidPercent * 100)}%` }}
-                  />
-                </div>
-                <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">
-                  {Math.round(overallPaidPercent * 100)}% paid off the original balance
-                </p>
-              </>
-            ) : (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Add an original principal to track paydown progress.
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Total debt · {String(activeDebts.length)} active
+          </p>
+          <p className="mt-1.5 font-mono text-3xl font-bold tabular-nums text-rose-600 dark:text-rose-400">
+            {formatCurrency(totalDebtBase, household.base_currency)}
+          </p>
+          {overallPaidPercent !== null ? (
+            <>
+              <div className="mt-3 h-2 max-w-xs overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all"
+                  style={{ width: `${Math.round(overallPaidPercent * 100)}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">
+                {Math.round(overallPaidPercent * 100)}% paid off the original balance
               </p>
-            )}
-          </div>
+            </>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Add an original principal to track paydown progress.
+            </p>
+          )}
+        </div>
 
+        <div className="mt-5 grid grid-cols-1 gap-5 border-t pt-5 sm:grid-cols-3 lg:flex lg:items-center lg:gap-0 lg:border-t-0 lg:pt-0">
           <DebtSummaryStat
             icon={<HandCoins className="size-3.5" />}
             accent="bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400"
             label="Monthly payment"
             value={formatCurrency(totalMinimumPayment, household.base_currency)}
           />
+          <DebtSummaryDivider />
           <DebtSummaryStat
             icon={<Percent className="size-3.5" />}
             accent="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
@@ -384,6 +389,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                 : 'N/A'
             }
           />
+          <DebtSummaryDivider />
           <DebtSummaryStat
             icon={<CalendarDays className="size-3.5" />}
             accent="bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400"
