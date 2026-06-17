@@ -1,18 +1,26 @@
+import type { ReactNode } from 'react'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import {
+  ArrowLeft,
+  Copy,
+  Gauge,
+  HandCoins,
+  Plus,
+  Target,
+  Wallet,
+} from 'lucide-react'
 import {
   copyPreviousMonthBudgetAction,
   createBudgetAction,
   upsertBudgetLineAction,
 } from './actions'
-import { HandCoins, PieChart, Plus, Target, Wallet } from 'lucide-react'
 import { BudgetLineRow } from './budget-line-row'
 import { buttonVariants } from '@/components/ui/button'
 import { AmountInput } from '@/components/amount-input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
-import { MetricCard } from '@/components/metric-card'
 import { MonthNav } from '@/components/month-nav'
 import { PageHeader } from '@/components/page-header'
 import { InfoTooltip } from '@/components/info-tooltip'
@@ -22,6 +30,7 @@ import { SubmitButton } from '@/components/submit-button'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
+import { cn } from '@/lib/utils'
 
 type BudgetsPageProps = {
   searchParams: Promise<{
@@ -65,10 +74,21 @@ type Category = {
   exclude_from_reports: boolean
   sort_order: number | null
   icon: string | null
+  color: string | null
 }
 
 const selectClassName =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+
+const fallbackLineColors = [
+  '#4f63e0',
+  '#d65450',
+  '#1f9d63',
+  '#2f86c2',
+  '#c98a2b',
+  '#e05fa0',
+  '#8b5cf6',
+]
 
 function currentMonthParam() {
   const today = new Date()
@@ -126,7 +146,7 @@ function formatPercent(value: number | null) {
   if (value === null) return 'N/A'
   return new Intl.NumberFormat('en-CA', {
     style: 'percent',
-    minimumFractionDigits: 1,
+    minimumFractionDigits: 0,
     maximumFractionDigits: 1,
   }).format(value)
 }
@@ -139,6 +159,86 @@ function getCategoryPath(
     ? categoriesById.get(category.parent_category_id)?.name
     : null
   return parentName ? `${parentName} / ${category.name}` : category.name
+}
+
+function getUsageTone(percentUsed: number | null) {
+  if (percentUsed === null)
+    return {
+      label: 'No lines',
+      valueClassName: 'text-muted-foreground',
+      barClassName: 'bg-muted-foreground',
+    }
+  if (percentUsed > 1)
+    return {
+      label: 'Over budget',
+      valueClassName: 'text-destructive',
+      barClassName: 'bg-destructive',
+    }
+  if (percentUsed >= 0.85)
+    return {
+      label: 'Near limit',
+      valueClassName: 'text-amber-600 dark:text-amber-400',
+      barClassName: 'bg-amber-500',
+    }
+  return {
+    label: 'On track',
+    valueClassName: 'text-emerald-600 dark:text-emerald-400',
+    barClassName: 'bg-emerald-500',
+  }
+}
+
+function BudgetKpiCard({
+  label,
+  value,
+  description,
+  icon,
+  accent,
+  valueClassName,
+  progress,
+}: {
+  label: string
+  value: string
+  description: string
+  icon: ReactNode
+  accent: string
+  valueClassName?: string
+  progress?: { width: number; className: string }
+}) {
+  return (
+    <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03] md:p-4">
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            'flex size-8 shrink-0 items-center justify-center rounded-lg [&_svg]:size-4',
+            accent
+          )}
+          aria-hidden="true"
+        >
+          {icon}
+        </span>
+        <p className="min-w-0 truncate text-[11px] font-medium text-muted-foreground md:text-xs">
+          {label}
+        </p>
+      </div>
+      <p
+        className={cn(
+          'mt-3 break-words font-mono text-base font-bold tabular-nums md:text-xl',
+          valueClassName
+        )}
+      >
+        {value}
+      </p>
+      <p className="mt-1 text-[10.5px] text-muted-foreground md:text-xs">{description}</p>
+      {progress ? (
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div
+            className={cn('h-full rounded-full transition-all', progress.className)}
+            style={{ width: `${progress.width}%` }}
+          />
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
@@ -187,7 +287,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   const { data: categoryRows, error: categoriesError } = await supabase
     .from('categories')
     .select(
-      'id, name, category_type, reporting_type, parent_category_id, is_archived, exclude_from_budget, exclude_from_reports, sort_order, icon'
+      'id, name, category_type, reporting_type, parent_category_id, is_archived, exclude_from_budget, exclude_from_reports, sort_order, icon, color'
     )
     .eq('household_id', household.id)
     .is('deleted_at', null)
@@ -228,14 +328,54 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   const totalSpent = budgetLines.reduce((sum, l) => sum + Number(l.actual_amount ?? 0), 0)
   const remaining = totalBudgeted - totalSpent
   const percentUsed = totalBudgeted > 0 ? totalSpent / totalBudgeted : null
+  const usageTone = getUsageTone(percentUsed)
+  const usageWidth = percentUsed !== null ? Math.min(Math.round(percentUsed * 100), 100) : 0
+  const overBudgetCount = budgetLines.filter(
+    (line) => Number(line.actual_amount ?? 0) > Number(line.planned_amount ?? 0)
+  ).length
 
   const cancelHref = budgetsPath({ month: selectedMonth })
+  const canAddLine = Boolean(!budgetError && budget && categoryOptions.length > 0)
+  const canCopyPrevious = Boolean(!budgetError && budget && hasPreviousBudget)
+
+  const addLineHref = budgetsPath({ month: selectedMonth, mode: 'addLine' })
+
+  function renderCopyPreviousForm() {
+    if (!canCopyPrevious) return null
+
+    return (
+      <form action={copyPreviousMonthBudgetAction}>
+        <input type="hidden" name="month" value={selectedMonth} />
+        <SubmitButton type="submit" variant="outline" size="sm" pendingText="Copying...">
+          <Copy aria-hidden="true" />
+          Copy previous
+        </SubmitButton>
+      </form>
+    )
+  }
+
+  function renderAddLineButton(label = 'Add line') {
+    if (!canAddLine) return null
+
+    return (
+      <Link
+        href={addLineHref}
+        className={cn(
+          buttonVariants({ size: 'sm' }),
+          'rounded-full px-3.5 shadow-sm shadow-primary/20'
+        )}
+      >
+        <Plus aria-hidden="true" />
+        {label}
+      </Link>
+    )
+  }
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-
-      {/* ── Header ─────────────────────────────────────────────────────── */}
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 pb-24 sm:gap-6 sm:p-6">
+      {/* Header */}
       <PageHeader
+        className="hidden md:flex"
         eyebrow={household.name}
         title={
           <span className="flex items-center gap-1.5">
@@ -243,7 +383,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
             <InfoTooltip term="allocations" label="Budgets" />
           </span>
         }
-        description={formatMonthLabel(selectedMonth)}
+        description={`Planned vs actual for ${formatMonthLabel(selectedMonth)}.`}
         actions={
           <>
             <MonthNav
@@ -252,30 +392,37 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
               previousLabel={translate(locale, 'common.previousMonth')}
               nextLabel={translate(locale, 'common.nextMonth')}
             />
-
-            {!budgetError && budget && hasPreviousBudget ? (
-              <form action={copyPreviousMonthBudgetAction}>
-                <input type="hidden" name="month" value={selectedMonth} />
-                <SubmitButton type="submit" variant="outline" size="sm" pendingText="Copying…">
-                  Copy previous month
-                </SubmitButton>
-              </form>
-            ) : null}
-
-            {!budgetError && budget && categoryOptions.length > 0 ? (
-              <Link
-                href={budgetsPath({ month: selectedMonth, mode: 'addLine' })}
-                className={buttonVariants({ size: 'sm' })}
-              >
-                <Plus aria-hidden="true" />
-                Add budget line
-              </Link>
-            ) : null}
           </>
         }
       />
 
-      {/* ── Notifications ──────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 md:hidden">
+        <Link
+          href="/dashboard/plan"
+          className={buttonVariants({ variant: 'outline', size: 'icon' })}
+          aria-label="Back to Plan"
+        >
+          <ArrowLeft aria-hidden="true" />
+        </Link>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-[15px] font-bold leading-tight">Budgets</h1>
+          <p className="truncate text-[11px] text-muted-foreground">
+            {formatMonthLabel(selectedMonth)}
+          </p>
+        </div>
+        {renderAddLineButton('New')}
+      </div>
+
+      <div className="md:hidden">
+        <MonthNav
+          month={selectedMonth}
+          basePath="/dashboard/budgets"
+          previousLabel={translate(locale, 'common.previousMonth')}
+          nextLabel={translate(locale, 'common.nextMonth')}
+        />
+      </div>
+
+      {/* Notifications */}
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
       {budgetError || categoriesError ? (
         <Callout variant="error">Could not load budget data.</Callout>
@@ -291,24 +438,23 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
         </Callout>
       ) : null}
 
-      {/* ── No budget for this month ────────────────────────────────────── */}
       {!budgetError && !budget ? (
-        <div className="rounded-xl border border-dashed bg-card/50 p-8 text-center">
-          <p className="font-medium">No budget for {formatMonthLabel(selectedMonth)}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-dashed bg-card/50 p-6 text-center shadow-sm shadow-black/[0.03] md:p-8">
+          <p className="font-semibold">No budget for {formatMonthLabel(selectedMonth)}</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
             Create a budget to start planning expenses for this month.
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             <form action={createBudgetAction}>
               <input type="hidden" name="month" value={selectedMonth} />
-              <SubmitButton type="submit" pendingText="Creating…">
+              <SubmitButton type="submit" pendingText="Creating...">
                 Create budget
               </SubmitButton>
             </form>
             {hasPreviousBudget ? (
               <form action={copyPreviousMonthBudgetAction}>
                 <input type="hidden" name="month" value={selectedMonth} />
-                <SubmitButton type="submit" variant="secondary" pendingText="Copying…">
+                <SubmitButton type="submit" variant="secondary" pendingText="Copying...">
                   Copy previous month
                 </SubmitButton>
               </form>
@@ -319,40 +465,41 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
 
       {!budgetError && budget ? (
         <>
-          {/* ── Summary cards ────────────────────────────────────────────── */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricCard
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
+            <BudgetKpiCard
               label="Total budgeted"
               value={formatCurrency(totalBudgeted, budgetCurrency)}
-              description="Planned expense budget"
+              description="Planned spend"
               icon={<Target />}
               accent="bg-primary/10 text-primary"
             />
-            <MetricCard
+            <BudgetKpiCard
               label="Total spent"
               value={formatCurrency(totalSpent, budgetCurrency)}
-              description="Posted expense actuals"
+              description={`${budgetLines.length} active lines`}
               icon={<HandCoins />}
               accent="bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400"
+              progress={{ width: usageWidth, className: usageTone.barClassName }}
             />
-            <MetricCard
+            <BudgetKpiCard
               label="Remaining"
               value={formatCurrency(remaining, budgetCurrency)}
-              description="Budgeted minus spent"
+              description={remaining < 0 ? 'Over planned' : 'Still available'}
               icon={<Wallet />}
               accent="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
-              valueClassName={remaining < 0 ? 'text-red-600 dark:text-red-400' : undefined}
+              valueClassName={remaining < 0 ? 'text-destructive' : undefined}
             />
-            <MetricCard
-              label="Percent used"
+            <BudgetKpiCard
+              label="Usage"
               value={formatPercent(percentUsed)}
-              description="Spent divided by budgeted"
-              icon={<PieChart />}
+              description={usageTone.label}
+              icon={<Gauge />}
               accent="bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
+              valueClassName={usageTone.valueClassName}
+              progress={{ width: usageWidth, className: usageTone.barClassName }}
             />
           </div>
 
-          {/* ── Dialogs ──────────────────────────────────────────────────── */}
           {isAddingLine ? (
             <FormDialog
               title="Add budget line"
@@ -386,7 +533,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                           <option key={c.id} value={c.id}>
                             {c.icon ? `${c.icon} ` : ''}
                             {getCategoryPath(c, categoriesById)}
-                            {c.exclude_from_reports ? ' · no reports' : ''}
+                            {c.exclude_from_reports ? ' - no reports' : ''}
                           </option>
                         ))}
                       </select>
@@ -403,7 +550,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                     </div>
                   </div>
 
-                  <SubmitButton type="submit" pendingText="Adding…">
+                  <SubmitButton type="submit" pendingText="Adding...">
                     Add line
                   </SubmitButton>
                 </form>
@@ -453,48 +600,79 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                   edited here.
                 </p>
 
-                <SubmitButton type="submit" pendingText="Saving…">
+                <SubmitButton type="submit" pendingText="Saving...">
                   Save line
                 </SubmitButton>
               </form>
             </FormDialog>
           ) : null}
 
-          {/* ── Budget lines ─────────────────────────────────────────────── */}
           <section className="space-y-3">
-            <SectionHeading
-              title="Budget lines"
-              description={`Planned vs actual for ${formatMonthLabel(selectedMonth)}.`}
-            />
-
-            {budgetLines.length ? (
-              <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
-                {budgetLines.map((line) => {
-                  const category = line.category_id ? categoriesById.get(line.category_id) : null
-                  const categoryName = category
-                    ? getCategoryPath(category, categoriesById)
-                    : line.category_name ?? 'Unknown category'
-
-                  return (
-                    <BudgetLineRow
-                      key={line.line_id}
-                      line={line}
-                      categoryName={categoryName}
-                      budgetCurrency={budgetCurrency}
-                      selectedMonth={selectedMonth}
-                      editHref={budgetsPath({ month: selectedMonth, edit: line.line_id ?? '' })}
-                    />
-                  )
-                })}
-              </div>
-            ) : (
-              <EmptyState
-                title="No budget lines yet"
-                description="Add a budget line to start planning this month's expenses."
-                actionHref={budgetsPath({ month: selectedMonth, mode: 'addLine' })}
-                actionLabel="Add budget line"
+            <div className="flex items-end justify-between gap-3">
+              <SectionHeading
+                title="Budget lines"
+                description={`${formatMonthLabel(selectedMonth)} - ${overBudgetCount} over budget.`}
               />
-            )}
+              <div className="hidden shrink-0 items-center gap-2 md:flex">
+                {renderCopyPreviousForm()}
+                {renderAddLineButton()}
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
+              <div className="flex items-center justify-between gap-3 border-b px-4 py-3 md:hidden">
+                <div>
+                  <p className="text-sm font-bold">Lines</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Tap a line for actions and details.
+                  </p>
+                </div>
+                {renderCopyPreviousForm()}
+              </div>
+
+              {budgetLines.length ? (
+                <>
+                  <div className="hidden grid-cols-[minmax(11rem,1fr)_minmax(5rem,6.5rem)_minmax(5rem,6.5rem)_minmax(5rem,6.5rem)_minmax(9rem,11rem)_4rem] items-center gap-3 border-b bg-muted/20 px-4 py-2 text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground md:grid">
+                    <span>Category</span>
+                    <span className="text-right">Planned</span>
+                    <span className="text-right">Spent</span>
+                    <span className="text-right">Remaining</span>
+                    <span className="text-left">Progress</span>
+                    <span className="sr-only">Actions</span>
+                  </div>
+                  <div className="divide-y">
+                    {budgetLines.map((line, index) => {
+                      const category = line.category_id ? categoriesById.get(line.category_id) : null
+                      const categoryName = category
+                        ? getCategoryPath(category, categoriesById)
+                        : line.category_name ?? 'Unknown category'
+
+                      return (
+                        <BudgetLineRow
+                          key={line.line_id}
+                          line={line}
+                          categoryName={categoryName}
+                          categoryIcon={category?.icon}
+                          categoryColor={category?.color ?? fallbackLineColors[index % fallbackLineColors.length]}
+                          budgetCurrency={budgetCurrency}
+                          selectedMonth={selectedMonth}
+                          editHref={budgetsPath({ month: selectedMonth, edit: line.line_id ?? '' })}
+                        />
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="p-6">
+                  <EmptyState
+                    title="No budget lines yet"
+                    description="Add a budget line to start planning this month's expenses."
+                    actionHref={addLineHref}
+                    actionLabel="Add line"
+                  />
+                </div>
+              )}
+            </div>
           </section>
         </>
       ) : null}
