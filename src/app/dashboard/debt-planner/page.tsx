@@ -11,8 +11,8 @@ import { PageHeader } from '@/components/page-header'
 import { Callout } from '@/components/callout'
 import { EmptyState } from '@/components/empty-state'
 import { buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { AmountInput } from '@/components/amount-input'
 import { formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { getHousehold } from '@/lib/analysis/server'
@@ -367,6 +367,12 @@ export default async function DebtPlannerPage({ searchParams }: DebtPlannerPageP
         }
       />
 
+      <p className="max-w-2xl text-sm text-muted-foreground">
+        Plan how to clear your debts faster. Pick a payoff strategy, then enter any extra
+        amount you could put toward debt each month — the plan shows which debt to attack
+        first, your debt-free date, and how much interest you&apos;d save.
+      </p>
+
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((kpi) => (
@@ -432,20 +438,16 @@ export default async function DebtPlannerPage({ searchParams }: DebtPlannerPageP
           className="flex flex-wrap items-end gap-2"
         >
           <input type="hidden" name="strategy" value={strategy} />
-          <div className="space-y-1.5">
+          <div className="w-44 space-y-1.5">
             <Label htmlFor="extra" className="text-xs text-muted-foreground">
-              Extra monthly payment ({currency})
+              Extra payment / month
             </Label>
-            <Input
+            <AmountInput
               id="extra"
               name="extra"
-              type="number"
-              min={0}
-              step="any"
-              inputMode="decimal"
+              currencyCode={currency}
               defaultValue={extra > 0 ? String(extra) : ''}
-              placeholder="0"
-              className="w-36"
+              placeholder="0.00"
             />
           </div>
           <button type="submit" className={buttonVariants({ size: 'sm' })}>
@@ -557,11 +559,13 @@ export default async function DebtPlannerPage({ searchParams }: DebtPlannerPageP
         >
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-sm font-bold">
-              With {formatCurrency(extra, currency)}/mo extra
+              {extra > 0 ? `With ${formatCurrency(extra, currency)}/mo extra` : 'With an extra payment'}
             </h2>
-            <span className="shrink-0 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-              Recommended
-            </span>
+            {extra > 0 ? (
+              <span className="shrink-0 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                Recommended
+              </span>
+            ) : null}
           </div>
           <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300/80">
             Rolling the same extra into your payoff order each month.

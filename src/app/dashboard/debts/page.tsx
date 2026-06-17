@@ -152,9 +152,9 @@ function DebtSummaryStat({
         >
           {icon}
         </span>
-        <span className="text-[11px] text-muted-foreground">{label}</span>
+        <span className="whitespace-nowrap text-[11px] text-muted-foreground">{label}</span>
       </div>
-      <p className="mt-1.5 font-mono text-base font-semibold tabular-nums">{value}</p>
+      <p className="mt-1.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums">{value}</p>
     </div>
   )
 }
@@ -341,8 +341,8 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
 
       {/* ── Summary ────────────────────────────────────────────────────── */}
       <div className="rounded-2xl border bg-card p-5 shadow-sm shadow-black/[0.03] sm:p-6">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-center lg:gap-0">
-          <div className="min-w-0 lg:pr-7">
+        <div className="grid gap-5 sm:grid-cols-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(7.5rem,auto))] lg:items-center lg:gap-x-0">
+          <div className="min-w-0 sm:col-span-3 lg:col-span-1 lg:pr-7">
             <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               Total debt · {String(activeDebts.length)} active
             </p>

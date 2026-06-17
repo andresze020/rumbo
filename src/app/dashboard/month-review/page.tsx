@@ -129,7 +129,10 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       const pct = line.planned > 0 ? line.actual / line.planned : 0
       return {
         id: line.lineId,
+        categoryId: line.categoryId,
         name: line.name,
+        actual: line.actual,
+        planned: line.planned,
         pct,
         over: pct > 1,
         color: SERIES_PALETTE[i % SERIES_PALETTE.length],
@@ -400,24 +403,33 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
               {budgetChips.map((chip) => (
                 <Link
                   key={chip.id}
-                  href={`/dashboard/budgets?month=${month}`}
+                  href={
+                    chip.categoryId
+                      ? `/dashboard/transactions?category_id=${chip.categoryId}&month=${month}&type=expense`
+                      : `/dashboard/budgets?month=${month}`
+                  }
                   className={cn(
-                    'flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-opacity hover:opacity-80',
+                    'block rounded-lg border px-3 py-2 text-xs transition-opacity hover:opacity-80',
                     chip.over
                       ? 'border-rose-200 bg-rose-50/60 dark:border-rose-900 dark:bg-rose-950/30'
                       : 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/30'
                   )}
                 >
-                  <span className="size-2 shrink-0 rounded-sm" style={{ backgroundColor: chip.color }} aria-hidden="true" />
-                  <span className="min-w-0 flex-1 truncate font-medium">{chip.name}</span>
-                  <span
-                    className={cn(
-                      'shrink-0 font-semibold tabular-nums',
-                      chip.over ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'
-                    )}
-                  >
-                    {chip.pctLabel}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="size-2 shrink-0 rounded-sm" style={{ backgroundColor: chip.color }} aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate font-medium">{chip.name}</span>
+                    <span
+                      className={cn(
+                        'shrink-0 font-semibold tabular-nums',
+                        chip.over ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'
+                      )}
+                    >
+                      {chip.pctLabel}
+                    </span>
+                  </div>
+                  <p className="mt-1 pl-4 tabular-nums text-muted-foreground">
+                    {formatCurrency(chip.actual, budgetCurrency)} / {formatCurrency(chip.planned, budgetCurrency)}
+                  </p>
                 </Link>
               ))}
             </div>
