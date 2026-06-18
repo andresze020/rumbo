@@ -23,6 +23,18 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Goals & funds (BR-019)** shipped. New `goals` table
+  (`20260618000100_create_goals.sql`, **not yet applied** — run
+  `npx supabase db push`) with type/status check constraints, member-select +
+  admin-write RLS, and no delete policy (soft-archive only, per the
+  archive-over-delete rule). `/dashboard/goals` has full CRUD plus
+  contribute/withdraw (auto-completes when `current_amount >= target_amount`)
+  and pause/resume/archive/restore lifecycle actions
+  (`dashboard/goals/{page,actions,goal-card,goal-form,goal-progress-form}.tsx`,
+  `lib/goals/shared.ts`). The nav entry moved from `phase: 'beta'` (locked
+  coming-soon page) to `phase: 'alpha'`. Dashboard's goals-mini widget and the
+  Plan page's Goals card now read real data instead of the mock/locked
+  placeholders.
 - **UI redesign — Sprint 4: Transactions inline/bulk edit + review workflow**
   (2026-06-15). `/dashboard/transactions` now supports inline per-row
   quick-edit (merchant, category, amount) via `updateManualTransactionAction`,
@@ -117,6 +129,7 @@ The product is household-first. All financial data must belong to a household.
 - debts
 - exchange_rates
 - recurring_transactions
+- goals
 - import_batches
 - import_rows
 
@@ -125,7 +138,7 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 ## Key areas of the app
 
 - `src/app/dashboard/` — accounts, categories, transactions, budgets, debts,
-  net-worth, recurring, export, settings, assistant (AI).
+  net-worth, recurring, goals, export, settings, assistant (AI).
 - `src/lib/supabase/{client,server,middleware}.ts` + `src/middleware.ts` — auth/SSR.
 - `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `recurring/`, `imports/`, `exports/`.
 - `src/components/` — shared design system (PageHeader, SectionHeading, Callout,

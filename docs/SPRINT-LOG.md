@@ -15,6 +15,40 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Sprint — Goals & funds (BR-019) (2026-06-18)
+- Goal: implement the only nav item still locked behind `phase: 'beta'`
+  (Goals & funds) per BR-019 in
+  `docs/alpha/benchmark-follow-up-issues.md` — the `goals` table was fully
+  designed in the initial schema doc but never migrated, and the page was a
+  locked coming-soon placeholder.
+- Shipped: `/dashboard/goals` with full CRUD (`GoalForm`), contribute/withdraw
+  actions (`GoalProgressForm`, single form-action-per-mode, no per-button
+  `formAction` — no precedent for that pattern in this codebase) that
+  auto-flip status to `completed` when `current_amount >= target_amount`,
+  and pause/resume/archive/restore lifecycle via `setGoalStatusAction`.
+  Goals are grouped into Active/Completed/Paused/Archived sections
+  (`goal-card.tsx`), with summary `MetricCard`s (active count, completed
+  count, total saved vs. target for base-currency goals). New shared helpers
+  in `lib/goals/shared.ts` (goal types, statuses, progress/reached
+  calculations). Nav entry flipped from `phase: 'beta'` to `phase: 'alpha'`
+  (`lib/nav/config.ts`). Dashboard's goals-mini widget and the Plan page's
+  Goals card now read real `goals` rows instead of mock data / a locked card.
+  Hardcoded English UI for the new page, matching the dominant pattern in
+  `recurring`/`debts` (most feature pages don't use the i18n `translate()`
+  system); touched only the few i18n keys already used by shared chrome
+  (dashboard widget, plan page, nav label) across en/es/fr.
+- Migrations added: `20260618000100_create_goals.sql` (additive — new
+  `goals` table: name, goal_type, target_amount, current_amount,
+  currency_code, target_date, linked_account_id, status, with type/status
+  check constraints, a household+status index, member-select RLS, and
+  admin-only insert/update RLS; deliberately no delete policy since goals
+  use soft `archived` status instead of physical deletion). **Not yet
+  applied** — run `npx supabase db push`.
+- Tables changed: new `goals` table.
+- Follow-ups / known gaps: no automation (e.g. recurring auto-contributions)
+  — manual contribute/withdraw only, matching MVP scope. No i18n for the new
+  page itself (English-hardcoded, consistent with `recurring`/`debts`).
+
 ## Sprint 4 — Transactions redesign: inline/bulk edit + review workflow (2026-06-15)
 - Goal: rebuild `/dashboard/transactions` per
   `docs/design/handoff-2026-06/prompts/sprint-4-transactions.md` — inline

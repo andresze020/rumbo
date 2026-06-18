@@ -10,12 +10,10 @@ import {
 import { PageHeader } from '@/components/page-header'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
-import { PhaseBadge } from '@/components/phase-badge'
 import { EmptyState } from '@/components/empty-state'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
-import { PHASE_LABEL_KEY } from '@/lib/nav/config'
 import { cn } from '@/lib/utils'
 
 type BudgetDetailRow = {
@@ -44,6 +42,14 @@ type Recurring = {
   currency_code: string
   next_run_date: string | null
   is_active: boolean
+}
+
+type Goal = {
+  id: string
+  target_amount: number | string
+  current_amount: number | string
+  currency_code: string
+  status: string
 }
 
 function todayIsoDate() {
@@ -99,6 +105,7 @@ export default async function PlanPage() {
     { data: debts, error: debtsError },
     { data: balances },
     { data: recurring, error: recurringError },
+    { data: goals, error: goalsError },
   ] = await Promise.all([
     supabase.rpc('get_monthly_budget_details', {
       p_household_id: household.id,
@@ -121,6 +128,10 @@ export default async function PlanPage() {
       .not('next_run_date', 'is', null)
       .order('next_run_date', { ascending: true })
       .limit(5),
+    supabase
+      .from('goals')
+      .select('id, target_amount, current_amount, currency_code, status')
+      .eq('household_id', household.id),
   ])
 
   // Budgets summary (current month).
@@ -144,7 +155,14 @@ export default async function PlanPage() {
   // Upcoming payments (recurring).
   const upcoming = (recurring ?? []) as Recurring[]
 
-  const hasLoadError = budgetError || debtsError || recurringError
+  // Goals summary (base-currency goals only, to keep the total meaningful).
+  const goalRows = (goals ?? []) as Goal[]
+  const activeGoals = goalRows.filter((g) => g.status === 'active')
+  const totalSaved = activeGoals
+    .filter((g) => g.currency_code === baseCurrency)
+    .reduce((sum, g) => sum + Number(g.current_amount), 0)
+
+  const hasLoadError = budgetError || debtsError || recurringError || goalsError
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 sm:p-6">
@@ -205,20 +223,22 @@ export default async function PlanPage() {
           </div>
         </Link>
 
-        {/* Goals (locked) */}
+        {/* Goals */}
         <Link
-          href="/dashboard/coming-soon/goals"
-          className="group flex flex-col gap-3 rounded-xl border border-dashed bg-card/50 p-4 transition-colors hover:bg-muted/40 sm:col-span-2"
+          href="/dashboard/goals"
+          className="group flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm shadow-black/[0.03] transition-colors hover:bg-muted/40 sm:col-span-2"
         >
           <div className="flex items-center gap-2.5">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <PiggyBank className="size-4" aria-hidden="true" />
             </span>
             <span className="font-medium">{t('nav.goals')}</span>
-            <PhaseBadge phase="beta" label={t(PHASE_LABEL_KEY.beta)} />
             <ChevronRight className="ml-auto size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
           </div>
-          <p className="text-sm text-muted-foreground">{t('comingSoon.descriptions.goals')}</p>
+          <div className="grid grid-cols-2 gap-2 text-center">
+            <Stat label={t('mobile.activeGoals')} value={String(activeGoals.length)} />
+            <Stat label={t('mobile.saved')} value={formatCurrency(totalSaved, baseCurrency)} />
+          </div>
         </Link>
       </div>
 

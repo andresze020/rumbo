@@ -69,13 +69,7 @@ export const navGroups: NavGroup[] = [
     titleKey: 'nav.groupPlanning',
     items: [
       { href: '/dashboard/budgets', labelKey: 'nav.budgets', icon: Target, phase: 'alpha' },
-      {
-        href: '/dashboard/coming-soon/goals',
-        labelKey: 'nav.goals',
-        icon: PiggyBank,
-        phase: 'beta',
-        descriptionKey: 'comingSoon.descriptions.goals',
-      },
+      { href: '/dashboard/goals', labelKey: 'nav.goals', icon: PiggyBank, phase: 'alpha' },
       { href: '/dashboard/debts', labelKey: 'nav.debts', icon: Scale, phase: 'alpha' },
       {
         href: '/dashboard/debt-planner',

@@ -167,9 +167,7 @@ export const en = {
     nextPaymentLabel: 'Next payment',
     planDebt: 'Plan',
     viewGoals: 'View goals',
-    goalEmergency: 'Emergency fund',
-    goalTrip: 'Trip (Cartagena)',
-    goalHome: 'Home down payment',
+    goalsMiniEmpty: 'No active goals yet.',
   },
   gettingStarted: {
     title: 'Getting started',
@@ -284,6 +282,8 @@ export const en = {
     remaining: 'Remaining',
     outstanding: 'Outstanding',
     activeDebts: 'Active debts',
+    activeGoals: 'Active goals',
+    saved: 'Saved',
     due: 'Due',
   },
   accounts: {
@@ -525,9 +525,7 @@ export const es: DeepStringify<typeof en> = {
     nextPaymentLabel: 'Próximo pago',
     planDebt: 'Planificar',
     viewGoals: 'Ver metas',
-    goalEmergency: 'Fondo de emergencia',
-    goalTrip: 'Viaje (Cartagena)',
-    goalHome: 'Enganche casa',
+    goalsMiniEmpty: 'Aún no hay metas activas.',
   },
   gettingStarted: {
     title: 'Primeros pasos',
@@ -642,6 +640,8 @@ export const es: DeepStringify<typeof en> = {
     remaining: 'Restante',
     outstanding: 'Saldo pendiente',
     activeDebts: 'Deudas activas',
+    activeGoals: 'Metas activas',
+    saved: 'Ahorrado',
     due: 'Vence',
   },
   accounts: {
@@ -883,9 +883,7 @@ export const fr: DeepStringify<typeof en> = {
     nextPaymentLabel: 'Prochain paiement',
     planDebt: 'Planifier',
     viewGoals: 'Voir objectifs',
-    goalEmergency: 'Fonds d’urgence',
-    goalTrip: 'Voyage (Cartagena)',
-    goalHome: 'Apport maison',
+    goalsMiniEmpty: 'Aucun objectif actif pour le moment.',
   },
   gettingStarted: {
     title: 'Premiers pas',
@@ -1000,6 +998,8 @@ export const fr: DeepStringify<typeof en> = {
     remaining: 'Restant',
     outstanding: 'Solde dû',
     activeDebts: 'Dettes actives',
+    activeGoals: 'Objectifs actifs',
+    saved: 'Épargné',
     due: 'Échéance',
   },
   accounts: {
