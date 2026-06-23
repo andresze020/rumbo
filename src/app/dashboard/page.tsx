@@ -660,7 +660,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const goalsMini = ((goalRows ?? []) as Goal[]).map((g, i) => {
     const target = Number(g.target_amount)
     const pct = target > 0 ? Math.round(Math.min(1, Number(g.current_amount) / target) * 100) : 0
-    return { name: g.name, pct, color: SERIES[i % SERIES.length] }
+    return { id: g.id, name: g.name, pct, color: SERIES[i % SERIES.length] }
   })
 
   // ── Recent activity rows. ────────────────────────────────────────────────
@@ -1016,7 +1016,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 ) : (
                   <div className="space-y-2.5">
                     {goalsMini.map((g) => (
-                      <div key={g.name}>
+                      <div key={g.id}>
                         <div className="mb-1 flex items-center justify-between text-[11.5px]">
                           <span className="text-muted-foreground">{g.name}</span>
                           <span className="font-semibold tabular-nums">{g.pct}%</span>

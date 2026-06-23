@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { isGoalReached, isGoalStatus, isGoalType } from '@/lib/goals/shared'
+import { isGoalStatus, isGoalType } from '@/lib/goals/shared'
+import { cleanSupabaseActionError } from '@/lib/supabase/errors'
 
 const MAX_NAME_LENGTH = 120
 
@@ -179,7 +180,7 @@ export async function updateGoalAction(formData: FormData) {
 
   const g = await parseAndValidateGoal(supabase, householdId, formData)
 
-  const { error: updateError } = await supabase
+  const { data: updated, error: updateError } = await supabase
     .from('goals')
     .update({
       name: g.name,
@@ -191,8 +192,9 @@ export async function updateGoalAction(formData: FormData) {
     })
     .eq('id', goalId)
     .eq('household_id', householdId)
+    .select('id')
 
-  if (updateError) {
+  if (updateError || !updated?.length) {
     redirectWithError('Could not update the goal. Please check the form and try again.')
   }
 
@@ -200,9 +202,8 @@ export async function updateGoalAction(formData: FormData) {
   redirect('/dashboard/goals?updated=1')
 }
 
-export async function contributeGoalAction(formData: FormData) {
-  const goalId = String(formData.get('goal_id') ?? '').trim()
-  const amount = parsePositiveNumber(formData.get('amount'))
+async function applyGoalAdjustment(goalId: string, amountRaw: FormDataEntryValue | null, sign: 1 | -1) {
+  const amount = parsePositiveNumber(amountRaw)
 
   if (!goalId) {
     redirectWithError('Goal is required.')
@@ -213,85 +214,38 @@ export async function contributeGoalAction(formData: FormData) {
 
   const { supabase, householdId } = await getAuthenticatedHousehold()
 
-  const { data: existing, error: existingError } = await supabase
-    .from('goals')
-    .select('id, current_amount, target_amount, status')
-    .eq('id', goalId)
-    .eq('household_id', householdId)
-    .maybeSingle()
+  const { data: rpcData, error } = await supabase
+    .rpc('apply_goal_adjustment', {
+      p_goal_id: goalId,
+      p_household_id: householdId,
+      p_delta: sign * (amount as number),
+    })
+    .single()
 
-  if (existingError || !existing) {
-    redirectWithError('Goal was not found for this household.')
-  }
-  if (existing.status === 'archived') {
-    redirectWithError('This goal is archived. Restore it first.')
-  }
+  const data = rpcData as { current_amount: number; status: string } | null
 
-  const newCurrentAmount = Number(existing.current_amount) + (amount as number)
-  const reached = isGoalReached(newCurrentAmount, Number(existing.target_amount))
-  const newStatus = reached ? 'completed' : existing.status === 'completed' ? 'active' : existing.status
-
-  const { error: updateError } = await supabase
-    .from('goals')
-    .update({ current_amount: newCurrentAmount, status: newStatus })
-    .eq('id', goalId)
-    .eq('household_id', householdId)
-
-  if (updateError) {
-    redirectWithError('Could not add the contribution.')
+  if (error || !data) {
+    redirectWithError(
+      cleanSupabaseActionError(
+        error?.message,
+        sign === 1 ? 'Could not add the contribution.' : 'Could not register the withdrawal.'
+      )
+    )
   }
 
   revalidateGoalsSurfaces()
+  return data.status === 'completed'
+}
+
+export async function contributeGoalAction(formData: FormData) {
+  const goalId = String(formData.get('goal_id') ?? '').trim()
+  const reached = await applyGoalAdjustment(goalId, formData.get('amount'), 1)
   redirect(`/dashboard/goals?contributed=1${reached ? '&completed=1' : ''}`)
 }
 
 export async function withdrawGoalAction(formData: FormData) {
   const goalId = String(formData.get('goal_id') ?? '').trim()
-  const amount = parsePositiveNumber(formData.get('amount'))
-
-  if (!goalId) {
-    redirectWithError('Goal is required.')
-  }
-  if (amount === null) {
-    redirectWithError('Amount must be greater than 0.')
-  }
-
-  const { supabase, householdId } = await getAuthenticatedHousehold()
-
-  const { data: existing, error: existingError } = await supabase
-    .from('goals')
-    .select('id, current_amount, target_amount, status')
-    .eq('id', goalId)
-    .eq('household_id', householdId)
-    .maybeSingle()
-
-  if (existingError || !existing) {
-    redirectWithError('Goal was not found for this household.')
-  }
-  if (existing.status === 'archived') {
-    redirectWithError('This goal is archived. Restore it first.')
-  }
-
-  const currentAmount = Number(existing.current_amount)
-  if ((amount as number) > currentAmount) {
-    redirectWithError('Cannot withdraw more than the current saved amount.')
-  }
-
-  const newCurrentAmount = currentAmount - (amount as number)
-  const stillReached = isGoalReached(newCurrentAmount, Number(existing.target_amount))
-  const newStatus = existing.status === 'completed' && !stillReached ? 'active' : existing.status
-
-  const { error: updateError } = await supabase
-    .from('goals')
-    .update({ current_amount: newCurrentAmount, status: newStatus })
-    .eq('id', goalId)
-    .eq('household_id', householdId)
-
-  if (updateError) {
-    redirectWithError('Could not register the withdrawal.')
-  }
-
-  revalidateGoalsSurfaces()
+  await applyGoalAdjustment(goalId, formData.get('amount'), -1)
   redirect('/dashboard/goals?withdrawn=1')
 }
 
@@ -308,13 +262,14 @@ export async function setGoalStatusAction(formData: FormData) {
 
   const { supabase, householdId } = await getAuthenticatedHousehold()
 
-  const { error: updateError } = await supabase
+  const { data: updated, error: updateError } = await supabase
     .from('goals')
     .update({ status })
     .eq('id', goalId)
     .eq('household_id', householdId)
+    .select('id')
 
-  if (updateError) {
+  if (updateError || !updated?.length) {
     redirectWithError('Could not update the goal status.')
   }
 

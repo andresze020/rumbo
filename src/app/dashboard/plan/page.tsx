@@ -158,8 +158,10 @@ export default async function PlanPage() {
   // Goals summary (base-currency goals only, to keep the total meaningful).
   const goalRows = (goals ?? []) as Goal[]
   const activeGoals = goalRows.filter((g) => g.status === 'active')
-  const totalSaved = activeGoals
-    .filter((g) => g.currency_code === baseCurrency)
+  // Saved total includes active/paused/completed goals (still-held savings),
+  // matching the Goals page summary — only archived goals are excluded.
+  const totalSaved = goalRows
+    .filter((g) => g.status !== 'archived' && g.currency_code === baseCurrency)
     .reduce((sum, g) => sum + Number(g.current_amount), 0)
 
   const hasLoadError = budgetError || debtsError || recurringError || goalsError
