@@ -129,6 +129,14 @@ type Debt = {
   minimum_payment: number | string | null
 }
 
+type Goal = {
+  id: string
+  name: string
+  target_amount: number | string
+  current_amount: number | string
+  status: string
+}
+
 type RecentTransaction = {
   id: string
   transaction_date: string
@@ -325,6 +333,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { data: recurringRows },
     { data: debtRows },
     { data: recentTxRows },
+    { data: goalRows },
   ] = await Promise.all([
     supabase
       .from('recurring_transactions')
@@ -349,6 +358,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .order('transaction_date', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(6),
+    supabase
+      .from('goals')
+      .select('id, name, target_amount, current_amount, status')
+      .eq('household_id', household.id)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(3),
   ])
 
   const recentTransactions = (recentTxRows ?? []) as RecentTransaction[]
@@ -640,13 +656,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const debtPaidPct = totalOriginal > 0 ? Math.max(0, Math.min(100, Math.round(((totalOriginal - totalDebt) / totalOriginal) * 100))) : null
   const nextPayment = activeDebtRows.reduce((s, d) => s + Number(d.minimum_payment ?? 0), 0)
 
-  // ── Goals mini — DEMO (Beta): Goals has no backend yet; illustrative teaser
-  //    matching the design, linked to the locked goals page. ────────────────
-  const goalsDemo = [
-    { name: t('dashboard.goalEmergency'), pct: 33, color: SERIES[1] },
-    { name: t('dashboard.goalTrip'), pct: 40, color: SERIES[0] },
-    { name: t('dashboard.goalHome'), pct: 20, color: SERIES[3] },
-  ]
+  // ── Goals mini. ───────────────────────────────────────────────────────────
+  const goalsMini = ((goalRows ?? []) as Goal[]).map((g, i) => {
+    const target = Number(g.target_amount)
+    const pct = target > 0 ? Math.round(Math.min(1, Number(g.current_amount) / target) * 100) : 0
+    return { id: g.id, name: g.name, pct, color: SERIES[i % SERIES.length] }
+  })
 
   // ── Recent activity rows. ────────────────────────────────────────────────
   const entriesByTxId = new Map<string, RecentEntry[]>()
@@ -990,29 +1005,30 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 )}
               </div>
 
-              {/* Goals mini — Beta (demo teaser) */}
-              <div className={cn(cardClass, 'relative p-4')}>
-                <span className="absolute right-3 top-3 rounded bg-amber-50 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                  Beta
-                </span>
+              {/* Goals mini */}
+              <div className={cn(cardClass, 'p-4')}>
                 <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold">
                   <PiggyBank className="size-[14px] text-primary" aria-hidden="true" />
                   {t('dashboard.goalsMiniTitle')}
                 </h2>
-                <div className="space-y-2.5">
-                  {goalsDemo.map((g) => (
-                    <div key={g.name}>
-                      <div className="mb-1 flex items-center justify-between text-[11.5px]">
-                        <span className="text-muted-foreground">{g.name}</span>
-                        <span className="font-semibold tabular-nums">{g.pct}%</span>
+                {goalsMini.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{t('dashboard.goalsMiniEmpty')}</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {goalsMini.map((g) => (
+                      <div key={g.id}>
+                        <div className="mb-1 flex items-center justify-between text-[11.5px]">
+                          <span className="text-muted-foreground">{g.name}</span>
+                          <span className="font-semibold tabular-nums">{g.pct}%</span>
+                        </div>
+                        <div className="h-[5px] overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full" style={{ width: `${g.pct}%`, backgroundColor: g.color }} />
+                        </div>
                       </div>
-                      <div className="h-[5px] overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full" style={{ width: `${g.pct}%`, backgroundColor: g.color }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <Link href="/dashboard/coming-soon/goals" className="mt-3 inline-block text-[11.5px] font-semibold text-primary hover:underline">
+                    ))}
+                  </div>
+                )}
+                <Link href="/dashboard/goals" className="mt-3 inline-block text-[11.5px] font-semibold text-primary hover:underline">
                   {t('dashboard.viewGoals')} →
                 </Link>
               </div>
