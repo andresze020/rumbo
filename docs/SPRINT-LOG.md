@@ -15,6 +15,39 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Sprint — Goals & funds hardening (code review follow-up) (2026-06-22)
+- Goal: code review on the Goals & funds PR (#13) surfaced a lost-update
+  race in contribute/withdraw, an RLS policy requiring admin instead of
+  editor (with silent no-op updates under RLS), and a Plan page total that
+  dropped completed goals — fix all before merge.
+- Shipped: new `apply_goal_adjustment(p_goal_id, p_household_id, p_delta)`
+  RPC that locks the goal row (`select ... for update`) and computes the
+  new `current_amount`/`status` atomically; `contributeGoalAction`/
+  `withdrawGoalAction` now call it instead of doing a plain select + JS
+  math + update. `updateGoalAction`/`setGoalStatusAction` now `.select('id')`
+  after their `update()` and treat an empty result as failure, since a
+  Postgres `UPDATE` blocked by RLS returns no error by default. Plan page's
+  "Total saved" now includes `active`/`paused`/`completed` goals (only
+  `archived` excluded), matching the Goals page instead of dropping a
+  goal's saved amount the moment it completes. Dashboard goals-mini widget
+  keys list items by `id` instead of `name`. `StatusBadge` gained explicit
+  styles for `paused`/`completed`/`archived`.
+- Migrations added: amended `20260618000100_create_goals.sql` in place
+  (not yet applied to any environment at review time) — insert/update RLS
+  switched from `is_household_admin` to `is_household_editor`;
+  `goals_amounts_chk` now requires `target_amount > 0` (was `>= 0`);
+  `linked_account_id` FK gained `on delete set null` plus a supporting
+  index; added `apply_goal_adjustment`. Applied to the linked remote
+  project (`karbhlstwxhjdnepglza`) via `npx supabase db push`.
+- Tables changed: `goals` (constraint/RLS/FK changes only, no new columns).
+- Follow-ups / known gaps: added `supabase/tests/br_019_goals_invariants.sql`
+  (read-only invariants + a rolled-back exercise of `apply_goal_adjustment`)
+  and ran it against real household data — all checks passed. Documented an
+  open decision in `docs/features/goals.md`: whether a linked goal's
+  progress should eventually be derived from the linked account's real
+  ledger balance instead of the manually-tracked `current_amount` — decided
+  to keep the manual model for now.
+
 ## Sprint — Goals & funds (BR-019) (2026-06-18)
 - Goal: implement the only nav item still locked behind `phase: 'beta'`
   (Goals & funds) per BR-019 in

@@ -23,18 +23,41 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
-- **Goals & funds (BR-019)** shipped. New `goals` table
-  (`20260618000100_create_goals.sql`, **not yet applied** — run
-  `npx supabase db push`) with type/status check constraints, member-select +
-  admin-write RLS, and no delete policy (soft-archive only, per the
+- **Goals & funds (BR-019)** shipped and merged (PR #13). `goals` table
+  (`20260618000100_create_goals.sql`, **applied** to the linked remote
+  project) with type/status check constraints (`target_amount > 0`),
+  member-select + **editor**-write RLS (`is_household_editor`, matching
+  `transactions`/`budgets`), `linked_account_id` `on delete set null` with a
+  supporting index, and no delete policy (soft-archive only, per the
   archive-over-delete rule). `/dashboard/goals` has full CRUD plus
   contribute/withdraw (auto-completes when `current_amount >= target_amount`)
   and pause/resume/archive/restore lifecycle actions
   (`dashboard/goals/{page,actions,goal-card,goal-form,goal-progress-form}.tsx`,
-  `lib/goals/shared.ts`). The nav entry moved from `phase: 'beta'` (locked
-  coming-soon page) to `phase: 'alpha'`. Dashboard's goals-mini widget and the
-  Plan page's Goals card now read real data instead of the mock/locked
-  placeholders.
+  `lib/goals/shared.ts`). Contribute/withdraw go through an
+  `apply_goal_adjustment` RPC that row-locks the goal so concurrent
+  adjustments can't clobber each other (a follow-up fix — the first version
+  did a plain select + JS math + update). The nav entry moved from
+  `phase: 'beta'` (locked coming-soon page) to `phase: 'alpha'`. Dashboard's
+  goals-mini widget (keyed by `id`, not `name`) and the Plan page's Goals
+  card (now includes `active`/`paused`/`completed` goals in "Total saved",
+  not just `active`) read real data instead of the mock/locked placeholders.
+  `StatusBadge` has explicit styles for `paused`/`completed`/`archived`. See
+  `docs/features/goals.md` (including an Open Decisions note on whether a
+  linked goal should eventually derive its progress from the account's real
+  ledger balance instead of the manually-tracked `current_amount`) and
+  `supabase/tests/br_019_goals_invariants.sql`.
+- **Analysis & planning screens (PR #12, 2026-06-16)** shipped: `/dashboard/reports`,
+  `/dashboard/trends`, `/dashboard/cash-flow`, `/dashboard/month-review`, and
+  `/dashboard/debt-planner` turned from locked coming-soon placeholders into
+  real pages driven by existing ledger data (no new migrations). Reports has
+  category/merchant tabs, a distribution donut, and a ranked list; Trends has
+  multi-month income/expense/savings/net-worth/savings-rate charts; Cash flow
+  has inflow/outflow bars with a net line; Month review has vs-prev-month
+  deltas, budget performance, and suggested actions (its health grade is an
+  explicitly-labeled **mock/demo heuristic**, same one used on the dashboard,
+  and its "Close month" button is disabled/not-yet-built); Debt planner
+  compares avalanche/snowball payoff strategies with an extra-payment
+  recalculation. Shared: `src/lib/analysis/server.ts`, `src/components/analysis/charts.tsx`.
 - **UI redesign — Sprint 4: Transactions inline/bulk edit + review workflow**
   (2026-06-15). `/dashboard/transactions` now supports inline per-row
   quick-edit (merchant, category, amount) via `updateManualTransactionAction`,
@@ -48,9 +71,9 @@ The product is household-first. All financial data must belong to a household.
   Account/Category chips, Status chip, date-range presets + From/To inputs,
   and a mobile "Filters" collapse. Backed by an additive migration
   `20260614120000_sprint_4_transaction_review_status.sql` (adds
-  `transactions.review_status`, **not yet applied** — run
-  `npx supabase db push`). Sprints 1–3 of this redesign (sidebar nav, mobile
-  bottom nav, dashboard) are already merged; see `docs/SPRINT-LOG.md`.
+  `transactions.review_status`, **applied**). Sprints 1–3 of this redesign
+  (sidebar nav, mobile bottom nav, dashboard) are already merged; see
+  `docs/SPRINT-LOG.md`.
 - **UI redesign — Sprint 3: Dashboard "Centro de control"** (2026-06-14).
   `/dashboard` was rebuilt to match `docs/design/handoff-2026-06`: a net-worth
   hero (real assets/liabilities/projected + 6-month sparkline + a clearly-marked
@@ -110,8 +133,10 @@ The product is household-first. All financial data must belong to a household.
   one-click **Post**. **Auto-posting (Sprint B) and the dashboard widget +
   recurring transfers (Sprint C) are still pending** — see
   `docs/features/recurring-transactions.md`.
-- See `docs/alpha/sprint-12-alpha-plan.md` for the live Alpha plan and
-  `docs/alpha-readiness-checklist.md` for the readiness gate.
+- See `docs/alpha/sprint-12-alpha-plan.md` for the live Alpha plan,
+  `docs/alpha-readiness-checklist.md` for the readiness gate, and
+  `docs/pending-work.md` for a single index of every open feature, BR
+  backlog item, and cross-feature Open Decision.
 
 ## Real Supabase tables (public schema)
 
@@ -138,9 +163,12 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 ## Key areas of the app
 
 - `src/app/dashboard/` — accounts, categories, transactions, budgets, debts,
-  net-worth, recurring, goals, export, settings, assistant (AI).
+  net-worth, recurring, goals, export, settings, assistant (AI), plus the
+  analysis/planning screens: reports, trends, cash-flow, month-review,
+  debt-planner.
 - `src/lib/supabase/{client,server,middleware}.ts` + `src/middleware.ts` — auth/SSR.
-- `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `recurring/`, `imports/`, `exports/`.
+- `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `recurring/`, `imports/`,
+  `exports/`, `analysis/server.ts` (shared data helpers for the analysis screens).
 - `src/components/` — shared design system (PageHeader, SectionHeading, Callout,
   Money, BalanceAmount, AccountAvatar, AccountGroup, AccountsViewToggle,
   CategoryStylePicker, FormDialog, AmountInput, etc.). Reuse these; do not

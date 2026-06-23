@@ -1,0 +1,88 @@
+# Pending Work
+
+> Documentation only. Single index of everything still open across the
+> project: features not yet implemented, the BR/BF backlog, and Open
+> Decisions tables scattered across individual feature docs. Each row is a
+> pointer to its source of truth, not a duplicate — update the linked doc
+> first, then update this index to match. Kept in sync by the
+> `app-finanzas-state-sync` skill at sprint close.
+
+---
+
+## Features blocked or not yet built
+
+| Feature | Status | Blocked by | Doc |
+|---|---|---|---|
+| Navbar redesign | Open decision — Opción C (More dropdown + avatar menu) vs. Opción D (collapsible sidebar) | Nothing; needs a decision | [features/navbar-redesign.md](./features/navbar-redesign.md) |
+| User Settings page (`/dashboard/settings`) | Pending | Navbar redesign decision (needs an entry point) | [features/user-settings.md](./features/user-settings.md) |
+| Recurring transactions — Sprint B (auto-posting) | Pending | Multi-currency FX strategy must be reliable first | [features/recurring-transactions.md](./features/recurring-transactions.md) |
+| Recurring transactions — Sprint C (dashboard widget + recurring transfers) | Pending | Needs a `to_account_id` schema migration | [features/recurring-transactions.md](./features/recurring-transactions.md) |
+
+## BR backlog — not started (P1, near-term)
+
+Full detail, "why soon," and acceptance criteria live in
+[alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md).
+
+| ID | Area | One-line |
+|---|---|---|
+| BR-007 | Transfers / debts / FX | Cross-currency transfers and debt payments |
+| BR-008 | Transactions | Pagination + server-side filters (list has no pagination today) |
+| BR-009 | Payees / merchants | `payees` table, normalize merchant names, autocomplete |
+| BR-010 | Rules / automation | `categorization_rules` designed but not migrated |
+| BR-011 | Review workflow | `review_status` queue/filter (the `review_status` column itself already shipped in Sprint 4) |
+
+## BR backlog — not started (P2/P3)
+
+| ID | Area | One-line |
+|---|---|---|
+| BR-014 | Recurring | Auto-post scheduler + failure log (depends on BR-002 reliability) |
+| BR-015 | Destructive actions | Standard confirm/undo pattern for void/archive |
+| BR-017 | Accounts | Adjust/reconcile balance action without editing history |
+| BR-018 | Budgeting | Budget rollover/carryover |
+| BR-023 | Tags | `tags` + `transaction_tags` for flexible slicing |
+| BR-024 | CSV import | Saved column-mapping presets + import revert |
+| BR-025 | Localization | Centralize locale/currency formatting (still `en-CA`-biased in places) |
+| BR-026 | Next.js maintenance | `middleware` → `proxy` rename for Next 16 (build currently warns) |
+| BR-027 | Route hygiene | Audit/remove duplicate root-level route stubs |
+| BR-028 | PWA | Manifest shortcuts + share target |
+
+## Partially resolved (shipped, with a known gap)
+
+| ID / Feature | What shipped | What's still missing | Doc |
+|---|---|---|---|
+| BR-012 | Dashboard recent-activity feed | Needs-review count (next to the feed) | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-021 | `/dashboard/month-review` recap from real data | Health score is an explicitly-labeled mock/demo heuristic (shared with the dashboard); "Close month" button is disabled, not yet built | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| Goals — linked-account progress | Manual `current_amount`, contribute/withdraw via atomic RPC | Could eventually derive progress from the linked account's real ledger balance instead of manual entry — deliberately deferred | [features/goals.md](./features/goals.md) (Open Decisions) |
+
+## Open decisions across feature docs
+
+| Doc | Question |
+|---|---|
+| [features/navbar-redesign.md](./features/navbar-redesign.md) | "More" dropdown + avatar menu vs. collapsible sidebar |
+| [features/recurring-transactions.md](./features/recurring-transactions.md) | Exchange rate to use at auto-post time (last known rate vs. API vs. fixed); cron infra (`pg_cron` vs. Vercel Cron) |
+| [features/goals.md](./features/goals.md) | Whether a linked goal should derive progress from the account's real ledger balance instead of a manually-tracked `current_amount` |
+
+## Deferred / parked (revisit only when triggered)
+
+| ID | Area | Revisit when |
+|---|---|---|
+| BR-D01 | Attachments / receipts | Real usage proves receipt capture is needed, or OCR becomes a priority |
+| BR-D02 | Investment performance | Core household cash/debt/budget flows are stable |
+| BR-D03 | Bill split / reimbursements | Multi-member household usage creates real split/reimbursement needs |
+| BR-D04 | Advisor / external access | Household invite/member management is shipped and used |
+| BR-D05 | Advanced charts (Sankey, saved reports) | Users ask for deeper analysis than the BR-022 reports hub gives |
+| BR-D06 | OCR / bank sync / billing | Explicit product decision; kept out of Alpha correctness work |
+| BF-022 (Sprint 12 alpha plan) | Reconciliation flow (mark transactions "cleared") | Deferred to Beta; candidate for v0.13 |
+| Beginner-friendly UX, idea #6 | AI assistant as the primary interface (vs. a supplementary drawer) | Out of scope of [features/beginner-friendly-ux.md](./features/beginner-friendly-ux.md); revisit if assistant usage data supports it |
+
+---
+
+## What's already done (so this list doesn't get re-proposed)
+
+Everything in [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md)'s
+"Resolved implementation issues" table, plus, shipped without a dedicated BR-ID:
+analysis & planning screens (`/dashboard/reports`, `/dashboard/trends`,
+`/dashboard/cash-flow`, `/dashboard/debt-planner`, and the non-mock parts of
+`/dashboard/month-review`), active nav highlighting (desktop + mobile), and
+the recurring "due soon" dashboard tile. See `AGENTS.md` → Current status for
+the up-to-date shipped-feature summary.
