@@ -15,6 +15,62 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Sprint 13 — Quick wins (2026-06-23)
+- Goal: clear five small, independent items off `docs/pending-work.md` in one
+  sprint: two pure cleanup items (Next 16 middleware rename, dead route
+  stubs) and three partial-progress items (dashboard needs-review count,
+  a reusable destructive-confirm dialog, payee data model), plus a
+  dev/demo data-seeding utility requested mid-sprint.
+- Shipped:
+  - BR-026: renamed `src/middleware.ts` → `src/proxy.ts`, exported function
+    `middleware` → `proxy`, matching Next 16's middleware→proxy convention.
+    `npm run build` no longer warns.
+  - BR-027: deleted 5 dead root-level redirect stubs
+    (`src/app/{budgets,debts,export,net-worth}/page.tsx`,
+    `src/app/transactions/import/page.tsx`) that only `redirect()`ed to their
+    real `/dashboard/...` equivalents; confirmed nothing referenced the root
+    paths first.
+  - BR-012: dashboard now queries a `count`-only `transactions` request for
+    `review_status = 'unreviewed'` and shows a "N to review" pill next to
+    Recent Activity, linking to `/dashboard/transactions?review=unreviewed`.
+    QA on a real-data demo household caught that the link silently inherited
+    the transactions page's current-month default and could hide older
+    unreviewed rows; fixed by adding an explicit wide date range
+    (`date_from=2000-01-01&date_to=2099-12-31`) to the link. The underlying
+    gap — no "All time" filter preset on the transactions page — is now
+    tracked as BR-029.
+  - BR-015 (partial): new reusable `AlertDialog` component
+    (`src/components/ui/alert-dialog.tsx`, mirrors the existing `dialog.tsx`
+    pattern over `@base-ui/react/alert-dialog`), adopted in
+    `void-transaction-form.tsx` replacing the old inline confirm-state UI.
+    No archive action exists yet to standardize the same way, and there is
+    no undo/toast.
+  - BR-009 (partial): new household-scoped `payees` table, backfilled from
+    each household's distinct `merchant_name` values; `transactions` gained
+    a nullable `payee_id` FK. Nothing writes `payee_id` yet (no CRUD page,
+    no picker on the transaction form) — `merchant_name` is still the only
+    thing the UI reads/writes.
+  - Dev/demo utility: `public.copy_household_data(p_source_household_id,
+    p_target_household_id, p_actor_user_id)` — wipes the target household
+    and mirrors the full dataset (categories, accounts, payees,
+    transactions/entries/allocations, budgets/lines, debts, recurring
+    templates, goals, exchange rates — 12 tables) from a source household,
+    remapping every id. Used to seed a demo user's household from a real
+    one for more realistic manual QA. Not granted to `authenticated`;
+    intended to be run from the Supabase SQL editor only. Manually tested
+    against real data — output confirmed row counts copied per table.
+- Migrations added: `20260622100000_create_payees.sql` (BR-009),
+  `20260622110000_copy_household_data.sql` (utility function). Both
+  **applied** to the linked remote project.
+- Tables changed: new `payees` table; `transactions` gained `payee_id`.
+- Follow-ups / known gaps: BR-009 needs a payee picker on the transaction
+  form (select existing or create new) and a minimal CRUD page
+  (rename/merge/archive) before it's actually useful — tracked in
+  `docs/alpha/benchmark-follow-up-issues.md`. BR-015 still has no archive
+  action or undo/toast. New BR-029: add an "All time" preset on
+  `/dashboard/transactions` instead of the dashboard link's ad-hoc wide
+  date range workaround.
+
 ## Sprint — Goals & funds hardening (code review follow-up) (2026-06-22)
 - Goal: code review on the Goals & funds PR (#13) surfaced a lost-update
   race in contribute/withdraw, an RLS policy requiring admin instead of
