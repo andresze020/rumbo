@@ -23,6 +23,32 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Sprint 13 — Quick wins** (2026-06-23). Closed BR-026 (renamed
+  `src/middleware.ts` → `src/proxy.ts` and the exported function to `proxy`,
+  per Next 16's middleware→proxy convention; build no longer warns), BR-027
+  (removed 5 dead root-level redirect stubs — `/budgets`, `/debts`,
+  `/export`, `/net-worth`, `/transactions/import` — that only redirected to
+  their real `/dashboard/...` pages), and BR-012 (dashboard "N to review"
+  pill next to Recent Activity, linking to `/dashboard/transactions`
+  pre-filtered to `review_status = 'unreviewed'`; QA on a real-data demo
+  household caught that the link silently inherited the transactions page's
+  current-month default, hiding older unreviewed rows — fixed with an
+  explicit wide date range on the link; the underlying gap, no "All time"
+  filter preset, is tracked as new **BR-029**). Partial progress on BR-015
+  (new reusable `AlertDialog` in `components/ui/alert-dialog.tsx`, adopted
+  for the void-transaction confirm; no archive action exists yet to
+  standardize, no undo/toast) and BR-009 (new `payees` table + backfill from
+  distinct `merchant_name` per household via
+  `20260622100000_create_payees.sql`, **applied**; still no CRUD page and no
+  picker on the transaction form, so nothing writes `payee_id` yet). Also
+  added a dev/demo-only maintenance function,
+  `public.copy_household_data(source, target, actor)`
+  (`20260622110000_copy_household_data.sql`, **applied**) — wipes the target
+  household and mirrors the full dataset (12 tables) from a source
+  household, for seeding realistic demo data; intentionally not granted to
+  `authenticated`, run manually from the Supabase SQL editor. See
+  `docs/alpha/benchmark-follow-up-issues.md` and `docs/SPRINT-LOG.md` for
+  detail.
 - **Goals & funds (BR-019)** shipped and merged (PR #13). `goals` table
   (`20260618000100_create_goals.sql`, **applied** to the linked remote
   project) with type/status check constraints (`target_amount > 0`),
@@ -155,6 +181,7 @@ The product is household-first. All financial data must belong to a household.
 - exchange_rates
 - recurring_transactions
 - goals
+- payees
 - import_batches
 - import_rows
 
@@ -166,9 +193,13 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
   net-worth, recurring, goals, export, settings, assistant (AI), plus the
   analysis/planning screens: reports, trends, cash-flow, month-review,
   debt-planner.
-- `src/lib/supabase/{client,server,middleware}.ts` + `src/middleware.ts` — auth/SSR.
+- `src/lib/supabase/{client,server,middleware}.ts` + `src/proxy.ts` — auth/SSR
+  (renamed from `src/middleware.ts` in Sprint 13, per Next 16 convention).
 - `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `recurring/`, `imports/`,
   `exports/`, `analysis/server.ts` (shared data helpers for the analysis screens).
+- `src/components/ui/` — `alert-dialog.tsx` (Sprint 13) alongside the existing
+  `dialog.tsx`; use for destructive-action confirms instead of an inline
+  confirm-state pattern.
 - `src/components/` — shared design system (PageHeader, SectionHeading, Callout,
   Money, BalanceAmount, AccountAvatar, AccountGroup, AccountsViewToggle,
   CategoryStylePicker, FormDialog, AmountInput, etc.). Reuse these; do not

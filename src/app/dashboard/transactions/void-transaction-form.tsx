@@ -1,10 +1,19 @@
 'use client'
 
-import { useState } from 'react'
 import { voidTransactionAction } from './actions'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 
 type VoidTransactionFormProps = {
   transactionId: string
@@ -13,35 +22,34 @@ type VoidTransactionFormProps = {
 export function VoidTransactionForm({
   transactionId,
 }: VoidTransactionFormProps) {
-  const [confirming, setConfirming] = useState(false)
-
-  if (!confirming) {
-    return (
-      <Button type="button" variant="outline" size="sm" onClick={() => setConfirming(true)}>
-        Void
-      </Button>
-    )
-  }
-
   return (
-    <form action={voidTransactionAction}>
-      <input type="hidden" name="transaction_id" value={transactionId} />
-
-      <div className="flex flex-wrap items-start gap-2">
-        <Textarea
-          name="void_reason"
-          placeholder="Reason (optional)"
-          className="min-h-12 w-48 text-sm"
-        />
-        <div className="flex gap-1.5">
-          <SubmitButton type="submit" variant="destructive" size="sm" pendingText="Voiding">
-            Confirm void
-          </SubmitButton>
-          <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>
-            Cancel
-          </Button>
-        </div>
-      </div>
-    </form>
+    <AlertDialog>
+      <AlertDialogTrigger render={<Button type="button" variant="outline" size="sm" />}>
+        Void
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <form action={voidTransactionAction}>
+          <input type="hidden" name="transaction_id" value={transactionId} />
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void this transaction?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Voiding keeps the record for history but removes it from account
+              balances and reports. This cannot be undone from here.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            name="void_reason"
+            placeholder="Reason (optional)"
+            className="mt-2 min-h-16 text-sm"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <SubmitButton type="submit" variant="destructive" size="sm" pendingText="Voiding">
+              Confirm void
+            </SubmitButton>
+          </AlertDialogFooter>
+        </form>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

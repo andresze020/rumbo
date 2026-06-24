@@ -27,7 +27,6 @@ Full detail, "why soon," and acceptance criteria live in
 |---|---|---|
 | BR-007 | Transfers / debts / FX | Cross-currency transfers and debt payments |
 | BR-008 | Transactions | Pagination + server-side filters (list has no pagination today) |
-| BR-009 | Payees / merchants | `payees` table, normalize merchant names, autocomplete |
 | BR-010 | Rules / automation | `categorization_rules` designed but not migrated |
 | BR-011 | Review workflow | `review_status` queue/filter (the `review_status` column itself already shipped in Sprint 4) |
 
@@ -36,22 +35,21 @@ Full detail, "why soon," and acceptance criteria live in
 | ID | Area | One-line |
 |---|---|---|
 | BR-014 | Recurring | Auto-post scheduler + failure log (depends on BR-002 reliability) |
-| BR-015 | Destructive actions | Standard confirm/undo pattern for void/archive |
 | BR-017 | Accounts | Adjust/reconcile balance action without editing history |
 | BR-018 | Budgeting | Budget rollover/carryover |
 | BR-023 | Tags | `tags` + `transaction_tags` for flexible slicing |
 | BR-024 | CSV import | Saved column-mapping presets + import revert |
 | BR-025 | Localization | Centralize locale/currency formatting (still `en-CA`-biased in places) |
-| BR-026 | Next.js maintenance | `middleware` → `proxy` rename for Next 16 (build currently warns) |
-| BR-027 | Route hygiene | Audit/remove duplicate root-level route stubs |
 | BR-028 | PWA | Manifest shortcuts + share target |
+| BR-029 | Transactions filters | No "All time" preset — links/visits without a date range silently default to current month |
 
 ## Partially resolved (shipped, with a known gap)
 
 | ID / Feature | What shipped | What's still missing | Doc |
 |---|---|---|---|
-| BR-012 | Dashboard recent-activity feed | Needs-review count (next to the feed) | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | BR-021 | `/dashboard/month-review` recap from real data | Health score is an explicitly-labeled mock/demo heuristic (shared with the dashboard); "Close month" button is disabled, not yet built | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-009 | `payees` table + backfill from `merchant_name` | No CRUD page to maintain payees (rename/merge/archive); no picker on the transaction form to select-existing-or-create-new; nothing writes `payee_id` yet | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-015 | Reusable `AlertDialog` adopted for void-transaction confirm | No archive action exists yet to standardize; no undo/toast | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | Goals — linked-account progress | Manual `current_amount`, contribute/withdraw via atomic RPC | Could eventually derive progress from the linked account's real ledger balance instead of manual entry — deliberately deferred | [features/goals.md](./features/goals.md) (Open Decisions) |
 
 ## Open decisions across feature docs
@@ -84,5 +82,9 @@ Everything in [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-
 analysis & planning screens (`/dashboard/reports`, `/dashboard/trends`,
 `/dashboard/cash-flow`, `/dashboard/debt-planner`, and the non-mock parts of
 `/dashboard/month-review`), active nav highlighting (desktop + mobile), and
-the recurring "due soon" dashboard tile. See `AGENTS.md` → Current status for
-the up-to-date shipped-feature summary.
+the recurring "due soon" dashboard tile. Sprint 13 (quick wins) closed
+BR-026 (middleware → proxy rename), BR-027 (removed 5 duplicate root-level
+route stubs), and BR-012 (needs-review dashboard count); it also made partial
+progress on BR-009 (`payees` table + backfill, no autocomplete yet) and
+BR-015 (reusable `AlertDialog`, adopted for void only). See `AGENTS.md` →
+Current status for the up-to-date shipped-feature summary.

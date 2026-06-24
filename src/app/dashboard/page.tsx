@@ -334,6 +334,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { data: debtRows },
     { data: recentTxRows },
     { data: goalRows },
+    { count: needsReviewCount },
   ] = await Promise.all([
     supabase
       .from('recurring_transactions')
@@ -365,6 +366,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(3),
+    supabase
+      .from('transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('household_id', household.id)
+      .eq('review_status', 'unreviewed')
+      .neq('transaction_type', 'opening_balance')
+      .neq('status', 'voided')
+      .is('deleted_at', null),
   ])
 
   const recentTransactions = (recentTxRows ?? []) as RecentTransaction[]
@@ -1038,7 +1047,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           {/* Recent activity */}
           <div className={cn(cardClass, 'overflow-hidden')}>
             <div className="flex items-center justify-between border-b px-4 py-3">
-              <h2 className="text-sm font-bold">{t('dashboard.recentActivityTitle')}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold">{t('dashboard.recentActivityTitle')}</h2>
+                {needsReviewCount ? (
+                  <Link
+                    href="/dashboard/transactions?review=unreviewed&date_from=2000-01-01&date_to=2099-12-31"
+                    className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-400"
+                  >
+                    {t('dashboard.needsReviewCount', { count: needsReviewCount })}
+                  </Link>
+                ) : null}
+              </div>
               <Link href="/dashboard/transactions" className="text-xs font-semibold text-primary hover:underline">{t('common.viewAll')} →</Link>
             </div>
             <RecentActivity rows={recentActivityRows} emptyLabel={t('dashboard.recentActivityEmpty')} />
