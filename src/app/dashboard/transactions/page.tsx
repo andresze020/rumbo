@@ -521,6 +521,21 @@ export default async function TransactionsPage({
       (c.category_type === 'income' || c.category_type === 'expense')
   )
 
+  // Selecting a parent category should also match transactions filed under any
+  // of its child categories (e.g. "Transport" matches "Transport / Subway").
+  const selectedCategoryIdSet = new Set(selectedCategoryIds)
+  const effectiveCategoryIds = new Set(selectedCategoryIds)
+  if (selectedCategoryIds.length > 0) {
+    for (const category of allCategories) {
+      if (
+        category.parent_category_id &&
+        selectedCategoryIdSet.has(category.parent_category_id)
+      ) {
+        effectiveCategoryIds.add(category.id)
+      }
+    }
+  }
+
   const filteredTransactions = ((transactions ?? []) as Transaction[]).filter(
     (transaction) => {
       const entries = entriesByTransactionId.get(transaction.id) ?? []
@@ -530,7 +545,7 @@ export default async function TransactionsPage({
         entries.some((e) => selectedAccountIds.includes(e.account_id))
       const matchesCategory =
         selectedCategoryIds.length === 0 ||
-        (allocation !== undefined && selectedCategoryIds.includes(allocation.category_id))
+        (allocation !== undefined && effectiveCategoryIds.has(allocation.category_id))
       return matchesAccount && matchesCategory
     }
   )
@@ -635,6 +650,35 @@ export default async function TransactionsPage({
   }
 
   const transactionRows = filteredTransactions.map(buildTransactionRow)
+
+  // Totals for the currently filtered set, converted to the household base
+  // currency. Transfers, debt payments and opening balances are excluded so the
+  // figures stay aligned with income/expense reporting; voided rows are skipped.
+  let filteredIncomeBase = 0
+  let filteredExpenseBase = 0
+  for (const row of transactionRows) {
+    if (
+      row.isVoided ||
+      row.isTransfer ||
+      row.isDebtPayment ||
+      row.isOpeningBalance
+    ) {
+      continue
+    }
+    const entry = row.amountEntry
+    if (!entry) continue
+    const baseAmount =
+      Number(entry.amount_account_currency) *
+      Number(entry.exchange_rate_to_base ?? 1)
+    if (row.transaction.transaction_type === 'income') {
+      filteredIncomeBase += baseAmount
+    } else if (row.transaction.transaction_type === 'expense') {
+      filteredExpenseBase += Math.abs(baseAmount)
+    }
+  }
+  const filteredNetBase = filteredIncomeBase - filteredExpenseBase
+  const hasFilteredTotals = filteredIncomeBase > 0 || filteredExpenseBase > 0
+
   const selectedEditRow = transactionRows.find(
     (row) => row.transaction.id === editTransactionId
   )
@@ -883,6 +927,30 @@ export default async function TransactionsPage({
             Add transaction
           </GlobalAddTransactionButton>
         </div>
+
+        {/* ── Filtered totals (base currency) ─────────────────────────── */}
+        {hasFilteredTotals ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-sm">
+            {filteredExpenseBase > 0 ? (
+              <span className="font-semibold text-red-600 dark:text-red-400">
+                Expenses {formatCurrency(filteredExpenseBase, household.base_currency)}
+              </span>
+            ) : null}
+            {filteredIncomeBase > 0 ? (
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                Income {formatCurrency(filteredIncomeBase, household.base_currency)}
+              </span>
+            ) : null}
+            {filteredIncomeBase > 0 && filteredExpenseBase > 0 ? (
+              <span className="font-semibold text-foreground">
+                Net {formatCurrency(filteredNetBase, household.base_currency)}
+              </span>
+            ) : null}
+            <span className="text-xs text-muted-foreground">
+              in {household.base_currency}
+            </span>
+          </div>
+        ) : null}
 
         {/* ── Review-status filter chips ──────────────────────────────── */}
         <div className="flex flex-wrap gap-1.5 px-1 pb-1">
