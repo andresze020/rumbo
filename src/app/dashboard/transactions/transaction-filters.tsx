@@ -64,12 +64,25 @@ function MultiSelectChip({
   options: { id: string; label: string; isArchived?: boolean }[]
   selectedIds: string[]
 }) {
+  // Track draft selections locally so the user can tick several options without
+  // the page reloading after each click. Changes apply only on "Apply filters".
+  const [checked, setChecked] = useState<Set<string>>(() => new Set(selectedIds))
+
+  function toggle(id: string, isChecked: boolean) {
+    setChecked((prev) => {
+      const next = new Set(prev)
+      if (isChecked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
   const summary =
-    selectedIds.length === 0
+    checked.size === 0
       ? 'All'
-      : selectedIds.length === 1
-        ? options.find((o) => o.id === selectedIds[0])?.label ?? '1 selected'
-        : `${selectedIds.length} selected`
+      : checked.size === 1
+        ? options.find((o) => o.id === [...checked][0])?.label ?? '1 selected'
+        : `${checked.size} selected`
 
   return (
     <details className="relative shrink-0">
@@ -92,8 +105,8 @@ function MultiSelectChip({
                 type="checkbox"
                 name={name}
                 value={option.id}
-                defaultChecked={selectedIds.includes(option.id)}
-                onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                checked={checked.has(option.id)}
+                onChange={(e) => toggle(option.id, e.currentTarget.checked)}
                 className="size-3.5 accent-primary"
               />
               <span className="truncate">
@@ -226,8 +239,7 @@ export function TransactionFilters({
             <span className="text-xs font-medium text-muted-foreground">Status</span>
             <select
               name="status"
-              value={selectedStatus}
-              onChange={(e) => e.currentTarget.form?.requestSubmit()}
+              defaultValue={selectedStatus}
               className={chipSelectClassName}
               aria-label="Filter by status"
             >
@@ -259,7 +271,6 @@ export function TransactionFilters({
               type="date"
               name="date_from"
               defaultValue={resolvedDateFrom}
-              onChange={(e) => e.currentTarget.form?.requestSubmit()}
               className="bg-transparent text-sm text-foreground outline-none"
               aria-label="From date"
             />
@@ -271,20 +282,27 @@ export function TransactionFilters({
               type="date"
               name="date_to"
               defaultValue={resolvedDateTo}
-              onChange={(e) => e.currentTarget.form?.requestSubmit()}
               className="bg-transparent text-sm text-foreground outline-none"
               aria-label="To date"
             />
           </label>
 
-          {hasActiveFilters ? (
-            <Link
-              href="/dashboard/transactions"
-              className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'ml-auto')}
+          <div className="ml-auto flex items-center gap-1.5">
+            {hasActiveFilters ? (
+              <Link
+                href="/dashboard/transactions"
+                className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+              >
+                Clear all
+              </Link>
+            ) : null}
+            <button
+              type="submit"
+              className={buttonVariants({ size: 'sm' })}
             >
-              Clear all
-            </Link>
-          ) : null}
+              Apply filters
+            </button>
+          </div>
         </div>
       </div>
 

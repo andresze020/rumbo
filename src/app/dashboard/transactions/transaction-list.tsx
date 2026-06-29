@@ -7,6 +7,7 @@ import {
   ArrowLeftRight,
   ArrowUpRight,
   Check,
+  ChevronDown,
   Pencil,
   Tag,
   X,
@@ -143,6 +144,9 @@ export function TransactionList({
 }: TransactionListProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editingId, setEditingId] = useState<string | null>(null)
+  // On mobile each row collapses to a single compact line; tapping it expands
+  // the badges/details/actions. Desktop always shows the full row.
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const allRows = useMemo(() => groups.flatMap((g) => g.rows), [groups])
   const allIds = useMemo(() => allRows.map((r) => r.id), [allRows])
@@ -288,8 +292,12 @@ export function TransactionList({
                     key={row.id}
                     row={row}
                     selected={selected.has(row.id)}
+                    expanded={expandedId === row.id}
                     returnTo={returnTo}
                     onToggle={() => toggleRow(row.id)}
+                    onToggleExpand={() =>
+                      setExpandedId((prev) => (prev === row.id ? null : row.id))
+                    }
                     onEdit={() => setEditingId(row.id)}
                   />
                 )
@@ -331,20 +339,24 @@ function ReviewControl({ row, returnTo }: { row: TransactionListRow; returnTo: s
 function DisplayRow({
   row,
   selected,
+  expanded,
   returnTo,
   onToggle,
+  onToggleExpand,
   onEdit,
 }: {
   row: TransactionListRow
   selected: boolean
+  expanded: boolean
   returnTo: string
   onToggle: () => void
+  onToggleExpand: () => void
   onEdit: () => void
 }) {
   return (
     <div
       className={cn(
-        'space-y-1 p-4 transition-colors',
+        'p-3 transition-colors sm:p-4',
         row.isVoided
           ? 'bg-muted/30 text-muted-foreground'
           : selected
@@ -352,109 +364,104 @@ function DisplayRow({
           : 'hover:bg-muted/30'
       )}
     >
-      <div className="flex items-start gap-3">
+      {/* ── Compact summary line (single row on mobile) ───────────────── */}
+      <div className="flex items-center gap-3">
         <input
           type="checkbox"
           checked={selected}
           onChange={onToggle}
-          className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
+          className="size-4 shrink-0 rounded border-input accent-primary"
           aria-label={`Select ${row.title}`}
         />
 
-        <div className="flex min-w-0 flex-1 items-start gap-2.5">
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          aria-expanded={expanded}
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+        >
           <RowTypeIcon
             transactionType={row.transactionType}
-            className={cn('mt-0.5 size-4 shrink-0', getAmountColorClass(row.transactionType))}
+            className={cn('size-4 shrink-0', getAmountColorClass(row.transactionType))}
           />
-          <div className="min-w-0 flex-1 space-y-0.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <h2 className="font-medium leading-snug">{row.title}</h2>
-              <Badge variant="secondary" className="text-xs">
-                {row.typeBadgeLabel}
-              </Badge>
-              <StatusBadge status={row.status} />
-              {row.isImported ? (
-                <Badge variant="outline" className="text-xs">
-                  Imported
-                </Badge>
-              ) : null}
-            </div>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium leading-snug">{row.title}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {row.accountName}
+              {' · '}
+              {row.categoryIcon ? `${row.categoryIcon} ` : ''}
+              {row.categoryName}
+            </span>
+          </span>
+        </button>
 
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-              <span>{row.accountName}</span>
-              <span>·</span>
-              <span className="inline-flex items-center gap-1">
-                {row.categoryColor ? (
-                  <span
-                    className="size-2 shrink-0 rounded-full border"
-                    style={{ backgroundColor: row.categoryColor }}
-                    aria-hidden="true"
-                  />
-                ) : null}
-                {row.categoryIcon ? <span aria-hidden="true">{row.categoryIcon} </span> : null}
-                {row.categoryName}
-              </span>
-              {row.currencyCode ? (
-                <>
-                  <span>·</span>
-                  <span>{row.currencyCode}</span>
-                </>
-              ) : null}
-              {row.merchantName ? (
-                <>
-                  <span>·</span>
-                  <span>{row.merchantName}</span>
-                </>
-              ) : null}
-              {row.voidReason ? (
-                <>
-                  <span>·</span>
-                  <span>Voided: {row.voidReason}</span>
-                </>
-              ) : null}
-            </div>
+        {row.amountFormatted ? (
+          <p
+            className={cn(
+              'shrink-0 text-base font-semibold tabular-nums leading-snug',
+              getAmountColorClass(row.transactionType)
+            )}
+          >
+            {row.amountFormatted}
+          </p>
+        ) : null}
 
-            {row.notes ? (
-              <p className="text-xs italic text-muted-foreground/70">{row.notes}</p>
-            ) : null}
-          </div>
+        <ChevronDown
+          aria-hidden="true"
+          className={cn(
+            'size-4 shrink-0 text-muted-foreground transition-transform sm:hidden',
+            expanded && 'rotate-180'
+          )}
+        />
+      </div>
+
+      {/* ── Details: collapsed on mobile, always shown on desktop ─────── */}
+      <div
+        className={cn(
+          'space-y-2 pl-7 pt-2 sm:block',
+          expanded ? 'block' : 'hidden'
+        )}
+      >
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
+          <Badge variant="secondary" className="text-xs">
+            {row.typeBadgeLabel}
+          </Badge>
+          <StatusBadge status={row.status} />
+          {row.isImported ? (
+            <Badge variant="outline" className="text-xs">
+              Imported
+            </Badge>
+          ) : null}
+          {row.currencyCode ? <span>{row.currencyCode}</span> : null}
+          {row.merchantName ? <span>· {row.merchantName}</span> : null}
+          {row.voidReason ? <span>· Voided: {row.voidReason}</span> : null}
         </div>
 
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          {row.amountFormatted ? (
-            <p
-              className={cn(
-                'text-base font-semibold tabular-nums leading-snug',
-                getAmountColorClass(row.transactionType)
-              )}
-            >
-              {row.amountFormatted}
-            </p>
-          ) : null}
+        {row.notes ? (
+          <p className="text-xs italic text-muted-foreground/70">{row.notes}</p>
+        ) : null}
 
+        <div className="flex flex-wrap items-center gap-1.5">
           {!row.isVoided ? <ReviewControl row={row} returnTo={returnTo} /> : null}
-
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
-            {row.canEdit ? (
-              <button
-                type="button"
-                onClick={onEdit}
-                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
-              >
-                <Pencil className="size-3.5" aria-hidden="true" />
-                Quick edit
-              </button>
-            ) : null}
-            {row.canEdit || row.canEditTransfer ? (
-              <Link
-                href={row.editHref}
-                className={buttonVariants({ variant: 'outline', size: 'sm' })}
-              >
-                Edit
-              </Link>
-            ) : null}
-            {row.canVoid ? <VoidTransactionForm transactionId={row.id} /> : null}
-          </div>
+          {row.canEdit ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
+            >
+              <Pencil className="size-3.5" aria-hidden="true" />
+              Quick edit
+            </button>
+          ) : null}
+          {row.canEdit || row.canEditTransfer ? (
+            <Link
+              href={row.editHref}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Edit
+            </Link>
+          ) : null}
+          {row.canVoid ? <VoidTransactionForm transactionId={row.id} /> : null}
         </div>
       </div>
     </div>
