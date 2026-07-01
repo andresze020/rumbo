@@ -13,6 +13,14 @@
 - ⬜ **Sprint C — Dashboard widget + transfers** (UC-8, UC-9): "Due soon" widget
   on `/dashboard`; recurring transfers require a schema migration to add
   `to_account_id`. Pending.
+- ⬜ **Requested evolution — inline creation from the transaction form** (UC-10):
+  add a frequency field to the normal create-transaction form so a single submit
+  both posts the first transaction and creates the template; combined with true
+  auto-posting (UC-4 / Sprint B / **BR-014**), this is the user's requested
+  "create it once, it publishes now and repeats automatically" flow.
+  **Not yet implemented.** The inline-create slice is buildable now; the
+  auto-posting half stays blocked on the same cron + FX-at-post decisions as
+  Sprint B (Open Decisions #3 and #7).
 
 > **Note:** the table did **not** actually exist in this project's database —
 > it was only in the initial schema design doc and was never applied. Migration
@@ -191,6 +199,35 @@ create table public.recurring_transactions (
 
 ---
 
+### UC-10 — Create a recurring transaction inline from the transaction form
+**Actor:** Household member (admin)
+**Trigger:** While entering a normal transaction, the user wants it to repeat.
+**Requested behavior (user):** "Create the recurring one from where I create a
+normal transaction — a frequency field. When I create it, publish that first
+transaction right away and then have it repeat automatically at the chosen
+frequency."
+**Flow:**
+1. On the standard create form (`src/app/dashboard/transactions/transaction-form.tsx`)
+   the user picks a **frequency** (a "Does not repeat" default + the
+   `RECURRING_FREQUENCIES` options from `src/lib/recurring/shared.ts`).
+2. On submit, if a repeating frequency is chosen:
+   - Post the first transaction immediately via the existing
+     `create_manual_transaction` RPC (same as a one-off), and
+   - Insert a `recurring_transactions` template with `start_date` =
+     `transaction_date` and `next_run_date` = the next occurrence **after** that
+     date (reuse `computeNextRunDate` / `advanceUntilFuture`).
+3. Subsequent occurrences are produced by auto-posting (**UC-4**), so this UC
+   depends on the Sprint B scheduler for the "repeats automatically" half.
+
+**Scope notes:**
+- Income + expense only initially (the RPC rejects other types; transfers are UC-9).
+- Reuses the existing table, RPC, and date helpers — no schema change for the
+  inline-create slice itself.
+- Until the scheduler ships, the template still appears on `/dashboard/recurring`
+  and can be posted manually (UC-3), so the feature is useful before UC-4 lands.
+
+---
+
 ## Open Decisions
 
 | # | Question | Options | Recommendation |
@@ -202,6 +239,7 @@ create table public.recurring_transactions (
 | 5 | Failure notifications for auto-post | Email / In-app / None | In-app Callout on next login |
 | 6 | `next_run_date` on reactivation | From last scheduled date / From today | From today (avoids posting a backlog of missed entries) |
 | 7 | Cron infrastructure | pg_cron / Vercel Cron | pg_cron (no extra infra, runs in DB, already available in Supabase) |
+| 8 | Recurring entry point (UC-10) | Inline frequency field on the transaction form / keep the separate `/dashboard/recurring` create form / both | Both — add the inline field for the common "make this repeat" case, keep the dedicated form for managing templates. Inline create reuses the existing RPC + table |
 
 ---
 
