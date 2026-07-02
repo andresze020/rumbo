@@ -6,7 +6,6 @@ import { usePathname, useRouter } from 'next/navigation'
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowLeftRight,
-  CalendarRange,
   Home,
   MoreHorizontal,
   Plus,
@@ -14,6 +13,7 @@ import {
   TrendingDown,
   TrendingUp,
   Upload,
+  Wallet,
 } from 'lucide-react'
 import {
   Drawer,
@@ -40,7 +40,9 @@ const leftTabs: Tab[] = [
 ]
 
 const rightTabs: Tab[] = [
-  { href: '/dashboard/plan', labelKey: 'nav.plan', icon: CalendarRange },
+  // Accounts is opened far more often than Plan, so it earns the primary slot.
+  // Plan stays reachable from the budgets page and via its own route.
+  { href: '/dashboard/accounts', labelKey: 'nav.accounts', icon: Wallet },
   { href: '/dashboard/more', labelKey: 'nav.more', icon: MoreHorizontal },
 ]
 

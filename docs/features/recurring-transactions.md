@@ -13,14 +13,15 @@
 - ⬜ **Sprint C — Dashboard widget + transfers** (UC-8, UC-9): "Due soon" widget
   on `/dashboard`; recurring transfers require a schema migration to add
   `to_account_id`. Pending.
-- ⬜ **Requested evolution — inline creation from the transaction form** (UC-10):
-  add a frequency field to the normal create-transaction form so a single submit
-  both posts the first transaction and creates the template; combined with true
-  auto-posting (UC-4 / Sprint B / **BR-014**), this is the user's requested
-  "create it once, it publishes now and repeats automatically" flow.
-  **Not yet implemented.** The inline-create slice is buildable now; the
-  auto-posting half stays blocked on the same cron + FX-at-post decisions as
-  Sprint B (Open Decisions #3 and #7).
+- 🟡 **Requested evolution — inline creation from the transaction form** (UC-10):
+  the normal create-transaction form now has a **Repeat** frequency field; a
+  single submit posts the first transaction and creates the template
+  (`auto_post = false`). **Shipped** on branch
+  `claude/transaction-filters-recurring-3nh1v0` (income + expense; transfers
+  excluded). The "repeats **automatically**" half is still **pending** — it needs
+  the Sprint B auto-post scheduler (UC-4 / **BR-014**), blocked on the cron + FX
+  -at-post decisions (Open Decisions #3 and #7). Until then, subsequent
+  occurrences are posted manually from `/dashboard/recurring` (UC-3).
 
 > **Note:** the table did **not** actually exist in this project's database —
 > it was only in the initial schema design doc and was never applied. Migration

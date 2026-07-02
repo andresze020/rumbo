@@ -205,6 +205,10 @@ export const en = {
     status: 'Status',
     statusPosted: 'Posted',
     statusPending: 'Pending',
+    repeat: 'Repeat',
+    repeatNever: 'Does not repeat',
+    repeatHelp:
+      'Posts this entry now and creates a recurring template. Manage upcoming occurrences under Recurring.',
     needTwoAccounts: 'Create at least two accounts to transfer between them.',
     crossCurrencyNotSupported: 'Cross-currency transfers are not supported yet.',
     createTransaction: 'Create transaction',
@@ -564,6 +568,10 @@ export const es: DeepStringify<typeof en> = {
     status: 'Estado',
     statusPosted: 'Contabilizada',
     statusPending: 'Pendiente',
+    repeat: 'Repetir',
+    repeatNever: 'No se repite',
+    repeatHelp:
+      'Publica este movimiento ahora y crea una plantilla recurrente. Gestiona las próximas veces en Recurrentes.',
     needTwoAccounts: 'Crea al menos dos cuentas para transferir entre ellas.',
     crossCurrencyNotSupported: 'Las transferencias entre monedas distintas aún no son compatibles.',
     createTransaction: 'Crear transacción',
@@ -923,6 +931,10 @@ export const fr: DeepStringify<typeof en> = {
     status: 'Statut',
     statusPosted: 'Comptabilisée',
     statusPending: 'En attente',
+    repeat: 'Répéter',
+    repeatNever: 'Ne se répète pas',
+    repeatHelp:
+      'Enregistre cette écriture maintenant et crée un modèle récurrent. Gérez les prochaines occurrences dans Récurrents.',
     needTwoAccounts: 'Créez au moins deux comptes pour effectuer des virements entre eux.',
     crossCurrencyNotSupported: 'Les virements entre devises différentes ne sont pas encore pris en charge.',
     createTransaction: 'Créer la transaction',

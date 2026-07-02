@@ -265,9 +265,15 @@ export function TransactionFilters({
             </Link>
           ))}
 
+          {/* `key` ties each uncontrolled input to the server-resolved range so a
+              client-side preset navigation remounts it with the new value. Without
+              this, `defaultValue` is ignored on re-render and the field keeps its
+              stale (e.g. this-month) value, which "Apply filters" would then
+              re-submit and clobber the range the user just picked (BF-024). */}
           <label className={chipLabelClassName}>
             <span className="text-xs font-medium text-muted-foreground">From</span>
             <input
+              key={resolvedDateFrom}
               type="date"
               name="date_from"
               defaultValue={resolvedDateFrom}
@@ -279,6 +285,7 @@ export function TransactionFilters({
           <label className={chipLabelClassName}>
             <span className="text-xs font-medium text-muted-foreground">To</span>
             <input
+              key={resolvedDateTo}
               type="date"
               name="date_to"
               defaultValue={resolvedDateTo}

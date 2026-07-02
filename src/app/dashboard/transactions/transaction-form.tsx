@@ -21,6 +21,7 @@ import {
   sanitizeAmountInput,
 } from '@/lib/format'
 import { useLanguage } from '@/components/language-provider'
+import { RECURRING_FREQUENCIES } from '@/lib/recurring/shared'
 import { cn } from '@/lib/utils'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
@@ -104,6 +105,7 @@ export function TransactionForm({
   const [toAccountId, setToAccountId] = useState('')
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
   const [amountInput, setAmountInput] = useState(defaultAmount ?? '')
+  const [recurringFrequency, setRecurringFrequency] = useState('')
   const [userRate, setUserRate] = useState('')
   const [fetchingRate, setFetchingRate] = useState(false)
   const [fxNote, setFxNote] = useState('')
@@ -539,6 +541,31 @@ export function TransactionForm({
           <option value="pending">{t('transactionForm.statusPending')}</option>
         </select>
       </div>
+
+      {/* UC-10: turn a normal entry into a recurring one. Transfers are not
+          supported as recurring templates yet, so this is income/expense only. */}
+      {!isTransfer ? (
+        <div className="space-y-2">
+          <Label htmlFor="frequency">{t('transactionForm.repeat')}</Label>
+          <select
+            id="frequency"
+            name="frequency"
+            value={recurringFrequency}
+            onChange={(e) => setRecurringFrequency(e.target.value)}
+            className={selectCls}
+          >
+            <option value="">{t('transactionForm.repeatNever')}</option>
+            {RECURRING_FREQUENCIES.map((frequency) => (
+              <option key={frequency.value} value={frequency.value}>
+                {frequency.label}
+              </option>
+            ))}
+          </select>
+          {recurringFrequency ? (
+            <p className="text-xs text-muted-foreground">{t('transactionForm.repeatHelp')}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       {!isTransfer ? (
         isMultiCurrency ? (
