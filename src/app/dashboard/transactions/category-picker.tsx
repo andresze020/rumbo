@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, Shapes } from 'lucide-react'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 
 type TransactionType = 'income' | 'expense'
 
@@ -26,25 +27,28 @@ type CategoryPickerProps = {
 const selectCls =
   'h-11 w-full appearance-none truncate rounded-xl border border-input bg-transparent pl-10 pr-9 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30'
 
+/**
+ * The selected option's text already carries the category emoji, so the
+ * leading slot only shows the generic glyph when there is no emoji —
+ * otherwise the icon would appear twice in the closed select.
+ */
 function SelectShell({
-  leadingIcon,
+  hasEmoji,
   children,
 }: {
-  leadingIcon: string | null | undefined
+  hasEmoji: boolean
   children: React.ReactNode
 }) {
   return (
     <div className="relative">
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute left-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-muted-foreground"
-      >
-        {leadingIcon ? (
-          <span className="text-base leading-none">{leadingIcon}</span>
-        ) : (
+      {hasEmoji ? null : (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-muted-foreground"
+        >
           <Shapes className="size-4.5" />
-        )}
-      </span>
+        </span>
+      )}
       {children}
       <ChevronDown
         aria-hidden="true"
@@ -136,12 +140,12 @@ export function CategoryPicker({
         <Label htmlFor={`parent_category_id_${transactionType}`}>
           Category
         </Label>
-        <SelectShell leadingIcon={selectedParent?.icon}>
+        <SelectShell hasEmoji={Boolean(selectedParent?.icon)}>
           <select
             id={`parent_category_id_${transactionType}`}
             value={parentCategoryId}
             onChange={(event) => handleParentChange(event.target.value)}
-            className={selectCls}
+            className={cn(selectCls, selectedParent?.icon && 'pl-3.5')}
             disabled={!parentCategories.length}
           >
             <option value="" disabled>
@@ -162,12 +166,12 @@ export function CategoryPicker({
           <Label htmlFor={`subcategory_id_${transactionType}`}>
             Subcategory
           </Label>
-          <SelectShell leadingIcon={selectedChild?.icon ?? selectedParent?.icon}>
+          <SelectShell hasEmoji={Boolean(selectedChild?.icon)}>
             <select
               id={`subcategory_id_${transactionType}`}
               value={subcategoryId}
               onChange={(event) => handleSubcategoryChange(event.target.value)}
-              className={selectCls}
+              className={cn(selectCls, selectedChild?.icon && 'pl-3.5')}
             >
               <option value="">No subcategory / General</option>
               {childCategories.map((category) => (

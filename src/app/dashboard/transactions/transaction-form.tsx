@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   CalendarDays,
   ChevronDown,
+  Repeat,
   Wallet,
 } from 'lucide-react'
 import {
@@ -25,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { fetchFxRate } from '@/lib/fx'
 import { useLanguage } from '@/components/language-provider'
+import { RECURRING_FREQUENCIES } from '@/lib/recurring/shared'
 import { cn } from '@/lib/utils'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
@@ -101,19 +103,26 @@ function SelectField({
 }: ComponentProps<'select'> & {
   id: string
   label: ReactNode
-  leading: ReactNode
+  /** Icon slot. Pass null when the selected option's text already starts with an emoji. */
+  leading: ReactNode | null
 }) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
       <div className="relative">
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute left-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-muted-foreground"
+        {leading ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-muted-foreground"
+          >
+            {leading}
+          </span>
+        ) : null}
+        <select
+          id={id}
+          className={cn(selectFieldCls, !leading && 'pl-3.5', className)}
+          {...selectProps}
         >
-          {leading}
-        </span>
-        <select id={id} className={cn(selectFieldCls, className)} {...selectProps}>
           {children}
         </select>
         <ChevronDown
@@ -125,10 +134,12 @@ function SelectField({
   )
 }
 
-/** Emoji when the account has one, otherwise the generic wallet glyph. */
+/**
+ * The option text already carries the account's emoji, so render the generic
+ * wallet glyph only when there is no emoji — otherwise it would show twice.
+ */
 function accountLeading(account: TransactionFormAccount | undefined) {
-  if (account?.icon) return <span className="text-base leading-none">{account.icon}</span>
-  return <Wallet className="size-4.5" />
+  return account?.icon ? null : <Wallet className="size-4.5" />
 }
 
 export function TransactionForm({
@@ -156,6 +167,7 @@ export function TransactionForm({
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
   const [amountInput, setAmountInput] = useState(defaultAmount ?? '')
   const [status, setStatus] = useState(defaultStatus ?? 'posted')
+  const [recurringFrequency, setRecurringFrequency] = useState('')
   const [userRate, setUserRate] = useState('')
   const [fetchingRate, setFetchingRate] = useState(false)
   const [fxNote, setFxNote] = useState('')
@@ -610,72 +622,89 @@ export function TransactionForm({
         </>
       )}
 
-      {/* ── Optional details ─────────────────────────────────────────── */}
-      <AdvancedFields
-        label={t('transactionForm.detailsLabel')}
-        defaultOpen={Boolean(
-          defaultDescription || defaultMerchantName || (defaultStatus && defaultStatus !== 'posted')
-        )}
-      >
+      {/* UC-10: turn a normal entry into a recurring one. Transfers are not
+          supported as recurring templates yet, so this is income/expense only. */}
+      {!isTransfer ? (
         <div className="space-y-1.5">
-          <Label htmlFor="description">{t('transactionForm.description')}</Label>
+          <SelectField
+            id="frequency"
+            name="frequency"
+            label={t('transactionForm.repeat')}
+            leading={<Repeat className="size-4.5" />}
+            value={recurringFrequency}
+            onChange={(e) => setRecurringFrequency(e.target.value)}
+          >
+            <option value="">{t('transactionForm.repeatNever')}</option>
+            {RECURRING_FREQUENCIES.map((frequency) => (
+              <option key={frequency.value} value={frequency.value}>
+                {frequency.label}
+              </option>
+            ))}
+          </SelectField>
+          {recurringFrequency ? (
+            <p className="text-xs text-muted-foreground">{t('transactionForm.repeatHelp')}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="space-y-1.5">
+        <Label htmlFor="description">{t('transactionForm.description')}</Label>
+        <Input
+          id="description"
+          name="description"
+          defaultValue={defaultDescription}
+          className={detailFieldCls}
+        />
+      </div>
+
+      {!isTransfer ? (
+        <div className="space-y-1.5">
+          <Label htmlFor="merchant_name">{t('transactionForm.merchant')}</Label>
           <Input
-            id="description"
-            name="description"
-            defaultValue={defaultDescription}
+            id="merchant_name"
+            name="merchant_name"
+            defaultValue={defaultMerchantName}
             className={detailFieldCls}
           />
         </div>
+      ) : null}
 
-        {!isTransfer ? (
-          <div className="space-y-1.5">
-            <Label htmlFor="merchant_name">{t('transactionForm.merchant')}</Label>
-            <Input
-              id="merchant_name"
-              name="merchant_name"
-              defaultValue={defaultMerchantName}
-              className={detailFieldCls}
-            />
-          </div>
-        ) : null}
+      <div className="space-y-1.5">
+        <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
+        <Textarea id="notes" name="notes" className="rounded-xl" />
+      </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-          <Textarea id="notes" name="notes" className="rounded-xl" />
+      <div className="space-y-1.5">
+        <Label>{t('transactionForm.status')}</Label>
+        <input type="hidden" name="status" value={status} />
+        <div
+          role="group"
+          aria-label={t('transactionForm.status')}
+          className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1"
+        >
+          {(
+            [
+              { value: 'posted', label: t('transactionForm.statusPosted') },
+              { value: 'pending', label: t('transactionForm.statusPending') },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={status === option.value}
+              onClick={() => setStatus(option.value)}
+              className={cn(
+                'flex h-8 items-center justify-center rounded-lg text-sm font-medium transition-all',
+                status === option.value
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
-
-        <div className="space-y-1.5">
-          <Label>{t('transactionForm.status')}</Label>
-          <input type="hidden" name="status" value={status} />
-          <div
-            role="group"
-            aria-label={t('transactionForm.status')}
-            className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1"
-          >
-            {(
-              [
-                { value: 'posted', label: t('transactionForm.statusPosted') },
-                { value: 'pending', label: t('transactionForm.statusPending') },
-              ] as const
-            ).map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={status === option.value}
-                onClick={() => setStatus(option.value)}
-                className={cn(
-                  'flex h-8 items-center justify-center rounded-lg text-sm font-medium transition-all',
-                  status === option.value
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </AdvancedFields>
+      </div>
 
       {!isTransfer ? (
         isMultiCurrency ? (

@@ -160,6 +160,16 @@ function offsetDate(baseDate: string, days: number): string {
   return new Date(Date.UTC(yr, mo - 1, dy + days)).toISOString().slice(0, 10)
 }
 
+// Shift a YYYY-MM month string by whole months (negative = earlier).
+function offsetMonth(month: string, months: number): string {
+  const [yr, mo] = month.split('-').map(Number)
+  return new Date(Date.UTC(yr, mo - 1 + months, 1)).toISOString().slice(0, 7)
+}
+
+// A range wide enough to cover every transaction, used for the "All time" preset.
+const ALL_TIME_FROM = '2000-01-01'
+const ALL_TIME_TO = '2099-12-31'
+
 function formatDateRangeLabel(dateFrom: string, dateTo: string): string {
   const fromMonth = dateFrom.slice(0, 7)
   const toMonth = dateTo.slice(0, 7)
@@ -693,12 +703,14 @@ export default async function TransactionsPage({
   const todayStr = todayIsoDate()
   const thisYear = todayStr.slice(0, 4)
   const thisMonthStr = currentMonth()
+  const lastMonthStr = offsetMonth(thisMonthStr, -1)
   const rawPresets = [
     { label: 'This month', from: monthFirstDay(thisMonthStr), to: monthLastDay(thisMonthStr) },
-    { label: 'Last 30d', from: offsetDate(todayStr, -29), to: todayStr },
-    { label: 'Last 60d', from: offsetDate(todayStr, -59), to: todayStr },
-    { label: 'Last 90d', from: offsetDate(todayStr, -89), to: todayStr },
-    { label: 'This year', from: `${thisYear}-01-01`, to: `${thisYear}-12-31` },
+    { label: 'Last month', from: monthFirstDay(lastMonthStr), to: monthLastDay(lastMonthStr) },
+    { label: 'Last 3 months', from: monthFirstDay(offsetMonth(thisMonthStr, -2)), to: todayStr },
+    { label: 'Last 6 months', from: monthFirstDay(offsetMonth(thisMonthStr, -5)), to: todayStr },
+    { label: 'Year to date', from: `${thisYear}-01-01`, to: todayStr },
+    { label: 'All time', from: ALL_TIME_FROM, to: ALL_TIME_TO },
   ]
   const presetLinks = rawPresets.map((p) => ({
     label: p.label,
