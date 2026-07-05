@@ -18,6 +18,7 @@ type EditAccount = {
   name: string
   currency_code: string
   institution_name: string | null
+  icon?: string | null
 }
 
 type EditCategory = {
@@ -25,6 +26,7 @@ type EditCategory = {
   name: string
   category_type: string
   parent_category_id: string | null
+  icon?: string | null
 }
 
 type TransactionEditFormProps = {
@@ -45,13 +47,14 @@ type TransactionEditFormProps = {
 }
 
 function formatAccountLabel(account: EditAccount) {
-  return [
+  const label = [
     account.name,
     account.institution_name || null,
     account.currency_code,
   ]
     .filter(Boolean)
     .join(' · ')
+  return account.icon ? `${account.icon} ${label}` : label
 }
 
 export function TransactionEditForm({
@@ -131,6 +134,7 @@ export function TransactionEditForm({
             name="amount"
             currencyCode={amountCurrency}
             defaultValue={amount.toFixed(2)}
+            withCalculator
             required
           />
         </div>

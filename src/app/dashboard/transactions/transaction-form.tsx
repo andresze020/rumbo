@@ -1,13 +1,22 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
+import {
+  ArrowDownRight,
+  ArrowLeftRight,
+  ArrowUpRight,
+  CalendarDays,
+  ChevronDown,
+  Wallet,
+} from 'lucide-react'
 import {
   createManualTransactionAction,
   createTransferTransactionAction,
 } from './actions'
 import { CategoryPicker } from './category-picker'
 import { AdvancedFields } from '@/components/advanced-fields'
+import { AmountInput } from '@/components/amount-input'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,11 +24,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { fetchFxRate } from '@/lib/fx'
-import {
-  formatAmountForDisplay,
-  getCurrencySymbol,
-  sanitizeAmountInput,
-} from '@/lib/format'
 import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
 
@@ -30,6 +34,9 @@ export type TransactionFormAccount = {
   name: string
   currency_code: string
   institution_name: string | null
+  account_type?: string
+  icon?: string | null
+  color?: string | null
 }
 
 export type TransactionFormCategory = {
@@ -38,6 +45,8 @@ export type TransactionFormCategory = {
   category_type: string
   reporting_type: string
   parent_category_id: string | null
+  icon?: string | null
+  color?: string | null
 }
 
 type TransactionFormProps = {
@@ -57,9 +66,6 @@ type TransactionFormProps = {
   returnTo?: string
 }
 
-const selectCls =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
-
 const LAST_ACCOUNT_KEY = 'af_last_account_id'
 const CATEGORY_USAGE_KEY = 'af_category_usage'
 
@@ -68,9 +74,10 @@ function lastCategoryKey(transactionType: TransactionType) {
 }
 
 function formatAccountLabel(account: TransactionFormAccount) {
-  return [account.name, account.institution_name || null, account.currency_code]
+  const label = [account.name, account.institution_name || null, account.currency_code]
     .filter(Boolean)
     .join(' · ')
+  return account.icon ? `${account.icon} ${label}` : label
 }
 
 function formatCurrency(value: number | string, currencyCode: string) {
@@ -78,6 +85,50 @@ function formatCurrency(value: number | string, currencyCode: string) {
     style: 'currency',
     currency: currencyCode,
   }).format(Number(value))
+}
+
+const selectFieldCls =
+  'h-11 w-full appearance-none truncate rounded-xl border border-input bg-transparent pl-10 pr-9 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30'
+
+/** Native select dressed as an app-style field: leading icon, trailing chevron. */
+function SelectField({
+  id,
+  label,
+  leading,
+  children,
+  className,
+  ...selectProps
+}: ComponentProps<'select'> & {
+  id: string
+  label: ReactNode
+  leading: ReactNode
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="relative">
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-muted-foreground"
+        >
+          {leading}
+        </span>
+        <select id={id} className={cn(selectFieldCls, className)} {...selectProps}>
+          {children}
+        </select>
+        <ChevronDown
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        />
+      </div>
+    </div>
+  )
+}
+
+/** Emoji when the account has one, otherwise the generic wallet glyph. */
+function accountLeading(account: TransactionFormAccount | undefined) {
+  if (account?.icon) return <span className="text-base leading-none">{account.icon}</span>
+  return <Wallet className="size-4.5" />
 }
 
 export function TransactionForm({
@@ -104,6 +155,7 @@ export function TransactionForm({
   const [toAccountId, setToAccountId] = useState('')
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
   const [amountInput, setAmountInput] = useState(defaultAmount ?? '')
+  const [status, setStatus] = useState(defaultStatus ?? 'posted')
   const [userRate, setUserRate] = useState('')
   const [fetchingRate, setFetchingRate] = useState(false)
   const [fxNote, setFxNote] = useState('')
@@ -188,7 +240,6 @@ export function TransactionForm({
   const amountCurrencyCode =
     (isTransfer ? selectedFromAccount?.currency_code : selectedAccount?.currency_code) ??
     baseCurrency
-  const amountCurrencySymbol = getCurrencySymbol(amountCurrencyCode)
   const isCrossCurrencyTransfer =
     Boolean(selectedFromAccount && selectedToAccount) &&
     selectedFromAccount?.currency_code !== selectedToAccount?.currency_code
@@ -270,93 +321,158 @@ export function TransactionForm({
     setFxError('')
   }
 
+  const typeOptions = [
+    {
+      value: 'expense' as const,
+      label: t('transactionForm.typeExpense'),
+      Icon: ArrowDownRight,
+      activeCls: 'text-rose-600 dark:text-rose-400',
+    },
+    {
+      value: 'income' as const,
+      label: t('transactionForm.typeIncome'),
+      Icon: ArrowUpRight,
+      activeCls: 'text-emerald-600 dark:text-emerald-400',
+    },
+    {
+      value: 'transfer' as const,
+      label: t('transactionForm.typeTransfer'),
+      Icon: ArrowLeftRight,
+      activeCls: 'text-sky-600 dark:text-sky-400',
+    },
+  ]
+
+  const detailFieldCls = 'h-11 rounded-xl'
+
   return (
     <form action={submitAction} onSubmit={rememberDefaults} className="space-y-4">
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
-      <div className="space-y-2">
-        <Label htmlFor="transaction_type">
-          {t('transactionForm.type')}
-          <InfoTooltip term="transfer" label={t('transactionForm.typeTransfer')} />
-        </Label>
-        <select
-          id="transaction_type"
-          name="transaction_type"
-          value={transactionType}
-          onChange={(e) => handleTransactionTypeChange(e.target.value as TransactionType)}
-          className={selectCls}
-        >
-          <option value="expense">{t('transactionForm.typeExpense')}</option>
-          <option value="income">{t('transactionForm.typeIncome')}</option>
-          <option value="transfer">{t('transactionForm.typeTransfer')}</option>
-        </select>
+
+      {/* ── Type: segmented control ──────────────────────────────────── */}
+      <input type="hidden" name="transaction_type" value={transactionType} />
+      <div
+        role="group"
+        aria-label={t('transactionForm.type')}
+        className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1"
+      >
+        {typeOptions.map(({ value, label, Icon, activeCls }) => {
+          const isActive = transactionType === value
+          return (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={isActive}
+              onClick={() => handleTransactionTypeChange(value)}
+              className={cn(
+                'flex h-9 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-all',
+                isActive
+                  ? cn('bg-background shadow-sm', activeCls)
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Icon className="size-4" aria-hidden="true" />
+              <span className="truncate">{label}</span>
+            </button>
+          )
+        })}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="transaction_date">{t('transactionForm.date')}</Label>
-        <Input
-          id="transaction_date"
-          name="transaction_date"
-          type="date"
-          value={transactionDate}
-          onChange={(e) => {
-            setTransactionDate(e.target.value)
-            if (isMultiCurrency) {
-              setUserRate('')
-              setFxNote('')
-              setFxError('')
-            }
-          }}
+      {/* ── Amount hero ──────────────────────────────────────────────── */}
+      <div className="rounded-2xl border bg-muted/30 p-3.5">
+        <div className="flex items-center justify-between">
+          <Label
+            htmlFor="amount"
+            className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
+          >
+            {t('transactionForm.amount')}
+          </Label>
+          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
+            {amountCurrencyCode}
+          </span>
+        </div>
+        <AmountInput
+          id="amount"
+          name="amount"
+          currencyCode={amountCurrencyCode}
+          value={amountInput}
+          onValueChange={setAmountInput}
+          size="lg"
+          withCalculator
           required
+          className="mt-1.5"
         />
+      </div>
+
+      {/* ── Date ─────────────────────────────────────────────────────── */}
+      <div className="space-y-1.5">
+        <Label htmlFor="transaction_date">{t('transactionForm.date')}</Label>
+        <div className="relative">
+          <CalendarDays
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            id="transaction_date"
+            name="transaction_date"
+            type="date"
+            value={transactionDate}
+            onChange={(e) => {
+              setTransactionDate(e.target.value)
+              if (isMultiCurrency) {
+                setUserRate('')
+                setFxNote('')
+                setFxError('')
+              }
+            }}
+            className="h-11 rounded-xl pl-10"
+            required
+          />
+        </div>
       </div>
 
       {isTransfer ? (
         <>
-          <div className="space-y-2">
-            <Label htmlFor="from_account_id">{t('transactionForm.fromAccount')}</Label>
-            <select
-              id="from_account_id"
-              name="from_account_id"
-              required
-              value={fromAccountId}
-              onChange={(e) => {
-                const next = e.target.value
-                setFromAccountId(next)
-                if (next === toAccountId) setToAccountId('')
-              }}
-              className={selectCls}
-            >
-              <option value="" disabled>{t('transactionForm.selectSource')}</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id} disabled={a.id === toAccountId}>
-                  {formatAccountLabel(a)}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SelectField
+            id="from_account_id"
+            name="from_account_id"
+            label={t('transactionForm.fromAccount')}
+            leading={accountLeading(selectedFromAccount)}
+            required
+            value={fromAccountId}
+            onChange={(e) => {
+              const next = e.target.value
+              setFromAccountId(next)
+              if (next === toAccountId) setToAccountId('')
+            }}
+          >
+            <option value="" disabled>{t('transactionForm.selectSource')}</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id} disabled={a.id === toAccountId}>
+                {formatAccountLabel(a)}
+              </option>
+            ))}
+          </SelectField>
 
-          <div className="space-y-2">
-            <Label htmlFor="to_account_id">{t('transactionForm.toAccount')}</Label>
-            <select
-              id="to_account_id"
-              name="to_account_id"
-              required
-              value={toAccountId}
-              onChange={(e) => {
-                const next = e.target.value
-                setToAccountId(next)
-                if (next === fromAccountId) setFromAccountId('')
-              }}
-              className={selectCls}
-            >
-              <option value="" disabled>{t('transactionForm.selectDestination')}</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id} disabled={a.id === fromAccountId}>
-                  {formatAccountLabel(a)}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SelectField
+            id="to_account_id"
+            name="to_account_id"
+            label={t('transactionForm.toAccount')}
+            leading={accountLeading(selectedToAccount)}
+            required
+            value={toAccountId}
+            onChange={(e) => {
+              const next = e.target.value
+              setToAccountId(next)
+              if (next === fromAccountId) setFromAccountId('')
+            }}
+          >
+            <option value="" disabled>{t('transactionForm.selectDestination')}</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id} disabled={a.id === fromAccountId}>
+                {formatAccountLabel(a)}
+              </option>
+            ))}
+          </SelectField>
 
           {accounts.length < 2 ? (
             <p className="text-sm text-muted-foreground">
@@ -365,7 +481,7 @@ export function TransactionForm({
           ) : null}
 
           {isCrossCurrencyTransfer ? (
-            <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
               {t('transactionForm.crossCurrencyNotSupported')}
             </p>
           ) : isTransferNonBaseCurrency ? (
@@ -440,29 +556,27 @@ export function TransactionForm({
         </>
       ) : (
         <>
-          <div className="space-y-2">
-            <Label htmlFor="account_id">{t('transactionForm.account')}</Label>
-            <select
-              id="account_id"
-              name="account_id"
-              required
-              value={accountId}
-              onChange={(e) => {
-                setAccountId(e.target.value)
-                setUserRate('')
-                setFxNote('')
-                setFxError('')
-              }}
-              className={selectCls}
-            >
-              <option value="" disabled>{t('transactionForm.selectAccount')}</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {formatAccountLabel(a)}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SelectField
+            id="account_id"
+            name="account_id"
+            label={t('transactionForm.account')}
+            leading={accountLeading(selectedAccount)}
+            required
+            value={accountId}
+            onChange={(e) => {
+              setAccountId(e.target.value)
+              setUserRate('')
+              setFxNote('')
+              setFxError('')
+            }}
+          >
+            <option value="" disabled>{t('transactionForm.selectAccount')}</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {formatAccountLabel(a)}
+              </option>
+            ))}
+          </SelectField>
 
           <CategoryPicker
             key={transactionType}
@@ -473,7 +587,7 @@ export function TransactionForm({
           />
 
           {frequentCategories.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
               {frequentCategories.map((category) => (
                 <button
@@ -481,12 +595,13 @@ export function TransactionForm({
                   type="button"
                   onClick={() => setCategoryId(category.id)}
                   className={cn(
-                    'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                    'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
                     categoryId === category.id
                       ? 'border-primary bg-primary/10 text-primary'
                       : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
                   )}
                 >
+                  {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
                   {category.name}
                 </button>
               ))}
@@ -495,50 +610,72 @@ export function TransactionForm({
         </>
       )}
 
-      <div className="space-y-2">
-        <Label htmlFor="amount">{t('transactionForm.amount')}</Label>
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-            {amountCurrencySymbol}
-          </span>
+      {/* ── Optional details ─────────────────────────────────────────── */}
+      <AdvancedFields
+        label={t('transactionForm.detailsLabel')}
+        defaultOpen={Boolean(
+          defaultDescription || defaultMerchantName || (defaultStatus && defaultStatus !== 'posted')
+        )}
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="description">{t('transactionForm.description')}</Label>
           <Input
-            id="amount"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-            value={formatAmountForDisplay(amountInput)}
-            onChange={(e) => setAmountInput(sanitizeAmountInput(e.target.value))}
-            className="pl-7"
-            required
+            id="description"
+            name="description"
+            defaultValue={defaultDescription}
+            className={detailFieldCls}
           />
         </div>
-        <input type="hidden" name="amount" value={amountInput} />
-      </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="description">{t('transactionForm.description')}</Label>
-        <Input id="description" name="description" defaultValue={defaultDescription} />
-      </div>
+        {!isTransfer ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="merchant_name">{t('transactionForm.merchant')}</Label>
+            <Input
+              id="merchant_name"
+              name="merchant_name"
+              defaultValue={defaultMerchantName}
+              className={detailFieldCls}
+            />
+          </div>
+        ) : null}
 
-      {!isTransfer ? (
-        <div className="space-y-2">
-          <Label htmlFor="merchant_name">{t('transactionForm.merchant')}</Label>
-          <Input id="merchant_name" name="merchant_name" defaultValue={defaultMerchantName} />
+        <div className="space-y-1.5">
+          <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
+          <Textarea id="notes" name="notes" className="rounded-xl" />
         </div>
-      ) : null}
 
-      <div className="space-y-2">
-        <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-        <Textarea id="notes" name="notes" />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="status">{t('transactionForm.status')}</Label>
-        <select id="status" name="status" defaultValue={defaultStatus ?? 'posted'} className={selectCls}>
-          <option value="posted">{t('transactionForm.statusPosted')}</option>
-          <option value="pending">{t('transactionForm.statusPending')}</option>
-        </select>
-      </div>
+        <div className="space-y-1.5">
+          <Label>{t('transactionForm.status')}</Label>
+          <input type="hidden" name="status" value={status} />
+          <div
+            role="group"
+            aria-label={t('transactionForm.status')}
+            className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1"
+          >
+            {(
+              [
+                { value: 'posted', label: t('transactionForm.statusPosted') },
+                { value: 'pending', label: t('transactionForm.statusPending') },
+              ] as const
+            ).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={status === option.value}
+                onClick={() => setStatus(option.value)}
+                className={cn(
+                  'flex h-8 items-center justify-center rounded-lg text-sm font-medium transition-all',
+                  status === option.value
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </AdvancedFields>
 
       {!isTransfer ? (
         isMultiCurrency ? (
@@ -612,35 +749,51 @@ export function TransactionForm({
         )
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
+      {/* ── Actions ──────────────────────────────────────────────────── */}
+      <div className="sticky bottom-0 z-10 -mb-1 space-y-2 bg-popover pb-1 pt-2 sm:static sm:flex sm:flex-wrap sm:items-center sm:gap-2 sm:space-y-0 sm:bg-transparent sm:p-0">
         <SubmitButton
           type="submit"
           disabled={!canSubmit}
+          className="h-11 w-full rounded-xl text-sm font-semibold sm:h-9 sm:w-auto sm:rounded-lg"
           pendingText={isTransfer ? t('transactionForm.creatingTransfer') : t('transactionForm.creatingTransaction')}
         >
           {isTransfer ? t('transactionForm.createTransfer') : t('transactionForm.createTransaction')}
         </SubmitButton>
-        {!isTransfer ? (
-          <SubmitButton
-            type="submit"
-            name="add_next"
-            value="true"
-            variant="outline"
-            disabled={!canSubmit}
-            pendingText={t('transactionForm.saving')}
-          >
-            {t('transactionForm.saveAndAddNext')}
-          </SubmitButton>
-        ) : null}
-        {onCancel ? (
-          <Button type="button" variant="outline" onClick={onCancel}>
-            {t('transactionForm.cancel')}
-          </Button>
-        ) : cancelHref ? (
-          <Link href={cancelHref} className={buttonVariants({ variant: 'outline' })}>
-            {t('transactionForm.cancel')}
-          </Link>
-        ) : null}
+        <div className="flex gap-2 sm:contents">
+          {!isTransfer ? (
+            <SubmitButton
+              type="submit"
+              name="add_next"
+              value="true"
+              variant="outline"
+              disabled={!canSubmit}
+              className="h-11 flex-1 rounded-xl sm:h-9 sm:flex-none sm:rounded-lg"
+              pendingText={t('transactionForm.saving')}
+            >
+              {t('transactionForm.saveAndAddNext')}
+            </SubmitButton>
+          ) : null}
+          {onCancel ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+              className="h-11 flex-1 rounded-xl sm:h-9 sm:flex-none sm:rounded-lg"
+            >
+              {t('transactionForm.cancel')}
+            </Button>
+          ) : cancelHref ? (
+            <Link
+              href={cancelHref}
+              className={cn(
+                buttonVariants({ variant: 'outline' }),
+                'h-11 flex-1 rounded-xl sm:h-9 sm:flex-none sm:rounded-lg'
+              )}
+            >
+              {t('transactionForm.cancel')}
+            </Link>
+          ) : null}
+        </div>
       </div>
     </form>
   )

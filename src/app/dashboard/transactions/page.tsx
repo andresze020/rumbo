@@ -47,6 +47,7 @@ type Account = {
   currency_code: string
   institution_name: string | null
   is_archived: boolean
+  icon: string | null
 }
 
 type Category = {
@@ -389,7 +390,7 @@ export default async function TransactionsPage({
 
   const { data: accounts, error: accountsError } = await supabase
     .from('accounts')
-    .select('id, name, currency_code, institution_name, is_archived')
+    .select('id, name, currency_code, institution_name, is_archived, icon')
     .eq('household_id', household.id)
     .is('deleted_at', null)
     .order('sort_order', { ascending: true, nullsFirst: false })
@@ -705,13 +706,16 @@ export default async function TransactionsPage({
     isActive: resolvedDateFrom === p.from && resolvedDateTo === p.to,
   }))
 
-  const accountOptions = allAccounts.map((a) => ({
-    id: a.id,
-    label: [a.name, a.institution_name, a.currency_code, a.is_archived ? 'archived' : null]
+  const accountOptions = allAccounts.map((a) => {
+    const label = [a.name, a.institution_name, a.currency_code, a.is_archived ? 'archived' : null]
       .filter(Boolean)
-      .join(' · '),
-    isArchived: a.is_archived,
-  }))
+      .join(' · ')
+    return {
+      id: a.id,
+      label: a.icon ? `${a.icon} ${label}` : label,
+      isArchived: a.is_archived,
+    }
+  })
 
   const categoryOpts = allCategories.map((c) => ({
     id: c.id,

@@ -7,6 +7,9 @@ export type QuickAddAccount = {
   name: string
   currency_code: string
   institution_name: string | null
+  account_type: string
+  icon: string | null
+  color: string | null
 }
 
 export type QuickAddCategory = {
@@ -15,6 +18,8 @@ export type QuickAddCategory = {
   category_type: string
   reporting_type: string
   parent_category_id: string | null
+  icon: string | null
+  color: string | null
 }
 
 export type QuickAddFormData = {
@@ -49,7 +54,7 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
         .single(),
       supabase
         .from('accounts')
-        .select('id, name, currency_code, institution_name')
+        .select('id, name, currency_code, institution_name, account_type, icon, color')
         .eq('household_id', householdId)
         .eq('is_archived', false)
         .is('deleted_at', null)
@@ -57,7 +62,7 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
         .order('name', { ascending: true }),
       supabase
         .from('categories')
-        .select('id, name, category_type, reporting_type, parent_category_id')
+        .select('id, name, category_type, reporting_type, parent_category_id, icon, color')
         .eq('household_id', householdId)
         .eq('is_archived', false)
         .is('deleted_at', null)

@@ -215,6 +215,9 @@ export const en = {
     saving: 'Saving…',
     cancel: 'Cancel',
     frequentlyUsed: 'Frequently used:',
+    detailsLabel: 'More details',
+    dialogTitle: 'New transaction',
+    dialogDescription: 'Record an income, expense, or transfer.',
   },
   installPrompt: {
     title: 'Install App Finanzas',
@@ -574,6 +577,9 @@ export const es: DeepStringify<typeof en> = {
     saving: 'Guardando…',
     cancel: 'Cancelar',
     frequentlyUsed: 'Usadas con frecuencia:',
+    detailsLabel: 'Más detalles',
+    dialogTitle: 'Nueva transacción',
+    dialogDescription: 'Registra un ingreso, gasto o transferencia.',
   },
   installPrompt: {
     title: 'Instala App Finanzas',
@@ -933,6 +939,9 @@ export const fr: DeepStringify<typeof en> = {
     saving: 'Enregistrement…',
     cancel: 'Annuler',
     frequentlyUsed: 'Utilisées fréquemment :',
+    detailsLabel: 'Plus de détails',
+    dialogTitle: 'Nouvelle transaction',
+    dialogDescription: 'Enregistrez un revenu, une dépense ou un virement.',
   },
   installPrompt: {
     title: 'Installez App Finanzas',
