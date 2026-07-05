@@ -256,8 +256,11 @@ export function TransactionFilters({
             <Link
               key={link.label}
               href={link.href}
+              aria-current={link.isActive ? 'true' : undefined}
               className={buttonVariants({
-                variant: link.isActive ? 'secondary' : 'outline',
+                // Solid primary fill for the active preset (matching the type
+                // toggle) so the selected range is obvious, not a faint tint.
+                variant: link.isActive ? 'default' : 'outline',
                 size: 'sm',
               })}
             >
