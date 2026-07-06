@@ -17,7 +17,7 @@
 | User Settings page (`/dashboard/settings`) | Pending | Navbar redesign decision (needs an entry point) | [features/user-settings.md](./features/user-settings.md) |
 | Recurring transactions — Sprint B (auto-posting) | Pending | Multi-currency FX strategy must be reliable first | [features/recurring-transactions.md](./features/recurring-transactions.md) |
 | Recurring transactions — Sprint C (dashboard widget + recurring transfers) | Pending | Needs a `to_account_id` schema migration | [features/recurring-transactions.md](./features/recurring-transactions.md) |
-| Recurring transactions — inline create from the transaction form (UC-10) | Pending — inline-create slice buildable now; "repeats automatically" half = Sprint B auto-posting | Auto-post half blocked by Sprint B (cron infra + FX-at-post); inline field itself is not blocked | [features/recurring-transactions.md](./features/recurring-transactions.md) |
+| Recurring transactions — inline create from the transaction form (UC-10) | 🟡 Inline-create **shipped** on branch `claude/transaction-filters-recurring-3nh1v0` (frequency field posts the first + creates the template, `auto_post=false`); "repeats **automatically**" half still pending = Sprint B auto-posting | Auto-post half blocked by Sprint B (cron infra + FX-at-post) | [features/recurring-transactions.md](./features/recurring-transactions.md) |
 
 ## Open bugs / friction (Alpha real usage)
 
@@ -25,9 +25,10 @@ Source of truth: [alpha/bug-friction-log.md](./alpha/bug-friction-log.md).
 
 | ID | Priority | Area | One-line |
 |---|---|---|---|
-| BF-024 | P1 | Transactions filters | Date filter applies on selection and "Apply filters" resets a custom range back to This month (regression from #14). Bundled with BR-029. |
-| BF-025 | P2 | Navigation | Mobile bottom nav should show Accounts instead of Plan (one-line change in `mobile-bottom-nav.tsx`). |
 | BF-022 | P3 | Transactions | Reconciliation flow (mark transactions "cleared") — deferred to Beta v0.13. |
+
+> Fixed on branch `claude/transaction-filters-recurring-3nh1v0` (pending merge):
+> **BF-024** (P1, date-filter Apply-reset) and **BF-025** (P2, mobile nav Plan → Accounts).
 
 ## BR backlog — not started (P1, near-term)
 
@@ -52,7 +53,7 @@ Full detail, "why soon," and acceptance criteria live in
 | BR-024 | CSV import | Saved column-mapping presets + import revert |
 | BR-025 | Localization | Centralize locale/currency formatting (still `en-CA`-biased in places) |
 | BR-028 | PWA | Manifest shortcuts + share target |
-| BR-029 | Transactions filters | **Now P2** — broaden date presets (Last month, Last 3/6 months, YTD, All time) **and** fix the Apply-resets regression (BF-024) so custom ranges survive Apply |
+| ~~BR-029~~ ✅ | Transactions filters | **Resolved** on branch `claude/transaction-filters-recurring-3nh1v0` (pending merge) — broadened date presets + fixed the Apply-resets regression (BF-024) |
 
 ## Partially resolved (shipped, with a known gap)
 

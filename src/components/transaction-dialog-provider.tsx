@@ -21,6 +21,7 @@ import {
   getQuickAddFormData,
   type QuickAddFormData,
 } from '@/app/dashboard/quick-add-actions'
+import { useLanguage } from '@/components/language-provider'
 
 type TransactionType = 'income' | 'expense'
 type OpenDialogType = 'income' | 'expense' | 'transfer'
@@ -69,6 +70,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { t } = useLanguage()
 
   // Read pending "Save and Add Next" defaults straight from the URL on first
   // render so a freshly mounted provider (e.g. after a server-action redirect
@@ -192,11 +194,21 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
           if (!value) setAddNextDefaults(null)
         }}
       >
-        <DialogContent className="overflow-y-auto max-h-[90dvh] sm:max-w-xl">
+        <DialogContent
+          className={
+            // Centered dialog on desktop; native-style bottom sheet on mobile.
+            'max-h-[90dvh] overflow-y-auto sm:max-w-xl ' +
+            'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 ' +
+            'max-sm:max-h-[92dvh] max-sm:rounded-t-2xl max-sm:rounded-b-none ' +
+            'max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] ' +
+            'max-sm:data-open:slide-in-from-bottom-10 max-sm:data-closed:slide-out-to-bottom-10'
+          }
+        >
+          <div aria-hidden="true" className="mx-auto -mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
           <DialogHeader>
-            <DialogTitle>Add transaction</DialogTitle>
+            <DialogTitle>{t('transactionForm.dialogTitle')}</DialogTitle>
             <DialogDescription>
-              Add a manual income, expense, or transfer transaction.
+              {t('transactionForm.dialogDescription')}
             </DialogDescription>
           </DialogHeader>
 

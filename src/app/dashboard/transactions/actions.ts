@@ -4,6 +4,14 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { cleanSupabaseActionError as cleanRpcError } from '@/lib/supabase/errors'
+import {
+  advanceUntilFuture,
+  computeNextRunDate,
+  isFrequency,
+  todayIsoDate,
+} from '@/lib/recurring/shared'
+
+const RECURRING_NAME_MAX_LENGTH = 120
 
 const TRANSACTION_TYPES = ['income', 'expense'] as const
 const STATUSES = ['posted', 'pending'] as const
@@ -70,6 +78,9 @@ export async function createManualTransactionAction(formData: FormData) {
   const status = String(formData.get('status') ?? '').trim()
   const returnTo = String(formData.get('return_to') ?? '').trim() || undefined
   const addNext = formData.get('add_next') === 'true'
+  // Optional recurrence: when set, we also create a recurring template so the
+  // entry repeats. Empty string = "Does not repeat".
+  const frequency = String(formData.get('frequency') ?? '').trim()
   const rateBaseToAccount = parsePositiveNumber(formData.get('rate_base_to_account'))
   const legacyRate = parsePositiveNumber(formData.get('exchange_rate_to_base'))
   const exchangeRateToBase =
@@ -172,6 +183,62 @@ export async function createManualTransactionAction(formData: FormData) {
     redirectWithError(
       'Could not create the transaction. Please check the form and try again.'
     )
+  }
+
+  // UC-10: if a frequency was chosen, also create a recurring template. The
+  // first occurrence was just posted above; the template schedules the rest.
+  // Posting subsequent occurrences is manual (via /dashboard/recurring) until
+  // the auto-post scheduler ships.
+  if (isFrequency(frequency)) {
+    const { data: account } = await supabase
+      .from('accounts')
+      .select('currency_code')
+      .eq('id', accountId)
+      .eq('household_id', profile.default_household_id)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (!account) {
+      redirectWithError(
+        'Transaction created, but the recurring schedule could not be saved (account not found). You can add it under Recurring.'
+      )
+    }
+
+    // First occurrence = the transaction date we just posted; schedule the next
+    // occurrence after it, skipping any that would already be in the past.
+    const today = todayIsoDate()
+    const firstNext = computeNextRunDate(transactionDate, frequency)
+    const nextRunDate =
+      firstNext > today ? firstNext : advanceUntilFuture(firstNext, frequency, today)
+    const recurringName = (description || merchantName || `Recurring ${transactionType}`).slice(
+      0,
+      RECURRING_NAME_MAX_LENGTH
+    )
+
+    const { error: recurringError } = await supabase.from('recurring_transactions').insert({
+      household_id: profile.default_household_id,
+      name: recurringName,
+      transaction_type: transactionType,
+      account_id: accountId,
+      category_id: categoryId,
+      amount,
+      currency_code: account.currency_code,
+      frequency,
+      start_date: transactionDate,
+      end_date: null,
+      next_run_date: nextRunDate,
+      auto_post: false,
+      is_active: true,
+      created_by: user.id,
+    })
+
+    if (recurringError) {
+      redirectWithError(
+        'Transaction created, but the recurring schedule could not be saved. You can add it under Recurring.'
+      )
+    }
+
+    revalidatePath('/dashboard/recurring')
   }
 
   revalidatePath('/dashboard/transactions')

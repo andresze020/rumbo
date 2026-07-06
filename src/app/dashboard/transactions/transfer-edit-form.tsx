@@ -18,6 +18,7 @@ type TransferAccount = {
   name: string
   currency_code: string
   institution_name: string | null
+  icon?: string | null
 }
 
 type TransferEditFormProps = {
@@ -37,13 +38,14 @@ type TransferEditFormProps = {
 }
 
 function formatAccountLabel(account: TransferAccount) {
-  return [
+  const label = [
     account.name,
     account.institution_name || null,
     account.currency_code,
   ]
     .filter(Boolean)
     .join(' · ')
+  return account.icon ? `${account.icon} ${label}` : label
 }
 
 function formatCurrency(value: number, currencyCode: string) {
@@ -245,6 +247,7 @@ export function TransferEditForm({
             currencyCode={selectedFromAccount?.currency_code ?? baseCurrency}
             value={amountInput}
             onValueChange={setAmountInput}
+            withCalculator
             required
           />
         </div>

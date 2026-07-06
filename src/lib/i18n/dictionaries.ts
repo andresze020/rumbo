@@ -205,6 +205,10 @@ export const en = {
     status: 'Status',
     statusPosted: 'Posted',
     statusPending: 'Pending',
+    repeat: 'Repeat',
+    repeatNever: 'Does not repeat',
+    repeatHelp:
+      'Posts this entry now and creates a recurring template. Manage upcoming occurrences under Recurring.',
     needTwoAccounts: 'Create at least two accounts to transfer between them.',
     crossCurrencyNotSupported: 'Cross-currency transfers are not supported yet.',
     createTransaction: 'Create transaction',
@@ -215,6 +219,8 @@ export const en = {
     saving: 'Saving…',
     cancel: 'Cancel',
     frequentlyUsed: 'Frequently used:',
+    dialogTitle: 'New transaction',
+    dialogDescription: 'Record an income, expense, or transfer.',
   },
   installPrompt: {
     title: 'Install App Finanzas',
@@ -564,6 +570,10 @@ export const es: DeepStringify<typeof en> = {
     status: 'Estado',
     statusPosted: 'Contabilizada',
     statusPending: 'Pendiente',
+    repeat: 'Repetir',
+    repeatNever: 'No se repite',
+    repeatHelp:
+      'Publica este movimiento ahora y crea una plantilla recurrente. Gestiona las próximas veces en Recurrentes.',
     needTwoAccounts: 'Crea al menos dos cuentas para transferir entre ellas.',
     crossCurrencyNotSupported: 'Las transferencias entre monedas distintas aún no son compatibles.',
     createTransaction: 'Crear transacción',
@@ -574,6 +584,8 @@ export const es: DeepStringify<typeof en> = {
     saving: 'Guardando…',
     cancel: 'Cancelar',
     frequentlyUsed: 'Usadas con frecuencia:',
+    dialogTitle: 'Nueva transacción',
+    dialogDescription: 'Registra un ingreso, gasto o transferencia.',
   },
   installPrompt: {
     title: 'Instala App Finanzas',
@@ -923,6 +935,10 @@ export const fr: DeepStringify<typeof en> = {
     status: 'Statut',
     statusPosted: 'Comptabilisée',
     statusPending: 'En attente',
+    repeat: 'Répéter',
+    repeatNever: 'Ne se répète pas',
+    repeatHelp:
+      'Enregistre cette écriture maintenant et crée un modèle récurrent. Gérez les prochaines occurrences dans Récurrents.',
     needTwoAccounts: 'Créez au moins deux comptes pour effectuer des virements entre eux.',
     crossCurrencyNotSupported: 'Les virements entre devises différentes ne sont pas encore pris en charge.',
     createTransaction: 'Créer la transaction',
@@ -933,6 +949,8 @@ export const fr: DeepStringify<typeof en> = {
     saving: 'Enregistrement…',
     cancel: 'Annuler',
     frequentlyUsed: 'Utilisées fréquemment :',
+    dialogTitle: 'Nouvelle transaction',
+    dialogDescription: 'Enregistrez un revenu, une dépense ou un virement.',
   },
   installPrompt: {
     title: 'Installez App Finanzas',

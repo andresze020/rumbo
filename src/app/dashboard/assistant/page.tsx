@@ -35,7 +35,7 @@ export default async function AssistantPage({ searchParams }: AssistantPageProps
 
   const { data: accountRows } = await supabase
     .from('accounts')
-    .select('id, name, currency_code, institution_name')
+    .select('id, name, currency_code, institution_name, account_type, icon')
     .eq('household_id', household.id)
     .is('deleted_at', null)
     .eq('is_archived', false)
@@ -43,7 +43,7 @@ export default async function AssistantPage({ searchParams }: AssistantPageProps
 
   const { data: categoryRows } = await supabase
     .from('categories')
-    .select('id, name, category_type, reporting_type, parent_category_id')
+    .select('id, name, category_type, reporting_type, parent_category_id, icon')
     .eq('household_id', household.id)
     .is('deleted_at', null)
     .eq('is_archived', false)

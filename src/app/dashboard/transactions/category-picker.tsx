@@ -1,7 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { ChevronDown, Shapes } from 'lucide-react'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 
 type TransactionType = 'income' | 'expense'
 
@@ -20,6 +22,40 @@ type CategoryPickerProps = {
   defaultCategoryId?: string
   /** External selection (e.g. from a "frequently used" chip) to sync into the picker. */
   selectedCategoryId?: string
+}
+
+const selectCls =
+  'h-11 w-full appearance-none truncate rounded-xl border border-input bg-transparent pl-10 pr-9 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30'
+
+/**
+ * The selected option's text already carries the category emoji, so the
+ * leading slot only shows the generic glyph when there is no emoji —
+ * otherwise the icon would appear twice in the closed select.
+ */
+function SelectShell({
+  hasEmoji,
+  children,
+}: {
+  hasEmoji: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className="relative">
+      {hasEmoji ? null : (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-muted-foreground"
+        >
+          <Shapes className="size-4.5" />
+        </span>
+      )}
+      {children}
+      <ChevronDown
+        aria-hidden="true"
+        className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+      />
+    </div>
+  )
 }
 
 export function CategoryPicker({
@@ -82,6 +118,8 @@ export function CategoryPicker({
   )
 
   const finalCategoryId = subcategoryId || parentCategoryId
+  const selectedParent = parentCategories.find((c) => c.id === parentCategoryId)
+  const selectedChild = childCategories.find((c) => c.id === subcategoryId)
 
   function handleParentChange(value: string) {
     setParentCategoryId(value)
@@ -98,48 +136,52 @@ export function CategoryPicker({
     <div className="space-y-4">
       <input type="hidden" name="category_id" value={finalCategoryId} />
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Label htmlFor={`parent_category_id_${transactionType}`}>
           Category
         </Label>
-        <select
-          id={`parent_category_id_${transactionType}`}
-          value={parentCategoryId}
-          onChange={(event) => handleParentChange(event.target.value)}
-          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          disabled={!parentCategories.length}
-        >
-          <option value="" disabled>
-            Select category
-          </option>
-          {parentCategories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.icon ? `${category.icon} ` : ''}
-              {category.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {parentCategoryId && childCategories.length ? (
-        <div className="space-y-2">
-          <Label htmlFor={`subcategory_id_${transactionType}`}>
-            Subcategory
-          </Label>
+        <SelectShell hasEmoji={Boolean(selectedParent?.icon)}>
           <select
-            id={`subcategory_id_${transactionType}`}
-            value={subcategoryId}
-            onChange={(event) => handleSubcategoryChange(event.target.value)}
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            id={`parent_category_id_${transactionType}`}
+            value={parentCategoryId}
+            onChange={(event) => handleParentChange(event.target.value)}
+            className={cn(selectCls, selectedParent?.icon && 'pl-3.5')}
+            disabled={!parentCategories.length}
           >
-            <option value="">No subcategory / General</option>
-            {childCategories.map((category) => (
+            <option value="" disabled>
+              Select category
+            </option>
+            {parentCategories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.icon ? `${category.icon} ` : ''}
                 {category.name}
               </option>
             ))}
           </select>
+        </SelectShell>
+      </div>
+
+      {parentCategoryId && childCategories.length ? (
+        <div className="space-y-1.5">
+          <Label htmlFor={`subcategory_id_${transactionType}`}>
+            Subcategory
+          </Label>
+          <SelectShell hasEmoji={Boolean(selectedChild?.icon)}>
+            <select
+              id={`subcategory_id_${transactionType}`}
+              value={subcategoryId}
+              onChange={(event) => handleSubcategoryChange(event.target.value)}
+              className={cn(selectCls, selectedChild?.icon && 'pl-3.5')}
+            >
+              <option value="">No subcategory / General</option>
+              {childCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.icon ? `${category.icon} ` : ''}
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </SelectShell>
         </div>
       ) : null}
 
