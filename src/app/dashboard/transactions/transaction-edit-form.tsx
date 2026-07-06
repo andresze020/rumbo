@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
+import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
+import { cn } from '@/lib/utils'
 
 type TransactionType = 'income' | 'expense'
 
@@ -102,7 +104,7 @@ export function TransactionEditForm({
             id={`edit_status_${transactionId}`}
             name="status"
             defaultValue={status}
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className={nativeSelectCls}
           >
             <option value="posted">Posted</option>
             <option value="pending">Pending</option>
@@ -116,7 +118,7 @@ export function TransactionEditForm({
             name="account_id"
             value={selectedAccountId}
             onChange={(e) => setSelectedAccountId(e.target.value)}
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className={nativeSelectCls}
             required
           >
             {accounts.map((account) => (
@@ -176,13 +178,13 @@ export function TransactionEditForm({
         />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <SubmitButton type="submit" pendingText="Saving transaction">
+      <div className={formActionsCls}>
+        <SubmitButton type="submit" className={formBtnCls} pendingText="Saving transaction">
           Save transaction
         </SubmitButton>
         <Link
           href={cancelHref}
-          className={buttonVariants({ variant: 'outline' })}
+          className={cn(buttonVariants({ variant: 'outline' }), formBtnCls)}
         >
           Cancel
         </Link>

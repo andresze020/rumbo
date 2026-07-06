@@ -12,12 +12,13 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { fetchFxRate } from '@/lib/fx'
+import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
+import { cn } from '@/lib/utils'
 
 type CurrencyOption = { code: string; name: string }
 type LiabilityAccount = { id: string; name: string; account_type: string; currency_code: string }
 
-const selectCls =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+const selectCls = nativeSelectCls
 
 function formatCurrency(value: number | string, currencyCode: string) {
   return new Intl.NumberFormat('en-CA', {
@@ -353,11 +354,11 @@ export function DebtCreateForm({
         <Textarea id="notes" name="notes" />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <SubmitButton type="submit" pendingText="Creating debt">
+      <div className={formActionsCls}>
+        <SubmitButton type="submit" className={formBtnCls} pendingText="Creating debt">
           Create debt
         </SubmitButton>
-        <Link href="/dashboard/debts" className={buttonVariants({ variant: 'outline' })}>
+        <Link href="/dashboard/debts" className={cn(buttonVariants({ variant: 'outline' }), formBtnCls)}>
           Cancel
         </Link>
       </div>

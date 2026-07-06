@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { ChevronDown, Shapes } from 'lucide-react'
+import { selectFieldCls } from '@/components/form-field'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
@@ -24,8 +25,7 @@ type CategoryPickerProps = {
   selectedCategoryId?: string
 }
 
-const selectCls =
-  'h-11 w-full appearance-none truncate rounded-xl border border-input bg-transparent pl-10 pr-9 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30'
+const selectCls = selectFieldCls
 
 /**
  * The selected option's text already carries the category emoji, so the

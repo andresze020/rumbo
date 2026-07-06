@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
+import { formActionsCls, formBtnCls } from '@/lib/form-styles'
+import { cn } from '@/lib/utils'
 
 type PostFormProps = {
   recurringId: string
@@ -109,13 +111,13 @@ export function PostForm({
         <Textarea id={`post_notes_${recurringId}`} name="notes" rows={2} />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <SubmitButton type="submit" pendingText="Posting…">
+      <div className={formActionsCls}>
+        <SubmitButton type="submit" className={formBtnCls} pendingText="Posting…">
           Post transaction
         </SubmitButton>
         <Link
           href="/dashboard/recurring"
-          className={buttonVariants({ variant: 'outline' })}
+          className={cn(buttonVariants({ variant: 'outline' }), formBtnCls)}
         >
           Cancel
         </Link>

@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
 import { RECURRING_FREQUENCIES, type RecurringType } from '@/lib/recurring/shared'
+import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
+import { cn } from '@/lib/utils'
 
 export type RecurringFormCategory = {
   id: string
@@ -37,8 +39,7 @@ export type RecurringTemplate = {
   end_date: string | null
 }
 
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+const selectClassName = nativeSelectCls
 
 function accountLabel(account: RecurringFormAccount) {
   return [account.name, account.institution_name, account.currency_code]
@@ -239,16 +240,17 @@ export function RecurringForm({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className={formActionsCls}>
         <SubmitButton
           type="submit"
+          className={formBtnCls}
           pendingText={mode === 'create' ? 'Creating…' : 'Saving…'}
         >
           {mode === 'create' ? 'Create recurring' : 'Save changes'}
         </SubmitButton>
         <Link
           href="/dashboard/recurring"
-          className={buttonVariants({ variant: 'outline' })}
+          className={cn(buttonVariants({ variant: 'outline' }), formBtnCls)}
         >
           Cancel
         </Link>

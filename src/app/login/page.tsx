@@ -113,7 +113,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   required
                 />
               </div>
-              <SubmitButton type="submit" className="w-full" pendingText="Signing in…">
+              <SubmitButton type="submit" className="h-11 w-full rounded-xl" pendingText="Signing in…">
                 Sign in
               </SubmitButton>
             </form>
@@ -155,7 +155,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <SubmitButton
                 type="submit"
                 variant="outline"
-                className="w-full"
+                className="h-11 w-full rounded-xl"
                 pendingText="Creating account…"
               >
                 Create account

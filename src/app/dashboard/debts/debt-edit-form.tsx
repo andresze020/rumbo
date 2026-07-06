@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
+import { nativeSelectCls, formBtnCls } from '@/lib/form-styles'
 
 type Debt = {
   id: string
@@ -19,8 +20,7 @@ type Debt = {
   notes: string | null
 }
 
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+const selectClassName = nativeSelectCls
 
 function nullableNumber(value: number | string | null) {
   return value === null ? '' : String(value)
@@ -145,7 +145,7 @@ export function DebtEditForm({ debt, currencyCode }: { debt: Debt; currencyCode:
         />
       </div>
 
-      <SubmitButton type="submit" variant="outline" pendingText="Saving…">
+      <SubmitButton type="submit" className={formBtnCls} variant="outline" pendingText="Saving…">
         Save debt
       </SubmitButton>
     </form>
