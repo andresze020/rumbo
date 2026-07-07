@@ -27,6 +27,7 @@ import type {
   ImportCategory,
   ImportCurrency,
 } from '@/lib/imports/types'
+import { nativeSelectCls } from '@/lib/form-styles'
 
 type CsvImportClientProps = {
   householdName: string
@@ -296,7 +297,7 @@ export function CsvImportClient({
                     onChange={(event) =>
                       updateMapping(field.key, event.target.value)
                     }
-                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    className={nativeSelectCls}
                   >
                     <option value="">Not mapped</option>
                     {headers.map((header) => (
@@ -315,7 +316,7 @@ export function CsvImportClient({
                 id="target_account_id"
                 value={targetAccountId}
                 onChange={(event) => setTargetAccountId(event.target.value)}
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className={nativeSelectCls}
               >
                 <option value="">No default account</option>
                 {accounts.map((account) => (

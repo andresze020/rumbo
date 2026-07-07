@@ -30,7 +30,7 @@ type AmountInputProps = {
   onValueChange?: (raw: string) => void
   placeholder?: string
   required?: boolean
-  /** Shows a calculator toggle inside the field; the keypad applies results live to the amount. */
+  /** Calculator toggle inside the field; the keypad applies results live to the amount. On by default for all money fields. */
   withCalculator?: boolean
   /** "lg" renders the hero variant used at the top of the transaction form. */
   size?: 'default' | 'lg'
@@ -59,7 +59,7 @@ export function AmountInput({
   onValueChange,
   placeholder = '0.00',
   required,
-  withCalculator = false,
+  withCalculator = true,
   size = 'default',
   className,
 }: AmountInputProps) {

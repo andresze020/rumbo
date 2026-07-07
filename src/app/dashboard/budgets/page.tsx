@@ -31,6 +31,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import { cn } from '@/lib/utils'
+import { nativeSelectCls } from '@/lib/form-styles'
 
 type BudgetsPageProps = {
   searchParams: Promise<{
@@ -77,8 +78,7 @@ type Category = {
   color: string | null
 }
 
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+const selectClassName = nativeSelectCls
 
 const fallbackLineColors = [
   '#4f63e0',

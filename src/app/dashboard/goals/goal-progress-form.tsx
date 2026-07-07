@@ -7,6 +7,8 @@ import { buttonVariants } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
 import { formatCurrency } from '@/lib/format'
+import { formActionsCls, formBtnCls } from '@/lib/form-styles'
+import { cn } from '@/lib/utils'
 
 export function GoalProgressForm({
   mode,
@@ -36,11 +38,11 @@ export function GoalProgressForm({
         <AmountInput id={`progress_amount_${goalId}`} name="amount" currencyCode={currencyCode} required />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <SubmitButton type="submit" pendingText={mode === 'contribute' ? 'Adding…' : 'Withdrawing…'}>
+      <div className={formActionsCls}>
+        <SubmitButton type="submit" className={formBtnCls} pendingText={mode === 'contribute' ? 'Adding…' : 'Withdrawing…'}>
           {mode === 'contribute' ? 'Add funds' : 'Withdraw'}
         </SubmitButton>
-        <Link href="/dashboard/goals" className={buttonVariants({ variant: 'outline' })}>
+        <Link href="/dashboard/goals" className={cn(buttonVariants({ variant: 'outline' }), formBtnCls)}>
           Cancel
         </Link>
       </div>

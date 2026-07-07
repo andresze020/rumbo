@@ -28,6 +28,8 @@ import { SubmitButton } from '@/components/submit-button'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
+import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
+import { cn } from '@/lib/utils'
 
 type AccountsPageProps = {
   searchParams: Promise<{
@@ -124,8 +126,7 @@ function getAccountClasses(locale: Locale) {
   ]
 }
 
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+const selectClassName = nativeSelectCls
 
 function accountsPath({
   showArchived,
@@ -326,13 +327,13 @@ function CreateAccountForm({
         </span>
       </Label>
 
-      <div className="flex flex-wrap gap-2">
-        <SubmitButton type="submit" pendingText={translate(locale, 'accounts.creatingAccount')}>
+      <div className={formActionsCls}>
+        <SubmitButton type="submit" className={formBtnCls} pendingText={translate(locale, 'accounts.creatingAccount')}>
           {translate(locale, 'accounts.createAccount')}
         </SubmitButton>
         <Link
           href={accountsPath({ showArchived })}
-          className={buttonVariants({ variant: 'outline' })}
+          className={cn(buttonVariants({ variant: 'outline' }), formBtnCls)}
         >
           {translate(locale, 'common.cancel')}
         </Link>
@@ -494,13 +495,13 @@ function EditAccountForm({
         </span>
       </Label>
 
-      <div className="flex flex-wrap gap-2">
-        <SubmitButton type="submit" pendingText={translate(locale, 'accounts.savingAccount')}>
+      <div className={formActionsCls}>
+        <SubmitButton type="submit" className={formBtnCls} pendingText={translate(locale, 'accounts.savingAccount')}>
           {translate(locale, 'accounts.saveAccount')}
         </SubmitButton>
         <Link
           href={accountsPath({ showArchived })}
-          className={buttonVariants({ variant: 'outline' })}
+          className={cn(buttonVariants({ variant: 'outline' }), formBtnCls)}
         >
           {translate(locale, 'common.cancel')}
         </Link>

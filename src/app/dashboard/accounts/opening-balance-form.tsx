@@ -19,6 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { formActionsCls, formBtnCls } from '@/lib/form-styles'
+import { cn } from '@/lib/utils'
 
 function formatCurrency(value: number | string, currencyCode: string) {
   return new Intl.NumberFormat('en-CA', {
@@ -263,11 +265,11 @@ export function OpeningBalanceForm({
         <Textarea id={`opening_notes_${accountId}`} name="notes" />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <SubmitButton type="submit" variant="outline" pendingText="Setting balance">
+      <div className={formActionsCls}>
+        <SubmitButton type="submit" className={formBtnCls} variant="outline" pendingText="Setting balance">
           Set opening balance
         </SubmitButton>
-        <Link href={cancelHref} className={buttonVariants({ variant: 'outline' })}>
+        <Link href={cancelHref} className={cn(buttonVariants({ variant: 'outline' }), formBtnCls)}>
           Cancel
         </Link>
       </div>

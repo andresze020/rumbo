@@ -19,6 +19,8 @@ import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
 import { createClient } from '@/lib/supabase/server'
+import { nativeSelectCls, formBtnCls } from '@/lib/form-styles'
+import { cn } from '@/lib/utils'
 
 type DebtsPageProps = {
   searchParams: Promise<{
@@ -75,8 +77,7 @@ type Debt = {
   created_at: string
 }
 
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+const selectClassName = nativeSelectCls
 
 function debtsPath({
   mode,
@@ -451,7 +452,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
               <Callout variant="success">
                 This debt is fully paid off. No outstanding balance to pay.
               </Callout>
-              <Link href={debtsPath()} className={buttonVariants({ variant: 'outline' })}>
+              <Link href={debtsPath()} className={cn(buttonVariants({ variant: 'outline' }), formBtnCls)}>
                 Back to debts
               </Link>
             </div>
@@ -547,7 +548,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                 <Textarea id="pay_notes" name="notes" />
               </div>
 
-              <SubmitButton type="submit" pendingText="Registering…">
+              <SubmitButton type="submit" className={formBtnCls} pendingText="Registering…">
                 Register payment
               </SubmitButton>
             </form>

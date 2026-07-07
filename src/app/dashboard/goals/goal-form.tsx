@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
 import { GOAL_TYPES } from '@/lib/goals/shared'
+import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
+import { cn } from '@/lib/utils'
 
 export type GoalFormAccount = {
   id: string
@@ -27,8 +29,7 @@ export type GoalTemplate = {
   linked_account_id: string | null
 }
 
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+const selectClassName = nativeSelectCls
 
 function accountLabel(account: GoalFormAccount) {
   return [account.name, account.institution_name, account.currency_code]
@@ -136,11 +137,11 @@ export function GoalForm({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <SubmitButton type="submit" pendingText={mode === 'create' ? 'Creating…' : 'Saving…'}>
+      <div className={formActionsCls}>
+        <SubmitButton type="submit" className={formBtnCls} pendingText={mode === 'create' ? 'Creating…' : 'Saving…'}>
           {mode === 'create' ? 'Create goal' : 'Save changes'}
         </SubmitButton>
-        <Link href="/dashboard/goals" className={buttonVariants({ variant: 'outline' })}>
+        <Link href="/dashboard/goals" className={cn(buttonVariants({ variant: 'outline' }), formBtnCls)}>
           Cancel
         </Link>
       </div>

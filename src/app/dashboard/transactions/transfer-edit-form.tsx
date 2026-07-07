@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { fetchFxRate } from '@/lib/fx'
+import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
+import { cn } from '@/lib/utils'
 
 type TransferAccount = {
   id: string
@@ -55,8 +57,7 @@ function formatCurrency(value: number, currencyCode: string) {
   }).format(value)
 }
 
-const selectCls =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+const selectCls = nativeSelectCls
 
 export function TransferEditForm({
   transactionId,
@@ -328,15 +329,16 @@ export function TransferEditForm({
         />
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className={formActionsCls}>
         <SubmitButton
           type="submit"
+          className={formBtnCls}
           disabled={!canSubmit}
           pendingText="Saving transfer"
         >
           Save transfer
         </SubmitButton>
-        <Link href={cancelHref} className={buttonVariants({ variant: 'outline' })}>
+        <Link href={cancelHref} className={cn(buttonVariants({ variant: 'outline' }), formBtnCls)}>
           Cancel
         </Link>
       </div>

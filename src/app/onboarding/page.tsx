@@ -65,7 +65,7 @@ export default async function OnboardingPage() {
             <div className="space-y-2">
               <Label htmlFor="baseCurrency">Base currency</Label>
               <Select name="baseCurrency" defaultValue="CAD">
-                <SelectTrigger id="baseCurrency">
+                <SelectTrigger id="baseCurrency" className="w-full">
                   <SelectValue placeholder="Select currency" />
                 </SelectTrigger>
                 <SelectContent>
@@ -78,7 +78,7 @@ export default async function OnboardingPage() {
 
             <SubmitButton
               type="submit"
-              className="w-full"
+              className="h-11 w-full rounded-xl"
               pendingText="Creating household"
             >
               Create household

@@ -1,13 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownRight,
   ArrowLeftRight,
   ArrowUpRight,
-  CalendarDays,
-  ChevronDown,
   Repeat,
   Wallet,
 } from 'lucide-react'
@@ -18,6 +16,7 @@ import {
 import { CategoryPicker } from './category-picker'
 import { AdvancedFields } from '@/components/advanced-fields'
 import { AmountInput } from '@/components/amount-input'
+import { DateField, SegmentedField, SelectField } from '@/components/form-field'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -87,51 +86,6 @@ function formatCurrency(value: number | string, currencyCode: string) {
     style: 'currency',
     currency: currencyCode,
   }).format(Number(value))
-}
-
-const selectFieldCls =
-  'h-11 w-full appearance-none truncate rounded-xl border border-input bg-transparent pl-10 pr-9 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30'
-
-/** Native select dressed as an app-style field: leading icon, trailing chevron. */
-function SelectField({
-  id,
-  label,
-  leading,
-  children,
-  className,
-  ...selectProps
-}: ComponentProps<'select'> & {
-  id: string
-  label: ReactNode
-  /** Icon slot. Pass null when the selected option's text already starts with an emoji. */
-  leading: ReactNode | null
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <div className="relative">
-        {leading ? (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute left-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-muted-foreground"
-          >
-            {leading}
-          </span>
-        ) : null}
-        <select
-          id={id}
-          className={cn(selectFieldCls, !leading && 'pl-3.5', className)}
-          {...selectProps}
-        >
-          {children}
-        </select>
-        <ChevronDown
-          aria-hidden="true"
-          className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-        />
-      </div>
-    </div>
-  )
 }
 
 /**
@@ -354,40 +308,26 @@ export function TransactionForm({
     },
   ]
 
-  const detailFieldCls = 'h-11 rounded-xl'
-
   return (
     <form action={submitAction} onSubmit={rememberDefaults} className="space-y-4">
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
 
       {/* ── Type: segmented control ──────────────────────────────────── */}
-      <input type="hidden" name="transaction_type" value={transactionType} />
-      <div
-        role="group"
-        aria-label={t('transactionForm.type')}
-        className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1"
-      >
-        {typeOptions.map(({ value, label, Icon, activeCls }) => {
-          const isActive = transactionType === value
-          return (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={isActive}
-              onClick={() => handleTransactionTypeChange(value)}
-              className={cn(
-                'flex h-9 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-all',
-                isActive
-                  ? cn('bg-background shadow-sm', activeCls)
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
+      <SegmentedField
+        name="transaction_type"
+        value={transactionType}
+        onChange={(value) => handleTransactionTypeChange(value as TransactionType)}
+        options={typeOptions.map(({ value, label, Icon, activeCls }) => ({
+          value,
+          activeCls,
+          label: (
+            <>
               <Icon className="size-4" aria-hidden="true" />
               <span className="truncate">{label}</span>
-            </button>
-          )
-        })}
-      </div>
+            </>
+          ),
+        }))}
+      />
 
       {/* ── Amount hero ──────────────────────────────────────────────── */}
       <div className="rounded-2xl border bg-muted/30 p-3.5">
@@ -416,31 +356,21 @@ export function TransactionForm({
       </div>
 
       {/* ── Date ─────────────────────────────────────────────────────── */}
-      <div className="space-y-1.5">
-        <Label htmlFor="transaction_date">{t('transactionForm.date')}</Label>
-        <div className="relative">
-          <CalendarDays
-            aria-hidden="true"
-            className="pointer-events-none absolute left-3 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            id="transaction_date"
-            name="transaction_date"
-            type="date"
-            value={transactionDate}
-            onChange={(e) => {
-              setTransactionDate(e.target.value)
-              if (isMultiCurrency) {
-                setUserRate('')
-                setFxNote('')
-                setFxError('')
-              }
-            }}
-            className="h-11 rounded-xl pl-10"
-            required
-          />
-        </div>
-      </div>
+      <DateField
+        id="transaction_date"
+        name="transaction_date"
+        label={t('transactionForm.date')}
+        value={transactionDate}
+        onChange={(e) => {
+          setTransactionDate(e.target.value)
+          if (isMultiCurrency) {
+            setUserRate('')
+            setFxNote('')
+            setFxError('')
+          }
+        }}
+        required
+      />
 
       {isTransfer ? (
         <>
@@ -653,7 +583,6 @@ export function TransactionForm({
           id="description"
           name="description"
           defaultValue={defaultDescription}
-          className={detailFieldCls}
         />
       </div>
 
@@ -664,47 +593,26 @@ export function TransactionForm({
             id="merchant_name"
             name="merchant_name"
             defaultValue={defaultMerchantName}
-            className={detailFieldCls}
           />
         </div>
       ) : null}
 
       <div className="space-y-1.5">
         <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-        <Textarea id="notes" name="notes" className="rounded-xl" />
+        <Textarea id="notes" name="notes" />
       </div>
 
-      <div className="space-y-1.5">
-        <Label>{t('transactionForm.status')}</Label>
-        <input type="hidden" name="status" value={status} />
-        <div
-          role="group"
-          aria-label={t('transactionForm.status')}
-          className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1"
-        >
-          {(
-            [
-              { value: 'posted', label: t('transactionForm.statusPosted') },
-              { value: 'pending', label: t('transactionForm.statusPending') },
-            ] as const
-          ).map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={status === option.value}
-              onClick={() => setStatus(option.value)}
-              className={cn(
-                'flex h-8 items-center justify-center rounded-lg text-sm font-medium transition-all',
-                status === option.value
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SegmentedField
+        label={t('transactionForm.status')}
+        name="status"
+        value={status}
+        onChange={setStatus}
+        size="sm"
+        options={[
+          { value: 'posted', label: t('transactionForm.statusPosted') },
+          { value: 'pending', label: t('transactionForm.statusPending') },
+        ]}
+      />
 
       {!isTransfer ? (
         isMultiCurrency ? (

@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
 import { CategoryStylePicker } from '@/components/category-style-picker'
+import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
+import { cn } from '@/lib/utils'
 
 type Category = {
   id: string
@@ -52,8 +54,7 @@ const reportingTypes = [
   { value: 'adjustment', label: 'Adjustment' },
 ]
 
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+const selectClassName = nativeSelectCls
 
 function defaultReportingTypeFor(categoryType: string) {
   if (categoryType === 'income') return 'income'
@@ -316,14 +317,15 @@ export function CategoryForm({
         </Label>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className={formActionsCls}>
         <SubmitButton
           type="submit"
+          className={formBtnCls}
           pendingText={mode === 'create' ? 'Creating category' : 'Saving category'}
         >
           {mode === 'create' ? 'Create category' : 'Save category'}
         </SubmitButton>
-        <Link href={cancelHref} className={buttonVariants({ variant: 'outline' })}>
+        <Link href={cancelHref} className={cn(buttonVariants({ variant: 'outline' }), formBtnCls)}>
           Cancel
         </Link>
       </div>
