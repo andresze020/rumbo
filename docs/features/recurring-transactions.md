@@ -16,9 +16,9 @@
 - 🟡 **Requested evolution — inline creation from the transaction form** (UC-10):
   the normal create-transaction form now has a **Repeat** frequency field; a
   single submit posts the first transaction and creates the template
-  (`auto_post = false`). **Shipped** on branch
-  `claude/transaction-filters-recurring-3nh1v0` (income + expense; transfers
-  excluded). The "repeats **automatically**" half is still **pending** — it needs
+  (`auto_post = false`). **Shipped, merged to `main`** via PR #17 (income +
+  expense; transfers excluded). The "repeats **automatically**" half is still
+  **pending** — it needs
   the Sprint B auto-post scheduler (UC-4 / **BR-014**), blocked on the cron + FX
   -at-post decisions (Open Decisions #3 and #7). Until then, subsequent
   occurrences are posted manually from `/dashboard/recurring` (UC-3).

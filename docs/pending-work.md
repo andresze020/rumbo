@@ -17,7 +17,7 @@
 | User Settings page (`/dashboard/settings`) | Pending | Navbar redesign decision (needs an entry point) | [features/user-settings.md](./features/user-settings.md) |
 | Recurring transactions — Sprint B (auto-posting) | Pending | Multi-currency FX strategy must be reliable first | [features/recurring-transactions.md](./features/recurring-transactions.md) |
 | Recurring transactions — Sprint C (dashboard widget + recurring transfers) | Pending | Needs a `to_account_id` schema migration | [features/recurring-transactions.md](./features/recurring-transactions.md) |
-| Recurring transactions — inline create from the transaction form (UC-10) | 🟡 Inline-create **shipped** on branch `claude/transaction-filters-recurring-3nh1v0` (frequency field posts the first + creates the template, `auto_post=false`); "repeats **automatically**" half still pending = Sprint B auto-posting | Auto-post half blocked by Sprint B (cron infra + FX-at-post) | [features/recurring-transactions.md](./features/recurring-transactions.md) |
+| Recurring transactions — inline create from the transaction form (UC-10) | 🟢 Inline-create **merged to `main`** (PR #17): frequency field posts the first + creates the template, `auto_post=false`. "repeats **automatically**" half still pending = Sprint B auto-posting | Auto-post half blocked by Sprint B (cron infra + FX-at-post) | [features/recurring-transactions.md](./features/recurring-transactions.md) |
 
 ## Open bugs / friction (Alpha real usage)
 
@@ -27,8 +27,8 @@ Source of truth: [alpha/bug-friction-log.md](./alpha/bug-friction-log.md).
 |---|---|---|---|
 | BF-022 | P3 | Transactions | Reconciliation flow (mark transactions "cleared") — deferred to Beta v0.13. |
 
-> Fixed on branch `claude/transaction-filters-recurring-3nh1v0` (pending merge):
-> **BF-024** (P1, date-filter Apply-reset) and **BF-025** (P2, mobile nav Plan → Accounts).
+> ✅ Merged to `main` (PR #17): **BF-024** (P1, date-filter Apply-reset) and
+> **BF-025** (P2, mobile nav Plan → Accounts).
 
 ## BR backlog — not started (P1, near-term)
 
@@ -53,7 +53,7 @@ Full detail, "why soon," and acceptance criteria live in
 | BR-024 | CSV import | Saved column-mapping presets + import revert |
 | BR-025 | Localization | Centralize locale/currency formatting (still `en-CA`-biased in places) |
 | BR-028 | PWA | Manifest shortcuts + share target |
-| ~~BR-029~~ ✅ | Transactions filters | **Resolved** on branch `claude/transaction-filters-recurring-3nh1v0` (pending merge) — broadened date presets + fixed the Apply-resets regression (BF-024) |
+| ~~BR-029~~ ✅ | Transactions filters | **Merged to `main`** (PR #17) — broadened date presets + fixed the Apply-resets regression (BF-024) |
 
 ## Partially resolved (shipped, with a known gap)
 
@@ -98,5 +98,10 @@ the recurring "due soon" dashboard tile. Sprint 13 (quick wins) closed
 BR-026 (middleware → proxy rename), BR-027 (removed 5 duplicate root-level
 route stubs), and BR-012 (needs-review dashboard count); it also made partial
 progress on BR-009 (`payees` table + backfill, no autocomplete yet) and
-BR-015 (reusable `AlertDialog`, adopted for void only). See `AGENTS.md` →
-Current status for the up-to-date shipped-feature summary.
+BR-015 (reusable `AlertDialog`, adopted for void only). PR #17 merged the
+add-transaction form redesign, the amount calculator, category/account icon
+fixes, and the transaction-filter/recurring/nav cluster (BF-024, BF-025,
+BR-029, UC-10 inline recurring); PR #18 merged the native-form-design rollout
+(shared `form-field.tsx` / `form-styles.ts` primitives) to every other entry
+form — see [features/native-form-design.md](./features/native-form-design.md).
+See `AGENTS.md` → Current status for the up-to-date shipped-feature summary.
