@@ -24,6 +24,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { fetchFxRate } from '@/lib/fx'
+import { formatCurrency } from '@/lib/format'
 import { useLanguage } from '@/components/language-provider'
 import { RECURRING_FREQUENCIES } from '@/lib/recurring/shared'
 import { cn } from '@/lib/utils'
@@ -79,13 +80,6 @@ function formatAccountLabel(account: TransactionFormAccount) {
     .filter(Boolean)
     .join(' · ')
   return account.icon ? `${account.icon} ${label}` : label
-}
-
-function formatCurrency(value: number | string, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(Number(value))
 }
 
 /**

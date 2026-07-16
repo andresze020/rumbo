@@ -15,6 +15,7 @@ import { FormDialog } from '@/components/form-dialog'
 import { AccountsViewToggle } from '@/components/accounts-view-toggle'
 import { getAccountsView } from '@/lib/accounts-view/server'
 import { createClient } from '@/lib/supabase/server'
+import { formatCurrency, formatLabel } from '@/lib/format'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -160,19 +161,6 @@ function accountsPath({
   const queryString = params.toString()
 
   return `/dashboard/accounts${queryString ? `?${queryString}` : ''}`
-}
-
-function formatLabel(value: string) {
-  return value
-    .replaceAll('_', ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
-}
-
-function formatCurrency(value: number | string, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(Number(value))
 }
 
 function liabilityDisplay(value: number | string) {

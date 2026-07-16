@@ -30,6 +30,7 @@ import { SubmitButton } from '@/components/submit-button'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
+import { formatCurrency, formatMonthLabel } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { nativeSelectCls } from '@/lib/form-styles'
 
@@ -126,20 +127,6 @@ function budgetsPath({
   if (mode) params.set('mode', mode)
   if (edit) params.set('edit', edit)
   return `/dashboard/budgets?${params.toString()}`
-}
-
-function formatCurrency(value: number, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(value)
-}
-
-function formatMonthLabel(month: string) {
-  const [year, monthNumber] = month.split('-').map(Number)
-  return new Intl.DateTimeFormat('en-CA', { month: 'long', year: 'numeric' }).format(
-    new Date(year, monthNumber - 1, 1)
-  )
 }
 
 function formatPercent(value: number | null) {
