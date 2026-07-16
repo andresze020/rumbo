@@ -11,8 +11,10 @@ import {
 } from 'lucide-react'
 import { CategoryForm } from './category-form'
 import { SortableCategoryList, type CategoryVM } from './sortable-category-list'
+import { archiveCategoryAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
+import { ArchiveToast } from '@/components/archive-toast'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
@@ -327,12 +329,18 @@ export default async function CategoriesPage({
         </Link>
       </div>
 
+      <ArchiveToast
+        action={archiveCategoryAction}
+        idField="category_id"
+        archivedMessage="Category archived."
+        restoredMessage="Category restored."
+        undoLabel="Undo"
+      />
+
       {/* ── Notifications ──────────────────────────────────────────────── */}
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
       {params.created === '1' ? <Callout variant="success">Category created.</Callout> : null}
       {params.updated === '1' ? <Callout variant="success">Category updated.</Callout> : null}
-      {params.archived === '1' ? <Callout variant="info">Category archived.</Callout> : null}
-      {params.unarchived === '1' ? <Callout variant="success">Category restored.</Callout> : null}
 
       {/* ── Summary cards ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-2 md:hidden">

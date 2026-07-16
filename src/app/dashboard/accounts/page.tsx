@@ -20,6 +20,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { BalanceAmount } from '@/components/balance-amount'
+import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
+import { ArchiveToast } from '@/components/archive-toast'
 import { EmptyState } from '@/components/empty-state'
 import { PageHeader } from '@/components/page-header'
 import { SectionHeading } from '@/components/section-heading'
@@ -513,19 +515,36 @@ function EditAccountForm({
           {translate(locale, 'accounts.setOpeningBalance')}
         </Link>
       ) : null}
-      <form action={archiveAccountAction}>
-        <input type="hidden" name="account_id" value={account.id} />
-        <input type="hidden" name="is_archived" value={account.is_archived ? 'false' : 'true'} />
-        <input type="hidden" name="show_archived" value={showArchived ? 'true' : 'false'} />
-        <SubmitButton
-          type="submit"
-          size="sm"
-          variant={account.is_archived ? 'outline' : 'secondary'}
-          pendingText={account.is_archived ? translate(locale, 'accounts.restoringAccount') : translate(locale, 'accounts.archivingAccount')}
-        >
-          {account.is_archived ? translate(locale, 'accounts.restoreAccount') : translate(locale, 'accounts.archiveAccount')}
-        </SubmitButton>
-      </form>
+      {account.is_archived ? (
+        <form action={archiveAccountAction}>
+          <input type="hidden" name="account_id" value={account.id} />
+          <input type="hidden" name="is_archived" value="false" />
+          <input type="hidden" name="show_archived" value={showArchived ? 'true' : 'false'} />
+          <SubmitButton
+            type="submit"
+            size="sm"
+            variant="outline"
+            pendingText={translate(locale, 'accounts.restoringAccount')}
+          >
+            {translate(locale, 'accounts.restoreAccount')}
+          </SubmitButton>
+        </form>
+      ) : (
+        <ArchiveConfirmButton
+          action={archiveAccountAction}
+          hiddenFields={{
+            account_id: account.id,
+            is_archived: 'true',
+            show_archived: showArchived ? 'true' : 'false',
+          }}
+          triggerLabel={translate(locale, 'accounts.archiveAccount')}
+          pendingLabel={translate(locale, 'accounts.archivingAccount')}
+          title={translate(locale, 'accounts.archiveConfirmTitle')}
+          description={translate(locale, 'accounts.archiveConfirmDescription')}
+          cancelLabel={translate(locale, 'common.cancel')}
+          confirmLabel={translate(locale, 'accounts.archiveAccount')}
+        />
+      )}
     </div>
     </>
   )
@@ -538,8 +557,6 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const infoMessage = typeof params.info === 'string' ? params.info : null
   const created = params.created === '1'
   const updated = params.updated === '1'
-  const archived = params.archived === '1'
-  const unarchived = params.unarchived === '1'
   const openingBalanceSet = params.openingBalanceSet === '1'
   const showArchived = params.showArchived === 'true'
   const isCreating = params.mode === 'create'
@@ -793,11 +810,17 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
         }
       />
 
+      <ArchiveToast
+        action={archiveAccountAction}
+        idField="account_id"
+        archivedMessage={translate(locale, 'accounts.accountArchived')}
+        restoredMessage={translate(locale, 'accounts.accountRestored')}
+        undoLabel={translate(locale, 'common.undo')}
+      />
+
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
       {created ? <Callout variant="success">{translate(locale, 'accounts.accountCreated')}</Callout> : null}
       {updated ? <Callout variant="success">{translate(locale, 'accounts.accountUpdated')}</Callout> : null}
-      {archived ? <Callout variant="info">{translate(locale, 'accounts.accountArchived')}</Callout> : null}
-      {unarchived ? <Callout variant="success">{translate(locale, 'accounts.accountRestored')}</Callout> : null}
       {infoMessage ? <Callout variant="info">{infoMessage}</Callout> : null}
       {openingBalanceSet ? (
         <Callout variant="success">{translate(locale, 'accounts.openingBalanceSet')}</Callout>

@@ -243,9 +243,6 @@ export async function archiveAccountAction(formData: FormData) {
   const accountId = String(formData.get('account_id') ?? '').trim()
   const isArchived = String(formData.get('is_archived') ?? '') === 'true'
   const showArchived = String(formData.get('show_archived') ?? '') === 'true'
-  const redirectPath = showArchived
-    ? `/dashboard/accounts?showArchived=true&${isArchived ? 'archived' : 'unarchived'}=1`
-    : `/dashboard/accounts?${isArchived ? 'archived' : 'unarchived'}=1`
 
   if (!accountId) {
     redirectWithError('Account is required.')
@@ -284,7 +281,12 @@ export async function archiveAccountAction(formData: FormData) {
   }
 
   revalidateAccountSurfaces()
-  redirect(redirectPath)
+
+  const redirectParams = new URLSearchParams()
+  if (showArchived) redirectParams.set('showArchived', 'true')
+  redirectParams.set(isArchived ? 'archived' : 'unarchived', '1')
+  if (isArchived) redirectParams.set('archived_id', accountId)
+  redirect(`/dashboard/accounts?${redirectParams.toString()}`)
 }
 
 export async function reorderAccountsAction(orderedIds: string[]) {
