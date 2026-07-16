@@ -51,8 +51,6 @@ Full detail, "why soon," and acceptance criteria live in
 | BR-018 | Budgeting | Budget rollover/carryover |
 | BR-023 | Tags | `tags` + `transaction_tags` for flexible slicing |
 | BR-024 | CSV import | Saved column-mapping presets + import revert |
-| BR-025 | Localization | Centralize locale/currency formatting (still `en-CA`-biased in places) |
-| BR-028 | PWA | Manifest shortcuts + share target |
 | ~~BR-029~~ ✅ | Transactions filters | **Merged to `main`** (PR #17) — broadened date presets + fixed the Apply-resets regression (BF-024) |
 
 ## Partially resolved (shipped, with a known gap)
@@ -62,6 +60,8 @@ Full detail, "why soon," and acceptance criteria live in
 | BR-021 | `/dashboard/month-review` recap from real data | Health score is an explicitly-labeled mock/demo heuristic (shared with the dashboard); "Close month" button is disabled, not yet built | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | BR-009 | `payees` table + backfill from `merchant_name` | No CRUD page to maintain payees (rename/merge/archive); no picker on the transaction form to select-existing-or-create-new; nothing writes `payee_id` yet | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | BR-015 | Reusable `AlertDialog` adopted for void-transaction confirm | No archive action exists yet to standardize; no undo/toast | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-025 | ~20 files' duplicated `formatCurrency`/`formatMonthLabel`/label-casing helpers consolidated into `lib/format.ts` imports (PR #22, open, pending merge) | `formatPercent` still duplicated with diverging digit options per file (needs case-by-case verification before centralizing); day-level date formatters have no shared helper yet; `lib/format.ts`'s `LOCALE` is still hardcoded `'en-CA'` regardless of the user's selected app language — dedup makes that a single-point fix later, doesn't implement it | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-028 | PWA manifest `shortcuts` (Quick add / Transactions / Recurring) added; Quick add deep-links via a new `quick_add` URL param the transaction dialog provider recognizes (PR #21, open, pending merge) | No manifest `share_target`; shortcut behavior not yet verified in a real browser/installed PWA (no Supabase session available in the dev sandbox that built it) | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | Goals — linked-account progress | Manual `current_amount`, contribute/withdraw via atomic RPC | Could eventually derive progress from the linked account's real ledger balance instead of manual entry — deliberately deferred | [features/goals.md](./features/goals.md) (Open Decisions) |
 
 ## Open decisions across feature docs
