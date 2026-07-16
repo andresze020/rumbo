@@ -63,7 +63,6 @@ Full detail, "why soon," and acceptance criteria live in
 | BR-009 | `payees` table + backfill from `merchant_name` | No CRUD page to maintain payees (rename/merge/archive); no picker on the transaction form to select-existing-or-create-new; nothing writes `payee_id` yet | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | BR-015 | Reusable `AlertDialog` adopted for void-transaction confirm | No archive action exists yet to standardize; no undo/toast | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | Goals — linked-account progress | Manual `current_amount`, contribute/withdraw via atomic RPC | Could eventually derive progress from the linked account's real ledger balance instead of manual entry — deliberately deferred | [features/goals.md](./features/goals.md) (Open Decisions) |
-| Native form design | Add-transaction form redesign + amount calculator + icon fixes **merged to `main`** (PR #17); shared primitives + rollout to every other form **pending merge** (PR #18) | Nothing — PR #18 open and green | [features/native-form-design.md](./features/native-form-design.md) |
 
 ## Open decisions across feature docs
 
@@ -102,6 +101,7 @@ progress on BR-009 (`payees` table + backfill, no autocomplete yet) and
 BR-015 (reusable `AlertDialog`, adopted for void only). PR #17 merged the
 add-transaction form redesign, the amount calculator, category/account icon
 fixes, and the transaction-filter/recurring/nav cluster (BF-024, BF-025,
-BR-029, UC-10 inline recurring); the native-form-design rollout to every other
-form is in PR #18 (pending merge). See `AGENTS.md` → Current status for the
-up-to-date shipped-feature summary.
+BR-029, UC-10 inline recurring); PR #18 merged the native-form-design rollout
+(shared `form-field.tsx` / `form-styles.ts` primitives) to every other entry
+form — see [features/native-form-design.md](./features/native-form-design.md).
+See `AGENTS.md` → Current status for the up-to-date shipped-feature summary.

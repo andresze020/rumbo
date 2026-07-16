@@ -127,7 +127,7 @@ All three critical bugs fixed:
 **Current open issues:**
 - `BF-022` (P3, Open/Deferred) — transaction reconciliation, candidate for Beta v0.13.
 
-**Recently fixed** (branch `claude/transaction-filters-recurring-3nh1v0`, pending manual QA + merge):
+**Recently fixed** (merged to `main` via PR #17):
 - `BF-024` (P1) — date-filter "Apply resets to This month" regression (bundled with BR-029 presets).
 - `BF-025` (P2) — mobile bottom nav now shows Accounts instead of Plan.
 
