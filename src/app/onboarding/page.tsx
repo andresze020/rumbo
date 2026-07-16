@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createHouseholdAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
+import { getActiveCurrencies } from '@/lib/currencies'
 import {
   Card,
   CardContent,
@@ -40,6 +41,11 @@ export default async function OnboardingPage() {
     redirect('/dashboard')
   }
 
+  const currencies = await getActiveCurrencies()
+  const defaultCurrency =
+    currencies.find((currency) => currency.code === 'CAD')?.code ??
+    currencies[0]?.code
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/8 via-background to-background p-4 sm:p-6">
       <Card className="w-full max-w-md">
@@ -64,14 +70,16 @@ export default async function OnboardingPage() {
 
             <div className="space-y-2">
               <Label htmlFor="baseCurrency">Base currency</Label>
-              <Select name="baseCurrency" defaultValue="CAD">
+              <Select name="baseCurrency" defaultValue={defaultCurrency}>
                 <SelectTrigger id="baseCurrency" className="w-full">
                   <SelectValue placeholder="Select currency" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="CAD">CAD — Canadian Dollar</SelectItem>
-                  <SelectItem value="USD">USD — US Dollar</SelectItem>
-                  <SelectItem value="COP">COP — Colombian Peso</SelectItem>
+                  {currencies.map((currency) => (
+                    <SelectItem key={currency.code} value={currency.code}>
+                      {currency.code} — {currency.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
