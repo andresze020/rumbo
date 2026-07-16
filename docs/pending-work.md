@@ -61,7 +61,7 @@ Full detail, "why soon," and acceptance criteria live in
 |---|---|---|---|
 | BR-021 | `/dashboard/month-review` recap from real data | Health score is an explicitly-labeled mock/demo heuristic (shared with the dashboard); "Close month" button is disabled, not yet built | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | BR-009 | `payees` table + backfill from `merchant_name` | No CRUD page to maintain payees (rename/merge/archive); no picker on the transaction form to select-existing-or-create-new; nothing writes `payee_id` yet | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-015 | Reusable `AlertDialog` adopted for void-transaction confirm | No archive action exists yet to standardize; no undo/toast | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-015 | Reusable `AlertDialog` now also adopted for account/category archive (previously fired with **zero** confirmation, not "no archive action" as this doc used to say — both actions already existed, just unguarded); toast+Undo added via the existing `ToastProvider` (PR #23, open, pending merge) | No archive action elsewhere in the app to standardize yet (e.g. goals, recurring templates don't have one); void-transaction confirm has no undo | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | Goals — linked-account progress | Manual `current_amount`, contribute/withdraw via atomic RPC | Could eventually derive progress from the linked account's real ledger balance instead of manual entry — deliberately deferred | [features/goals.md](./features/goals.md) (Open Decisions) |
 
 ## Open decisions across feature docs
