@@ -118,13 +118,39 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
       setAddNextDefaults(readAddNextDefaults(searchParams))
       setFormKey((k) => k + 1)
       setOpen(true)
-
-      // Fetch the form data BEFORE calling router.replace() below — issuing the
-      // replace first hangs the server action's request (it never resolves nor
-      // rejects), leaving the dialog stuck on "Loading form...".
       setLoading(true)
+
+      // Fully sequence the fetch and the URL cleanup: starting router.replace()
+      // while getQuickAddFormData() is still in flight can hang that server
+      // action indefinitely (it never resolves nor rejects), leaving the
+      // dialog stuck on "Loading form...". Only replace the URL once the
+      // fetch has settled, and back it with a timeout so a hang (whatever its
+      // cause) still surfaces a "try again" message instead of spinning
+      // forever.
+      let settled = false
+      const timeoutId = window.setTimeout(() => {
+        if (settled) return
+        settled = true
+        setLoadError(true)
+        setLoading(false)
+        cleanNextParams()
+      }, 10000)
+
+      function cleanNextParams() {
+        const cleaned = new URLSearchParams(searchParams.toString())
+        cleaned.delete('next_date')
+        cleaned.delete('next_type')
+        cleaned.delete('next_account')
+        cleaned.delete('next_status')
+        cleaned.delete('next_seq')
+        cleaned.delete('created') // prevent the auto-close effect from firing after the URL is cleaned
+        const qs = cleaned.toString()
+        router.replace(qs ? `${pathname}?${qs}` : pathname)
+      }
+
       getQuickAddFormData()
         .then((data) => {
+          if (settled) return
           if (data) {
             setFormData(data)
             setLoadError(false)
@@ -132,18 +158,16 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
             setLoadError(true)
           }
         })
-        .catch(() => setLoadError(true))
-        .finally(() => setLoading(false))
-
-      const cleaned = new URLSearchParams(searchParams.toString())
-      cleaned.delete('next_date')
-      cleaned.delete('next_type')
-      cleaned.delete('next_account')
-      cleaned.delete('next_status')
-      cleaned.delete('next_seq')
-      cleaned.delete('created') // prevent the auto-close effect from firing after the URL is cleaned
-      const qs = cleaned.toString()
-      router.replace(qs ? `${pathname}?${qs}` : pathname)
+        .catch(() => {
+          if (!settled) setLoadError(true)
+        })
+        .finally(() => {
+          if (settled) return
+          settled = true
+          window.clearTimeout(timeoutId)
+          setLoading(false)
+          cleanNextParams()
+        })
     })
 
     return () => window.cancelAnimationFrame(frame)
