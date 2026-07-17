@@ -20,6 +20,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
+import { formatCurrency, formatLabel as formatValue, formatMonthLabel } from '@/lib/format'
 
 type TransactionsPageProps = {
   searchParams: Promise<{
@@ -174,10 +175,7 @@ function formatDateRangeLabel(dateFrom: string, dateTo: string): string {
   const fromMonth = dateFrom.slice(0, 7)
   const toMonth = dateTo.slice(0, 7)
   if (fromMonth === toMonth) {
-    const [yr, mo] = fromMonth.split('-').map(Number)
-    return new Intl.DateTimeFormat('en-CA', { month: 'long', year: 'numeric' }).format(
-      new Date(yr, mo - 1, 1)
-    )
+    return formatMonthLabel(fromMonth)
   }
   const fmt = new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
   return `${fmt.format(new Date(dateFrom))} – ${fmt.format(new Date(dateTo))}`
@@ -185,17 +183,6 @@ function formatDateRangeLabel(dateFrom: string, dateTo: string): string {
 
 function normalizeOption(value: string | undefined, allowedValues: string[]) {
   return value && allowedValues.includes(value) ? value : 'all'
-}
-
-function formatValue(value: string) {
-  return value.replaceAll('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-}
-
-function formatCurrency(value: number | string, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(Number(value))
 }
 
 type TransactionGroup = {

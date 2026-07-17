@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/empty-state'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
+import { formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 type BudgetDetailRow = {
@@ -60,13 +61,6 @@ function currentMonthDate() {
   const today = new Date()
   const month = String(today.getMonth() + 1).padStart(2, '0')
   return `${today.getFullYear()}-${month}-01`
-}
-
-function formatCurrency(value: number, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(value)
 }
 
 export default async function PlanPage() {

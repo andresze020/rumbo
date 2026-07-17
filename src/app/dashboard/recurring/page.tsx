@@ -12,6 +12,7 @@ import { MetricCard } from '@/components/metric-card'
 import { PageHeader } from '@/components/page-header'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
+import { formatCurrency } from '@/lib/format'
 import { frequencyLabel, todayIsoDate } from '@/lib/recurring/shared'
 
 type RecurringPageProps = {
@@ -203,10 +204,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
     : null
 
   function formatMoney(value: number) {
-    return new Intl.NumberFormat('en-CA', {
-      style: 'currency',
-      currency: baseCurrency,
-    }).format(value)
+    return formatCurrency(value, baseCurrency)
   }
 
   return (

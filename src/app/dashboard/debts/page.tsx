@@ -18,6 +18,7 @@ import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
+import { formatCurrency } from '@/lib/format'
 import { createClient } from '@/lib/supabase/server'
 import { nativeSelectCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
@@ -98,13 +99,6 @@ function debtsPath({
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
-}
-
-function formatCurrency(value: number | string, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(Number(value))
 }
 
 function formatDueDay(value: number | string | null) {

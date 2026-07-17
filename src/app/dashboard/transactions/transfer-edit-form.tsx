@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { fetchFxRate } from '@/lib/fx'
+import { formatCurrency } from '@/lib/format'
 import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
 
@@ -48,13 +49,6 @@ function formatAccountLabel(account: TransferAccount) {
     .filter(Boolean)
     .join(' · ')
   return account.icon ? `${account.icon} ${label}` : label
-}
-
-function formatCurrency(value: number, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(value)
 }
 
 const selectCls = nativeSelectCls

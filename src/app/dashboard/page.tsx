@@ -35,6 +35,7 @@ import { getDashboardTrend } from './trend-actions'
 import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
+import { formatCurrency, formatMonthLabel, formatTransactionCount } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const ACCENT = {
@@ -213,14 +214,6 @@ function parseDashboardMonth(month: string | undefined) {
   return month
 }
 
-function formatCurrency(value: number, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', { style: 'currency', currency: currencyCode }).format(value)
-}
-
-function formatTransactionCount(count: number, descriptor = 'transaction') {
-  return `${count} ${descriptor}${count === 1 ? '' : 's'}`
-}
-
 function getDisplayedLiabilityBalance(value: number | string) {
   return Math.max(0, -Number(value))
 }
@@ -232,12 +225,6 @@ function formatPercent(value: number | string | null, locale: Locale) {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   }).format(Number(value))
-}
-
-function formatMonthLabel(month: string) {
-  const [year, monthNumber] = month.split('-').map(Number)
-  const monthDate = new Date(year, monthNumber - 1, 1)
-  return new Intl.DateTimeFormat('en-CA', { month: 'long', year: 'numeric' }).format(monthDate)
 }
 
 function getMonthEndDate(month: string) {

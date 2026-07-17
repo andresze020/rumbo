@@ -1,6 +1,7 @@
 import 'server-only'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { formatMonthLabel } from '@/lib/format'
 
 /**
  * Shared server-side data helpers for the analysis & planning screens
@@ -91,7 +92,6 @@ export function monthEndDate(month: string): string {
 }
 
 const SHORT_FMT = new Intl.DateTimeFormat('en-CA', { month: 'short' })
-const LONG_FMT = new Intl.DateTimeFormat('en-CA', { month: 'long', year: 'numeric' })
 
 /** `2026-06` -> `Jun`. */
 export function shortMonthLabel(month: string): string {
@@ -101,8 +101,7 @@ export function shortMonthLabel(month: string): string {
 
 /** `2026-06` -> `June 2026`. */
 export function longMonthLabel(month: string): string {
-  const [year, mon] = month.split('-').map(Number)
-  return LONG_FMT.format(new Date(year, mon - 1, 1))
+  return formatMonthLabel(month)
 }
 
 // ── Monthly summary series ───────────────────────────────────────────────────

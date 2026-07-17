@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
 import { StatusBadge } from '@/components/status-badge'
+import { formatCurrency } from '@/lib/format'
 import { toggleRecurringActiveAction, deleteRecurringAction } from './actions'
 
 export type RecurringRowVM = {
@@ -26,13 +27,6 @@ export type RecurringRowVM = {
   categoryIcon: string | null
   editHref: string
   postHref: string
-}
-
-function formatCurrency(value: number, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(value)
 }
 
 function formatDate(iso: string | null) {

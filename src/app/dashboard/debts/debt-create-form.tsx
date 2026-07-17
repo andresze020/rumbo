@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { fetchFxRate } from '@/lib/fx'
+import { formatCurrency } from '@/lib/format'
 import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
 
@@ -19,13 +20,6 @@ type CurrencyOption = { code: string; name: string }
 type LiabilityAccount = { id: string; name: string; account_type: string; currency_code: string }
 
 const selectCls = nativeSelectCls
-
-function formatCurrency(value: number | string, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(Number(value))
-}
 
 export function DebtCreateForm({
   baseCurrency,

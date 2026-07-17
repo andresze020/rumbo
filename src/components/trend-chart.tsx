@@ -11,6 +11,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { TrendPoint } from '@/app/dashboard/trend-actions'
+import { formatCurrencyCompact, formatPercent } from '@/lib/format'
 
 // Reads CSS custom properties at runtime so Recharts SVG attributes
 // get resolved color values instead of unresolved var() strings.
@@ -46,19 +47,7 @@ type TrendChartProps = {
 }
 
 function formatValue(value: number, currency: string, formatAs: 'currency' | 'percent') {
-  if (formatAs === 'percent') {
-    return new Intl.NumberFormat('en-CA', {
-      style: 'percent',
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    }).format(value)
-  }
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency,
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value)
+  return formatAs === 'percent' ? formatPercent(value) : formatCurrencyCompact(value, currency)
 }
 
 function CustomTooltip({
