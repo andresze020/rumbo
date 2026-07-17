@@ -7,6 +7,7 @@ import {
   updateAccountAction,
 } from './actions'
 import { OpeningBalanceForm } from './opening-balance-form'
+import { BalanceAdjustmentForm } from './balance-adjustment-form'
 import {
   SortableAccountsList,
   type AccountRowVM,
@@ -41,10 +42,12 @@ type AccountsPageProps = {
     archived?: string
     unarchived?: string
     openingBalanceSet?: string
+    adjustBalanceSet?: string
     showArchived?: string
     mode?: string
     edit?: string
     openingBalance?: string
+    adjustBalance?: string
     info?: string
     error?: string
   }>
@@ -136,11 +139,13 @@ function accountsPath({
   mode,
   edit,
   openingBalance,
+  adjustBalance,
 }: {
   showArchived?: boolean
   mode?: 'create'
   edit?: string
   openingBalance?: string
+  adjustBalance?: string
 } = {}) {
   const params = new URLSearchParams()
 
@@ -158,6 +163,10 @@ function accountsPath({
 
   if (openingBalance) {
     params.set('openingBalance', openingBalance)
+  }
+
+  if (adjustBalance) {
+    params.set('adjustBalance', adjustBalance)
   }
 
   const queryString = params.toString()
@@ -337,12 +346,14 @@ function EditAccountForm({
   showArchived,
   hasOpeningBalance,
   openingBalanceHref,
+  adjustBalanceHref,
   locale,
 }: {
   row: AccountRow
   showArchived: boolean
   hasOpeningBalance: boolean
   openingBalanceHref: string
+  adjustBalanceHref: string
   locale: Locale
 }) {
   const account = row.metadata
@@ -503,6 +514,11 @@ function EditAccountForm({
           {translate(locale, 'accounts.setOpeningBalance')}
         </Link>
       ) : null}
+      {!account.is_archived ? (
+        <Link href={adjustBalanceHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          {translate(locale, 'accounts.adjustBalance')}
+        </Link>
+      ) : null}
       {account.is_archived ? (
         <form action={archiveAccountAction}>
           <input type="hidden" name="account_id" value={account.id} />
@@ -546,11 +562,14 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const created = params.created === '1'
   const updated = params.updated === '1'
   const openingBalanceSet = params.openingBalanceSet === '1'
+  const adjustBalanceSet = params.adjustBalanceSet === '1'
   const showArchived = params.showArchived === 'true'
   const isCreating = params.mode === 'create'
   const editAccountId = typeof params.edit === 'string' ? params.edit : null
   const openingBalanceAccountId =
     typeof params.openingBalance === 'string' ? params.openingBalance : null
+  const adjustBalanceAccountId =
+    typeof params.adjustBalance === 'string' ? params.adjustBalance : null
   const view = await getAccountsView()
   const locale = await getLocale()
   const supabase = await createClient()
@@ -761,6 +780,9 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       !row.metadata.is_archived &&
       !row.hasOpeningBalance
   )
+  const selectedAdjustBalanceRow = displayRows.find(
+    (row) => row.metadata.id === adjustBalanceAccountId && !row.metadata.is_archived
+  )
   const activeCurrencies = (currencies ?? []) as Currency[]
   const defaultCurrency =
     activeCurrencies.find((currency) => currency.code === household.base_currency)
@@ -812,6 +834,9 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       {infoMessage ? <Callout variant="info">{infoMessage}</Callout> : null}
       {openingBalanceSet ? (
         <Callout variant="success">{translate(locale, 'accounts.openingBalanceSet')}</Callout>
+      ) : null}
+      {adjustBalanceSet ? (
+        <Callout variant="success">{translate(locale, 'accounts.adjustBalanceSet')}</Callout>
       ) : null}
 
       <div className="rounded-2xl border bg-card p-5 shadow-sm shadow-black/[0.03]">
@@ -872,6 +897,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
             showArchived={showArchived}
             hasOpeningBalance={selectedEditRow.hasOpeningBalance}
             openingBalanceHref={accountsPath({ showArchived, openingBalance: selectedEditRow.metadata.id })}
+            adjustBalanceHref={accountsPath({ showArchived, adjustBalance: selectedEditRow.metadata.id })}
             locale={locale}
           />
         </FormDialog>
@@ -888,6 +914,28 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
             accountClass={selectedOpeningBalanceRow.metadata.account_class}
             accountCurrency={selectedOpeningBalanceRow.metadata.currency_code}
             defaultDate={selectedOpeningBalanceRow.metadata.opening_balance_date ?? todayIsoDate()}
+            showArchived={showArchived}
+            baseCurrency={household.base_currency}
+          />
+        </FormDialog>
+      ) : null}
+
+      {selectedAdjustBalanceRow ? (
+        <FormDialog
+          title={translate(locale, 'accounts.adjustBalanceLabel')}
+          description={translate(locale, 'accounts.adjustBalanceDialogDesc', { name: selectedAdjustBalanceRow.metadata.name })}
+          cancelHref={accountsPath({ showArchived })}
+        >
+          <BalanceAdjustmentForm
+            accountId={selectedAdjustBalanceRow.metadata.id}
+            accountClass={selectedAdjustBalanceRow.metadata.account_class}
+            accountCurrency={selectedAdjustBalanceRow.metadata.currency_code}
+            currentBalanceDisplay={
+              selectedAdjustBalanceRow.metadata.account_class === 'liability'
+                ? liabilityDisplay(selectedAdjustBalanceRow.balance.posted_balance_account_currency)
+                : Number(selectedAdjustBalanceRow.balance.posted_balance_account_currency)
+            }
+            defaultDate={todayIsoDate()}
             showArchived={showArchived}
             baseCurrency={household.base_currency}
           />

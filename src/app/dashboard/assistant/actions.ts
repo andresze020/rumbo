@@ -93,7 +93,12 @@ function friendlyAssistantError(error: unknown) {
 }
 
 export async function getAssistantContextAction(): Promise<
-  | { baseCurrency: string; accounts: TransactionFormAccount[]; categories: TransactionFormCategory[] }
+  | {
+      baseCurrency: string
+      accounts: TransactionFormAccount[]
+      categories: TransactionFormCategory[]
+      payees: { id: string; name: string }[]
+    }
   | { error: string }
 > {
   const supabase = await createClient()
@@ -131,10 +136,17 @@ export async function getAssistantContextAction(): Promise<
     .eq('is_archived', false)
     .order('name', { ascending: true })
 
+  const { data: payees } = await supabase
+    .from('payees')
+    .select('id, name')
+    .eq('household_id', profile.default_household_id)
+    .order('name', { ascending: true })
+
   return {
     baseCurrency: household.base_currency,
     accounts: accounts ?? [],
     categories: (categories ?? []).map((c) => ({ ...c, reporting_type: c.reporting_type ?? '' })),
+    payees: payees ?? [],
   }
 }
 

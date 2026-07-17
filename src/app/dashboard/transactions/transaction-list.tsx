@@ -79,7 +79,7 @@ export type TransactionListGroup = {
 type TransactionListProps = {
   groups: TransactionListGroup[]
   categories: TransactionListCategory[]
-  merchantSuggestions: string[]
+  payeeSuggestions: string[]
   returnTo: string
 }
 
@@ -139,7 +139,7 @@ function categoryLabel(
 export function TransactionList({
   groups,
   categories,
-  merchantSuggestions,
+  payeeSuggestions,
   returnTo,
 }: TransactionListProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -163,7 +163,7 @@ export function TransactionList({
         .sort((a, b) => a.label.localeCompare(b.label)),
     [categories, categoriesById]
   )
-  const merchantListId = 'merchant-suggestions'
+  const payeeListId = 'payee-suggestions'
 
   function toggleRow(id: string) {
     setSelected((prev) => {
@@ -182,8 +182,8 @@ export function TransactionList({
 
   return (
     <div className="space-y-2">
-      <datalist id={merchantListId}>
-        {merchantSuggestions.map((name) => (
+      <datalist id={payeeListId}>
+        {payeeSuggestions.map((name) => (
           <option key={name} value={name} />
         ))}
       </datalist>
@@ -283,7 +283,7 @@ export function TransactionList({
                     key={row.id}
                     row={row}
                     categories={categories}
-                    merchantListId={merchantListId}
+                    payeeListId={payeeListId}
                     returnTo={returnTo}
                     onCancel={() => setEditingId(null)}
                   />
@@ -471,13 +471,13 @@ function DisplayRow({
 function InlineEditRow({
   row,
   categories,
-  merchantListId,
+  payeeListId,
   returnTo,
   onCancel,
 }: {
   row: TransactionListRow
   categories: TransactionListCategory[]
-  merchantListId: string
+  payeeListId: string
   returnTo: string
   onCancel: () => void
 }) {
@@ -499,17 +499,17 @@ function InlineEditRow({
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1 sm:col-span-1">
             <label
-              htmlFor={`inline_merchant_${row.id}`}
+              htmlFor={`inline_payee_${row.id}`}
               className="text-xs text-muted-foreground"
             >
-              Merchant
+              Payee
             </label>
             <Input
-              id={`inline_merchant_${row.id}`}
-              name="merchant_name"
-              list={merchantListId}
+              id={`inline_payee_${row.id}`}
+              name="payee_name"
+              list={payeeListId}
               defaultValue={row.merchantName ?? ''}
-              placeholder="Merchant"
+              placeholder="Payee"
               autoComplete="off"
             />
           </div>

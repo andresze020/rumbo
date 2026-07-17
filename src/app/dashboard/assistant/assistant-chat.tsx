@@ -17,6 +17,7 @@ import {
   type TransactionFormAccount,
   type TransactionFormCategory,
 } from '@/app/dashboard/transactions/transaction-form'
+import { type PayeeOption } from '@/app/dashboard/transactions/payee-picker'
 import {
   parseTransactionFromPhotoAction,
   parseTransactionFromTranscriptAction,
@@ -37,6 +38,7 @@ type AssistantChatProps = {
   baseCurrency: string
   accounts: TransactionFormAccount[]
   categories: TransactionFormCategory[]
+  payees: PayeeOption[]
   returnTo?: string
 }
 
@@ -61,7 +63,7 @@ function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }
   })
 }
 
-export function AssistantChat({ baseCurrency, accounts, categories, returnTo }: AssistantChatProps) {
+export function AssistantChat({ baseCurrency, accounts, categories, payees, returnTo }: AssistantChatProps) {
   const inputId = useId()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -238,6 +240,7 @@ export function AssistantChat({ baseCurrency, accounts, categories, returnTo }: 
                 accounts={accounts}
                 baseCurrency={baseCurrency}
                 categories={categories}
+                payees={payees}
                 defaultDate={reviewDraft.transaction_date || todayIsoDate()}
                 defaultType={reviewDraft.transaction_type}
                 defaultAmount={String(reviewDraft.amount)}

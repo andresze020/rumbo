@@ -74,6 +74,9 @@ export async function createManualTransactionAction(formData: FormData) {
   const amount = parsePositiveNumber(formData.get('amount'))
   const description = String(formData.get('description') ?? '').trim()
   const merchantName = String(formData.get('merchant_name') ?? '').trim()
+  // BR-009: the form's payee combobox submits `payee_name`; the RPC normalizes
+  // it into `payees` and keeps `merchant_name` in sync.
+  const payeeName = String(formData.get('payee_name') ?? '').trim()
   const notes = String(formData.get('notes') ?? '').trim()
   const status = String(formData.get('status') ?? '').trim()
   const returnTo = String(formData.get('return_to') ?? '').trim() || undefined
@@ -176,6 +179,7 @@ export async function createManualTransactionAction(formData: FormData) {
       p_notes: notes || null,
       p_status: status,
       p_exchange_rate_to_base: exchangeRateToBase,
+      p_payee_name: payeeName || null,
     }
   )
 
@@ -210,7 +214,7 @@ export async function createManualTransactionAction(formData: FormData) {
     const firstNext = computeNextRunDate(transactionDate, frequency)
     const nextRunDate =
       firstNext > today ? firstNext : advanceUntilFuture(firstNext, frequency, today)
-    const recurringName = (description || merchantName || `Recurring ${transactionType}`).slice(
+    const recurringName = (description || merchantName || payeeName || `Recurring ${transactionType}`).slice(
       0,
       RECURRING_NAME_MAX_LENGTH
     )
@@ -365,6 +369,11 @@ export async function updateManualTransactionAction(formData: FormData) {
   const amount = parsePositiveNumber(formData.get('amount'))
   const description = String(formData.get('description') ?? '').trim()
   const merchantName = String(formData.get('merchant_name') ?? '').trim()
+  // BR-009: distinguish "form omitted the payee field" (legacy caller → leave
+  // payee_id untouched) from "field present but empty" (user cleared it).
+  const rawPayee = formData.get('payee_name')
+  const payeeProvided = rawPayee !== null
+  const payeeName = String(rawPayee ?? '').trim()
   const notes = String(formData.get('notes') ?? '').trim()
   const status = String(formData.get('status') ?? '').trim()
   const returnTo = String(formData.get('return_to') ?? '').trim()
@@ -430,6 +439,7 @@ export async function updateManualTransactionAction(formData: FormData) {
       p_merchant_name: merchantName || null,
       p_notes: notes || null,
       p_status: status,
+      p_payee_name: payeeProvided ? payeeName : null,
     }
   )
 
