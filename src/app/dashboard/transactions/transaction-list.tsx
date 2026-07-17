@@ -8,7 +8,9 @@ import {
   ArrowUpRight,
   Check,
   ChevronDown,
+  Flag,
   Pencil,
+  RotateCcw,
   Tag,
   X,
 } from 'lucide-react'
@@ -211,6 +213,42 @@ export function TransactionList({
             >
               <Check className="size-3.5" aria-hidden="true" />
               Mark reviewed
+            </SubmitButton>
+          </form>
+
+          <form action={updateReviewStatusAction} className="contents">
+            <input type="hidden" name="return_to" value={returnTo} />
+            <input type="hidden" name="review_status" value="flagged" />
+            {selectedIds.map((id) => (
+              <input key={id} type="hidden" name="transaction_id" value={id} />
+            ))}
+            <SubmitButton
+              type="submit"
+              size="sm"
+              variant="secondary"
+              className="h-7 gap-1.5"
+              pendingText="Saving…"
+            >
+              <Flag className="size-3.5" aria-hidden="true" />
+              Flag
+            </SubmitButton>
+          </form>
+
+          <form action={updateReviewStatusAction} className="contents">
+            <input type="hidden" name="return_to" value={returnTo} />
+            <input type="hidden" name="review_status" value="unreviewed" />
+            {selectedIds.map((id) => (
+              <input key={id} type="hidden" name="transaction_id" value={id} />
+            ))}
+            <SubmitButton
+              type="submit"
+              size="sm"
+              variant="secondary"
+              className="h-7 gap-1.5"
+              pendingText="Saving…"
+            >
+              <RotateCcw className="size-3.5" aria-hidden="true" />
+              Mark unreviewed
             </SubmitButton>
           </form>
 

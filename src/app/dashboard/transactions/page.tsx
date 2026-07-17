@@ -980,6 +980,13 @@ export default async function TransactionsPage({
             merchantSuggestions={merchantSuggestions}
             returnTo={returnTo}
           />
+        ) : selectedReview === 'unreviewed' ? (
+          <EmptyState
+            title="You're all caught up"
+            description="Nothing is waiting for review in this range. Widen the date range or view all transactions."
+            actionHref={transactionsPath({ ...filters, review: 'all' })}
+            actionLabel="View all transactions"
+          />
         ) : (
           <EmptyState
             title={

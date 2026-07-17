@@ -40,7 +40,7 @@ Full detail, "why soon," and acceptance criteria live in
 | BR-007 | Transfers / debts / FX | Cross-currency transfers and debt payments |
 | BR-008 | Transactions | Pagination + server-side filters (list has no pagination today) |
 | BR-010 | Rules / automation | `categorization_rules` designed but not migrated |
-| BR-011 | Review workflow | `review_status` queue/filter (the `review_status` column itself already shipped in Sprint 4) |
+| BR-011 | Review workflow | ✅ Core already shipped (Sprint 4 + PR #17): `review_status` column, filter chips, bulk "Mark reviewed"/categorize, per-row control, dashboard "N to review" pill. Polished on branch `feat/br-011-review-queue-polish` (no migration): activated the "Review queue" nav entry (was locked "coming soon") → `/dashboard/transactions?review=unreviewed`, added bulk **Flag** / **Mark unreviewed**, and an "all caught up" empty state |
 
 ## BR backlog — not started (P2/P3)
 
