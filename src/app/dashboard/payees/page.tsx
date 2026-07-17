@@ -143,6 +143,7 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
     lastUsedLabel: formatLastUsed(p.lastTxnDate),
     editHref: payeesPath({ showArchived, q: searchQuery, edit: p.id }),
     mergeHref: payeesPath({ showArchived, q: searchQuery, merge: p.id }),
+    transactionsHref: `/dashboard/transactions?payee_id=${p.id}`,
   }))
 
   const selectedEditPayee = allPayees.find((p) => p.id === editPayeeId) ?? null

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { GitMerge, Pencil, Store } from 'lucide-react'
+import { ArrowLeftRight, GitMerge, Pencil, Store } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
 import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
@@ -16,6 +16,7 @@ export type PayeeVM = {
   lastUsedLabel: string | null
   editHref: string
   mergeHref: string
+  transactionsHref: string
 }
 
 export function PayeeRow({
@@ -57,6 +58,16 @@ export function PayeeRow({
       </div>
 
       <div className="flex items-center gap-1">
+        {payee.txnCount > 0 ? (
+          <Link
+            href={payee.transactionsHref}
+            className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}
+            aria-label={`View transactions for ${payee.name}`}
+            title="View transactions"
+          >
+            <ArrowLeftRight className="size-3.5" aria-hidden="true" />
+          </Link>
+        ) : null}
         <Link
           href={payee.editHref}
           className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}

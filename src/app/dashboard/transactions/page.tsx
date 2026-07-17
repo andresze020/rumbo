@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { Store, X } from 'lucide-react'
 import { TransactionEditForm } from './transaction-edit-form'
 import { TransferEditForm } from './transfer-edit-form'
 import { TransactionFilters } from './transaction-filters'
@@ -21,6 +22,7 @@ import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { formatCurrency, formatLabel as formatValue, formatMonthLabel } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 type TransactionsPageProps = {
   searchParams: Promise<{
@@ -37,6 +39,7 @@ type TransactionsPageProps = {
     account_id?: string | string[]
     category_id?: string | string[]
     search?: string
+    payee_id?: string
     mode?: string
     edit?: string
   }>
@@ -106,6 +109,7 @@ type TransactionFilters = {
   status: string
   review: string
   type: string
+  payeeId: string
 }
 
 type TransactionRow = {
@@ -253,7 +257,10 @@ function transactionsPath(
   if (filters.dateFrom && filters.dateTo) {
     params.set('date_from', filters.dateFrom)
     params.set('date_to', filters.dateTo)
-  } else {
+  } else if (!filters.payeeId) {
+    // A payee filter with no explicit range is an all-time view of that payee —
+    // don't pin it to the current month, or navigating back to this URL would
+    // hide the payee's transactions from other months.
     params.set('month', filters.month || currentMonth())
   }
 
@@ -263,6 +270,7 @@ function transactionsPath(
   for (const id of filters.accountIds) params.append('account_id', id)
   for (const id of filters.categoryIds) params.append('category_id', id)
   if (filters.search) params.set('search', filters.search)
+  if (filters.payeeId) params.set('payee_id', filters.payeeId)
   if (panel?.mode) params.set('mode', panel.mode)
   if (panel?.edit) params.set('edit', panel.edit)
 
@@ -338,6 +346,15 @@ export default async function TransactionsPage({
     ? [rawCategoryIds]
     : []
   const searchText = typeof params.search === 'string' ? params.search.trim() : ''
+  const selectedPayeeId =
+    typeof params.payee_id === 'string' && params.payee_id.trim()
+      ? params.payee_id.trim()
+      : ''
+
+  // A payee filter defaults to an all-time view; only constrain by date when the
+  // user has explicitly picked a month or a custom range.
+  const applyDateWindow =
+    !selectedPayeeId || hasCustomDateRange || params.month !== undefined
 
   const filters: TransactionFilters = {
     accountIds: selectedAccountIds,
@@ -349,6 +366,7 @@ export default async function TransactionsPage({
     status: selectedStatus,
     review: selectedReview,
     type: selectedType,
+    payeeId: selectedPayeeId,
   }
 
   const hasActiveFilters =
@@ -359,7 +377,8 @@ export default async function TransactionsPage({
     selectedReview !== 'all' ||
     selectedAccountIds.length > 0 ||
     selectedCategoryIds.length > 0 ||
-    searchText.length > 0
+    searchText.length > 0 ||
+    selectedPayeeId.length > 0
 
   const editTransactionId =
     typeof params.edit === 'string' ? params.edit : null
@@ -413,6 +432,10 @@ export default async function TransactionsPage({
     .eq('household_id', household.id)
     .order('name', { ascending: true })
   const payeeOptions = (payeeRows ?? []) as { id: string; name: string }[]
+  const selectedPayeeName = selectedPayeeId
+    ? payeeOptions.find((p) => p.id === selectedPayeeId)?.name ?? null
+    : null
+  const clearPayeeHref = transactionsPath({ ...filters, payeeId: '' })
 
   let transactionsQuery = supabase
     .from('transactions')
@@ -420,11 +443,18 @@ export default async function TransactionsPage({
       'id, transaction_date, transaction_type, status, review_status, description, merchant_name, notes, source, void_reason'
     )
     .eq('household_id', household.id)
-    .gte('transaction_date', resolvedDateFrom)
-    .lte('transaction_date', resolvedDateTo)
     .is('deleted_at', null)
     .order('transaction_date', { ascending: false })
     .order('created_at', { ascending: false })
+
+  if (applyDateWindow) {
+    transactionsQuery = transactionsQuery
+      .gte('transaction_date', resolvedDateFrom)
+      .lte('transaction_date', resolvedDateTo)
+  }
+  if (selectedPayeeId) {
+    transactionsQuery = transactionsQuery.eq('payee_id', selectedPayeeId)
+  }
 
   if (selectedType !== 'all') {
     transactionsQuery = transactionsQuery.eq('transaction_type', selectedType)
@@ -844,6 +874,22 @@ export default async function TransactionsPage({
       <TransactionToasts />
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
 
+      {/* ── Payee focus chip ───────────────────────────────────────────── */}
+      {selectedPayeeId ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-primary/5 px-3 py-2 text-sm">
+          <Store className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <span className="text-muted-foreground">Showing all transactions for</span>
+          <span className="font-semibold">{selectedPayeeName ?? 'this payee'}</span>
+          <Link
+            href={clearPayeeHref}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'ml-auto gap-1')}
+          >
+            <X className="size-3.5" aria-hidden="true" />
+            Clear
+          </Link>
+        </div>
+      ) : null}
+
       {/* ── Filters ────────────────────────────────────────────────────── */}
       <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
         <TransactionFilters
@@ -859,6 +905,7 @@ export default async function TransactionsPage({
           accountOptions={accountOptions}
           categoryOptions={categoryOpts}
           presetLinks={presetLinks}
+          payeeId={selectedPayeeId}
         />
       </div>
 
