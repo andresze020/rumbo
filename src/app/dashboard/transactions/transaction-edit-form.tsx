@@ -166,7 +166,7 @@ export function TransactionEditForm({
       <PayeePicker
         payees={payees}
         defaultValue={merchantName}
-        label="Payee"
+        label={transactionType === 'income' ? 'Payer' : 'Payee'}
         helpText="Pick an existing payee or type a new name to create it."
         inputId={`edit_payee_${transactionId}`}
       />

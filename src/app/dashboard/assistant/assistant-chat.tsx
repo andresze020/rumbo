@@ -329,7 +329,9 @@ function DraftCard({
         <dd>{draft.transaction_date}</dd>
         {draft.merchant_name ? (
           <>
-            <dt className="text-muted-foreground">Merchant</dt>
+            <dt className="text-muted-foreground">
+              {draft.transaction_type === 'income' ? 'Payer' : 'Payee'}
+            </dt>
             <dd>{draft.merchant_name}</dd>
           </>
         ) : null}

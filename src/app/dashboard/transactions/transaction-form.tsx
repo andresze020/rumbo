@@ -587,7 +587,9 @@ export function TransactionForm({
         <PayeePicker
           payees={payees}
           defaultValue={defaultMerchantName}
-          label={t('transactionForm.payee')}
+          // "Payer" for income (who paid you), "Payee" for an expense (whom you
+          // paid) — same underlying payees table, context-appropriate wording.
+          label={t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')}
           helpText={t('transactionForm.payeeHelp')}
           inputId="payee_name"
         />

@@ -540,14 +540,14 @@ function InlineEditRow({
               htmlFor={`inline_payee_${row.id}`}
               className="text-xs text-muted-foreground"
             >
-              Payee
+              {row.transactionType === 'income' ? 'Payer' : 'Payee'}
             </label>
             <Input
               id={`inline_payee_${row.id}`}
               name="payee_name"
               list={payeeListId}
               defaultValue={row.merchantName ?? ''}
-              placeholder="Payee"
+              placeholder={row.transactionType === 'income' ? 'Payer' : 'Payee'}
               autoComplete="off"
             />
           </div>
