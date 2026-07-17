@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { isActiveCurrency } from '@/lib/currencies'
 
 export async function createHouseholdAction(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim()
@@ -13,7 +14,7 @@ export async function createHouseholdAction(formData: FormData) {
     throw new Error('Household name is required')
   }
 
-  if (!['CAD', 'USD', 'COP'].includes(baseCurrency)) {
+  if (!(await isActiveCurrency(baseCurrency))) {
     throw new Error('Invalid base currency')
   }
 

@@ -4,8 +4,6 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
-const VALID_CURRENCIES = ['CAD', 'USD', 'COP'] as const
-
 async function getAuthContext() {
   const supabase = await createClient()
   const {
@@ -63,18 +61,19 @@ export async function updatePasswordAction(formData: FormData) {
 
 export async function updateHouseholdAction(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim()
-  const baseCurrency = String(formData.get('base_currency') ?? '').trim().toUpperCase()
 
   if (!name) redirectWithError('Household name is required.')
-  if (!(VALID_CURRENCIES as readonly string[]).includes(baseCurrency)) {
-    redirectWithError('Select a valid base currency.')
-  }
 
+  // base_currency is immutable after household creation: every stored
+  // amount_base_currency is frozen at the FX rate used when it was written,
+  // so changing the base would silently invalidate all balances and reports.
+  // Changing it would require a full data migration (re-conversion of every
+  // entry), so this action never updates it.
   const { supabase, householdId } = await getAuthContext()
 
   const { error } = await supabase
     .from('households')
-    .update({ name, base_currency: baseCurrency })
+    .update({ name })
     .eq('id', householdId)
 
   if (error) redirectWithError('Could not update household. Please try again.')
