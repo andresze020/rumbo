@@ -252,6 +252,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
                 accounts={formData.accounts}
                 baseCurrency={formData.baseCurrency}
                 categories={formData.categories}
+                payees={formData.payees}
                 defaultDate={addNextDefaults?.date ?? todayIsoDate()}
                 defaultAccountId={addNextDefaults?.accountId ?? triggerAccountId}
                 defaultType={addNextDefaults?.type ?? triggerType}

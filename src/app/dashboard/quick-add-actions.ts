@@ -22,10 +22,16 @@ export type QuickAddCategory = {
   color: string | null
 }
 
+export type QuickAddPayee = {
+  id: string
+  name: string
+}
+
 export type QuickAddFormData = {
   baseCurrency: string
   accounts: QuickAddAccount[]
   categories: QuickAddCategory[]
+  payees: QuickAddPayee[]
 }
 
 export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
@@ -46,7 +52,7 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
 
     const householdId = profile.default_household_id
 
-    const [householdResult, accountsResult, categoriesResult] = await Promise.all([
+    const [householdResult, accountsResult, categoriesResult, payeesResult] = await Promise.all([
       supabase
         .from('households')
         .select('base_currency')
@@ -69,12 +75,18 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
         .order('parent_category_id', { ascending: true, nullsFirst: true })
         .order('sort_order', { ascending: true, nullsFirst: false })
         .order('name', { ascending: true }),
+      supabase
+        .from('payees')
+        .select('id, name')
+        .eq('household_id', householdId)
+        .order('name', { ascending: true }),
     ])
 
     return {
       baseCurrency: householdResult.data?.base_currency ?? 'CAD',
       accounts: (accountsResult.data ?? []) as QuickAddAccount[],
       categories: (categoriesResult.data ?? []) as QuickAddCategory[],
+      payees: (payeesResult.data ?? []) as QuickAddPayee[],
     }
   } catch {
     return null
