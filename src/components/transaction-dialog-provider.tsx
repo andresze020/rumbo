@@ -48,6 +48,11 @@ function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function readQuickAddType(searchParams: URLSearchParams): OpenDialogType | null {
+  const type = searchParams.get('quick_add')
+  return type === 'income' || type === 'expense' || type === 'transfer' ? type : null
+}
+
 function readAddNextDefaults(searchParams: URLSearchParams): AddNextDefaults | null {
   const nextDate = searchParams.get('next_date')
   const nextType = searchParams.get('next_type')
@@ -160,6 +165,24 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
     return () => window.cancelAnimationFrame(frame)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [created, hasPendingNext, addNextDefaults])
+
+  // Opens the dialog when landing on a `?quick_add=income|expense|transfer`
+  // link (e.g. a PWA manifest shortcut), then strips the param from the URL.
+  const processedQuickAddRef = useRef(false)
+  useEffect(() => {
+    if (processedQuickAddRef.current) return
+    const type = readQuickAddType(searchParams)
+    if (!type) return
+    processedQuickAddRef.current = true
+
+    openDialog({ type })
+
+    const cleaned = new URLSearchParams(searchParams.toString())
+    cleaned.delete('quick_add')
+    const qs = cleaned.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function openDialog(options?: OpenDialogOptions) {
     setTriggerAccountId(options?.accountId)
