@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ChevronDown, Pencil, Tag } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
+import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
 import { formatLabel } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { archiveCategoryAction } from './actions'
@@ -282,27 +283,35 @@ export function CategoryRow({
               >
                 Edit
               </Link>
-              <form action={archiveCategoryAction}>
-                <input type="hidden" name="category_id" value={category.id} />
-                <input
-                  type="hidden"
-                  name="is_archived"
-                  value={category.is_archived ? 'false' : 'true'}
+              {category.is_archived ? (
+                <form action={archiveCategoryAction}>
+                  <input type="hidden" name="category_id" value={category.id} />
+                  <input type="hidden" name="is_archived" value="false" />
+                  <input
+                    type="hidden"
+                    name="show_archived"
+                    value={showArchived ? 'true' : 'false'}
+                  />
+                  <SubmitButton type="submit" size="sm" variant="outline" pendingText="Restoring…">
+                    Restore
+                  </SubmitButton>
+                </form>
+              ) : (
+                <ArchiveConfirmButton
+                  action={archiveCategoryAction}
+                  hiddenFields={{
+                    category_id: category.id,
+                    is_archived: 'true',
+                    show_archived: showArchived ? 'true' : 'false',
+                  }}
+                  triggerLabel="Archive"
+                  pendingLabel="Archiving…"
+                  title="Archive this category?"
+                  description="Archived categories are hidden from category lists and pickers, but history stays intact. You can restore it anytime."
+                  cancelLabel="Cancel"
+                  confirmLabel="Archive"
                 />
-                <input
-                  type="hidden"
-                  name="show_archived"
-                  value={showArchived ? 'true' : 'false'}
-                />
-                <SubmitButton
-                  type="submit"
-                  size="sm"
-                  variant={category.is_archived ? 'outline' : 'secondary'}
-                  pendingText={category.is_archived ? 'Restoring…' : 'Archiving…'}
-                >
-                  {category.is_archived ? 'Restore' : 'Archive'}
-                </SubmitButton>
-              </form>
+              )}
             </div>
           </div>
         </div>

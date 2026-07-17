@@ -471,9 +471,6 @@ export async function archiveCategoryAction(formData: FormData) {
   const categoryId = String(formData.get('category_id') ?? '').trim()
   const isArchived = String(formData.get('is_archived') ?? '') === 'true'
   const showArchived = String(formData.get('show_archived') ?? '') === 'true'
-  const redirectPath = showArchived
-    ? `/dashboard/categories?showArchived=true&${isArchived ? 'archived' : 'unarchived'}=1`
-    : `/dashboard/categories?${isArchived ? 'archived' : 'unarchived'}=1`
 
   if (!categoryId) {
     redirectWithError('Category is required.')
@@ -512,5 +509,10 @@ export async function archiveCategoryAction(formData: FormData) {
   }
 
   revalidateCategorySurfaces()
-  redirect(redirectPath)
+
+  const redirectParams = new URLSearchParams()
+  if (showArchived) redirectParams.set('showArchived', 'true')
+  redirectParams.set(isArchived ? 'archived' : 'unarchived', '1')
+  if (isArchived) redirectParams.set('archived_id', categoryId)
+  redirect(`/dashboard/categories?${redirectParams.toString()}`)
 }
