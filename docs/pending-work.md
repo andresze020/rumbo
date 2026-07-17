@@ -47,7 +47,7 @@ Full detail, "why soon," and acceptance criteria live in
 | ID | Area | One-line |
 |---|---|---|
 | BR-014 | Recurring | Auto-post scheduler + failure log (depends on BR-002 reliability) |
-| BR-017 | Accounts | Adjust/reconcile balance action without editing history |
+| BR-017 | Accounts | ✅ Built on branch `feat/br-017-balance-adjustment` (migration `20260716130000`): `create_balance_adjustment` RPC + "Adjust balance" action on the accounts edit dialog — posts a ledger-safe `adjustment` entry to reconcile the posted balance, no allocation (excluded from reports/budgets), history preserved |
 | BR-018 | Budgeting | Budget rollover/carryover |
 | BR-023 | Tags | `tags` + `transaction_tags` for flexible slicing |
 | BR-024 | CSV import | Saved column-mapping presets + import revert |
