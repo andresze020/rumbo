@@ -114,11 +114,12 @@ export const navGroups: NavGroup[] = [
         descriptionKey: 'comingSoon.descriptions.rules',
       },
       {
-        href: '/dashboard/coming-soon/review-queue',
+        // BR-011: the review queue is shipped — it's the transactions list
+        // filtered to unreviewed, with bulk mark-reviewed/flag actions.
+        href: '/dashboard/transactions?review=unreviewed',
         labelKey: 'nav.reviewQueue',
         icon: ListChecks,
-        phase: 'soon',
-        descriptionKey: 'comingSoon.descriptions.reviewQueue',
+        phase: 'alpha',
       },
       {
         href: '/dashboard/coming-soon/assistant',
