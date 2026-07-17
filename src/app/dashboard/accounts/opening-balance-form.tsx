@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { fetchFxRate } from '@/lib/fx'
+import { formatCurrency } from '@/lib/format'
 import {
   Dialog,
   DialogContent,
@@ -21,13 +22,6 @@ import {
 } from '@/components/ui/dialog'
 import { formActionsCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
-
-function formatCurrency(value: number | string, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(Number(value))
-}
 
 export function OpeningBalanceForm({
   accountId,

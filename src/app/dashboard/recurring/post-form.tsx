@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { formActionsCls, formBtnCls } from '@/lib/form-styles'
+import { formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 type PostFormProps = {
@@ -19,13 +20,6 @@ type PostFormProps = {
   defaultDate: string
   currencyCode: string
   baseCurrency: string
-}
-
-function formatCurrency(value: number, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(value)
 }
 
 export function PostForm({

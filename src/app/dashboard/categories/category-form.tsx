@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
 import { CategoryStylePicker } from '@/components/category-style-picker'
+import { formatLabel as formatValue } from '@/lib/format'
 import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
 
@@ -71,12 +72,6 @@ function getCategoryPath(
     ? categoriesById[category.parent_category_id]?.name
     : null
   return parentName ? `${parentName} / ${category.name}` : category.name
-}
-
-function formatValue(value: string) {
-  return value
-    .replaceAll('_', ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
 function getCompatibleParentOptions({

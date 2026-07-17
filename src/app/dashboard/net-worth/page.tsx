@@ -17,6 +17,7 @@ import { groupAccountsByType } from '@/lib/accounts-view/group'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
+import { formatCurrency, formatLabel as formatValue, formatMonthLabel } from '@/lib/format'
 
 type NetWorthPageProps = {
   searchParams: Promise<{
@@ -84,24 +85,6 @@ function getPreviousMonths(selectedMonth: string, count: number) {
     months.push(`${monthYear}-${month}`)
   }
   return months
-}
-
-function formatMonthLabel(month: string) {
-  const [year, monthNumber] = month.split('-').map(Number)
-  return new Intl.DateTimeFormat('en-CA', { month: 'long', year: 'numeric' }).format(
-    new Date(year, monthNumber - 1, 1)
-  )
-}
-
-function formatCurrency(value: number | string, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(Number(value))
-}
-
-function formatValue(value: string) {
-  return value.replaceAll('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
 function getDisplayedLiabilityBalance(value: number | string) {

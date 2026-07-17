@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
+import { formatMonthLabel } from '@/lib/format'
 
 type MonthNavProps = {
   /** Currently selected month, formatted as `YYYY-MM`. */
@@ -21,16 +22,6 @@ function shiftMonth(month: string, offset: number): string {
   const shiftedYear = shifted.getUTCFullYear()
   const shiftedMonth = String(shifted.getUTCMonth() + 1).padStart(2, '0')
   return `${shiftedYear}-${shiftedMonth}`
-}
-
-function formatMonthLabel(month: string) {
-  const [year, monthNumber] = month.split('-').map(Number)
-  const monthDate = new Date(year, monthNumber - 1, 1)
-
-  return new Intl.DateTimeFormat('en-CA', {
-    month: 'long',
-    year: 'numeric',
-  }).format(monthDate)
 }
 
 function buildHref(basePath: string, month: string, searchParams?: Record<string, string>) {

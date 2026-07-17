@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
 import { cn } from '@/lib/utils'
+import { formatCurrency } from '@/lib/format'
 import { deleteBudgetLineAction } from './actions'
 
 type BudgetLineRow = {
@@ -32,13 +33,6 @@ type BudgetLineRowProps = {
 }
 
 const NEAR_LIMIT_THRESHOLD = 0.8
-
-function formatCurrency(value: number, currencyCode: string) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: currencyCode,
-  }).format(value)
-}
 
 function formatPercent(value: number | null) {
   if (value === null) return 'N/A'
