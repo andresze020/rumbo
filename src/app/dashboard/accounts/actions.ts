@@ -413,3 +413,66 @@ export async function setOpeningBalanceAction(formData: FormData) {
   revalidatePath('/dashboard')
   redirect('/dashboard/accounts?openingBalanceSet=1')
 }
+
+// BR-017: correct an account's current balance with a ledger-safe adjustment
+// transaction (no editing of history). Sign/FX handling mirrors the opening
+// balance flow; the RPC computes the delta from the current posted balance.
+export async function adjustBalanceAction(formData: FormData) {
+  const accountId = String(formData.get('account_id') ?? '').trim()
+  const adjustmentDate = String(formData.get('adjustment_date') ?? '').trim()
+  const amountText = String(formData.get('new_balance') ?? '').trim()
+  const newBalance = Number(amountText)
+  const rateBaseToAccountText = String(
+    formData.get('rate_base_to_account') ?? ''
+  ).trim()
+  const rateBaseToAccount = Number(rateBaseToAccountText)
+  const legacyRate = Number(
+    String(formData.get('exchange_rate_to_base') ?? '1').trim()
+  )
+  const exchangeRateToBase =
+    rateBaseToAccountText && Number.isFinite(rateBaseToAccount) && rateBaseToAccount > 0
+      ? 1 / rateBaseToAccount
+      : legacyRate
+  const notes = String(formData.get('notes') ?? '').trim()
+
+  if (!accountId) {
+    redirectWithError('Account is required.')
+  }
+
+  if (!amountText || !Number.isFinite(newBalance)) {
+    redirectWithError('Enter the new balance as a number.')
+  }
+
+  if (!adjustmentDate) {
+    redirectWithError('Adjustment date is required.')
+  }
+
+  if (!Number.isFinite(exchangeRateToBase) || exchangeRateToBase <= 0) {
+    redirectWithError('Exchange rate must be greater than 0.')
+  }
+
+  const { supabase, householdId } = await getAuthenticatedHousehold()
+
+  const { error: adjustmentError } = await supabase.rpc(
+    'create_balance_adjustment',
+    {
+      p_household_id: householdId,
+      p_account_id: accountId,
+      p_new_balance: newBalance,
+      p_adjustment_date: adjustmentDate,
+      p_exchange_rate_to_base: exchangeRateToBase,
+      p_notes: notes || null,
+    }
+  )
+
+  if (adjustmentError) {
+    redirectWithError(
+      adjustmentError.message.includes('already at that amount')
+        ? 'That account is already at this balance — no adjustment needed.'
+        : 'Could not adjust the balance. Please check the form and try again.'
+    )
+  }
+
+  revalidateAccountSurfaces()
+  redirect('/dashboard/accounts?adjustBalanceSet=1')
+}
