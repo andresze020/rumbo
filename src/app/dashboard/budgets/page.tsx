@@ -41,6 +41,7 @@ type BudgetsPageProps = {
     created?: string
     lineUpdated?: string
     lineRemoved?: string
+    rolloverUpdated?: string
     copied?: string
     mode?: string
     edit?: string
@@ -239,6 +240,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   const created = params.created === '1'
   const lineUpdated = params.lineUpdated === '1'
   const lineRemoved = params.lineRemoved === '1'
+  const rolloverUpdated = params.rolloverUpdated === '1'
   const copiedCount = typeof params.copied === 'string' ? Number(params.copied) : null
   const isAddingLine = params.mode === 'addLine'
   const editLineId = typeof params.edit === 'string' ? params.edit : null
@@ -295,6 +297,41 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   const budgetDetails = (budgetRows ?? []) as BudgetDetailRow[]
   const budget = budgetDetails[0] ?? null
   const budgetLines = budgetDetails.filter((row) => row.line_id)
+
+  // BR-018: per-line rollover opt-in + accumulated carryover per category.
+  // rollover_enabled is not part of get_monthly_budget_details, so it's read
+  // from budget_lines directly; carryover comes from its own RPC.
+  const rolloverByLineId = new Map<string, boolean>()
+  const carryoverByCategoryId = new Map<string, number>()
+  if (budget) {
+    const [{ data: rolloverRows }, { data: carryoverRows }] = await Promise.all([
+      supabase
+        .from('budget_lines')
+        .select('id, rollover_enabled')
+        .eq('budget_id', budget.budget_id)
+        .is('deleted_at', null),
+      supabase.rpc('get_budget_line_carryovers', {
+        p_household_id: household.id,
+        p_budget_month: selectedMonthDate,
+      }),
+    ])
+    for (const row of (rolloverRows ?? []) as { id: string; rollover_enabled: boolean }[]) {
+      rolloverByLineId.set(row.id, Boolean(row.rollover_enabled))
+    }
+    for (const row of (carryoverRows ?? []) as {
+      category_id: string
+      carryover_amount: number | string
+    }[]) {
+      carryoverByCategoryId.set(row.category_id, Number(row.carryover_amount))
+    }
+  }
+
+  // Carryover only applies when the current line has opted into rollover.
+  const appliedCarryover = (line: BudgetDetailRow) => {
+    const enabled = line.line_id ? rolloverByLineId.get(line.line_id) ?? false : false
+    if (!enabled || !line.category_id) return 0
+    return carryoverByCategoryId.get(line.category_id) ?? 0
+  }
   const lineCategoryIds = new Set(
     budgetLines
       .map((line) => line.category_id)
@@ -313,12 +350,15 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   const budgetCurrency = budget?.currency_code ?? household.base_currency
   const totalBudgeted = budgetLines.reduce((sum, l) => sum + Number(l.planned_amount ?? 0), 0)
   const totalSpent = budgetLines.reduce((sum, l) => sum + Number(l.actual_amount ?? 0), 0)
-  const remaining = totalBudgeted - totalSpent
-  const percentUsed = totalBudgeted > 0 ? totalSpent / totalBudgeted : null
+  const totalCarryover = budgetLines.reduce((sum, l) => sum + appliedCarryover(l), 0)
+  // "Available" folds in rollover carryover so remaining/usage reflect it.
+  const totalAvailable = totalBudgeted + totalCarryover
+  const remaining = totalAvailable - totalSpent
+  const percentUsed = totalAvailable > 0 ? totalSpent / totalAvailable : null
   const usageTone = getUsageTone(percentUsed)
   const usageWidth = percentUsed !== null ? Math.min(Math.round(percentUsed * 100), 100) : 0
   const overBudgetCount = budgetLines.filter(
-    (line) => Number(line.actual_amount ?? 0) > Number(line.planned_amount ?? 0)
+    (line) => Number(line.actual_amount ?? 0) > Number(line.planned_amount ?? 0) + appliedCarryover(line)
   ).length
 
   const cancelHref = budgetsPath({ month: selectedMonth })
@@ -417,6 +457,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
       {created ? <Callout variant="success">Budget created.</Callout> : null}
       {lineUpdated ? <Callout variant="success">Budget line saved.</Callout> : null}
       {lineRemoved ? <Callout variant="info">Budget line removed.</Callout> : null}
+      {rolloverUpdated ? <Callout variant="success">Rollover updated.</Callout> : null}
       {copiedCount !== null && Number.isFinite(copiedCount) ? (
         <Callout variant="info">
           {copiedCount > 0
@@ -471,7 +512,13 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
             <BudgetKpiCard
               label="Remaining"
               value={formatCurrency(remaining, budgetCurrency)}
-              description={remaining < 0 ? 'Over planned' : 'Still available'}
+              description={
+                totalCarryover !== 0
+                  ? `Incl. ${formatCurrency(totalCarryover, budgetCurrency)} rollover`
+                  : remaining < 0
+                    ? 'Over planned'
+                    : 'Still available'
+              }
               icon={<Wallet />}
               accent="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
               valueClassName={remaining < 0 ? 'text-destructive' : undefined}
@@ -644,6 +691,8 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                           budgetCurrency={budgetCurrency}
                           selectedMonth={selectedMonth}
                           editHref={budgetsPath({ month: selectedMonth, edit: line.line_id ?? '' })}
+                          rolloverEnabled={line.line_id ? rolloverByLineId.get(line.line_id) ?? false : false}
+                          carryover={line.category_id ? carryoverByCategoryId.get(line.category_id) ?? 0 : 0}
                         />
                       )
                     })}

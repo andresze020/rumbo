@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { updateManualTransactionAction } from './actions'
 import { CategoryPicker } from './category-picker'
+import { PayeePicker, type PayeeOption } from './payee-picker'
 import { AmountInput } from '@/components/amount-input'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,6 +46,7 @@ type TransactionEditFormProps = {
   status: string
   accounts: EditAccount[]
   categories: EditCategory[]
+  payees: PayeeOption[]
   returnTo: string
 }
 
@@ -73,6 +75,7 @@ export function TransactionEditForm({
   status,
   accounts,
   categories,
+  payees,
   returnTo,
 }: TransactionEditFormProps) {
   const [selectedAccountId, setSelectedAccountId] = useState(accountId)
@@ -160,14 +163,13 @@ export function TransactionEditForm({
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor={`edit_merchant_${transactionId}`}>Merchant</Label>
-        <Input
-          id={`edit_merchant_${transactionId}`}
-          name="merchant_name"
-          defaultValue={merchantName}
-        />
-      </div>
+      <PayeePicker
+        payees={payees}
+        defaultValue={merchantName}
+        label="Payee"
+        helpText="Pick an existing payee or type a new name to create it."
+        inputId={`edit_payee_${transactionId}`}
+      />
 
       <div className="space-y-2">
         <Label htmlFor={`edit_notes_${transactionId}`}>Notes</Label>

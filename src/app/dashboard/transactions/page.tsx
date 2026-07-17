@@ -406,6 +406,14 @@ export default async function TransactionsPage({
     .order('name', { ascending: true })
   if (categoriesError) throw new Error('Could not load categories.')
 
+  // BR-009: household payees power the transaction form's payee combobox.
+  const { data: payeeRows } = await supabase
+    .from('payees')
+    .select('id, name')
+    .eq('household_id', household.id)
+    .order('name', { ascending: true })
+  const payeeOptions = (payeeRows ?? []) as { id: string; name: string }[]
+
   let transactionsQuery = supabase
     .from('transactions')
     .select(
@@ -798,12 +806,15 @@ export default async function TransactionsPage({
     })),
   }))
 
-  const merchantSuggestions = Array.from(
-    new Set(
-      transactionRows
+  // BR-009: suggest normalized payees (plus any not-yet-normalized merchant
+  // names still on loaded rows) for the inline quick-edit payee field.
+  const payeeSuggestions = Array.from(
+    new Set([
+      ...payeeOptions.map((payee) => payee.name),
+      ...transactionRows
         .map((row) => row.transaction.merchant_name)
-        .filter((name): name is string => Boolean(name && name.trim()))
-    )
+        .filter((name): name is string => Boolean(name && name.trim())),
+    ])
   ).sort((a, b) => a.localeCompare(b))
 
   return (
@@ -878,6 +889,7 @@ export default async function TransactionsPage({
               status={selectedEditRow.transaction.status}
               accounts={activeAccounts}
               categories={activeCategories}
+              payees={payeeOptions}
               returnTo={returnTo}
             />
           ) : null}
@@ -977,8 +989,15 @@ export default async function TransactionsPage({
           <TransactionList
             groups={serializedGroups}
             categories={inlineCategories}
-            merchantSuggestions={merchantSuggestions}
+            payeeSuggestions={payeeSuggestions}
             returnTo={returnTo}
+          />
+        ) : selectedReview === 'unreviewed' ? (
+          <EmptyState
+            title="You're all caught up"
+            description="Nothing is waiting for review in this range. Widen the date range or view all transactions."
+            actionHref={transactionsPath({ ...filters, review: 'all' })}
+            actionLabel="View all transactions"
           />
         ) : (
           <EmptyState

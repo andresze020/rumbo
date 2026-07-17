@@ -2,13 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown, Pencil, Tag } from 'lucide-react'
+import { ChevronDown, Pencil, Repeat, Tag } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/format'
-import { deleteBudgetLineAction } from './actions'
+import { deleteBudgetLineAction, setBudgetLineRolloverAction } from './actions'
 
 type BudgetLineRow = {
   line_id: string | null
@@ -30,6 +30,10 @@ type BudgetLineRowProps = {
   budgetCurrency: string
   selectedMonth: string
   editHref: string
+  /** BR-018: whether this line opts into rollover/carryover. */
+  rolloverEnabled: boolean
+  /** Accumulated carryover for this category (planned − actual of prior rollover months). */
+  carryover: number
 }
 
 const NEAR_LIMIT_THRESHOLD = 0.8
@@ -92,17 +96,23 @@ export function BudgetLineRow({
   budgetCurrency,
   selectedMonth,
   editHref,
+  rolloverEnabled,
+  carryover,
 }: BudgetLineRowProps) {
   const [open, setOpen] = useState(false)
 
   const plannedAmount = Number(line.planned_amount ?? 0)
   const actualAmount = Number(line.actual_amount ?? 0)
-  const lineRemaining = plannedAmount - actualAmount
-  const linePercent = plannedAmount > 0 ? actualAmount / plannedAmount : null
+  // BR-018: carryover only counts when this line has rollover enabled. The
+  // "available" budget then folds it in, so remaining/progress reflect it.
+  const appliedCarryover = rolloverEnabled ? carryover : 0
+  const availableAmount = plannedAmount + appliedCarryover
+  const lineRemaining = availableAmount - actualAmount
+  const linePercent = availableAmount > 0 ? actualAmount / availableAmount : null
   const txCount = Number(line.transaction_count ?? 0)
-  const status = getLineStatus(plannedAmount, actualAmount)
+  const status = getLineStatus(availableAmount, actualAmount)
   const barWidth = linePercent !== null ? Math.min(Math.round(linePercent * 100), 100) : 0
-  const overBudget = actualAmount > plannedAmount
+  const overBudget = actualAmount > availableAmount
   const remainingClassName =
     lineRemaining < 0
       ? 'text-destructive'
@@ -124,7 +134,12 @@ export function BudgetLineRow({
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-start gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{categoryName}</p>
+                  <p className="flex min-w-0 items-center gap-1 text-sm font-semibold">
+                    <span className="truncate">{categoryName}</span>
+                    {rolloverEnabled ? (
+                      <Repeat className="size-3 shrink-0 text-primary" aria-label="Rollover enabled" />
+                    ) : null}
+                  </p>
                   <p className="mt-0.5 text-[10.5px] text-muted-foreground">
                     {txCount} transaction{txCount === 1 ? '' : 's'}
                   </p>
@@ -243,6 +258,12 @@ export function BudgetLineRow({
               <Badge variant={status.variant} className="text-xs">
                 {status.label}
               </Badge>
+              {rolloverEnabled ? (
+                <Badge variant="secondary" className="gap-1 text-xs">
+                  <Repeat className="size-3" aria-hidden="true" />
+                  Rollover
+                </Badge>
+              ) : null}
               {line.category_is_archived ? (
                 <Badge variant="outline" className="text-xs">
                   Archived
@@ -262,6 +283,32 @@ export function BudgetLineRow({
                   {formatCurrency(plannedAmount, budgetCurrency)}
                 </p>
               </div>
+              {rolloverEnabled ? (
+                <>
+                  <div className="rounded-md border bg-background p-2.5">
+                    <p className="text-xs text-muted-foreground">Carryover</p>
+                    <p
+                      className={cn(
+                        'mt-0.5 font-mono text-sm font-medium tabular-nums',
+                        appliedCarryover < 0
+                          ? 'text-destructive'
+                          : appliedCarryover > 0
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-muted-foreground'
+                      )}
+                    >
+                      {appliedCarryover >= 0 ? '+' : '−'}
+                      {formatCurrency(Math.abs(appliedCarryover), budgetCurrency)}
+                    </p>
+                  </div>
+                  <div className="rounded-md border bg-background p-2.5">
+                    <p className="text-xs text-muted-foreground">Available</p>
+                    <p className="mt-0.5 font-mono text-sm font-medium tabular-nums">
+                      {formatCurrency(availableAmount, budgetCurrency)}
+                    </p>
+                  </div>
+                </>
+              ) : null}
               <div className="rounded-md border bg-background p-2.5">
                 <p className="text-xs text-muted-foreground">Spent</p>
                 <p className="mt-0.5 font-mono text-sm font-medium tabular-nums">
@@ -296,6 +343,26 @@ export function BudgetLineRow({
                 >
                   View transactions
                 </Link>
+              ) : null}
+              {line.line_id ? (
+                <form action={setBudgetLineRolloverAction}>
+                  <input type="hidden" name="month" value={selectedMonth} />
+                  <input type="hidden" name="line_id" value={line.line_id} />
+                  <input
+                    type="hidden"
+                    name="rollover_enabled"
+                    value={rolloverEnabled ? 'false' : 'true'}
+                  />
+                  <SubmitButton
+                    type="submit"
+                    variant="outline"
+                    size="sm"
+                    pendingText="Saving..."
+                  >
+                    <Repeat className="size-3.5" aria-hidden="true" />
+                    {rolloverEnabled ? 'Disable rollover' : 'Enable rollover'}
+                  </SubmitButton>
+                </form>
               ) : null}
               <form action={deleteBudgetLineAction}>
                 <input type="hidden" name="month" value={selectedMonth} />

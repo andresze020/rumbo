@@ -169,6 +169,37 @@ export async function deleteBudgetLineAction(formData: FormData) {
   redirect(budgetPath(month, { lineRemoved: '1' }))
 }
 
+// BR-018: opt a budget line into rollover/carryover. A workflow flag on the
+// line — updated directly under RLS (is_household_editor), no ledger impact.
+export async function setBudgetLineRolloverAction(formData: FormData) {
+  const month = normalizeMonth(formData.get('month'))
+  const lineId = String(formData.get('line_id') ?? '').trim()
+  const rolloverEnabled = String(formData.get('rollover_enabled') ?? '') === 'true'
+
+  if (!month) {
+    redirectWithError('Select a valid budget month.', month)
+  }
+
+  if (!lineId) {
+    redirectWithError('Budget line is required.', month)
+  }
+
+  const { supabase, householdId } = await getAuthenticatedHousehold()
+  const { error } = await supabase
+    .from('budget_lines')
+    .update({ rollover_enabled: rolloverEnabled })
+    .eq('id', lineId)
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+
+  if (error) {
+    redirectWithError('Could not update rollover for this line.', month)
+  }
+
+  revalidateBudgetSurfaces()
+  redirect(budgetPath(month, { rolloverUpdated: '1' }))
+}
+
 export async function copyPreviousMonthBudgetAction(formData: FormData) {
   const month = normalizeMonth(formData.get('month'))
 

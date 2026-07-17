@@ -40,15 +40,15 @@ Full detail, "why soon," and acceptance criteria live in
 | BR-007 | Transfers / debts / FX | Cross-currency transfers and debt payments |
 | BR-008 | Transactions | Pagination + server-side filters (list has no pagination today) |
 | BR-010 | Rules / automation | `categorization_rules` designed but not migrated |
-| BR-011 | Review workflow | `review_status` queue/filter (the `review_status` column itself already shipped in Sprint 4) |
+| BR-011 | Review workflow | ✅ Core already shipped (Sprint 4 + PR #17): `review_status` column, filter chips, bulk "Mark reviewed"/categorize, per-row control, dashboard "N to review" pill. Polished on branch `feat/br-011-review-queue-polish` (no migration): activated the "Review queue" nav entry (was locked "coming soon") → `/dashboard/transactions?review=unreviewed`, added bulk **Flag** / **Mark unreviewed**, and an "all caught up" empty state |
 
 ## BR backlog — not started (P2/P3)
 
 | ID | Area | One-line |
 |---|---|---|
 | BR-014 | Recurring | Auto-post scheduler + failure log (depends on BR-002 reliability) |
-| BR-017 | Accounts | Adjust/reconcile balance action without editing history |
-| BR-018 | Budgeting | Budget rollover/carryover |
+| BR-017 | Accounts | ✅ Built on branch `feat/br-017-balance-adjustment` (migration `20260716130000`): `create_balance_adjustment` RPC + "Adjust balance" action on the accounts edit dialog — posts a ledger-safe `adjustment` entry to reconcile the posted balance, no allocation (excluded from reports/budgets), history preserved |
+| BR-018 | Budgeting | ✅ Built on branch `feat/br-018-budget-rollover` (migration `20260716140000`): per-line `rollover_enabled` toggle + `get_budget_line_carryovers` RPC (accumulated planned−actual of prior rollover months). "Available = planned + carryover" folds into line remaining/progress and budget totals when enabled |
 | BR-023 | Tags | `tags` + `transaction_tags` for flexible slicing |
 | BR-024 | CSV import | Saved column-mapping presets + import revert |
 | ~~BR-029~~ ✅ | Transactions filters | **Merged to `main`** (PR #17) — broadened date presets + fixed the Apply-resets regression (BF-024) |
@@ -58,7 +58,7 @@ Full detail, "why soon," and acceptance criteria live in
 | ID / Feature | What shipped | What's still missing | Doc |
 |---|---|---|---|
 | BR-021 | `/dashboard/month-review` recap + (branch `feat/br-021-health-score-close-month`, migration `20260716150000`) a **real** documented health score (`lib/health/score.ts`: savings rate 65% + budget adherence 35%, shared by dashboard + month-review, "Demo" labels removed) and a **light Close month** (`month_closures` marker + snapshot; reopenable; does NOT lock the ledger) | Close month is a soft marker only — no month-locking of transactions (deliberate, per product decision) | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-009 | `payees` table + backfill from `merchant_name` | No CRUD page to maintain payees (rename/merge/archive); no picker on the transaction form to select-existing-or-create-new; nothing writes `payee_id` yet | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-009 | Slice 1 (payee picker) built on branch `feat/br-009-payee-picker` (migration `20260716120000`): the transaction form's Merchant field is now a Payee combobox (search existing / create new) wired through `create_manual_transaction` / `update_manual_transaction` (new `p_payee_name` arg + `get_or_create_payee`) to write `payee_id`; `merchant_name` kept in sync. Also covers the full edit form, inline quick-edit, and the assistant review form. `payees` table + backfill already existed. | No CRUD page to maintain payees (rename/merge/archive) — slice 2; CSV import does not set `payee_id` yet; recurring templates carry no payee | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | BR-015 | Reusable `AlertDialog` now also adopted for account/category archive (previously fired with **zero** confirmation, not "no archive action" as this doc used to say — both actions already existed, just unguarded); toast+Undo added via the existing `ToastProvider` (PR #23, merged to `main`) | No archive action elsewhere in the app to standardize yet (e.g. goals, recurring templates don't have one); void-transaction confirm has no undo | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | BR-025 | ~20 files' duplicated `formatCurrency`/`formatMonthLabel`/label-casing helpers consolidated into `lib/format.ts` imports (PR #22, merged to `main`) | `formatPercent` still duplicated with diverging digit options per file (needs case-by-case verification before centralizing); day-level date formatters have no shared helper yet; `lib/format.ts`'s `LOCALE` is still hardcoded `'en-CA'` regardless of the user's selected app language — dedup makes that a single-point fix later, doesn't implement it | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | BR-028 | PWA manifest `shortcuts` (Quick add / Transactions / Recurring) added; Quick add deep-links via a new `quick_add` URL param the transaction dialog provider recognizes (PR #21, merged to `main`) | No manifest `share_target`; shortcut behavior not yet verified in a real browser/installed PWA | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
