@@ -9,14 +9,18 @@ import {
   Lock,
   Percent,
   PiggyBank,
+  RotateCcw,
   Tags,
   TrendingDown,
 } from 'lucide-react'
+import { closeMonthAction, reopenMonthAction } from './actions'
 import { PageHeader } from '@/components/page-header'
 import { MonthNav } from '@/components/month-nav'
 import { Callout } from '@/components/callout'
 import { InfoTooltip } from '@/components/info-tooltip'
+import { SubmitButton } from '@/components/submit-button'
 import { formatCurrency, formatPercent } from '@/lib/format'
+import { computeHealthScore, healthGrade } from '@/lib/health/score'
 import { cn } from '@/lib/utils'
 import {
   getHousehold,
@@ -31,7 +35,12 @@ import {
 } from '@/lib/analysis/server'
 
 type MonthReviewPageProps = {
-  searchParams: Promise<{ month?: string }>
+  searchParams: Promise<{
+    month?: string
+    closed?: string
+    reopened?: string
+    error?: string
+  }>
 }
 
 const CARD = 'rounded-2xl border bg-card shadow-sm shadow-black/[0.03]'
@@ -187,20 +196,33 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
     if (!error) pendingReview = count ?? 0
   }
 
-  // ── Health score: MOCK / DEMO ONLY. This is an illustrative heuristic, not
-  //    financial advice. Same thresholds/heuristic as the dashboard. ─────────
-  let healthScore = 50
-  if (curr.savingsRate != null) {
-    healthScore += Math.max(-25, Math.min(25, curr.savingsRate * 100))
-  }
-  if (hasBudget) {
-    healthScore +=
-      totalBudgetPercent <= 1 ? (1 - totalBudgetPercent) * 15 : -Math.min(25, (totalBudgetPercent - 1) * 50)
-  }
-  healthScore = Math.max(0, Math.min(100, healthScore))
-  const score = Math.round(healthScore)
-  const healthGrade =
-    score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 70 ? 'B+' : score >= 60 ? 'B' : score >= 50 ? 'C+' : score >= 40 ? 'C' : 'D'
+  // ── Health score (BR-021): a real, documented formula (see lib/health/score).
+  //    Weighted savings rate (65%) + budget adherence (35%). ─────────────────
+  const score = computeHealthScore({
+    savingsRate: curr.savingsRate,
+    hasBudget,
+    budgetPercent: totalBudgetPercent,
+  })
+  const scoreGrade = healthGrade(score)
+
+  // ── BR-021: light "close month" state (marker + snapshot, no ledger lock). ──
+  const monthClosed = params.closed === '1'
+  const monthReopened = params.reopened === '1'
+  const closeError = typeof params.error === 'string' ? params.error : null
+  const { data: closureRow } = await ctx.supabase
+    .from('month_closures')
+    .select('closed_at, note')
+    .eq('household_id', ctx.household.id)
+    .eq('closure_month', `${month}-01`)
+    .maybeSingle()
+  const isClosed = Boolean(closureRow)
+  const closedAtLabel = closureRow?.closed_at
+    ? new Date(closureRow.closed_at).toLocaleDateString('en-CA', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
+    : null
 
   // ── Suggested actions (real data only, max 4). ─────────────────────────────
   type Action = {
@@ -314,43 +336,65 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
         }
       />
 
+      {monthClosed ? (
+        <Callout variant="success">
+          Month closed. It&apos;s recorded with a snapshot — you can still edit transactions or reopen it anytime.
+        </Callout>
+      ) : null}
+      {monthReopened ? <Callout variant="info">Month reopened.</Callout> : null}
+      {closeError ? <Callout variant="error">{closeError}</Callout> : null}
+
       {/* Month status + health */}
       <div className={cn(CARD, 'flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5')}>
         <div className="flex items-center gap-4">
           <div className="flex size-16 shrink-0 items-center justify-center rounded-full border-[3px] border-primary bg-primary/10">
-            <span className="text-xl font-bold text-primary">{healthGrade}</span>
+            <span className="text-xl font-bold text-primary">{scoreGrade}</span>
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-sm font-bold">
               Month health
               <InfoTooltip
-                text="Illustrative demo only — a mock heuristic from your savings rate and budget usage. It is not financial advice."
+                text="Score out of 100 from your savings rate (65%) and, when you have a budget, budget adherence (35%). 100 ≈ saving 20%+ of income while staying within budget. Guidance, not financial advice."
                 label="Month health"
               />
             </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {score}/100 · <span className="font-semibold uppercase tracking-wide">Demo</span>
-            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{score}/100</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {longMonthLabel(month)} · {hasActivity ? 'Activity recorded' : 'No activity yet'}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-            Soon
-          </span>
-          {/* Close-month has no backend yet — visually styled but disabled. */}
-          <button
-            type="button"
-            disabled
-            title="Coming soon"
-            aria-disabled="true"
-            className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground opacity-50 [&_svg]:size-4"
-          >
-            <Lock aria-hidden="true" />
-            Close month
-          </button>
+          {isClosed ? (
+            <>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <CheckCircle2 className="size-3.5" aria-hidden="true" />
+                Closed{closedAtLabel ? ` · ${closedAtLabel}` : ''}
+              </span>
+              <form action={reopenMonthAction}>
+                <input type="hidden" name="month" value={month} />
+                <SubmitButton type="submit" variant="outline" size="sm" pendingText="Reopening…">
+                  <RotateCcw aria-hidden="true" />
+                  Reopen
+                </SubmitButton>
+              </form>
+            </>
+          ) : (
+            <form action={closeMonthAction}>
+              <input type="hidden" name="month" value={month} />
+              <input type="hidden" name="income" value={curr.income} />
+              <input type="hidden" name="expenses" value={curr.expenses} />
+              <input type="hidden" name="savings" value={curr.savings} />
+              <input type="hidden" name="savings_rate" value={curr.savingsRate ?? ''} />
+              <input type="hidden" name="score" value={score} />
+              <input type="hidden" name="grade" value={scoreGrade} />
+              <input type="hidden" name="currency" value={currency} />
+              <SubmitButton type="submit" size="sm" className="gap-2" pendingText="Closing…">
+                <Lock aria-hidden="true" />
+                Close month
+              </SubmitButton>
+            </form>
+          )}
         </div>
       </div>
 
