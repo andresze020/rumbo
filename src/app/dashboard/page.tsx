@@ -36,6 +36,7 @@ import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { formatCurrency, formatMonthLabel, formatTransactionCount } from '@/lib/format'
+import { computeHealthScore, healthGrade as computeHealthGrade } from '@/lib/health/score'
 import { cn } from '@/lib/utils'
 
 const ACCENT = {
@@ -505,16 +506,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     .reduce((s, c) => s + Number(c.amount_base_currency), 0)
   if (otherTotal > 0) donutData.push({ name: t('common.other'), value: otherTotal, categoryId: null })
 
-  // ── Health score: MOCK / DEMO ONLY (marked in UI with a tooltip). ────────
-  let healthScore = 50
-  if (monthlySummary?.savings_rate != null) {
-    healthScore += Math.max(-25, Math.min(25, Number(monthlySummary.savings_rate) * 100))
-  }
-  if (hasBudget) {
-    healthScore +=
-      totalBudgetPercent <= 1 ? (1 - totalBudgetPercent) * 15 : -Math.min(25, (totalBudgetPercent - 1) * 50)
-  }
-  healthScore = Math.max(0, Math.min(100, healthScore))
+  // ── Health score (BR-021): shared real formula (see lib/health/score). ─────
+  const healthScore = computeHealthScore({
+    savingsRate: monthlySummary?.savings_rate != null ? Number(monthlySummary.savings_rate) : null,
+    hasBudget,
+    budgetPercent: totalBudgetPercent,
+  })
 
   // ── Budget top rows. ─────────────────────────────────────────────────────
   const budgetTop = [...budgetLines]
@@ -719,8 +716,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const hasLoadError = accountBalancesError || monthlySummaryError || expenseCategoriesError || categoryLookupError
   const cardClass = 'rounded-2xl border bg-card shadow-sm shadow-black/[0.03]'
-  const score = Math.round(healthScore)
-  const healthGrade = score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 70 ? 'B+' : score >= 60 ? 'B' : score >= 50 ? 'C+' : score >= 40 ? 'C' : 'D'
+  const score = healthScore
+  const healthGrade = computeHealthGrade(score)
 
   return (
     <main className="mx-auto flex w-full max-w-[1340px] flex-col gap-4 p-4 sm:p-6">
@@ -805,9 +802,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 {t('dashboard.monthHealth')}
                 <InfoTooltip text={t('dashboard.healthScoreTooltip')} label={t('dashboard.monthHealth')} />
               </div>
-              <p className="text-xs text-muted-foreground">
-                {score}/100 · <span className="font-medium uppercase tracking-wide">{t('dashboard.healthScoreDemo')}</span>
-              </p>
+              <p className="text-xs text-muted-foreground">{score}/100</p>
             </div>
           </div>
 

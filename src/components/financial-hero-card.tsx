@@ -13,9 +13,9 @@ type FinancialHeroCardProps = {
   /** Net-worth values for the last N months, oldest→newest, for the sparkline. */
   spark: number[]
   /**
-   * MOCK / DEMO ONLY. Illustrative composite from savings rate + budget usage.
-   * NOT a validated metric and NOT financial advice — always rendered with the
-   * "Demo" tooltip. No real health metric exists yet (Sprint 3 brief).
+   * BR-021 month-health score (0–100). Real, documented formula in
+   * lib/health/score.ts (weighted savings rate + budget adherence). Guidance,
+   * not financial advice — explained via the health tooltip.
    */
   healthScore: number
   labels: {
@@ -29,7 +29,7 @@ type FinancialHeroCardProps = {
   }
 }
 
-/** Demo letter grade for the mock health score. */
+/** Letter grade for the month-health score (matches lib/health/score). */
 function healthGrade(score: number) {
   if (score >= 90) return 'A+'
   if (score >= 80) return 'A'
@@ -185,7 +185,7 @@ export function FinancialHeroCard({
           </p>
         </div>
 
-        {/* Demo health score */}
+        {/* Month-health score (BR-021) */}
         <div className="border-l pl-5 text-center">
           <div className="mb-1.5 flex items-center justify-center gap-1 text-[11px] text-muted-foreground">
             {labels.monthHealth}

@@ -130,7 +130,7 @@ export const en = {
     healthScore: 'Health score',
     healthScoreDemo: 'Demo',
     healthScoreTooltip:
-      'Illustrative demo score based on your savings rate and budget usage. It is not financial advice and not a validated metric.',
+      'Score out of 100 from your savings rate (65%) and, when you have a budget, budget adherence (35%). Guidance, not financial advice.',
     insightsTitle: 'Insights',
     insightsDescription: 'Derived from your real data.',
     insightsLive: 'Live',
@@ -504,7 +504,7 @@ export const es: DeepStringify<typeof en> = {
     healthScore: 'Salud financiera',
     healthScoreDemo: 'Demo',
     healthScoreTooltip:
-      'Puntaje de demostración ilustrativo basado en tu tasa de ahorro y uso del presupuesto. No es asesoría financiera ni una métrica validada.',
+      'Puntaje sobre 100 a partir de tu tasa de ahorro (65%) y, si tienes presupuesto, la adherencia al presupuesto (35%). Es una guía, no asesoría financiera.',
     insightsTitle: 'Perspectivas',
     insightsDescription: 'Derivados de tus datos reales.',
     insightsLive: 'En vivo',
@@ -878,7 +878,7 @@ export const fr: DeepStringify<typeof en> = {
     healthScore: 'Santé financière',
     healthScoreDemo: 'Démo',
     healthScoreTooltip:
-      'Score de démonstration illustratif basé sur votre taux d’épargne et l’utilisation du budget. Ce n’est pas un conseil financier ni une mesure validée.',
+      'Score sur 100 basé sur votre taux d’épargne (65%) et, si vous avez un budget, le respect du budget (35%). À titre indicatif, pas un conseil financier.',
     insightsTitle: 'Perspectives',
     insightsDescription: 'Dérivées de vos données réelles.',
     insightsLive: 'En direct',
