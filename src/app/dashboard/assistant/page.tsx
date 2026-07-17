@@ -49,6 +49,12 @@ export default async function AssistantPage({ searchParams }: AssistantPageProps
     .eq('is_archived', false)
     .order('name', { ascending: true })
 
+  const { data: payeeRows } = await supabase
+    .from('payees')
+    .select('id, name')
+    .eq('household_id', household.id)
+    .order('name', { ascending: true })
+
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 sm:p-6">
       <PageHeader
@@ -63,6 +69,7 @@ export default async function AssistantPage({ searchParams }: AssistantPageProps
         baseCurrency={household.base_currency}
         accounts={accountRows ?? []}
         categories={categoryRows ?? []}
+        payees={payeeRows ?? []}
       />
     </main>
   )

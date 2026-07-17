@@ -21,6 +21,7 @@ type AssistantContext = {
   baseCurrency: string
   accounts: TransactionFormAccount[]
   categories: TransactionFormCategory[]
+  payees: { id: string; name: string }[]
 }
 
 export function AssistantDrawer() {
@@ -70,6 +71,7 @@ export function AssistantDrawer() {
                 baseCurrency={context.baseCurrency}
                 accounts={context.accounts}
                 categories={context.categories}
+                payees={context.payees}
                 returnTo={pathname}
               />
             )}

@@ -14,6 +14,7 @@ import {
   createTransferTransactionAction,
 } from './actions'
 import { CategoryPicker } from './category-picker'
+import { PayeePicker, type PayeeOption } from './payee-picker'
 import { AdvancedFields } from '@/components/advanced-fields'
 import { AmountInput } from '@/components/amount-input'
 import { DateField, SegmentedField, SelectField } from '@/components/form-field'
@@ -57,6 +58,7 @@ type TransactionFormProps = {
   cancelHref?: string
   onCancel?: () => void
   categories: TransactionFormCategory[]
+  payees: PayeeOption[]
   defaultDate: string
   defaultAccountId?: string
   defaultType?: TransactionType
@@ -96,6 +98,7 @@ export function TransactionForm({
   cancelHref,
   onCancel,
   categories,
+  payees,
   defaultDate,
   defaultAccountId,
   defaultType,
@@ -581,14 +584,13 @@ export function TransactionForm({
       </div>
 
       {!isTransfer ? (
-        <div className="space-y-1.5">
-          <Label htmlFor="merchant_name">{t('transactionForm.merchant')}</Label>
-          <Input
-            id="merchant_name"
-            name="merchant_name"
-            defaultValue={defaultMerchantName}
-          />
-        </div>
+        <PayeePicker
+          payees={payees}
+          defaultValue={defaultMerchantName}
+          label={t('transactionForm.payee')}
+          helpText={t('transactionForm.payeeHelp')}
+          inputId="payee_name"
+        />
       ) : null}
 
       <div className="space-y-1.5">
