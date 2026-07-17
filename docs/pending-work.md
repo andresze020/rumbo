@@ -48,7 +48,7 @@ Full detail, "why soon," and acceptance criteria live in
 |---|---|---|
 | BR-014 | Recurring | Auto-post scheduler + failure log (depends on BR-002 reliability) |
 | BR-017 | Accounts | ✅ Built on branch `feat/br-017-balance-adjustment` (migration `20260716130000`): `create_balance_adjustment` RPC + "Adjust balance" action on the accounts edit dialog — posts a ledger-safe `adjustment` entry to reconcile the posted balance, no allocation (excluded from reports/budgets), history preserved |
-| BR-018 | Budgeting | Budget rollover/carryover |
+| BR-018 | Budgeting | ✅ Built on branch `feat/br-018-budget-rollover` (migration `20260716140000`): per-line `rollover_enabled` toggle + `get_budget_line_carryovers` RPC (accumulated planned−actual of prior rollover months). "Available = planned + carryover" folds into line remaining/progress and budget totals when enabled |
 | BR-023 | Tags | `tags` + `transaction_tags` for flexible slicing |
 | BR-024 | CSV import | Saved column-mapping presets + import revert |
 | ~~BR-029~~ ✅ | Transactions filters | **Merged to `main`** (PR #17) — broadened date presets + fixed the Apply-resets regression (BF-024) |
