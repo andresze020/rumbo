@@ -1,26 +1,28 @@
 import { redirect } from 'next/navigation'
-import { createHouseholdAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
-import { getActiveCurrencies } from '@/lib/currencies'
+import { WelcomeButton } from './welcome-button'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { SubmitButton } from '@/components/submit-button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 
-export default async function OnboardingPage() {
+const benefits = [
+  {
+    icon: '💰',
+    text: 'Know your real balance across all your accounts',
+  },
+  {
+    icon: '📊',
+    text: 'See exactly where your money goes each month',
+  },
+  {
+    icon: '🎯',
+    text: 'Plan ahead with budgets and savings goals',
+  },
+]
+
+export default async function OnboardingWelcomePage() {
   const supabase = await createClient()
 
   const {
@@ -38,60 +40,40 @@ export default async function OnboardingPage() {
     .maybeSingle()
 
   if (profile?.default_household_id) {
-    redirect('/dashboard')
-  }
+    const { count: accountCount } = await supabase
+      .from('accounts')
+      .select('id', { count: 'exact', head: true })
+      .eq('household_id', profile.default_household_id)
+      .is('deleted_at', null)
 
-  const currencies = await getActiveCurrencies()
-  const defaultCurrency =
-    currencies.find((currency) => currency.code === 'CAD')?.code ??
-    currencies[0]?.code
+    if ((accountCount ?? 0) > 0) {
+      redirect('/dashboard')
+    }
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/8 via-background to-background p-4 sm:p-6">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Create your household</CardTitle>
-          <CardDescription>
-            Set up your household name and base currency to get started.
-          </CardDescription>
+        <CardHeader className="text-center">
+          <h1 className="text-3xl font-bold tracking-tight">App Finanzas</h1>
+          <p className="text-muted-foreground">
+            Track your money. Understand where it goes.
+          </p>
         </CardHeader>
 
-        <CardContent>
-          <form action={createHouseholdAction} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Household name</Label>
-              <Input
-                id="name"
-                name="name"
-                placeholder="My Household"
-                required
-              />
-            </div>
+        <CardContent className="space-y-6">
+          <ul className="space-y-4">
+            {benefits.map((benefit) => (
+              <li key={benefit.text} className="flex items-start gap-3">
+                <span className="text-xl leading-none" aria-hidden="true">
+                  {benefit.icon}
+                </span>
+                <span className="text-sm leading-relaxed">{benefit.text}</span>
+              </li>
+            ))}
+          </ul>
 
-            <div className="space-y-2">
-              <Label htmlFor="baseCurrency">Base currency</Label>
-              <Select name="baseCurrency" defaultValue={defaultCurrency}>
-                <SelectTrigger id="baseCurrency" className="w-full">
-                  <SelectValue placeholder="Select currency" />
-                </SelectTrigger>
-                <SelectContent>
-                  {currencies.map((currency) => (
-                    <SelectItem key={currency.code} value={currency.code}>
-                      {currency.code} — {currency.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <SubmitButton
-              type="submit"
-              className="h-11 w-full rounded-xl"
-              pendingText="Creating household"
-            >
-              Create household
-            </SubmitButton>
-          </form>
+          <WelcomeButton />
         </CardContent>
       </Card>
     </main>

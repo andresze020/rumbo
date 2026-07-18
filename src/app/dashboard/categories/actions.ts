@@ -109,6 +109,7 @@ function revalidateCategorySurfaces() {
   revalidatePath('/dashboard/categories')
   revalidatePath('/dashboard/transactions')
   revalidatePath('/dashboard')
+  revalidatePath('/onboarding/categories')
 }
 
 function wouldCreateParentLoop(
@@ -195,6 +196,14 @@ function validateParentCategory({
 }
 
 export async function createCategoryAction(formData: FormData) {
+  // The onboarding wizard reuses this action; `return_to=onboarding` keeps
+  // success/error redirects inside the wizard instead of /dashboard/categories.
+  const fromOnboarding = String(formData.get('return_to') ?? '') === 'onboarding'
+  const fail: (message: string) => never = (message) =>
+    fromOnboarding
+      ? redirect(`/onboarding/categories?error=${encodeURIComponent(message)}`)
+      : redirectWithError(message)
+
   const name = String(formData.get('name') ?? '').trim()
   const categoryType = String(formData.get('category_type') ?? '').trim()
   const reportingType = String(formData.get('reporting_type') ?? '').trim()
@@ -209,25 +218,23 @@ export async function createCategoryAction(formData: FormData) {
   const sortOrder = parseNullableInteger(formData.get('sort_order'))
 
   if (!name) {
-    redirectWithError('Category name is required.')
+    fail('Category name is required.')
   }
 
   if (!isCategoryType(categoryType)) {
-    redirectWithError('Select a valid category type.')
+    fail('Select a valid category type.')
   }
 
   if (!isReportingType(reportingType)) {
-    redirectWithError('Select a valid reporting type.')
+    fail('Select a valid reporting type.')
   }
 
   if (!isCompatibleReportingType(categoryType, reportingType)) {
-    redirectWithError(
-      'The reporting type is not compatible with the category type.'
-    )
+    fail('The reporting type is not compatible with the category type.')
   }
 
   if (sortOrder === undefined) {
-    redirectWithError('Sort order must be a whole number.')
+    fail('Sort order must be a whole number.')
   }
 
   const { supabase, userId, householdId } = await getAuthenticatedHousehold()
@@ -242,7 +249,7 @@ export async function createCategoryAction(formData: FormData) {
       .is('deleted_at', null)
 
   if (householdCategoriesError) {
-    redirectWithError('Could not validate the category hierarchy.')
+    fail('Could not validate the category hierarchy.')
   }
 
   validateParentCategory({
@@ -267,13 +274,15 @@ export async function createCategoryAction(formData: FormData) {
   })
 
   if (insertError) {
-    redirectWithError(
-      'Could not create the category. Please check the form and try again.'
-    )
+    fail('Could not create the category. Please check the form and try again.')
   }
 
   revalidateCategorySurfaces()
-  redirect('/dashboard/categories?created=1')
+  redirect(
+    fromOnboarding
+      ? '/onboarding/categories?created=1'
+      : '/dashboard/categories?created=1'
+  )
 }
 
 export async function updateCategoryAction(formData: FormData) {
@@ -468,12 +477,19 @@ export async function reorderCategoriesAction(orderedIds: string[]) {
 }
 
 export async function archiveCategoryAction(formData: FormData) {
+  // Also reused by the onboarding wizard — see createCategoryAction.
+  const fromOnboarding = String(formData.get('return_to') ?? '') === 'onboarding'
+  const fail: (message: string) => never = (message) =>
+    fromOnboarding
+      ? redirect(`/onboarding/categories?error=${encodeURIComponent(message)}`)
+      : redirectWithError(message)
+
   const categoryId = String(formData.get('category_id') ?? '').trim()
   const isArchived = String(formData.get('is_archived') ?? '') === 'true'
   const showArchived = String(formData.get('show_archived') ?? '') === 'true'
 
   if (!categoryId) {
-    redirectWithError('Category is required.')
+    fail('Category is required.')
   }
 
   const { supabase, userId, householdId } = await getAuthenticatedHousehold()
@@ -487,7 +503,7 @@ export async function archiveCategoryAction(formData: FormData) {
     .maybeSingle()
 
   if (categoryError || !category) {
-    redirectWithError('Category was not found for this household.')
+    fail('Category was not found for this household.')
   }
 
   const { error: updateError } = await supabase
@@ -501,7 +517,7 @@ export async function archiveCategoryAction(formData: FormData) {
     .is('deleted_at', null)
 
   if (updateError) {
-    redirectWithError(
+    fail(
       isArchived
         ? 'Could not archive the category.'
         : 'Could not unarchive the category.'
@@ -509,6 +525,10 @@ export async function archiveCategoryAction(formData: FormData) {
   }
 
   revalidateCategorySurfaces()
+
+  if (fromOnboarding) {
+    redirect('/onboarding/categories')
+  }
 
   const redirectParams = new URLSearchParams()
   if (showArchived) redirectParams.set('showArchived', 'true')
