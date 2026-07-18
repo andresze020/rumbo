@@ -2,17 +2,30 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { Plus } from 'lucide-react'
 import { createAccountAction } from '@/app/dashboard/accounts/actions'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsiblePanel,
+} from '@/components/ui/collapsible'
 import { nativeSelectCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
 
 type Currency = {
   code: string
   name: string
+}
+
+export type OnboardingAccount = {
+  id: string
+  name: string
+  account_type: string
+  currency_code: string
 }
 
 const typeTiles = [
@@ -42,6 +55,16 @@ const typeTiles = [
   },
 ] as const
 
+const typeIconByValue: Record<string, string> = {
+  checking: '🏦',
+  savings: '🏦',
+  credit_card: '💳',
+  cash: '💵',
+  investment: '📈',
+  debt: '💳',
+  other: '🏷️',
+}
+
 const accountTypeOptions = [
   { value: 'cash', label: 'Cash' },
   { value: 'checking', label: 'Checking' },
@@ -52,17 +75,19 @@ const accountTypeOptions = [
   { value: 'other', label: 'Other' },
 ]
 
-export function AccountStepForm({
+function NewAccountFields({
   currencies,
   defaultCurrency,
+  accountType,
+  setAccountType,
 }: {
   currencies: Currency[]
   defaultCurrency: string
+  accountType: string
+  setAccountType: (value: string) => void
 }) {
-  const [accountType, setAccountType] = useState('checking')
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {typeTiles.map((tile) => (
           <button
@@ -139,25 +164,87 @@ export function AccountStepForm({
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 pt-1">
-          <SubmitButton
-            type="submit"
-            className="h-11 w-full rounded-xl"
-            pendingText="Saving account"
-          >
-            Save account →
-          </SubmitButton>
-          <Link
-            href="/onboarding/categories"
-            className={cn(
-              buttonVariants({ variant: 'ghost' }),
-              'h-11 w-full rounded-xl'
-            )}
-          >
-            Skip for now →
-          </Link>
-        </div>
+        <SubmitButton
+          type="submit"
+          className="h-11 w-full rounded-xl"
+          pendingText="Saving account"
+        >
+          Save account →
+        </SubmitButton>
       </form>
+    </div>
+  )
+}
+
+export function AccountStepForm({
+  existingAccounts,
+  currencies,
+  defaultCurrency,
+}: {
+  existingAccounts: OnboardingAccount[]
+  currencies: Currency[]
+  defaultCurrency: string
+}) {
+  const [accountType, setAccountType] = useState('checking')
+  const hasAccounts = existingAccounts.length > 0
+
+  return (
+    <div className="space-y-5">
+      {hasAccounts ? (
+        <ul className="divide-y rounded-xl border">
+          {existingAccounts.map((account) => (
+            <li
+              key={account.id}
+              className="flex items-center gap-3 px-3 py-2.5"
+            >
+              <span className="text-lg leading-none" aria-hidden="true">
+                {typeIconByValue[account.account_type] ?? '🏷️'}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                {account.name}
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {account.currency_code}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {hasAccounts ? (
+        <Collapsible>
+          <CollapsibleTrigger className="px-0">
+            <Plus className="size-3.5" aria-hidden="true" />
+            Add another account
+          </CollapsibleTrigger>
+          <CollapsiblePanel>
+            <div className="pt-3">
+              <NewAccountFields
+                currencies={currencies}
+                defaultCurrency={defaultCurrency}
+                accountType={accountType}
+                setAccountType={setAccountType}
+              />
+            </div>
+          </CollapsiblePanel>
+        </Collapsible>
+      ) : (
+        <NewAccountFields
+          currencies={currencies}
+          defaultCurrency={defaultCurrency}
+          accountType={accountType}
+          setAccountType={setAccountType}
+        />
+      )}
+
+      <div className="flex flex-col gap-2 border-t pt-4">
+        <Link
+          href="/onboarding/categories"
+          className={cn(buttonVariants(), 'h-11 w-full rounded-xl')}
+        >
+          {hasAccounts ? 'Continue →' : 'Skip for now →'}
+        </Link>
+      </div>
     </div>
   )
 }

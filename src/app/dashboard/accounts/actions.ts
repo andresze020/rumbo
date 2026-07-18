@@ -158,7 +158,7 @@ export async function createAccountAction(formData: FormData) {
   }
 
   revalidatePath('/dashboard/accounts')
-  redirect(fromOnboarding ? '/onboarding/categories' : '/dashboard/accounts?created=1')
+  redirect(fromOnboarding ? '/onboarding/account?created=1' : '/dashboard/accounts?created=1')
 }
 
 export async function updateAccountAction(formData: FormData) {

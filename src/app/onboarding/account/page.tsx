@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { StepIndicator } from '../step-indicator'
-import { AccountStepForm } from './account-step-form'
+import { AccountStepForm, type OnboardingAccount } from './account-step-form'
 import { createClient } from '@/lib/supabase/server'
 import { getActiveCurrencies } from '@/lib/currencies'
 import {
@@ -13,7 +13,7 @@ import {
 import { Callout } from '@/components/callout'
 
 type OnboardingAccountPageProps = {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; created?: string }>
 }
 
 export default async function OnboardingAccountPage({
@@ -21,6 +21,7 @@ export default async function OnboardingAccountPage({
 }: OnboardingAccountPageProps) {
   const params = await searchParams
   const errorMessage = typeof params.error === 'string' ? params.error : null
+  const created = params.created === '1'
 
   const supabase = await createClient()
 
@@ -42,21 +43,20 @@ export default async function OnboardingAccountPage({
     redirect('/onboarding/household')
   }
 
-  const { count: accountCount } = await supabase
-    .from('accounts')
-    .select('id', { count: 'exact', head: true })
-    .eq('household_id', profile.default_household_id)
-    .is('deleted_at', null)
-
-  if ((accountCount ?? 0) > 0) {
-    redirect('/onboarding/categories')
-  }
-
   const { data: household } = await supabase
     .from('households')
     .select('base_currency')
     .eq('id', profile.default_household_id)
     .single()
+
+  const { data: accounts } = await supabase
+    .from('accounts')
+    .select('id, name, account_type, currency_code')
+    .eq('household_id', profile.default_household_id)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+
+  const existingAccounts = (accounts ?? []) as OnboardingAccount[]
 
   const currencies = await getActiveCurrencies()
   const defaultCurrency =
@@ -70,16 +70,19 @@ export default async function OnboardingAccountPage({
       <Card className="w-full max-w-lg">
         <CardHeader className="space-y-2">
           <StepIndicator step={3} />
-          <CardTitle>Your first account</CardTitle>
+          <CardTitle>Your accounts</CardTitle>
           <CardDescription>
-            An account is a place where your money lives. Pick the type that
-            matches, give it a name, and you&apos;re done.
+            An account is a place where your money lives. Add as many as you
+            need — a checking account, a credit card, cash. You can always add
+            more later.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
           {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
+          {created ? <Callout variant="success">Account added.</Callout> : null}
           <AccountStepForm
+            existingAccounts={existingAccounts}
             currencies={currencies}
             defaultCurrency={defaultCurrency}
           />
