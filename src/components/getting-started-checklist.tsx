@@ -13,20 +13,27 @@ const HIDE_KEY = 'af_hide_getting_started'
 
 function ChecklistStep({
   done,
+  hint,
   children,
 }: {
   done: boolean
+  hint?: string
   children: React.ReactNode
 }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-start gap-3">
       {done ? (
-        <Check className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+        <Check className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
       ) : (
-        <Circle className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       )}
-      <span className={cn('text-sm', done && 'text-muted-foreground line-through')}>
-        {children}
+      <span className="min-w-0 space-y-0.5">
+        <span className={cn('block text-sm', done && 'text-muted-foreground line-through')}>
+          {children}
+        </span>
+        {!done && hint ? (
+          <span className="block text-xs text-muted-foreground">{hint}</span>
+        ) : null}
       </span>
     </div>
   )
@@ -43,6 +50,9 @@ export function GettingStartedChecklist({
 }) {
   const { t } = useLanguage()
   const allDone = hasAccounts && hasTransactions && hasBudget
+  const completedCount = [hasAccounts, hasTransactions, hasBudget].filter(
+    Boolean
+  ).length
   const [dismissed, setDismissed] = useState(true)
 
   useEffect(() => {
@@ -63,14 +73,18 @@ export function GettingStartedChecklist({
     <Card>
       <CardHeader>
         <CardTitle>{t('gettingStarted.title')}</CardTitle>
-        <CardDescription>{t('gettingStarted.description')}</CardDescription>
+        <CardDescription>
+          {t('gettingStarted.progress', { done: completedCount, total: 3 })}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {hasAccounts ? (
           <ChecklistStep done>{t('gettingStarted.addAccount')}</ChecklistStep>
         ) : (
           <Link href="/dashboard/accounts?mode=create" className="block">
-            <ChecklistStep done={false}>{t('gettingStarted.addAccount')}</ChecklistStep>
+            <ChecklistStep done={false} hint={t('gettingStarted.addAccountHint')}>
+              {t('gettingStarted.addAccount')}
+            </ChecklistStep>
           </Link>
         )}
 
@@ -78,7 +92,9 @@ export function GettingStartedChecklist({
           <ChecklistStep done>{t('gettingStarted.addTransaction')}</ChecklistStep>
         ) : (
           <GlobalAddTransactionButton className="block w-full text-left">
-            <ChecklistStep done={false}>{t('gettingStarted.addTransaction')}</ChecklistStep>
+            <ChecklistStep done={false} hint={t('gettingStarted.addTransactionHint')}>
+              {t('gettingStarted.addTransaction')}
+            </ChecklistStep>
           </GlobalAddTransactionButton>
         )}
 
@@ -86,7 +102,9 @@ export function GettingStartedChecklist({
           <ChecklistStep done>{t('gettingStarted.setBudget')}</ChecklistStep>
         ) : (
           <Link href="/dashboard/budgets" className="block">
-            <ChecklistStep done={false}>{t('gettingStarted.setBudget')}</ChecklistStep>
+            <ChecklistStep done={false} hint={t('gettingStarted.setBudgetHint')}>
+              {t('gettingStarted.setBudget')}
+            </ChecklistStep>
           </Link>
         )}
 

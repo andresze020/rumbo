@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import type { LucideIcon } from 'lucide-react'
 import { ChevronLeft, ChevronRight, LogOut, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { SubmitButton } from '@/components/submit-button'
 import { PhaseBadge } from '@/components/phase-badge'
@@ -21,14 +22,16 @@ type SidebarLinkProps = {
   collapsed: boolean
   phase: Phase
   phaseLabel?: string
+  hint?: string
 }
 
-function SidebarLink({ href, label, icon: Icon, active, collapsed, phase, phaseLabel }: SidebarLinkProps) {
-  return (
+function SidebarLink({ href, label, icon: Icon, active, collapsed, phase, phaseLabel, hint }: SidebarLinkProps) {
+  const showTooltip = collapsed && Boolean(hint)
+  const link = (
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
-      title={collapsed ? label : undefined}
+      title={collapsed && !showTooltip ? label : undefined}
       className={cn(
         'flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition-colors',
         active
@@ -44,6 +47,20 @@ function SidebarLink({ href, label, icon: Icon, active, collapsed, phase, phaseL
         </>
       )}
     </Link>
+  )
+
+  if (!showTooltip) {
+    return link
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={link} />
+      <TooltipContent side="right" className="space-y-0.5">
+        <p className="font-semibold">{label}</p>
+        <p className="text-muted-foreground">{hint}</p>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -128,6 +145,7 @@ export function AppSidebar({ className }: { className?: string }) {
                 collapsed={collapsed}
                 phase={item.phase}
                 phaseLabel={item.phase === 'alpha' ? undefined : t(PHASE_LABEL_KEY[item.phase])}
+                hint={item.hint}
               />
             ))}
           </div>

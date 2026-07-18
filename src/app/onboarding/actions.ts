@@ -94,5 +94,5 @@ export async function createHouseholdAction(formData: FormData) {
     throw new Error('Could not finish household setup. Please try again.')
   }
 
-  redirect('/dashboard')
+  redirect('/onboarding/account')
 }
