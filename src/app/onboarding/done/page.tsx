@@ -1,6 +1,13 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { CheckCircle2 } from 'lucide-react'
+import {
+  ArrowLeftRight,
+  CheckCircle2,
+  ChevronRight,
+  Target,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react'
 import { StepIndicator } from '../step-indicator'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -12,10 +19,39 @@ import {
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-const nextSteps = [
-  'Record your first transaction using the ＋ button on the dashboard',
-  'Set up a monthly budget to track spending by category',
-  'Check your Net Worth to see your overall financial picture',
+const addAccountStep = {
+  href: '/dashboard/accounts?mode=create',
+  icon: Wallet,
+  accent: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
+  title: 'Add your first account',
+  description:
+    'You skipped this earlier — add a bank account, card, or cash wallet so you can start tracking.',
+}
+
+const recordTransactionStep = {
+  href: '/dashboard/transactions',
+  icon: ArrowLeftRight,
+  accent: 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400',
+  title: 'Record your first transaction',
+  description:
+    'Log what you spend or receive with the ＋ button — this is where your day-to-day money lives.',
+}
+
+const planningSteps = [
+  {
+    href: '/dashboard/budgets',
+    icon: Target,
+    accent: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
+    title: 'Set up a monthly budget',
+    description: 'Give each category a spending limit and track how close you are.',
+  },
+  {
+    href: '/dashboard/net-worth',
+    icon: TrendingUp,
+    accent: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+    title: 'Check your Net Worth',
+    description: 'See everything you own minus what you owe, all in one place.',
+  },
 ]
 
 export default async function OnboardingDonePage() {
@@ -67,6 +103,13 @@ export default async function OnboardingDonePage() {
     { label: 'Active categories', value: String(categoryCount ?? 0) },
   ]
 
+  // If the user skipped account creation, lead with that — recording a
+  // transaction is impossible without an account.
+  const nextSteps =
+    (accountCount ?? 0) > 0
+      ? [recordTransactionStep, ...planningSteps]
+      : [addAccountStep, ...planningSteps]
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/8 via-background to-background p-4 sm:p-6">
       <Card className="w-full max-w-md">
@@ -75,6 +118,10 @@ export default async function OnboardingDonePage() {
           <div className="flex flex-col items-center gap-3 pt-2 text-center">
             <CheckCircle2 className="size-16 text-emerald-500" aria-hidden="true" />
             <CardTitle className="text-2xl">You&apos;re all set!</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Your household is ready. Here&apos;s what you set up — and where to
+              go next.
+            </p>
           </div>
         </CardHeader>
 
@@ -93,17 +140,37 @@ export default async function OnboardingDonePage() {
 
           <div className="space-y-2">
             <p className="text-sm font-semibold">What&apos;s next</p>
-            <ul className="space-y-1.5">
+            <div className="space-y-2">
               {nextSteps.map((step) => (
-                <li
-                  key={step}
-                  className="flex items-start gap-2 text-sm text-muted-foreground"
+                <Link
+                  key={step.href}
+                  href={step.href}
+                  className="flex items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/50"
                 >
-                  <span className="mt-1.5 size-1 shrink-0 rounded-full bg-muted-foreground/60" aria-hidden="true" />
-                  {step}
-                </li>
+                  <span
+                    className={cn(
+                      'flex size-9 shrink-0 items-center justify-center rounded-lg [&_svg]:size-4',
+                      step.accent
+                    )}
+                    aria-hidden="true"
+                  >
+                    <step.icon />
+                  </span>
+                  <span className="min-w-0 flex-1 space-y-0.5">
+                    <span className="block text-sm font-semibold">
+                      {step.title}
+                    </span>
+                    <span className="block text-xs leading-snug text-muted-foreground">
+                      {step.description}
+                    </span>
+                  </span>
+                  <ChevronRight
+                    className="size-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </Link>
               ))}
-            </ul>
+            </div>
           </div>
 
           <Link
@@ -112,6 +179,11 @@ export default async function OnboardingDonePage() {
           >
             Go to my dashboard →
           </Link>
+
+          <p className="text-center text-xs text-muted-foreground">
+            You can always come back to these from the sidebar. The dashboard is
+            your home base.
+          </p>
         </CardContent>
       </Card>
     </main>
