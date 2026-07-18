@@ -14,6 +14,7 @@ import {
   Tag,
   X,
 } from 'lucide-react'
+import { PayeePicker, type PayeeOption } from './payee-picker'
 import {
   bulkCategorizeAction,
   updateManualTransactionAction,
@@ -25,7 +26,6 @@ import { AmountInput } from '@/components/amount-input'
 import { SubmitButton } from '@/components/submit-button'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { StatusBadge } from '@/components/status-badge'
 import { cn } from '@/lib/utils'
 
@@ -165,7 +165,12 @@ export function TransactionList({
         .sort((a, b) => a.label.localeCompare(b.label)),
     [categories, categoriesById]
   )
-  const payeeListId = 'payee-suggestions'
+  // Unique payee names → options for the inline quick-edit combobox. (Names are
+  // unique per household, so the name doubles as a stable key.)
+  const payeeOptions: PayeeOption[] = payeeSuggestions.map((name) => ({
+    id: name,
+    name,
+  }))
 
   function toggleRow(id: string) {
     setSelected((prev) => {
@@ -184,12 +189,6 @@ export function TransactionList({
 
   return (
     <div className="space-y-2">
-      <datalist id={payeeListId}>
-        {payeeSuggestions.map((name) => (
-          <option key={name} value={name} />
-        ))}
-      </datalist>
-
       {/* ── Bulk action bar ───────────────────────────────────────────── */}
       {selectedIds.length > 0 ? (
         <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border bg-primary px-3 py-2 text-primary-foreground shadow-sm">
@@ -321,7 +320,7 @@ export function TransactionList({
                     key={row.id}
                     row={row}
                     categories={categories}
-                    payeeListId={payeeListId}
+                    payees={payeeOptions}
                     returnTo={returnTo}
                     onCancel={() => setEditingId(null)}
                   />
@@ -509,13 +508,13 @@ function DisplayRow({
 function InlineEditRow({
   row,
   categories,
-  payeeListId,
+  payees,
   returnTo,
   onCancel,
 }: {
   row: TransactionListRow
   categories: TransactionListCategory[]
-  payeeListId: string
+  payees: PayeeOption[]
   returnTo: string
   onCancel: () => void
 }) {
@@ -535,20 +534,13 @@ function InlineEditRow({
         <input type="hidden" name="notes" value={row.notes ?? ''} />
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="space-y-1 sm:col-span-1">
-            <label
-              htmlFor={`inline_payee_${row.id}`}
-              className="text-xs text-muted-foreground"
-            >
-              {row.transactionType === 'income' ? 'Payer' : 'Payee'}
-            </label>
-            <Input
-              id={`inline_payee_${row.id}`}
-              name="payee_name"
-              list={payeeListId}
+          <div className="sm:col-span-1">
+            <PayeePicker
+              payees={payees}
               defaultValue={row.merchantName ?? ''}
-              placeholder={row.transactionType === 'income' ? 'Payer' : 'Payee'}
-              autoComplete="off"
+              label={row.transactionType === 'income' ? 'Payer' : 'Payee'}
+              labelClassName="text-xs font-normal text-muted-foreground"
+              inputId={`inline_payee_${row.id}`}
             />
           </div>
 

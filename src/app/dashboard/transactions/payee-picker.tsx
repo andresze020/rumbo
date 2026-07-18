@@ -19,6 +19,8 @@ type PayeePickerProps = {
   helpText?: string
   /** Optional explicit id (defaults to a generated one). */
   inputId?: string
+  /** Override the label styling (e.g. the compact inline quick-edit). */
+  labelClassName?: string
 }
 
 /** Cap the rendered list so a large household doesn't paint hundreds of rows. */
@@ -46,6 +48,7 @@ export function PayeePicker({
   label,
   helpText,
   inputId,
+  labelClassName,
 }: PayeePickerProps) {
   const generatedId = useId()
   const id = inputId ?? `payee_${generatedId}`
@@ -80,7 +83,7 @@ export function PayeePicker({
       itemToStringValue={(item: ListItem) => item.name}
     >
       <div className="space-y-1.5">
-        <Label htmlFor={id}>{label}</Label>
+        <Label htmlFor={id} className={labelClassName}>{label}</Label>
         <div className="relative">
           <span
             aria-hidden="true"
