@@ -50,6 +50,40 @@ function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
 }
 
+/**
+ * On mobile the dialog is a bottom-anchored sheet, so when the soft keyboard
+ * opens it covers the sheet's footer (Create / Save & Add Next / Cancel). The
+ * layout viewport doesn't shrink on iOS, so we measure the keyboard overlap via
+ * the VisualViewport API and lift the sheet above it. Returns 0 on desktop (no
+ * soft keyboard) and on narrow-viewport-only, so the centered desktop dialog is
+ * never affected.
+ */
+function useMobileKeyboardInset() {
+  const [inset, setInset] = useState(0)
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const update = () => {
+      const isMobile = window.matchMedia('(max-width: 639px)').matches
+      // Overlap between the layout viewport bottom and the visual viewport
+      // bottom — i.e. the height taken by the keyboard. Ignore small deltas
+      // (browser toolbars) so only a real keyboard triggers the lift.
+      const overlap = window.innerHeight - vv.height - vv.offsetTop
+      setInset(isMobile && overlap > 120 ? Math.round(overlap) : 0)
+    }
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    window.addEventListener('resize', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+  return inset
+}
+
 function readQuickAddType(searchParams: URLSearchParams): OpenDialogType | null {
   const type = searchParams.get('quick_add')
   return type === 'income' || type === 'expense' || type === 'transfer' ? type : null
@@ -97,6 +131,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t } = useLanguage()
+  const keyboardInset = useMobileKeyboardInset()
 
   // Read pending "Save and Add Next" defaults straight from the URL on first
   // render so a freshly mounted provider (e.g. after a server-action redirect
@@ -277,6 +312,13 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
         }}
       >
         <DialogContent
+          // Lift the mobile bottom sheet above the on-screen keyboard so its
+          // footer buttons stay reachable; no-op on desktop (inset is 0).
+          style={
+            keyboardInset
+              ? { bottom: keyboardInset, maxHeight: `calc(100dvh - ${keyboardInset}px - 0.5rem)` }
+              : undefined
+          }
           className={
             // Centered dialog on desktop; native-style bottom sheet on mobile.
             'max-h-[90dvh] overflow-y-auto sm:max-w-xl ' +
