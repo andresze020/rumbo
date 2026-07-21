@@ -330,6 +330,22 @@ export function TransactionForm({
     />
   )
 
+  // Shared status segmented control, paired with another compact field in the
+  // essentials grid.
+  const statusField = (
+    <SegmentedField
+      label={t('transactionForm.status')}
+      name="status"
+      value={status}
+      onChange={setStatus}
+      size="sm"
+      options={[
+        { value: 'posted', label: t('transactionForm.statusPosted') },
+        { value: 'pending', label: t('transactionForm.statusPending') },
+      ]}
+    />
+  )
+
   // Exchange-rate block, shared by the transfer and single-account paths. Stays
   // outside the "More details" collapse because the rate is required to submit a
   // non-base-currency entry, so it must always be visible.
@@ -402,7 +418,7 @@ export function TransactionForm({
   }
 
   return (
-    <form action={submitAction} onSubmit={rememberDefaults} className="space-y-4">
+    <form action={submitAction} onSubmit={rememberDefaults} className="space-y-3">
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
 
       {/* ── Type: segmented control ──────────────────────────────────── */}
@@ -423,7 +439,7 @@ export function TransactionForm({
       />
 
       {/* ── Amount hero ──────────────────────────────────────────────── */}
-      <div className="rounded-2xl border bg-muted/30 p-3.5">
+      <div className="rounded-2xl border bg-muted/30 p-3">
         <div className="flex items-center justify-between">
           <Label
             htmlFor="amount"
@@ -448,9 +464,9 @@ export function TransactionForm({
         />
       </div>
 
-      {/* ── Essentials: two-column grid on desktop, stacked on mobile ─── */}
+      {/* ── Essentials: dense two-column grid on both mobile and desktop ─ */}
       {isTransfer ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3">
           <SelectField
             id="from_account_id"
             name="from_account_id"
@@ -493,28 +509,29 @@ export function TransactionForm({
             ))}
           </SelectField>
 
-          <div className="sm:col-span-2">{dateField}</div>
+          {dateField}
+          {statusField}
 
           {/* Description: kept essential (visible on mobile too). */}
-          <div className="space-y-1.5 sm:col-span-2">
+          <div className="space-y-1.5 col-span-2">
             <Label htmlFor="description">{t('transactionForm.description')}</Label>
             <Input id="description" name="description" defaultValue={defaultDescription} />
           </div>
 
           {accounts.length < 2 ? (
-            <p className="text-sm text-muted-foreground sm:col-span-2">
+            <p className="text-sm text-muted-foreground col-span-2">
               {t('transactionForm.needTwoAccounts')}
             </p>
           ) : null}
 
           {isCrossCurrencyTransfer ? (
-            <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive sm:col-span-2">
+            <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive col-span-2">
               {t('transactionForm.crossCurrencyNotSupported')}
             </p>
           ) : null}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3">
           <SelectField
             id="account_id"
             name="account_id"
@@ -539,7 +556,7 @@ export function TransactionForm({
 
           {dateField}
 
-          <div className="space-y-1.5 sm:col-span-2">
+          <div className="space-y-1.5 col-span-2">
             <CategoryPicker
               key={transactionType}
               categories={compatibleCategories}
@@ -571,26 +588,29 @@ export function TransactionForm({
             ) : null}
           </div>
 
-          {/* Description & Payee: kept essential (visible on mobile too). */}
-          <div className="space-y-1.5">
+          {/* Description & Payee: kept essential (visible on mobile too) and
+              full-width so they're comfortable to type into. */}
+          <div className="space-y-1.5 col-span-2">
             <Label htmlFor="description">{t('transactionForm.description')}</Label>
             <Input id="description" name="description" defaultValue={defaultDescription} />
           </div>
 
-          <PayeePicker
-            payees={payees}
-            defaultValue={defaultMerchantName}
-            // "Payer" for income (who paid you), "Payee" for an expense (whom you
-            // paid) — same underlying payees table, context-appropriate wording.
-            label={t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')}
-            helpText={t('transactionForm.payeeHelp')}
-            inputId="payee_name"
-          />
+          <div className="col-span-2">
+            <PayeePicker
+              payees={payees}
+              defaultValue={defaultMerchantName}
+              // "Payer" for income (who paid you), "Payee" for an expense (whom you
+              // paid) — same underlying payees table, context-appropriate wording.
+              label={t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')}
+              helpText={t('transactionForm.payeeHelp')}
+              inputId="payee_name"
+            />
+          </div>
 
           {/* UC-10: turn a normal entry into a recurring one. Kept essential so
               the recurring feature is discoverable. Transfers are not supported
               as recurring templates yet, so this is income/expense only. */}
-          <div className="space-y-1.5 sm:col-span-2">
+          <div className="space-y-1.5">
             <SelectField
               id="frequency"
               name="frequency"
@@ -606,10 +626,13 @@ export function TransactionForm({
                 </option>
               ))}
             </SelectField>
-            {recurringFrequency ? (
-              <p className="text-xs text-muted-foreground">{t('transactionForm.repeatHelp')}</p>
-            ) : null}
           </div>
+
+          {statusField}
+
+          {recurringFrequency ? (
+            <p className="text-xs text-muted-foreground col-span-2">{t('transactionForm.repeatHelp')}</p>
+          ) : null}
         </div>
       )}
 
@@ -628,28 +651,9 @@ export function TransactionForm({
           />
         </button>
 
-        <div
-          className={cn(
-            'grid-cols-1 gap-4 sm:grid sm:grid-cols-2',
-            showMoreDetails ? 'grid' : 'hidden'
-          )}
-        >
-          <SegmentedField
-            label={t('transactionForm.status')}
-            name="status"
-            value={status}
-            onChange={setStatus}
-            size="sm"
-            options={[
-              { value: 'posted', label: t('transactionForm.statusPosted') },
-              { value: 'pending', label: t('transactionForm.statusPending') },
-            ]}
-          />
-
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-            <Textarea id="notes" name="notes" />
-          </div>
+        <div className={cn('space-y-1.5 sm:block', showMoreDetails ? 'block' : 'hidden')}>
+          <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
+          <Textarea id="notes" name="notes" rows={2} />
         </div>
       </div>
 
