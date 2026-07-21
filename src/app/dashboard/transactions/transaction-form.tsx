@@ -6,6 +6,7 @@ import {
   ArrowDownRight,
   ArrowLeftRight,
   ArrowUpRight,
+  ChevronDown,
   Repeat,
   Wallet,
 } from 'lucide-react'
@@ -118,6 +119,10 @@ export function TransactionForm({
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
   const [amountInput, setAmountInput] = useState(defaultAmount ?? '')
   const [status, setStatus] = useState(defaultStatus ?? 'posted')
+  // Secondary fields (description, payee, notes, status, repeat) collapse behind
+  // a "More details" toggle on mobile so the essentials + action buttons fit on
+  // one screen; on desktop (sm+) they always show in the two-column grid.
+  const [showMoreDetails, setShowMoreDetails] = useState(false)
   const [recurringFrequency, setRecurringFrequency] = useState('')
   const [userRate, setUserRate] = useState('')
   const [fetchingRate, setFetchingRate] = useState(false)
@@ -305,6 +310,97 @@ export function TransactionForm({
     },
   ]
 
+  // Shared date field — placed inside each essentials grid below so it pairs
+  // with the account selector on the same row.
+  const dateField = (
+    <DateField
+      id="transaction_date"
+      name="transaction_date"
+      label={t('transactionForm.date')}
+      value={transactionDate}
+      onChange={(e) => {
+        setTransactionDate(e.target.value)
+        if (isMultiCurrency) {
+          setUserRate('')
+          setFxNote('')
+          setFxError('')
+        }
+      }}
+      required
+    />
+  )
+
+  // Exchange-rate block, shared by the transfer and single-account paths. Stays
+  // outside the "More details" collapse because the rate is required to submit a
+  // non-base-currency entry, so it must always be visible.
+  function fxFields(account: TransactionFormAccount | undefined) {
+    if (!account) return null
+    return (
+      <AdvancedFields
+        defaultOpen
+        summary={
+          rateIsValid
+            ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${account.currency_code}`
+            : undefined
+        }
+      >
+        <Label htmlFor="user_rate">
+          Exchange rate: 1 {baseCurrency} = ? {account.currency_code}
+          <InfoTooltip term="exchangeRate" label="Exchange rate" />
+          {fetchingRate ? (
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              Fetching rate…
+            </span>
+          ) : null}
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          Enter how many {account.currency_code} make up 1 {baseCurrency}. This
+          converts the amount into {baseCurrency} for your reports and totals.
+        </p>
+        <div className="flex gap-2">
+          <Input
+            id="user_rate"
+            type="text"
+            inputMode="decimal"
+            placeholder={fetchingRate ? 'Fetching…' : 'e.g. 2690'}
+            value={userRate}
+            onChange={(e) => {
+              setUserRate(e.target.value)
+              setFxNote('')
+              setFxError('')
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            disabled={fetchingRate}
+            onClick={() => autoFetch(account.currency_code, transactionDate)}
+          >
+            Refresh
+          </Button>
+        </div>
+        {fxError ? (
+          <p className="text-xs text-destructive">{fxError}</p>
+        ) : fxNote ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400">{fxNote}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Auto-filled for {transactionDate}. Edit if needed.
+          </p>
+        )}
+        {conversionPreview(account.currency_code) ? (
+          <p className="text-xs font-medium text-foreground">
+            {conversionPreview(account.currency_code)}{' '}
+            <span className="font-normal text-muted-foreground">at this rate</span>
+          </p>
+        ) : null}
+        <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
+      </AdvancedFields>
+    )
+  }
+
   return (
     <form action={submitAction} onSubmit={rememberDefaults} className="space-y-4">
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
@@ -352,25 +448,9 @@ export function TransactionForm({
         />
       </div>
 
-      {/* ── Date ─────────────────────────────────────────────────────── */}
-      <DateField
-        id="transaction_date"
-        name="transaction_date"
-        label={t('transactionForm.date')}
-        value={transactionDate}
-        onChange={(e) => {
-          setTransactionDate(e.target.value)
-          if (isMultiCurrency) {
-            setUserRate('')
-            setFxNote('')
-            setFxError('')
-          }
-        }}
-        required
-      />
-
+      {/* ── Essentials: two-column grid on desktop, stacked on mobile ─── */}
       {isTransfer ? (
-        <>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SelectField
             id="from_account_id"
             name="from_account_id"
@@ -413,88 +493,28 @@ export function TransactionForm({
             ))}
           </SelectField>
 
+          <div className="sm:col-span-2">{dateField}</div>
+
+          {/* Description: kept essential (visible on mobile too). */}
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="description">{t('transactionForm.description')}</Label>
+            <Input id="description" name="description" defaultValue={defaultDescription} />
+          </div>
+
           {accounts.length < 2 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground sm:col-span-2">
               {t('transactionForm.needTwoAccounts')}
             </p>
           ) : null}
 
           {isCrossCurrencyTransfer ? (
-            <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive sm:col-span-2">
               {t('transactionForm.crossCurrencyNotSupported')}
             </p>
-          ) : isTransferNonBaseCurrency ? (
-            <AdvancedFields
-              defaultOpen
-              summary={
-                rateIsValid
-                  ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${selectedFromAccount?.currency_code}`
-                  : undefined
-              }
-            >
-              <Label htmlFor="user_rate">
-                Exchange rate: 1 {baseCurrency} = ? {selectedFromAccount?.currency_code}
-                <InfoTooltip term="exchangeRate" label="Exchange rate" />
-                {fetchingRate ? (
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    Fetching rate…
-                  </span>
-                ) : null}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Enter how many {selectedFromAccount?.currency_code} make up 1 {baseCurrency}.
-                This converts the transfer amount into {baseCurrency} for your reports and totals.
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  id="user_rate"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder={fetchingRate ? 'Fetching…' : 'e.g. 2690'}
-                  value={userRate}
-                  onChange={(e) => {
-                    setUserRate(e.target.value)
-                    setFxNote('')
-                    setFxError('')
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0"
-                  disabled={fetchingRate}
-                  onClick={() =>
-                    selectedFromAccount &&
-                    autoFetch(selectedFromAccount.currency_code, transactionDate)
-                  }
-                >
-                  Refresh
-                </Button>
-              </div>
-              {fxError ? (
-                <p className="text-xs text-destructive">{fxError}</p>
-              ) : fxNote ? (
-                <p className="text-xs text-amber-600 dark:text-amber-400">{fxNote}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Auto-filled for {transactionDate}. Edit if needed.
-                </p>
-              )}
-              {conversionPreview(selectedFromAccount?.currency_code) ? (
-                <p className="text-xs font-medium text-foreground">
-                  {conversionPreview(selectedFromAccount?.currency_code)}{' '}
-                  <span className="font-normal text-muted-foreground">at this rate</span>
-                </p>
-              ) : null}
-              <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
-            </AdvancedFields>
-          ) : (
-            <input type="hidden" name="exchange_rate_to_base" value="1" />
-          )}
-        </>
+          ) : null}
+        </div>
       ) : (
-        <>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SelectField
             id="account_id"
             name="account_id"
@@ -517,172 +537,134 @@ export function TransactionForm({
             ))}
           </SelectField>
 
-          <CategoryPicker
-            key={transactionType}
-            categories={compatibleCategories}
-            transactionType={transactionType}
-            onCategoryChange={setCategoryId}
-            selectedCategoryId={categoryId}
+          {dateField}
+
+          <div className="space-y-1.5 sm:col-span-2">
+            <CategoryPicker
+              key={transactionType}
+              categories={compatibleCategories}
+              transactionType={transactionType}
+              onCategoryChange={setCategoryId}
+              selectedCategoryId={categoryId}
+            />
+
+            {frequentCategories.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
+                {frequentCategories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => setCategoryId(category.id)}
+                    className={cn(
+                      'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
+                      categoryId === category.id
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                  >
+                    {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Description & Payee: kept essential (visible on mobile too). */}
+          <div className="space-y-1.5">
+            <Label htmlFor="description">{t('transactionForm.description')}</Label>
+            <Input id="description" name="description" defaultValue={defaultDescription} />
+          </div>
+
+          <PayeePicker
+            payees={payees}
+            defaultValue={defaultMerchantName}
+            // "Payer" for income (who paid you), "Payee" for an expense (whom you
+            // paid) — same underlying payees table, context-appropriate wording.
+            label={t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')}
+            helpText={t('transactionForm.payeeHelp')}
+            inputId="payee_name"
           />
 
-          {frequentCategories.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
-              {frequentCategories.map((category) => (
-                <button
-                  key={category.id}
-                  type="button"
-                  onClick={() => setCategoryId(category.id)}
-                  className={cn(
-                    'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
-                    categoryId === category.id
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-                  )}
-                >
-                  {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
-                  {category.name}
-                </button>
+          {/* UC-10: turn a normal entry into a recurring one. Kept essential so
+              the recurring feature is discoverable. Transfers are not supported
+              as recurring templates yet, so this is income/expense only. */}
+          <div className="space-y-1.5 sm:col-span-2">
+            <SelectField
+              id="frequency"
+              name="frequency"
+              label={t('transactionForm.repeat')}
+              leading={<Repeat className="size-4.5" />}
+              value={recurringFrequency}
+              onChange={(e) => setRecurringFrequency(e.target.value)}
+            >
+              <option value="">{t('transactionForm.repeatNever')}</option>
+              {RECURRING_FREQUENCIES.map((frequency) => (
+                <option key={frequency.value} value={frequency.value}>
+                  {frequency.label}
+                </option>
               ))}
-            </div>
-          ) : null}
-        </>
+            </SelectField>
+            {recurringFrequency ? (
+              <p className="text-xs text-muted-foreground">{t('transactionForm.repeatHelp')}</p>
+            ) : null}
+          </div>
+        </div>
       )}
 
-      {/* UC-10: turn a normal entry into a recurring one. Transfers are not
-          supported as recurring templates yet, so this is income/expense only. */}
-      {!isTransfer ? (
-        <div className="space-y-1.5">
-          <SelectField
-            id="frequency"
-            name="frequency"
-            label={t('transactionForm.repeat')}
-            leading={<Repeat className="size-4.5" />}
-            value={recurringFrequency}
-            onChange={(e) => setRecurringFrequency(e.target.value)}
-          >
-            <option value="">{t('transactionForm.repeatNever')}</option>
-            {RECURRING_FREQUENCIES.map((frequency) => (
-              <option key={frequency.value} value={frequency.value}>
-                {frequency.label}
-              </option>
-            ))}
-          </SelectField>
-          {recurringFrequency ? (
-            <p className="text-xs text-muted-foreground">{t('transactionForm.repeatHelp')}</p>
-          ) : null}
+      {/* ── Secondary details: collapse on mobile, grid on desktop ────── */}
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => setShowMoreDetails((value) => !value)}
+          aria-expanded={showMoreDetails}
+          className="flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted sm:hidden"
+        >
+          {showMoreDetails ? t('transactionForm.fewerDetails') : t('transactionForm.moreDetails')}
+          <ChevronDown
+            className={cn('size-4 transition-transform', showMoreDetails && 'rotate-180')}
+            aria-hidden="true"
+          />
+        </button>
+
+        <div
+          className={cn(
+            'grid-cols-1 gap-4 sm:grid sm:grid-cols-2',
+            showMoreDetails ? 'grid' : 'hidden'
+          )}
+        >
+          <SegmentedField
+            label={t('transactionForm.status')}
+            name="status"
+            value={status}
+            onChange={setStatus}
+            size="sm"
+            options={[
+              { value: 'posted', label: t('transactionForm.statusPosted') },
+              { value: 'pending', label: t('transactionForm.statusPending') },
+            ]}
+          />
+
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
+            <Textarea id="notes" name="notes" />
+          </div>
         </div>
-      ) : null}
-
-      <div className="space-y-1.5">
-        <Label htmlFor="description">{t('transactionForm.description')}</Label>
-        <Input
-          id="description"
-          name="description"
-          defaultValue={defaultDescription}
-        />
       </div>
 
-      {!isTransfer ? (
-        <PayeePicker
-          payees={payees}
-          defaultValue={defaultMerchantName}
-          // "Payer" for income (who paid you), "Payee" for an expense (whom you
-          // paid) — same underlying payees table, context-appropriate wording.
-          label={t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')}
-          helpText={t('transactionForm.payeeHelp')}
-          inputId="payee_name"
-        />
-      ) : null}
-
-      <div className="space-y-1.5">
-        <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-        <Textarea id="notes" name="notes" />
-      </div>
-
-      <SegmentedField
-        label={t('transactionForm.status')}
-        name="status"
-        value={status}
-        onChange={setStatus}
-        size="sm"
-        options={[
-          { value: 'posted', label: t('transactionForm.statusPosted') },
-          { value: 'pending', label: t('transactionForm.statusPending') },
-        ]}
-      />
-
-      {!isTransfer ? (
-        isMultiCurrency ? (
-          <AdvancedFields
-            defaultOpen
-            summary={
-              rateIsValid
-                ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${selectedAccount?.currency_code}`
-                : undefined
-            }
-          >
-            <Label htmlFor="user_rate">
-              Exchange rate: 1 {baseCurrency} = ? {selectedAccount?.currency_code}
-              <InfoTooltip term="exchangeRate" label="Exchange rate" />
-              {fetchingRate ? (
-                <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  Fetching rate…
-                </span>
-              ) : null}
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              Enter how many {selectedAccount?.currency_code} make up 1 {baseCurrency}. This
-              converts the amount into {baseCurrency} for your reports and totals.
-            </p>
-            <div className="flex gap-2">
-              <Input
-                id="user_rate"
-                type="text"
-                inputMode="decimal"
-                placeholder={fetchingRate ? 'Fetching…' : 'e.g. 2690'}
-                value={userRate}
-                onChange={(e) => {
-                  setUserRate(e.target.value)
-                  setFxNote('')
-                  setFxError('')
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                disabled={fetchingRate}
-                onClick={() =>
-                  selectedAccount &&
-                  autoFetch(selectedAccount.currency_code, transactionDate)
-                }
-              >
-                Refresh
-              </Button>
-            </div>
-            {fxError ? (
-              <p className="text-xs text-destructive">{fxError}</p>
-            ) : fxNote ? (
-              <p className="text-xs text-amber-600 dark:text-amber-400">{fxNote}</p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Auto-filled for {transactionDate}. Edit if needed.
-              </p>
-            )}
-            {conversionPreview(selectedAccount?.currency_code) ? (
-              <p className="text-xs font-medium text-foreground">
-                {conversionPreview(selectedAccount?.currency_code)}{' '}
-                <span className="font-normal text-muted-foreground">at this rate</span>
-              </p>
-            ) : null}
-            <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
-          </AdvancedFields>
+      {/* ── Exchange rate (only for non-base-currency entries) ────────── */}
+      {isTransfer ? (
+        isCrossCurrencyTransfer ? null : isTransferNonBaseCurrency ? (
+          fxFields(selectedFromAccount)
         ) : (
           <input type="hidden" name="exchange_rate_to_base" value="1" />
         )
-      ) : null}
+      ) : isMultiCurrency ? (
+        fxFields(selectedAccount)
+      ) : (
+        <input type="hidden" name="exchange_rate_to_base" value="1" />
+      )}
 
       {/* ── Actions ──────────────────────────────────────────────────── */}
       <div className="sticky bottom-0 z-10 -mb-1 space-y-2 bg-popover pb-1 pt-2 sm:static sm:flex sm:flex-wrap sm:items-center sm:gap-2 sm:space-y-0 sm:bg-transparent sm:p-0">
