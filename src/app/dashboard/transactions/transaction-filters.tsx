@@ -38,6 +38,8 @@ type TransactionFiltersProps = {
   accountOptions: AccountOption[]
   categoryOptions: CategoryOption[]
   presetLinks: PresetLink[]
+  /** Active payee focus filter, carried through the form so Apply keeps it. */
+  payeeId?: string
 }
 
 const TYPE_OPTIONS = [
@@ -134,6 +136,7 @@ export function TransactionFilters({
   accountOptions,
   categoryOptions,
   presetLinks,
+  payeeId,
 }: TransactionFiltersProps) {
   const typeRef = useRef<HTMLInputElement>(null)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -157,6 +160,7 @@ export function TransactionFilters({
       {selectedReview !== 'all' ? (
         <input type="hidden" name="review" value={selectedReview} />
       ) : null}
+      {payeeId ? <input type="hidden" name="payee_id" value={payeeId} /> : null}
 
       {/* ── Primary bar: type toggle · search · mobile filters toggle ──── */}
       <div className="flex flex-wrap items-center gap-2">
