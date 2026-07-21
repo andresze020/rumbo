@@ -7,6 +7,7 @@ import {
   ArrowLeftRight,
   ArrowUpRight,
   CalendarDays,
+  Check,
   ChevronDown,
   FileText,
   ListChecks,
@@ -155,6 +156,28 @@ export function TransactionForm({
   // Which mobile row is expanded for editing (accordion; null = all collapsed).
   const [expandedField, setExpandedField] = useState<string | null>(null)
   const isMobile = useIsMobile()
+
+  // When a mobile row expands, focus its control so choosing a value is a single
+  // tap: text fields get the keyboard, the date field opens its native picker.
+  // Rows backed by an inline option list have no text input, so this is a no-op
+  // for them (they already show the list on expand).
+  useEffect(() => {
+    if (!expandedField) return
+    const panel = document.querySelector(`[data-field-panel="${expandedField}"]`)
+    const el = panel?.querySelector('input:not([type="hidden"]), textarea') as
+      | HTMLInputElement
+      | HTMLTextAreaElement
+      | null
+    if (!el) return
+    el.focus()
+    if (el instanceof HTMLInputElement && el.type === 'date') {
+      try {
+        el.showPicker?.()
+      } catch {
+        // showPicker() can throw outside a user gesture; focus already happened.
+      }
+    }
+  }, [expandedField])
   const [userRate, setUserRate] = useState('')
   const [fetchingRate, setFetchingRate] = useState(false)
   const [fxNote, setFxNote] = useState('')
@@ -456,6 +479,15 @@ export function TransactionForm({
   const categoryValue = selectedCategory
     ? `${selectedCategory.icon ? `${selectedCategory.icon} ` : ''}${selectedCategory.name}`
     : ''
+  // Two-level category selection for the mobile inline list.
+  const mobileParentCategories = compatibleCategories.filter(
+    (c) => c.parent_category_id === null
+  )
+  const mobileCurrentParentId =
+    selectedCategory?.parent_category_id ?? selectedCategory?.id ?? ''
+  const mobileChildCategories = compatibleCategories.filter(
+    (c) => c.parent_category_id === mobileCurrentParentId
+  )
   const repeatValue =
     RECURRING_FREQUENCIES.find((f) => f.value === recurringFrequency)?.label ??
     t('transactionForm.repeatNever')
@@ -504,12 +536,50 @@ export function TransactionForm({
             aria-hidden="true"
           />
         </button>
-        <div className={cn('px-1 pb-3 [&_label]:sr-only', open ? 'block' : 'hidden')}>
+        <div
+          data-field-panel={id}
+          className={cn('px-1 pb-3 [&_label]:sr-only', open ? 'block' : 'hidden')}
+        >
           {children}
         </div>
       </div>
     )
   }
+
+  // Inline single-select list: tapping a row shows these directly (one tap),
+  // and tapping an option selects it — no native <select> to open first.
+  const optionList = (
+    options: { value: string; label: string; icon?: ReactNode; disabled?: boolean }[],
+    selected: string,
+    onSelect: (value: string) => void
+  ) => (
+    <div className="max-h-72 overflow-y-auto">
+      {options.map((option) => (
+        <button
+          key={option.value || '__none__'}
+          type="button"
+          disabled={option.disabled}
+          onClick={() => onSelect(option.value)}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm disabled:opacity-40',
+            selected === option.value
+              ? 'bg-primary/10 font-medium text-primary'
+              : 'hover:bg-muted'
+          )}
+        >
+          {option.icon ? (
+            <span className="shrink-0" aria-hidden="true">
+              {option.icon}
+            </span>
+          ) : null}
+          <span className="flex-1 truncate">{option.label}</span>
+          {selected === option.value ? (
+            <Check className="size-4 shrink-0" aria-hidden="true" />
+          ) : null}
+        </button>
+      ))}
+    </div>
+  )
 
   const mobileFields = (
     <div className="rounded-xl border px-2">
@@ -531,26 +601,22 @@ export function TransactionForm({
             value: selectedFromAccount ? formatAccountLabel(selectedFromAccount) : '',
             placeholder: t('transactionForm.selectSource'),
             children: (
-              <SelectField
-                id="from_account_id"
-                name="from_account_id"
-                label={t('transactionForm.fromAccount')}
-                leading={accountLeading(selectedFromAccount)}
-                required
-                value={fromAccountId}
-                onChange={(e) => {
-                  const next = e.target.value
-                  setFromAccountId(next)
-                  if (next === toAccountId) setToAccountId('')
-                }}
-              >
-                <option value="" disabled>{t('transactionForm.selectSource')}</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id} disabled={a.id === toAccountId}>
-                    {formatAccountLabel(a)}
-                  </option>
-                ))}
-              </SelectField>
+              <>
+                <input type="hidden" name="from_account_id" value={fromAccountId} />
+                {optionList(
+                  accounts.map((a) => ({
+                    value: a.id,
+                    label: formatAccountLabel(a),
+                    disabled: a.id === toAccountId,
+                  })),
+                  fromAccountId,
+                  (value) => {
+                    setFromAccountId(value)
+                    if (value === toAccountId) setToAccountId('')
+                    setExpandedField(null)
+                  }
+                )}
+              </>
             ),
           })}
           {editRow({
@@ -560,26 +626,22 @@ export function TransactionForm({
             value: selectedToAccount ? formatAccountLabel(selectedToAccount) : '',
             placeholder: t('transactionForm.selectDestination'),
             children: (
-              <SelectField
-                id="to_account_id"
-                name="to_account_id"
-                label={t('transactionForm.toAccount')}
-                leading={accountLeading(selectedToAccount)}
-                required
-                value={toAccountId}
-                onChange={(e) => {
-                  const next = e.target.value
-                  setToAccountId(next)
-                  if (next === fromAccountId) setFromAccountId('')
-                }}
-              >
-                <option value="" disabled>{t('transactionForm.selectDestination')}</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id} disabled={a.id === fromAccountId}>
-                    {formatAccountLabel(a)}
-                  </option>
-                ))}
-              </SelectField>
+              <>
+                <input type="hidden" name="to_account_id" value={toAccountId} />
+                {optionList(
+                  accounts.map((a) => ({
+                    value: a.id,
+                    label: formatAccountLabel(a),
+                    disabled: a.id === fromAccountId,
+                  })),
+                  toAccountId,
+                  (value) => {
+                    setToAccountId(value)
+                    if (value === fromAccountId) setFromAccountId('')
+                    setExpandedField(null)
+                  }
+                )}
+              </>
             ),
           })}
         </>
@@ -592,27 +654,20 @@ export function TransactionForm({
             value: selectedAccount ? formatAccountLabel(selectedAccount) : '',
             placeholder: t('transactionForm.selectAccount'),
             children: (
-              <SelectField
-                id="account_id"
-                name="account_id"
-                label={t('transactionForm.account')}
-                leading={accountLeading(selectedAccount)}
-                required
-                value={accountId}
-                onChange={(e) => {
-                  setAccountId(e.target.value)
-                  setUserRate('')
-                  setFxNote('')
-                  setFxError('')
-                }}
-              >
-                <option value="" disabled>{t('transactionForm.selectAccount')}</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {formatAccountLabel(a)}
-                  </option>
-                ))}
-              </SelectField>
+              <>
+                <input type="hidden" name="account_id" value={accountId} />
+                {optionList(
+                  accounts.map((a) => ({ value: a.id, label: formatAccountLabel(a) })),
+                  accountId,
+                  (value) => {
+                    setAccountId(value)
+                    setUserRate('')
+                    setFxNote('')
+                    setFxError('')
+                    setExpandedField(null)
+                  }
+                )}
+              </>
             ),
           })}
           {editRow({
@@ -623,13 +678,48 @@ export function TransactionForm({
             placeholder: 'Select category',
             children: (
               <>
-                <CategoryPicker
-                  key={transactionType}
-                  categories={compatibleCategories}
-                  transactionType={transactionType}
-                  onCategoryChange={setCategoryId}
-                  selectedCategoryId={categoryId}
-                />
+                <input type="hidden" name="category_id" value={categoryId} />
+                {optionList(
+                  mobileParentCategories.map((c) => ({
+                    value: c.id,
+                    label: c.name,
+                    icon: c.icon,
+                  })),
+                  mobileCurrentParentId,
+                  (parentId) => {
+                    const kids = compatibleCategories.filter(
+                      (c) => c.parent_category_id === parentId
+                    )
+                    setCategoryId(parentId)
+                    // A parent with no subcategories is a complete choice; one
+                    // with children keeps the row open to pick the subcategory.
+                    if (kids.length === 0) setExpandedField(null)
+                  }
+                )}
+
+                {mobileChildCategories.length > 0 ? (
+                  <>
+                    <p className="px-2 pt-3 pb-1 text-xs font-medium text-muted-foreground">
+                      Subcategory
+                    </p>
+                    {optionList(
+                      [
+                        { value: mobileCurrentParentId, label: 'General' },
+                        ...mobileChildCategories.map((c) => ({
+                          value: c.id,
+                          label: c.name,
+                          icon: c.icon,
+                        })),
+                      ],
+                      categoryId,
+                      (value) => {
+                        setCategoryId(value)
+                        setExpandedField(null)
+                      }
+                    )}
+                  </>
+                ) : null}
+
                 {frequentCategories.length > 0 ? (
                   <div className="mt-3 flex flex-wrap items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
@@ -637,7 +727,10 @@ export function TransactionForm({
                       <button
                         key={category.id}
                         type="button"
-                        onClick={() => setCategoryId(category.id)}
+                        onClick={() => {
+                          setCategoryId(category.id)
+                          setExpandedField(null)
+                        }}
                         className={cn(
                           'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
                           categoryId === category.id
@@ -678,21 +771,20 @@ export function TransactionForm({
             value: repeatValue,
             placeholder: t('transactionForm.repeatNever'),
             children: (
-              <SelectField
-                id="frequency"
-                name="frequency"
-                label={t('transactionForm.repeat')}
-                leading={<Repeat className="size-4.5" />}
-                value={recurringFrequency}
-                onChange={(e) => setRecurringFrequency(e.target.value)}
-              >
-                <option value="">{t('transactionForm.repeatNever')}</option>
-                {RECURRING_FREQUENCIES.map((frequency) => (
-                  <option key={frequency.value} value={frequency.value}>
-                    {frequency.label}
-                  </option>
-                ))}
-              </SelectField>
+              <>
+                <input type="hidden" name="frequency" value={recurringFrequency} />
+                {optionList(
+                  [
+                    { value: '', label: t('transactionForm.repeatNever') },
+                    ...RECURRING_FREQUENCIES.map((f) => ({ value: f.value, label: f.label })),
+                  ],
+                  recurringFrequency,
+                  (value) => {
+                    setRecurringFrequency(value)
+                    setExpandedField(null)
+                  }
+                )}
+              </>
             ),
           })}
         </>
