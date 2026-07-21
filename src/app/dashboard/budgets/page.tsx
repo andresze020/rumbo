@@ -30,7 +30,7 @@ import { SubmitButton } from '@/components/submit-button'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
-import { formatCurrency, formatMonthLabel } from '@/lib/format'
+import { formatCurrency, formatMonthLabel, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { nativeSelectCls } from '@/lib/form-styles'
 
@@ -130,14 +130,6 @@ function budgetsPath({
   return `/dashboard/budgets?${params.toString()}`
 }
 
-function formatPercent(value: number | null) {
-  if (value === null) return 'N/A'
-  return new Intl.NumberFormat('en-CA', {
-    style: 'percent',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  }).format(value)
-}
 
 function getCategoryPath(
   category: { name: string; parent_category_id: string | null },
@@ -526,7 +518,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
             />
             <BudgetKpiCard
               label="Usage"
-              value={formatPercent(percentUsed)}
+              value={formatPercent(percentUsed, locale, { minimumFractionDigits: 0 })}
               description={usageTone.label}
               icon={<Gauge />}
               accent="bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"

@@ -34,7 +34,7 @@ export function VoidTransactionForm({
             <AlertDialogTitle>Void this transaction?</AlertDialogTitle>
             <AlertDialogDescription>
               Voiding keeps the record for history but removes it from account
-              balances and reports. This cannot be undone from here.
+              balances and reports. You can undo this right after from the toast.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Textarea

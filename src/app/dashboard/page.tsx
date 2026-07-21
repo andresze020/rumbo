@@ -35,7 +35,7 @@ import { getDashboardTrend } from './trend-actions'
 import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
-import { formatCurrency, formatMonthLabel, formatTransactionCount } from '@/lib/format'
+import { formatCurrency, formatMonthLabel, formatPercent, formatTransactionCount, localeToBcp47 } from '@/lib/format'
 import { computeHealthScore, healthGrade as computeHealthGrade } from '@/lib/health/score'
 import { cn } from '@/lib/utils'
 
@@ -176,7 +176,7 @@ function renderPctDelta(
   const isUp = diff > 0
   const isGood = higherIsBad ? !isUp : isUp
   const arrow = isUp ? '↑' : '↓'
-  const formatted = new Intl.NumberFormat('en-CA', {
+  const formatted = new Intl.NumberFormat(localeToBcp47(locale), {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   }).format(Math.abs(diff) * 100)
@@ -192,7 +192,7 @@ function renderRateDelta(diff: number | null, locale: Locale) {
   if (Math.abs(diff) < 0.0001) return <span className="text-xs text-muted-foreground">{translate(locale, 'common.noChangeVsLastMonth')}</span>
   const isUp = diff > 0
   const arrow = isUp ? '↑' : '↓'
-  const formatted = new Intl.NumberFormat('en-CA', {
+  const formatted = new Intl.NumberFormat(localeToBcp47(locale), {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   }).format(Math.abs(diff * 100))
@@ -217,15 +217,6 @@ function parseDashboardMonth(month: string | undefined) {
 
 function getDisplayedLiabilityBalance(value: number | string) {
   return Math.max(0, -Number(value))
-}
-
-function formatPercent(value: number | string | null, locale: Locale) {
-  if (value === null) return translate(locale, 'common.notAvailable')
-  return new Intl.NumberFormat('en-CA', {
-    style: 'percent',
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(Number(value))
 }
 
 function getMonthEndDate(month: string) {
@@ -255,7 +246,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const supabase = await createClient()
   const locale = await getLocale()
   const t = (key: TranslationKey, vars?: Record<string, string | number>) => translate(locale, key, vars)
-  const dateFmt = new Intl.DateTimeFormat(locale === 'en' ? 'en-CA' : locale, { month: 'short', day: 'numeric' })
+  const dateFmt = new Intl.DateTimeFormat(localeToBcp47(locale), { month: 'short', day: 'numeric' })
 
   const {
     data: { user },

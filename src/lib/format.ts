@@ -4,12 +4,31 @@
  * These are presentation-only. They must never alter financial values —
  * they only control how already-computed numbers are rendered. Keeping them
  * in one place avoids subtly divergent formatting across pages.
+ *
+ * The app locale (`en` | `es` | `fr`) selects the BCP-47 tag used for grouping,
+ * decimal separators, currency-symbol placement, and month names. Pass the
+ * active locale where it's in scope; helpers default to the app default when
+ * it isn't, so leaf components stay call-compatible.
  */
 
-const LOCALE = 'en-CA'
+import { translate } from './i18n/translate'
+import type { Locale } from './i18n/dictionaries'
 
-export function formatCurrency(value: number | string, currencyCode: string) {
-  return new Intl.NumberFormat(LOCALE, {
+/** App locale → BCP-47 tag. `en` maps to en-CA (the app's original default). */
+export function localeToBcp47(locale: Locale = 'en'): string {
+  switch (locale) {
+    case 'es':
+      return 'es-ES'
+    case 'fr':
+      return 'fr-CA'
+    case 'en':
+    default:
+      return 'en-CA'
+  }
+}
+
+export function formatCurrency(value: number | string, currencyCode: string, locale: Locale = 'en') {
+  return new Intl.NumberFormat(localeToBcp47(locale), {
     style: 'currency',
     currency: currencyCode,
   }).format(Number(value))
@@ -19,12 +38,12 @@ export function formatCurrency(value: number | string, currencyCode: string) {
  * Compact currency for tight spaces (e.g. chart axes, dense tables).
  * Falls back to the full format for small magnitudes.
  */
-export function formatCurrencyCompact(value: number | string, currencyCode: string) {
+export function formatCurrencyCompact(value: number | string, currencyCode: string, locale: Locale = 'en') {
   const numeric = Number(value)
   if (Math.abs(numeric) < 10_000) {
-    return formatCurrency(numeric, currencyCode)
+    return formatCurrency(numeric, currencyCode, locale)
   }
-  return new Intl.NumberFormat(LOCALE, {
+  return new Intl.NumberFormat(localeToBcp47(locale), {
     style: 'currency',
     currency: currencyCode,
     notation: 'compact',
@@ -37,9 +56,9 @@ export function formatCurrencyCompact(value: number | string, currencyCode: stri
  * for EUR), falling back to the code itself for unknown currencies. Used to
  * prefix amount inputs so users see which currency they're entering.
  */
-export function getCurrencySymbol(currencyCode: string) {
+export function getCurrencySymbol(currencyCode: string, locale: Locale = 'en') {
   try {
-    const parts = new Intl.NumberFormat(LOCALE, {
+    const parts = new Intl.NumberFormat(localeToBcp47(locale), {
       style: 'currency',
       currency: currencyCode,
       currencyDisplay: 'narrowSymbol',
@@ -50,7 +69,7 @@ export function getCurrencySymbol(currencyCode: string) {
   }
 }
 
-const thousandsFormatter = new Intl.NumberFormat(LOCALE, {
+const thousandsFormatter = new Intl.NumberFormat('en-CA', {
   maximumFractionDigits: 20,
 })
 
@@ -83,13 +102,23 @@ export function sanitizeAmountInput(value: string) {
   return negative ? `-${digits}` : digits
 }
 
-export function formatPercent(value: number | string | null) {
+/**
+ * Formats a ratio (0.125 → "12.5%"). `null` renders the localized
+ * "not available" label. `minimumFractionDigits` defaults to 1 (the app's
+ * original behavior); pass 0 for whole-number-friendly displays like progress
+ * bars where "50%" reads better than "50.0%".
+ */
+export function formatPercent(
+  value: number | string | null,
+  locale: Locale = 'en',
+  { minimumFractionDigits = 1 }: { minimumFractionDigits?: number } = {}
+) {
   if (value === null) {
-    return 'N/A'
+    return translate(locale, 'common.notAvailable')
   }
-  return new Intl.NumberFormat(LOCALE, {
+  return new Intl.NumberFormat(localeToBcp47(locale), {
     style: 'percent',
-    minimumFractionDigits: 1,
+    minimumFractionDigits,
     maximumFractionDigits: 1,
   }).format(Number(value))
 }
@@ -100,18 +129,18 @@ export function formatLabel(value: string) {
 }
 
 /** "2026-06" -> "June 2026" */
-export function formatMonthLabel(month: string) {
+export function formatMonthLabel(month: string, locale: Locale = 'en') {
   const [year, monthNumber] = month.split('-').map(Number)
-  return new Intl.DateTimeFormat(LOCALE, {
+  return new Intl.DateTimeFormat(localeToBcp47(locale), {
     month: 'long',
     year: 'numeric',
   }).format(new Date(year, monthNumber - 1, 1))
 }
 
 /** "2026-06" -> "Jun 2026" */
-export function formatMonthLabelShort(month: string) {
+export function formatMonthLabelShort(month: string, locale: Locale = 'en') {
   const [year, monthNumber] = month.split('-').map(Number)
-  return new Intl.DateTimeFormat(LOCALE, {
+  return new Intl.DateTimeFormat(localeToBcp47(locale), {
     month: 'short',
     year: 'numeric',
   }).format(new Date(year, monthNumber - 1, 1))

@@ -21,7 +21,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
-import { formatCurrency, formatLabel as formatValue, formatMonthLabel } from '@/lib/format'
+import { formatCurrency, formatLabel as formatValue, formatMonthLabel, localeToBcp47 } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 type TransactionsPageProps = {
@@ -195,15 +195,9 @@ type TransactionGroup = {
   rows: TransactionRow[]
 }
 
-const GROUP_DATE_LOCALES: Record<Locale, string> = {
-  en: 'en-US',
-  es: 'es-ES',
-  fr: 'fr-FR',
-}
-
 function formatGroupDateLabel(date: string, locale: Locale) {
   const [yr, mo, dy] = date.split('-').map(Number)
-  return new Intl.DateTimeFormat(GROUP_DATE_LOCALES[locale], {
+  return new Intl.DateTimeFormat(localeToBcp47(locale), {
     weekday: 'long',
     month: 'long',
     day: 'numeric',

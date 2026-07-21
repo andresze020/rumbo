@@ -245,6 +245,7 @@ export const en = {
     toastCreated: 'Transaction created.',
     toastUpdated: 'Transaction updated.',
     toastVoided: 'Transaction voided.',
+    toastRestored: 'Transaction restored.',
   },
   comingSoon: {
     back: 'Back to dashboard',
@@ -626,6 +627,7 @@ export const es: DeepStringify<typeof en> = {
     toastCreated: 'Transacción creada.',
     toastUpdated: 'Transacción actualizada.',
     toastVoided: 'Transacción anulada.',
+    toastRestored: 'Transacción restaurada.',
   },
   comingSoon: {
     back: 'Volver al panel',
@@ -1007,6 +1009,7 @@ export const fr: DeepStringify<typeof en> = {
     toastCreated: 'Transaction créée.',
     toastUpdated: 'Transaction mise à jour.',
     toastVoided: 'Transaction annulée.',
+    toastRestored: 'Transaction rétablie.',
   },
   comingSoon: {
     back: 'Retour au tableau de bord',

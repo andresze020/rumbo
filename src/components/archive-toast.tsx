@@ -12,6 +12,13 @@ type ArchiveToastProps = {
   archivedMessage: string
   restoredMessage: string
   undoLabel: string
+  /**
+   * The field/value the undo submit sets to reverse the archive. Defaults to the
+   * is_archived=false contract used by accounts/categories/payees; goals pass
+   * status=active and recurring templates pass activate=true (BR-015).
+   */
+  undoField?: string
+  undoValue?: string
 }
 
 type PendingUndo = {
@@ -33,6 +40,8 @@ export function ArchiveToast({
   archivedMessage,
   restoredMessage,
   undoLabel,
+  undoField = 'is_archived',
+  undoValue = 'false',
 }: ArchiveToastProps) {
   const { toast } = useToast()
   const router = useRouter()
@@ -83,7 +92,7 @@ export function ArchiveToast({
   return (
     <form ref={formRef} action={action} hidden>
       <input type="hidden" name={idField} value={pendingUndo.id} />
-      <input type="hidden" name="is_archived" value="false" />
+      <input type="hidden" name={undoField} value={undoValue} />
       <input type="hidden" name="show_archived" value={pendingUndo.showArchived ? 'true' : 'false'} />
     </form>
   )

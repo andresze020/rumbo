@@ -119,11 +119,37 @@ export async function createCsvImportAction(formData: FormData) {
     })
     .filter((row) => row.transactionId && row.merchantName)
 
+  // BR-009: resolve each imported merchant name to a payee so CSV rows land with
+  // a payee_id (matching manual entry). Resolve once per distinct name — payees
+  // are case/whitespace-insensitive — then reuse the id across its rows.
+  const payeeIdByMerchant = new Map<string, string>()
+  const distinctMerchants = [...new Set(merchantUpdates.map((row) => row.merchantName))]
+  const payeeResults = await Promise.all(
+    distinctMerchants.map((name) =>
+      supabase.rpc('get_or_create_payee', {
+        p_household_id: householdId,
+        p_name: name,
+      })
+    )
+  )
+
+  if (payeeResults.some((result) => result.error)) {
+    redirectWithError('CSV imported, but payees could not be saved.')
+  }
+
+  distinctMerchants.forEach((name, index) => {
+    const payeeId = payeeResults[index].data as string | null
+    if (payeeId) payeeIdByMerchant.set(name, payeeId)
+  })
+
   const merchantUpdateResults = await Promise.all(
     merchantUpdates.map((row) =>
       supabase
         .from('transactions')
-        .update({ merchant_name: row.merchantName })
+        .update({
+          merchant_name: row.merchantName,
+          payee_id: payeeIdByMerchant.get(row.merchantName) ?? null,
+        })
         .eq('household_id', householdId)
         .eq('id', row.transactionId)
     )

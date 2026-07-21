@@ -262,6 +262,17 @@ export async function setGoalStatusAction(formData: FormData) {
 
   const { supabase, householdId } = await getAuthenticatedHousehold()
 
+  // Read the prior status so we can distinguish "archive/restore" (which get the
+  // undo toast, BR-015) from plain pause/resume — both of the latter also land
+  // on status='active'.
+  const { data: existing } = await supabase
+    .from('goals')
+    .select('status')
+    .eq('id', goalId)
+    .eq('household_id', householdId)
+    .maybeSingle()
+  const priorStatus = existing?.status
+
   const { data: updated, error: updateError } = await supabase
     .from('goals')
     .update({ status })
@@ -274,5 +285,12 @@ export async function setGoalStatusAction(formData: FormData) {
   }
 
   revalidateGoalsSurfaces()
-  redirect(`/dashboard/goals?status_updated=1`)
+
+  if (status === 'archived') {
+    redirect(`/dashboard/goals?archived=1&archived_id=${encodeURIComponent(goalId)}`)
+  }
+  if (status === 'active' && priorStatus === 'archived') {
+    redirect('/dashboard/goals?unarchived=1')
+  }
+  redirect('/dashboard/goals?status_updated=1')
 }

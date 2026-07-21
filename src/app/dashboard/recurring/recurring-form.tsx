@@ -11,6 +11,7 @@ import { SubmitButton } from '@/components/submit-button'
 import { RECURRING_FREQUENCIES, type RecurringType } from '@/lib/recurring/shared'
 import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
+import { PayeePicker, type PayeeOption } from '../transactions/payee-picker'
 
 export type RecurringFormCategory = {
   id: string
@@ -37,6 +38,8 @@ export type RecurringTemplate = {
   frequency: string
   start_date: string
   end_date: string | null
+  /** BR-009: resolved payee name for the edit prefill (empty when none). */
+  payee_name?: string
 }
 
 const selectClassName = nativeSelectCls
@@ -61,11 +64,13 @@ export function RecurringForm({
   template,
   accounts,
   categories,
+  payees,
 }: {
   mode: 'create' | 'edit'
   template?: RecurringTemplate
   accounts: RecurringFormAccount[]
   categories: RecurringFormCategory[]
+  payees: PayeeOption[]
 }) {
   const today = new Date().toISOString().slice(0, 10)
 
@@ -239,6 +244,14 @@ export function RecurringForm({
           </p>
         </div>
       </div>
+
+      <PayeePicker
+        payees={payees}
+        defaultValue={template?.payee_name ?? ''}
+        // Same wording split as the transaction form: who paid you vs. whom you paid.
+        label={transactionType === 'income' ? 'Payer (optional)' : 'Payee (optional)'}
+        helpText="Search an existing payee or type a new name to create one."
+      />
 
       <div className={formActionsCls}>
         <SubmitButton

@@ -3,7 +3,7 @@ import { StatusBadge } from '@/components/status-badge'
 import { SubmitButton } from '@/components/submit-button'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, formatPercent } from '@/lib/format'
 import { goalProgress, goalTypeLabel } from '@/lib/goals/shared'
 import { setGoalStatusAction } from './actions'
 
@@ -33,14 +33,6 @@ function formatDate(iso: string) {
     month: 'short',
     day: 'numeric',
   }).format(new Date(Date.UTC(y, m - 1, d)))
-}
-
-function formatPercent(value: number) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'percent',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  }).format(value)
 }
 
 export function GoalCard({
@@ -87,7 +79,7 @@ export function GoalCard({
         />
       </div>
       <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-        <span className="tabular-nums">{formatPercent(progress)} of goal</span>
+        <span className="tabular-nums">{formatPercent(progress, 'en', { minimumFractionDigits: 0 })} of goal</span>
         <span className="tabular-nums">Target {formatCurrency(targetAmount, goal.currency_code)}</span>
       </div>
 

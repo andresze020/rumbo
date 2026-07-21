@@ -81,6 +81,8 @@ type ValidatedTemplate = {
   frequency: Frequency
   startDate: string
   endDate: string | null
+  /** BR-009: resolved payee (null when the field is empty). */
+  payeeId: string | null
 }
 
 /** Shared field parsing + validation for create/update. Verifies the account
@@ -100,6 +102,7 @@ async function parseAndValidateTemplate(
   const startDate = String(formData.get('start_date') ?? '').trim()
   const endDateRaw = String(formData.get('end_date') ?? '').trim()
   const endDate = endDateRaw || null
+  const payeeName = String(formData.get('payee_name') ?? '').trim()
 
   if (!name) {
     redirectWithError('Name is required.')
@@ -167,6 +170,20 @@ async function parseAndValidateTemplate(
     )
   }
 
+  // BR-009: resolve the payee name to an id (get-or-create, case-insensitive).
+  // Empty name → null, which clears the payee on update.
+  let payeeId: string | null = null
+  if (payeeName) {
+    const { data: resolvedPayeeId, error: payeeError } = await supabase.rpc(
+      'get_or_create_payee',
+      { p_household_id: householdId, p_name: payeeName }
+    )
+    if (payeeError) {
+      redirectWithError('Could not save the payee. Please try again.')
+    }
+    payeeId = (resolvedPayeeId as string | null) ?? null
+  }
+
   return {
     name,
     transactionType,
@@ -177,6 +194,7 @@ async function parseAndValidateTemplate(
     frequency: frequency as Frequency,
     startDate,
     endDate,
+    payeeId,
   }
 }
 
@@ -196,6 +214,7 @@ export async function createRecurringAction(formData: FormData) {
     transaction_type: t.transactionType,
     account_id: t.accountId,
     category_id: t.categoryId,
+    payee_id: t.payeeId,
     amount: t.amount,
     currency_code: t.currencyCode,
     frequency: t.frequency,
@@ -256,6 +275,7 @@ export async function updateRecurringAction(formData: FormData) {
       transaction_type: t.transactionType,
       account_id: t.accountId,
       category_id: t.categoryId,
+      payee_id: t.payeeId,
       amount: t.amount,
       currency_code: t.currencyCode,
       frequency: t.frequency,
@@ -323,7 +343,12 @@ export async function toggleRecurringActiveAction(formData: FormData) {
   }
 
   revalidateRecurringSurfaces()
-  redirect(`/dashboard/recurring?${activate ? 'reactivated' : 'deactivated'}=1`)
+  // BR-015: deactivating is the reversible "archive" for a template; ship the
+  // undo toast so it can be reactivated in one tap.
+  if (activate) {
+    redirect('/dashboard/recurring?unarchived=1')
+  }
+  redirect(`/dashboard/recurring?archived=1&archived_id=${encodeURIComponent(recurringId)}`)
 }
 
 export async function deleteRecurringAction(formData: FormData) {
@@ -370,7 +395,7 @@ export async function postRecurringAction(formData: FormData) {
   const { data: template, error: templateError } = await supabase
     .from('recurring_transactions')
     .select(
-      'id, name, transaction_type, account_id, category_id, currency_code, frequency, end_date, next_run_date, is_active'
+      'id, name, transaction_type, account_id, category_id, payee_id, currency_code, frequency, end_date, next_run_date, is_active'
     )
     .eq('id', recurringId)
     .eq('household_id', householdId)
@@ -417,6 +442,19 @@ export async function postRecurringAction(formData: FormData) {
 
   const exchangeRateToBase = rateBaseToAccount !== null ? 1 / rateBaseToAccount : 1
 
+  // BR-009: carry the template's payee onto the posted occurrence. The RPC
+  // takes the payee *name* (it re-resolves get-or-create), so read it here.
+  let payeeName: string | null = null
+  if (template.payee_id) {
+    const { data: payee } = await supabase
+      .from('payees')
+      .select('name')
+      .eq('id', template.payee_id)
+      .eq('household_id', householdId)
+      .maybeSingle()
+    payeeName = payee?.name ?? null
+  }
+
   const { error: postError } = await supabase.rpc('create_manual_transaction', {
     p_household_id: householdId,
     p_transaction_type: template.transaction_type,
@@ -429,6 +467,7 @@ export async function postRecurringAction(formData: FormData) {
     p_notes: notes || null,
     p_status: 'posted',
     p_exchange_rate_to_base: exchangeRateToBase,
+    p_payee_name: payeeName,
   })
 
   if (postError) {

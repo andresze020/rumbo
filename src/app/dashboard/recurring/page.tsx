@@ -12,8 +12,10 @@ import { MetricCard } from '@/components/metric-card'
 import { PageHeader } from '@/components/page-header'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
+import { ArchiveToast } from '@/components/archive-toast'
 import { formatCurrency } from '@/lib/format'
 import { frequencyLabel, todayIsoDate } from '@/lib/recurring/shared'
+import { toggleRecurringActiveAction } from './actions'
 
 type RecurringPageProps = {
   searchParams: Promise<{
@@ -22,8 +24,6 @@ type RecurringPageProps = {
     deleted?: string
     posted?: string
     completed?: string
-    reactivated?: string
-    deactivated?: string
     advance_warning?: string
     error?: string
     mode?: string
@@ -38,6 +38,7 @@ type RecurringTransaction = {
   transaction_type: string
   account_id: string | null
   category_id: string | null
+  payee_id: string | null
   amount: number | string
   currency_code: string
   frequency: string
@@ -45,6 +46,11 @@ type RecurringTransaction = {
   end_date: string | null
   next_run_date: string | null
   is_active: boolean
+}
+
+type Payee = {
+  id: string
+  name: string
 }
 
 type Account = {
@@ -106,11 +112,12 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
     { data: recurring, error: recurringError },
     { data: accounts },
     { data: categories },
+    { data: payees },
   ] = await Promise.all([
     supabase
       .from('recurring_transactions')
       .select(
-        'id, name, transaction_type, account_id, category_id, amount, currency_code, frequency, start_date, end_date, next_run_date, is_active'
+        'id, name, transaction_type, account_id, category_id, payee_id, amount, currency_code, frequency, start_date, end_date, next_run_date, is_active'
       )
       .eq('household_id', household.id)
       .order('next_run_date', { ascending: true, nullsFirst: false }),
@@ -129,13 +136,20 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
       .order('category_type', { ascending: true })
       .order('sort_order', { ascending: true, nullsFirst: false })
       .order('name', { ascending: true }),
+    supabase
+      .from('payees')
+      .select('id, name')
+      .eq('household_id', household.id)
+      .order('name', { ascending: true }),
   ])
 
   const allRecurring = (recurring ?? []) as RecurringTransaction[]
   const allAccounts = (accounts ?? []) as Account[]
   const allCategories = (categories ?? []) as Category[]
+  const allPayees = (payees ?? []) as Payee[]
   const accountsById = new Map(allAccounts.map((a) => [a.id, a]))
   const categoriesById = new Map(allCategories.map((c) => [c.id, c]))
+  const payeesById = new Map(allPayees.map((p) => [p.id, p]))
 
   const today = todayIsoDate()
 
@@ -239,8 +253,15 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
           The transaction posted, but the next run date could not be advanced. Edit the template if needed.
         </Callout>
       ) : null}
-      {params.reactivated === '1' ? <Callout variant="success">Recurring transaction reactivated.</Callout> : null}
-      {params.deactivated === '1' ? <Callout variant="info">Recurring transaction deactivated.</Callout> : null}
+      <ArchiveToast
+        action={toggleRecurringActiveAction}
+        idField="recurring_id"
+        archivedMessage="Recurring transaction deactivated."
+        restoredMessage="Recurring transaction reactivated."
+        undoLabel="Undo"
+        undoField="activate"
+        undoValue="true"
+      />
 
       {/* Summary */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -275,7 +296,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
           cancelHref="/dashboard/recurring"
           wide
         >
-          <RecurringForm mode="create" accounts={formAccounts} categories={formCategories} />
+          <RecurringForm mode="create" accounts={formAccounts} categories={formCategories} payees={allPayees} />
         </FormDialog>
       ) : null}
 
@@ -288,9 +309,15 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
         >
           <RecurringForm
             mode="edit"
-            template={editTemplate}
+            template={{
+              ...editTemplate,
+              payee_name: editTemplate.payee_id
+                ? payeesById.get(editTemplate.payee_id)?.name ?? ''
+                : '',
+            }}
             accounts={formAccounts}
             categories={formCategories}
+            payees={allPayees}
           />
         </FormDialog>
       ) : null}
