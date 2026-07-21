@@ -219,12 +219,24 @@ export async function createManualTransactionAction(formData: FormData) {
       RECURRING_NAME_MAX_LENGTH
     )
 
+    // BR-009: carry the payee onto the generated template so its future
+    // occurrences post with the same payee as this first one.
+    let recurringPayeeId: string | null = null
+    if (payeeName) {
+      const { data: resolvedPayeeId } = await supabase.rpc('get_or_create_payee', {
+        p_household_id: profile.default_household_id,
+        p_name: payeeName,
+      })
+      recurringPayeeId = (resolvedPayeeId as string | null) ?? null
+    }
+
     const { error: recurringError } = await supabase.from('recurring_transactions').insert({
       household_id: profile.default_household_id,
       name: recurringName,
       transaction_type: transactionType,
       account_id: accountId,
       category_id: categoryId,
+      payee_id: recurringPayeeId,
       amount,
       currency_code: account.currency_code,
       frequency,
@@ -577,6 +589,17 @@ export async function voidTransactionAction(formData: FormData) {
     redirect('/login')
   }
 
+  // BR-015: capture the posting status before voiding so the "Undo" toast can
+  // restore the transaction to exactly what it was (posted vs pending). The
+  // void RPC overwrites status with 'voided' and doesn't record the prior one.
+  const { data: priorRow } = await supabase
+    .from('transactions')
+    .select('status')
+    .eq('id', transactionId)
+    .maybeSingle()
+  const restoreStatus =
+    priorRow?.status === 'pending' ? 'pending' : 'posted'
+
   const { error: transactionError } = await supabase.rpc('void_transaction', {
     p_transaction_id: transactionId,
     p_void_reason: voidReason || null,
@@ -594,7 +617,48 @@ export async function voidTransactionAction(formData: FormData) {
   revalidatePath('/dashboard/transactions')
   revalidatePath('/dashboard/accounts')
   revalidatePath('/dashboard')
-  redirect('/dashboard/transactions?voided=1')
+  redirect(
+    `/dashboard/transactions?voided=1&undo_id=${encodeURIComponent(transactionId)}&undo_status=${restoreStatus}`
+  )
+}
+
+export async function unvoidTransactionAction(formData: FormData) {
+  const transactionId = String(formData.get('transaction_id') ?? '').trim()
+  const restoreStatus = String(formData.get('restore_status') ?? '').trim() || 'posted'
+
+  if (!transactionId) {
+    redirectWithError('Transaction id is required.')
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    redirect('/login')
+  }
+
+  const { error: transactionError } = await supabase.rpc('unvoid_transaction', {
+    p_transaction_id: transactionId,
+    p_restore_status: restoreStatus,
+  })
+
+  if (transactionError) {
+    redirectWithError(
+      cleanRpcError(
+        transactionError.message,
+        'Could not restore the transaction. Please try again.'
+      )
+    )
+  }
+
+  revalidatePath('/dashboard/transactions')
+  revalidatePath('/dashboard/accounts')
+  revalidatePath('/dashboard')
+  redirect('/dashboard/transactions?unvoided=1')
 }
 
 // ── Sprint 4: review workflow + bulk editing ────────────────────────────────

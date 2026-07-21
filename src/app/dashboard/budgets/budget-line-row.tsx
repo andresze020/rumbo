@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
 import { cn } from '@/lib/utils'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, formatPercent } from '@/lib/format'
 import { deleteBudgetLineAction, setBudgetLineRolloverAction } from './actions'
 
 type BudgetLineRow = {
@@ -37,15 +37,6 @@ type BudgetLineRowProps = {
 }
 
 const NEAR_LIMIT_THRESHOLD = 0.8
-
-function formatPercent(value: number | null) {
-  if (value === null) return 'N/A'
-  return new Intl.NumberFormat('en-CA', {
-    style: 'percent',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  }).format(value)
-}
 
 function getLineStatus(plannedAmount: number, actualAmount: number) {
   if (actualAmount > plannedAmount)
@@ -149,7 +140,7 @@ export function BudgetLineRow({
                     {formatCurrency(actualAmount, budgetCurrency)}
                   </p>
                   <p className={cn('mt-0.5 text-[10.5px] font-bold tabular-nums', status.textClassName)}>
-                    {formatPercent(linePercent)}
+                    {formatPercent(linePercent, 'en', { minimumFractionDigits: 0 })}
                   </p>
                 </div>
                 <ChevronDown
@@ -203,7 +194,7 @@ export function BudgetLineRow({
         <div className="min-w-0">
           <div className="mb-1 grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2 text-[10.5px]">
             <span className={cn('font-bold tabular-nums', status.textClassName)}>
-              {formatPercent(linePercent)}
+              {formatPercent(linePercent, 'en', { minimumFractionDigits: 0 })}
             </span>
             <span className="truncate text-right text-muted-foreground">{status.label}</span>
           </div>
@@ -323,7 +314,7 @@ export function BudgetLineRow({
               </div>
               <div className="rounded-md border bg-background p-2.5">
                 <p className="text-xs text-muted-foreground">Used</p>
-                <p className="mt-0.5 text-sm font-medium tabular-nums">{formatPercent(linePercent)}</p>
+                <p className="mt-0.5 text-sm font-medium tabular-nums">{formatPercent(linePercent, 'en', { minimumFractionDigits: 0 })}</p>
               </div>
             </div>
 

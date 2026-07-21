@@ -14,7 +14,7 @@ import { EmptyState } from '@/components/empty-state'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, localeToBcp47 } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 type BudgetDetailRow = {
@@ -66,7 +66,7 @@ function currentMonthDate() {
 export default async function PlanPage() {
   const locale = await getLocale()
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key)
-  const dateFmt = new Intl.DateTimeFormat(locale === 'en' ? 'en-CA' : locale, {
+  const dateFmt = new Intl.DateTimeFormat(localeToBcp47(locale), {
     month: 'short',
     day: 'numeric',
   })

@@ -3,7 +3,7 @@ import { AccountAvatar } from '@/components/account-avatar'
 import { StatusBadge } from '@/components/status-badge'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { formatCurrency, formatLabel } from '@/lib/format'
+import { formatCurrency, formatLabel, formatPercent } from '@/lib/format'
 
 type Debt = {
   id: string
@@ -37,14 +37,6 @@ type DebtCardProps = {
   noSourceAccounts: boolean
   editHref: string
   payHref: string
-}
-
-function formatPercent(value: number) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'percent',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  }).format(value)
 }
 
 /**
@@ -103,7 +95,7 @@ export function DebtCard({
             />
           </div>
           <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-            <span className="tabular-nums">{formatPercent(paydownPercent)} paid off</span>
+            <span className="tabular-nums">{formatPercent(paydownPercent, 'en', { minimumFractionDigits: 0 })} paid off</span>
             {debt.minimum_payment ? (
               <span className="tabular-nums">Min {formatCurrency(debt.minimum_payment, currency)}</span>
             ) : null}

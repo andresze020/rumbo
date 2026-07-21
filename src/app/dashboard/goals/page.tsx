@@ -12,7 +12,9 @@ import { MetricCard } from '@/components/metric-card'
 import { PageHeader } from '@/components/page-header'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
+import { ArchiveToast } from '@/components/archive-toast'
 import { formatCurrency } from '@/lib/format'
+import { setGoalStatusAction } from './actions'
 
 type GoalsPageProps = {
   searchParams: Promise<{
@@ -165,6 +167,15 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
       ) : null}
       {params.withdrawn === '1' ? <Callout variant="info">Withdrawal registered.</Callout> : null}
       {params.status_updated === '1' ? <Callout variant="info">Goal status updated.</Callout> : null}
+      <ArchiveToast
+        action={setGoalStatusAction}
+        idField="goal_id"
+        archivedMessage="Goal archived."
+        restoredMessage="Goal restored."
+        undoLabel="Undo"
+        undoField="status"
+        undoValue="active"
+      />
 
       {/* Summary */}
       <div className="grid gap-4 sm:grid-cols-3">

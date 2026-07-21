@@ -36,6 +36,8 @@ type AddNextDefaults = {
 type OpenDialogOptions = {
   accountId?: string
   type?: OpenDialogType
+  /** BR-028: prefill the description (e.g. text received from a PWA share). */
+  description?: string
 }
 
 type TransactionDialogContextValue = {
@@ -51,6 +53,25 @@ function todayIsoDate() {
 function readQuickAddType(searchParams: URLSearchParams): OpenDialogType | null {
   const type = searchParams.get('quick_add')
   return type === 'income' || type === 'expense' || type === 'transfer' ? type : null
+}
+
+/**
+ * BR-028: builds a description prefill from a PWA Web Share Target GET request.
+ * The manifest maps the OS share sheet's title/text/url onto the
+ * `share_title`/`share_text`/`share_url` query params; we fold them into a
+ * single description string (preferring the text, appending the URL when it
+ * isn't already contained in it). Returns null when no share params are present.
+ */
+function readSharedDescription(searchParams: URLSearchParams): string | null {
+  const title = searchParams.get('share_title')?.trim()
+  const text = searchParams.get('share_text')?.trim()
+  const url = searchParams.get('share_url')?.trim()
+  if (!title && !text && !url) return null
+
+  const base = text || title || ''
+  const description = url && !base.includes(url) ? `${base ? `${base} ` : ''}${url}` : base
+  // Descriptions are short single-line labels; keep the shared payload bounded.
+  return description.slice(0, 200)
 }
 
 function readAddNextDefaults(searchParams: URLSearchParams): AddNextDefaults | null {
@@ -90,6 +111,9 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   )
   const [triggerAccountId, setTriggerAccountId] = useState<string | undefined>()
   const [triggerType, setTriggerType] = useState<OpenDialogType | undefined>()
+  // BR-028: description prefilled from a PWA share (persists across the
+  // getQuickAddFormData load + URL cleanup that follow the share redirect).
+  const [sharedDescription, setSharedDescription] = useState<string | undefined>()
 
   const nextDate = searchParams.get('next_date')
   const nextType = searchParams.get('next_type')
@@ -191,18 +215,25 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   }, [created, hasPendingNext, addNextDefaults])
 
   // Opens the dialog when landing on a `?quick_add=income|expense|transfer`
-  // link (e.g. a PWA manifest shortcut), then strips the param from the URL.
+  // link (e.g. a PWA manifest shortcut) or a Web Share Target GET (BR-028),
+  // then strips the params from the URL.
   const processedQuickAddRef = useRef(false)
   useEffect(() => {
     if (processedQuickAddRef.current) return
-    const type = readQuickAddType(searchParams)
+    const shared = readSharedDescription(searchParams)
+    // A share always lands on the expense quick-add; an explicit quick_add param
+    // still wins when both are present.
+    const type = readQuickAddType(searchParams) ?? (shared !== null ? 'expense' : null)
     if (!type) return
     processedQuickAddRef.current = true
 
-    openDialog({ type })
+    openDialog({ type, description: shared ?? undefined })
 
     const cleaned = new URLSearchParams(searchParams.toString())
     cleaned.delete('quick_add')
+    cleaned.delete('share_title')
+    cleaned.delete('share_text')
+    cleaned.delete('share_url')
     const qs = cleaned.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -211,6 +242,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   async function openDialog(options?: OpenDialogOptions) {
     setTriggerAccountId(options?.accountId)
     setTriggerType(options?.type)
+    setSharedDescription(options?.description)
     setOpen(true)
     if (!loading) {
       setLoading(true)
@@ -238,7 +270,10 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
         open={open}
         onOpenChange={(value) => {
           setOpen(value)
-          if (!value) setAddNextDefaults(null)
+          if (!value) {
+            setAddNextDefaults(null)
+            setSharedDescription(undefined)
+          }
         }}
       >
         <DialogContent
@@ -281,8 +316,9 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
                 defaultAccountId={addNextDefaults?.accountId ?? triggerAccountId}
                 defaultType={addNextDefaults?.type ?? triggerType}
                 defaultStatus={addNextDefaults?.status}
+                defaultDescription={sharedDescription}
                 returnTo={pathname}
-                onCancel={() => { setOpen(false); setAddNextDefaults(null) }}
+                onCancel={() => { setOpen(false); setAddNextDefaults(null); setSharedDescription(undefined) }}
               />
             )
           ) : null}
