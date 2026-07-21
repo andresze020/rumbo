@@ -450,7 +450,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       value: formatCurrency(monthlyIncome, dashboardCurrency),
       description: formatTransactionCount(incomeTransactionCount, 'posted income transaction'),
       delta: renderPctDelta(monthlyIncome, prevIncome, locale, false),
-      trendMetric: 'monthly-income' as const,
       icon: <ArrowUpRight />,
       accent: ACCENT.emerald,
       valueClassName: undefined as string | undefined,
@@ -460,7 +459,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       value: formatCurrency(monthlyExpenses, dashboardCurrency),
       description: formatTransactionCount(expenseTransactionCount, 'posted expense transaction'),
       delta: renderPctDelta(monthlyExpenses, prevExpenses, locale, true),
-      trendMetric: 'monthly-expenses' as const,
       icon: <ArrowDownRight />,
       accent: ACCENT.rose,
       valueClassName: undefined as string | undefined,
@@ -470,7 +468,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       value: formatCurrency(monthlySavings, dashboardCurrency),
       description: t('dashboard.monthlySavingsDescription'),
       delta: renderPctDelta(monthlySavings, prevSavings, locale, false),
-      trendMetric: 'monthly-savings' as const,
       icon: <PiggyBank />,
       accent: ACCENT.sky,
       valueClassName: monthlySavings < 0 ? 'text-red-600 dark:text-red-400' : undefined,
@@ -480,7 +477,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       value: formatPercent(monthlySummary?.savings_rate ?? null, locale),
       description: t('dashboard.savingsRateDescription'),
       delta: renderRateDelta(savingsRateDelta, locale),
-      trendMetric: 'savings-rate' as const,
       icon: <Percent />,
       accent: ACCENT.violet,
       valueClassName: undefined as string | undefined,
@@ -773,24 +769,32 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           />
 
           {/* Monthly metrics */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {monthlyCards.map((c) => (
-              <MetricCard
-                key={c.label}
-                label={c.label}
-                value={c.value}
-                description={c.description}
-                delta={c.delta}
-                icon={c.icon}
-                accent={c.accent}
-                valueClassName={c.valueClassName}
-                trendMetric={c.trendMetric}
-                currentMonth={selectedMonth}
-                currency={dashboardCurrency}
-                tooltip={'tooltip' in c ? c.tooltip : undefined}
-              />
-            ))}
-          </div>
+          <section>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold">{t('dashboard.thisMonthTitle')}</h2>
+              <Link
+                href={`/dashboard/trends?month=${selectedMonth}`}
+                className="shrink-0 text-xs font-semibold text-primary hover:underline"
+              >
+                {t('dashboard.viewTrends')} →
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {monthlyCards.map((c) => (
+                <MetricCard
+                  key={c.label}
+                  label={c.label}
+                  value={c.value}
+                  description={c.description}
+                  delta={c.delta}
+                  icon={c.icon}
+                  accent={c.accent}
+                  valueClassName={c.valueClassName}
+                  tooltip={'tooltip' in c ? c.tooltip : undefined}
+                />
+              ))}
+            </div>
+          </section>
 
           {/* Mobile-only month health card */}
           <div className={cn(cardClass, 'flex items-center gap-4 p-4 lg:hidden')}>
