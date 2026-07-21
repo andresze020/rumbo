@@ -15,6 +15,40 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Payees maintenance — BR-009 slice 2 (2026-07-20)
+- Goal: close BR-009 by making the backfilled `payees` table maintainable and
+  the transaction-form payee field genuinely searchable.
+- Shipped:
+  - `/dashboard/payees` CRUD page (Money nav group, en/es/fr `nav.payees`):
+    list with per-payee usage stats (transaction count + last-used date),
+    create, rename, archive/restore, and merge. Rename propagates the new name
+    to every linked `transactions.merchant_name`. Merge reassigns all of a
+    payee's transactions to a surviving payee and archives the drained source.
+    Mirrors the categories management page (search, show-archived toggle,
+    metric cards, archive-confirm + undo toast).
+  - Searchable payee combobox: replaced the native `<datalist>` in
+    `payee-picker.tsx` with **Base UI Autocomplete** — a floating portal popup
+    (never clipped by the transaction dialog's scroll area, flips/repositions,
+    doesn't dismiss the parent dialog), live substring filtering with an
+    explicit "Create <text>" row and a "N more" hint. Used by the add form,
+    edit form, and the inline quick-edit (which dropped its shared datalist).
+  - Transactions `payee_id` filter: exact filter, all-time by default (skips
+    the month window unless a month/range is explicitly chosen), with a
+    dismissible "Showing all transactions for <payee>" chip; threaded through
+    `transactionsPath` + the filter form so it stays sticky. Reached from a
+    "View transactions" button on each payee row.
+  - Context-aware label: the payee field reads **Payer** on income vs **Payee**
+    on expense across the add form (reactive to the type toggle), edit form,
+    inline quick-edit, and the assistant receipt-review summary
+    (`transactionForm.payer` in en/es/fr).
+- Migrations added: `20260717120000_br_009_payee_crud.sql` — `payees.is_archived`
+  (+ partial index), `get_payees_with_stats(household)` and
+  `merge_payees(household, source, target)` RPCs (both `security invoker`).
+- Tables changed: `payees` (added `is_archived boolean not null default false`).
+- Follow-ups / known gaps: CSV import still does not set `payee_id`; recurring
+  templates carry no payee; the payees page has no bulk merge (one source at a
+  time).
+
 ## Sprint 13 — Quick wins (2026-06-23)
 - Goal: clear five small, independent items off `docs/pending-work.md` in one
   sprint: two pure cleanup items (Next 16 middleware rename, dead route

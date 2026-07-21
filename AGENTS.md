@@ -23,6 +23,22 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Payees maintenance — BR-009 slice 2** (2026-07-20, PR on
+  `feat/br-009-payee-crud`). BR-009 is now fully closed. New
+  `/dashboard/payees` CRUD page (Money nav group): list with usage stats
+  (transaction count + last-used via `get_payees_with_stats`), create,
+  rename (propagates to linked `transactions.merchant_name`),
+  archive/restore, and **merge** duplicates (`merge_payees` RPC reassigns
+  transactions to the surviving payee, then archives the drained source).
+  Migration `20260717120000_br_009_payee_crud.sql` adds `payees.is_archived`
+  + the two RPCs. Also: the transaction form's payee field is now a
+  searchable combobox built on **Base UI Autocomplete** (floating portal,
+  no dialog clipping; used by add/edit forms and the inline quick-edit);
+  the transactions list takes a `payee_id` filter (all-time by default,
+  dismissible chip) reachable from each payee's "View transactions" button;
+  and the field is labeled **Payer** on income vs **Payee** on expense
+  (`transactionForm.payer`, en/es/fr). Slice 1 (the payee picker wired to
+  write `payee_id`) shipped earlier in the Tier-2 cluster.
 - **Sprint 13 — Quick wins** (2026-06-23). Closed BR-026 (renamed
   `src/middleware.ts` → `src/proxy.ts` and the exported function to `proxy`,
   per Next 16's middleware→proxy convention; build no longer warns), BR-027
@@ -39,8 +55,9 @@ The product is household-first. All financial data must belong to a household.
   for the void-transaction confirm; no archive action exists yet to
   standardize, no undo/toast) and BR-009 (new `payees` table + backfill from
   distinct `merchant_name` per household via
-  `20260622100000_create_payees.sql`, **applied**; still no CRUD page and no
-  picker on the transaction form, so nothing writes `payee_id` yet). Also
+  `20260622100000_create_payees.sql`, **applied** — this was the data-model
+  slice only; the picker and the `/dashboard/payees` CRUD shipped later, see
+  the Payees entry above). Also
   added a dev/demo-only maintenance function,
   `public.copy_household_data(source, target, actor)`
   (`20260622110000_copy_household_data.sql`, **applied**) — wipes the target
@@ -189,8 +206,8 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
 ## Key areas of the app
 
-- `src/app/dashboard/` — accounts, categories, transactions, budgets, debts,
-  net-worth, recurring, goals, export, settings, assistant (AI), plus the
+- `src/app/dashboard/` — accounts, categories, payees, transactions, budgets,
+  debts, net-worth, recurring, goals, export, settings, assistant (AI), plus the
   analysis/planning screens: reports, trends, cash-flow, month-review,
   debt-planner.
 - `src/lib/supabase/{client,server,middleware}.ts` + `src/proxy.ts` — auth/SSR
