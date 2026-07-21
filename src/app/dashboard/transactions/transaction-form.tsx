@@ -1,13 +1,19 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownRight,
   ArrowLeftRight,
   ArrowUpRight,
+  CalendarDays,
   ChevronDown,
+  FileText,
+  ListChecks,
   Repeat,
+  Shapes,
+  Store,
+  StickyNote,
   Wallet,
 } from 'lucide-react'
 import {
@@ -93,6 +99,23 @@ function accountLeading(account: TransactionFormAccount | undefined) {
   return account?.icon ? null : <Wallet className="size-4.5" />
 }
 
+/**
+ * True on phone-width viewports. Drives the mobile "row list" layout (each field
+ * is a compact tap-to-expand row) vs the desktop two-column grid. Starts false
+ * so SSR/first paint is deterministic, then resolves on mount.
+ */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)')
+    const onChange = () => setIsMobile(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return isMobile
+}
+
 export function TransactionForm({
   accounts,
   baseCurrency,
@@ -119,11 +142,19 @@ export function TransactionForm({
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
   const [amountInput, setAmountInput] = useState(defaultAmount ?? '')
   const [status, setStatus] = useState(defaultStatus ?? 'posted')
-  // Secondary fields (description, payee, notes, status, repeat) collapse behind
-  // a "More details" toggle on mobile so the essentials + action buttons fit on
-  // one screen; on desktop (sm+) they always show in the two-column grid.
+  // Secondary fields (notes) collapse behind a "More details" toggle on the
+  // desktop grid; on mobile the row layout replaces this entirely.
   const [showMoreDetails, setShowMoreDetails] = useState(false)
   const [recurringFrequency, setRecurringFrequency] = useState('')
+  // Controlled copies of the free-text fields so the mobile row layout can show
+  // the current value inside each collapsed row. On desktop these controls stay
+  // uncontrolled (defaultValue), so this state only matters on mobile.
+  const [description, setDescription] = useState(defaultDescription ?? '')
+  const [payeeName, setPayeeName] = useState(defaultMerchantName ?? '')
+  const [notes, setNotes] = useState('')
+  // Which mobile row is expanded for editing (accordion; null = all collapsed).
+  const [expandedField, setExpandedField] = useState<string | null>(null)
+  const isMobile = useIsMobile()
   const [userRate, setUserRate] = useState('')
   const [fetchingRate, setFetchingRate] = useState(false)
   const [fxNote, setFxNote] = useState('')
@@ -417,6 +448,315 @@ export function TransactionForm({
     )
   }
 
+  // ── Mobile row layout ──────────────────────────────────────────────────
+  // Each field is a compact row (icon + label + current value); tapping expands
+  // its real control inline. The controls stay mounted (hidden when collapsed),
+  // so they submit exactly like the desktop grid — no separate hidden inputs.
+  const selectedCategory = categories.find((c) => c.id === categoryId)
+  const categoryValue = selectedCategory
+    ? `${selectedCategory.icon ? `${selectedCategory.icon} ` : ''}${selectedCategory.name}`
+    : ''
+  const repeatValue =
+    RECURRING_FREQUENCIES.find((f) => f.value === recurringFrequency)?.label ??
+    t('transactionForm.repeatNever')
+  const statusValue =
+    status === 'pending' ? t('transactionForm.statusPending') : t('transactionForm.statusPosted')
+
+  const editRow = ({
+    id,
+    icon,
+    label,
+    value,
+    placeholder,
+    children,
+  }: {
+    id: string
+    icon: ReactNode
+    label: string
+    value?: string
+    placeholder: string
+    children: ReactNode
+  }) => {
+    const open = expandedField === id
+    return (
+      <div key={id} className="border-t first:border-t-0">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setExpandedField(open ? null : id)}
+          className="flex w-full items-center gap-3 px-1 py-3 text-left"
+        >
+          <span className="shrink-0 text-muted-foreground">{icon}</span>
+          <span className="shrink-0 text-sm font-medium">{label}</span>
+          <span
+            className={cn(
+              'ml-auto max-w-[52%] truncate text-sm',
+              value ? 'text-foreground' : 'text-muted-foreground'
+            )}
+          >
+            {value || placeholder}
+          </span>
+          <ChevronDown
+            className={cn(
+              'size-4 shrink-0 text-muted-foreground transition-transform',
+              open && 'rotate-180'
+            )}
+            aria-hidden="true"
+          />
+        </button>
+        <div className={cn('px-1 pb-3 [&_label]:sr-only', open ? 'block' : 'hidden')}>
+          {children}
+        </div>
+      </div>
+    )
+  }
+
+  const mobileFields = (
+    <div className="rounded-xl border px-2">
+      {editRow({
+        id: 'date',
+        icon: <CalendarDays className="size-4.5" />,
+        label: t('transactionForm.date'),
+        value: transactionDate,
+        placeholder: '—',
+        children: dateField,
+      })}
+
+      {isTransfer ? (
+        <>
+          {editRow({
+            id: 'from',
+            icon: <Wallet className="size-4.5" />,
+            label: t('transactionForm.fromAccount'),
+            value: selectedFromAccount ? formatAccountLabel(selectedFromAccount) : '',
+            placeholder: t('transactionForm.selectSource'),
+            children: (
+              <SelectField
+                id="from_account_id"
+                name="from_account_id"
+                label={t('transactionForm.fromAccount')}
+                leading={accountLeading(selectedFromAccount)}
+                required
+                value={fromAccountId}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setFromAccountId(next)
+                  if (next === toAccountId) setToAccountId('')
+                }}
+              >
+                <option value="" disabled>{t('transactionForm.selectSource')}</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id} disabled={a.id === toAccountId}>
+                    {formatAccountLabel(a)}
+                  </option>
+                ))}
+              </SelectField>
+            ),
+          })}
+          {editRow({
+            id: 'to',
+            icon: <Wallet className="size-4.5" />,
+            label: t('transactionForm.toAccount'),
+            value: selectedToAccount ? formatAccountLabel(selectedToAccount) : '',
+            placeholder: t('transactionForm.selectDestination'),
+            children: (
+              <SelectField
+                id="to_account_id"
+                name="to_account_id"
+                label={t('transactionForm.toAccount')}
+                leading={accountLeading(selectedToAccount)}
+                required
+                value={toAccountId}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setToAccountId(next)
+                  if (next === fromAccountId) setFromAccountId('')
+                }}
+              >
+                <option value="" disabled>{t('transactionForm.selectDestination')}</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id} disabled={a.id === fromAccountId}>
+                    {formatAccountLabel(a)}
+                  </option>
+                ))}
+              </SelectField>
+            ),
+          })}
+        </>
+      ) : (
+        <>
+          {editRow({
+            id: 'account',
+            icon: <Wallet className="size-4.5" />,
+            label: t('transactionForm.account'),
+            value: selectedAccount ? formatAccountLabel(selectedAccount) : '',
+            placeholder: t('transactionForm.selectAccount'),
+            children: (
+              <SelectField
+                id="account_id"
+                name="account_id"
+                label={t('transactionForm.account')}
+                leading={accountLeading(selectedAccount)}
+                required
+                value={accountId}
+                onChange={(e) => {
+                  setAccountId(e.target.value)
+                  setUserRate('')
+                  setFxNote('')
+                  setFxError('')
+                }}
+              >
+                <option value="" disabled>{t('transactionForm.selectAccount')}</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {formatAccountLabel(a)}
+                  </option>
+                ))}
+              </SelectField>
+            ),
+          })}
+          {editRow({
+            id: 'category',
+            icon: <Shapes className="size-4.5" />,
+            label: 'Category',
+            value: categoryValue,
+            placeholder: 'Select category',
+            children: (
+              <>
+                <CategoryPicker
+                  key={transactionType}
+                  categories={compatibleCategories}
+                  transactionType={transactionType}
+                  onCategoryChange={setCategoryId}
+                  selectedCategoryId={categoryId}
+                />
+                {frequentCategories.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
+                    {frequentCategories.map((category) => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() => setCategoryId(category.id)}
+                        className={cn(
+                          'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
+                          categoryId === category.id
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                        )}
+                      >
+                        {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
+                        {category.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            ),
+          })}
+          {editRow({
+            id: 'payee',
+            icon: <Store className="size-4.5" />,
+            label: t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee'),
+            value: payeeName,
+            placeholder: '—',
+            children: (
+              <PayeePicker
+                payees={payees}
+                value={payeeName}
+                onValueChange={setPayeeName}
+                label={t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')}
+                helpText={t('transactionForm.payeeHelp')}
+                inputId="payee_name"
+              />
+            ),
+          })}
+          {editRow({
+            id: 'repeat',
+            icon: <Repeat className="size-4.5" />,
+            label: t('transactionForm.repeat'),
+            value: repeatValue,
+            placeholder: t('transactionForm.repeatNever'),
+            children: (
+              <SelectField
+                id="frequency"
+                name="frequency"
+                label={t('transactionForm.repeat')}
+                leading={<Repeat className="size-4.5" />}
+                value={recurringFrequency}
+                onChange={(e) => setRecurringFrequency(e.target.value)}
+              >
+                <option value="">{t('transactionForm.repeatNever')}</option>
+                {RECURRING_FREQUENCIES.map((frequency) => (
+                  <option key={frequency.value} value={frequency.value}>
+                    {frequency.label}
+                  </option>
+                ))}
+              </SelectField>
+            ),
+          })}
+        </>
+      )}
+
+      {editRow({
+        id: 'description',
+        icon: <FileText className="size-4.5" />,
+        label: t('transactionForm.description'),
+        value: description,
+        placeholder: '—',
+        children: (
+          <div className="space-y-1.5">
+            <Label htmlFor="description">{t('transactionForm.description')}</Label>
+            <Input
+              id="description"
+              name="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+        ),
+      })}
+      {editRow({
+        id: 'note',
+        icon: <StickyNote className="size-4.5" />,
+        label: t('transactionForm.notes'),
+        value: notes,
+        placeholder: '—',
+        children: (
+          <div className="space-y-1.5">
+            <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
+            <Textarea
+              id="notes"
+              name="notes"
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+        ),
+      })}
+      {editRow({
+        id: 'status',
+        icon: <ListChecks className="size-4.5" />,
+        label: t('transactionForm.status'),
+        value: statusValue,
+        placeholder: '',
+        children: statusField,
+      })}
+
+      {isTransfer && accounts.length < 2 ? (
+        <p className="border-t px-1 py-3 text-sm text-muted-foreground">
+          {t('transactionForm.needTwoAccounts')}
+        </p>
+      ) : null}
+      {isCrossCurrencyTransfer ? (
+        <p className="border-t px-1 py-3 text-sm text-destructive">
+          {t('transactionForm.crossCurrencyNotSupported')}
+        </p>
+      ) : null}
+    </div>
+  )
+
   return (
     <form action={submitAction} onSubmit={rememberDefaults} className="space-y-3">
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
@@ -464,7 +804,9 @@ export function TransactionForm({
         />
       </div>
 
-      {/* ── Essentials: dense two-column grid on both mobile and desktop ─ */}
+      {/* ── Fields: mobile row-list vs desktop two-column grid ─────────── */}
+      {isMobile ? mobileFields : (
+      <>
       {isTransfer ? (
         <div className="grid grid-cols-2 gap-3">
           <SelectField
@@ -656,6 +998,8 @@ export function TransactionForm({
           <Textarea id="notes" name="notes" rows={2} />
         </div>
       </div>
+      </>
+      )}
 
       {/* ── Exchange rate (only for non-base-currency entries) ────────── */}
       {isTransfer ? (
