@@ -1056,7 +1056,7 @@ export default async function TransactionsPage({
             description={
               hasActiveFilters
                 ? 'Clear filters or adjust the date range to see more activity.'
-                : 'Add a transaction or import a CSV once accounts and categories are ready.'
+                : 'A transaction is any money movement — a purchase, a payment you received, or a transfer between your own accounts.'
             }
             actionHref={
               hasActiveFilters

@@ -36,6 +36,8 @@ export type NavItem = {
   phase: Phase
   /** Required for locked items — text shown on the coming-soon page. */
   descriptionKey?: TranslationKey
+  /** Plain-language tooltip shown next to the icon when the sidebar is collapsed. */
+  hint?: string
 }
 
 export type NavGroup = {
@@ -47,32 +49,87 @@ export const navGroups: NavGroup[] = [
   {
     titleKey: 'nav.groupOverview',
     items: [
-      { href: '/dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard, phase: 'alpha' },
-      { href: '/dashboard/net-worth', labelKey: 'nav.netWorth', icon: TrendingUp, phase: 'alpha' },
+      {
+        href: '/dashboard',
+        labelKey: 'nav.dashboard',
+        icon: LayoutDashboard,
+        phase: 'alpha',
+        hint: 'Your monthly financial overview',
+      },
+      {
+        href: '/dashboard/net-worth',
+        labelKey: 'nav.netWorth',
+        icon: TrendingUp,
+        phase: 'alpha',
+        hint: 'What you own minus what you owe',
+      },
       {
         href: '/dashboard/month-review',
         labelKey: 'nav.monthReview',
         icon: CalendarCheck,
         phase: 'alpha',
+        hint: 'Compare this month to last month',
       },
     ],
   },
   {
     titleKey: 'nav.groupMoney',
     items: [
-      { href: '/dashboard/transactions', labelKey: 'nav.transactions', icon: ArrowLeftRight, phase: 'alpha' },
-      { href: '/dashboard/accounts', labelKey: 'nav.accounts', icon: Wallet, phase: 'alpha' },
-      { href: '/dashboard/categories', labelKey: 'nav.categories', icon: Tag, phase: 'alpha' },
-      { href: '/dashboard/payees', labelKey: 'nav.payees', icon: Store, phase: 'alpha' },
+      {
+        href: '/dashboard/transactions',
+        labelKey: 'nav.transactions',
+        icon: ArrowLeftRight,
+        phase: 'alpha',
+        hint: "Every money movement you've recorded",
+      },
+      {
+        href: '/dashboard/accounts',
+        labelKey: 'nav.accounts',
+        icon: Wallet,
+        phase: 'alpha',
+        hint: 'Your bank accounts, cards, and wallets',
+      },
+      {
+        href: '/dashboard/categories',
+        labelKey: 'nav.categories',
+        icon: Tag,
+        phase: 'alpha',
+        hint: 'How transactions are grouped for reports',
+      },
+      {
+        href: '/dashboard/payees',
+        labelKey: 'nav.payees',
+        icon: Store,
+        phase: 'alpha',
+        hint: 'The merchants and people you transact with',
+      },
       { href: '/dashboard/transactions/import', labelKey: 'nav.importCsv', icon: Upload, phase: 'alpha' },
     ],
   },
   {
     titleKey: 'nav.groupPlanning',
     items: [
-      { href: '/dashboard/budgets', labelKey: 'nav.budgets', icon: Target, phase: 'alpha' },
-      { href: '/dashboard/goals', labelKey: 'nav.goals', icon: PiggyBank, phase: 'alpha' },
-      { href: '/dashboard/debts', labelKey: 'nav.debts', icon: Scale, phase: 'alpha' },
+      {
+        href: '/dashboard/budgets',
+        labelKey: 'nav.budgets',
+        icon: Target,
+        phase: 'alpha',
+        hint: 'Monthly spending limits by category',
+      },
+      {
+        href: '/dashboard/goals',
+        labelKey: 'nav.goals',
+        icon: PiggyBank,
+        phase: 'alpha',
+        hint: 'Save toward a specific target',
+      },
+      {
+        href: '/dashboard/debts',
+        labelKey: 'nav.debts',
+        icon: Scale,
+        phase: 'alpha',
+        hint: "Loans and credit you're paying off",
+      },
       {
         href: '/dashboard/debt-planner',
         labelKey: 'nav.debtPlanner',
@@ -90,18 +147,21 @@ export const navGroups: NavGroup[] = [
         labelKey: 'nav.reports',
         icon: BarChart3,
         phase: 'alpha',
+        hint: 'Spending breakdown by category',
       },
       {
         href: '/dashboard/trends',
         labelKey: 'nav.trends',
         icon: LineChart,
         phase: 'alpha',
+        hint: 'How your finances change over time',
       },
       {
         href: '/dashboard/cash-flow',
         labelKey: 'nav.cashFlow',
         icon: Waves,
         phase: 'alpha',
+        hint: 'Money coming in versus going out',
       },
     ],
   },
@@ -135,7 +195,13 @@ export const navGroups: NavGroup[] = [
   {
     titleKey: 'nav.groupSettings',
     items: [
-      { href: '/dashboard/settings', labelKey: 'nav.settings', icon: Settings, phase: 'alpha' },
+      {
+        href: '/dashboard/settings',
+        labelKey: 'nav.settings',
+        icon: Settings,
+        phase: 'alpha',
+        hint: 'Preferences and household settings',
+      },
       { href: '/dashboard/export', labelKey: 'nav.export', icon: Download, phase: 'alpha' },
       {
         href: '/dashboard/coming-soon/household',

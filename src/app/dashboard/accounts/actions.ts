@@ -93,6 +93,14 @@ function revalidateAccountSurfaces() {
 }
 
 export async function createAccountAction(formData: FormData) {
+  // The onboarding wizard reuses this action; `return_to=onboarding` keeps
+  // success/error redirects inside the wizard instead of /dashboard/accounts.
+  const fromOnboarding = String(formData.get('return_to') ?? '') === 'onboarding'
+  const fail: (message: string) => never = (message) =>
+    fromOnboarding
+      ? redirect(`/onboarding/account?error=${encodeURIComponent(message)}`)
+      : redirectWithError(message)
+
   const name = String(formData.get('name') ?? '').trim()
   const accountType = String(formData.get('account_type') ?? '').trim()
   const currencyCode = String(formData.get('currency_code') ?? '')
@@ -104,19 +112,19 @@ export async function createAccountAction(formData: FormData) {
   const includeInNetWorth = formData.get('include_in_net_worth') !== null
 
   if (!name) {
-    redirectWithError('Account name is required.')
+    fail('Account name is required.')
   }
 
   if (!isAccountType(accountType)) {
-    redirectWithError('Select a valid account type.')
+    fail('Select a valid account type.')
   }
 
   if (!currencyCode) {
-    redirectWithError('Select a valid currency.')
+    fail('Select a valid currency.')
   }
 
   if (lastFour && !/^[0-9]{1,4}$/.test(lastFour)) {
-    redirectWithError('Last four must be 1 to 4 digits.')
+    fail('Last four must be 1 to 4 digits.')
   }
 
   const { supabase, userId, householdId } = await getAuthenticatedHousehold()
@@ -129,7 +137,7 @@ export async function createAccountAction(formData: FormData) {
     .maybeSingle()
 
   if (currencyError || !currency) {
-    redirectWithError('Select a valid active currency.')
+    fail('Select a valid active currency.')
   }
 
   const { error: insertError } = await supabase.from('accounts').insert({
@@ -146,13 +154,11 @@ export async function createAccountAction(formData: FormData) {
   })
 
   if (insertError) {
-    redirectWithError(
-      'Could not create the account. Please check the form and try again.'
-    )
+    fail('Could not create the account. Please check the form and try again.')
   }
 
   revalidatePath('/dashboard/accounts')
-  redirect('/dashboard/accounts?created=1')
+  redirect(fromOnboarding ? '/onboarding/account?created=1' : '/dashboard/accounts?created=1')
 }
 
 export async function updateAccountAction(formData: FormData) {

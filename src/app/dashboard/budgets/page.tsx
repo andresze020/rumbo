@@ -470,7 +470,8 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
         <div className="rounded-2xl border border-dashed bg-card/50 p-6 text-center shadow-sm shadow-black/[0.03] md:p-8">
           <p className="font-semibold">No budget for {formatMonthLabel(selectedMonth)}</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Create a budget to start planning expenses for this month.
+            A budget lets you set a monthly spending limit per category. Once
+            set, the dashboard shows how close you are to each limit.
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             <form action={createBudgetAction}>
