@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { Popover } from '@base-ui/react/popover'
 import {
   ArrowDownRight,
   ArrowLeftRight,
@@ -1002,35 +1003,51 @@ export function TransactionForm({
       <div className={cn('space-y-1.5', className)}>
         <Label>{label}</Label>
         <input type="hidden" name={hiddenName} value={hiddenValue} />
-        <button
-          type="button"
-          aria-expanded={open}
-          onClick={() => {
-            resetPickerState()
-            setExpandedField(open ? null : id)
+        <Popover.Root
+          open={open}
+          onOpenChange={(next) => {
+            if (next) resetPickerState()
+            setExpandedField(next ? id : null)
           }}
-          className={cn(
-            'flex h-11 w-full items-center gap-2 rounded-xl border bg-background px-3 text-left text-sm transition-colors',
-            open ? 'ring-2 ring-ring' : 'hover:bg-muted/50'
-          )}
         >
-          {leading ? <span className="shrink-0 text-muted-foreground">{leading}</span> : null}
-          <span className={cn('flex-1 truncate', valueText ? '' : 'text-muted-foreground')}>
-            {valueText || placeholder}
-          </span>
-          <ChevronDown
-            className={cn(
-              'size-4 shrink-0 text-muted-foreground transition-transform',
-              open && 'rotate-180'
-            )}
-            aria-hidden="true"
-          />
-        </button>
-        {open ? (
-          <div data-field-panel={id} className="rounded-xl border p-2 [&_label]:sr-only">
-            {body}
-          </div>
-        ) : null}
+          <Popover.Trigger
+            render={
+              <button
+                type="button"
+                className={cn(
+                  'flex h-11 w-full items-center gap-2 rounded-xl border bg-background px-3 text-left text-sm transition-colors',
+                  open ? 'ring-2 ring-ring' : 'hover:bg-muted/50'
+                )}
+              />
+            }
+          >
+            {leading ? <span className="shrink-0 text-muted-foreground">{leading}</span> : null}
+            <span className={cn('flex-1 truncate', valueText ? '' : 'text-muted-foreground')}>
+              {valueText || placeholder}
+            </span>
+            <ChevronDown
+              className={cn(
+                'size-4 shrink-0 text-muted-foreground transition-transform',
+                open && 'rotate-180'
+              )}
+              aria-hidden="true"
+            />
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Positioner
+              sideOffset={4}
+              align="start"
+              className="isolate z-50 w-(--anchor-width)"
+            >
+              <Popover.Popup
+                data-field-panel={id}
+                className="max-h-(--available-height) w-(--anchor-width) overflow-y-auto rounded-xl border bg-popover p-2 text-popover-foreground shadow-md ring-1 ring-foreground/10 [&_label]:sr-only"
+              >
+                {body}
+              </Popover.Popup>
+            </Popover.Positioner>
+          </Popover.Portal>
+        </Popover.Root>
       </div>
     )
   }
