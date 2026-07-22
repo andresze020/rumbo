@@ -171,9 +171,15 @@ export function TransactionForm({
     () => [...categories, ...createdCategories],
     [categories, createdCategories]
   )
-  // Inline create form state (category + account).
-  const [newCategoryName, setNewCategoryName] = useState('')
+  // Category picker: search text + which parent we've drilled into (null = show
+  // the parent list; a parent id = show only that parent's subcategories).
+  const [categorySearch, setCategorySearch] = useState('')
+  const [categoryDrillParentId, setCategoryDrillParentId] = useState<string | null>(null)
   const [creatingCategory, setCreatingCategory] = useState(false)
+  // Account picker: search text + whether the inline "create account" sub-view
+  // is showing (reveals the extra fields only when needed, keeping it lean).
+  const [accountSearch, setAccountSearch] = useState('')
+  const [showAccountCreate, setShowAccountCreate] = useState(false)
   const [newAccountName, setNewAccountName] = useState('')
   const [newAccountType, setNewAccountType] = useState('cash')
   const [newAccountCurrency, setNewAccountCurrency] = useState('')
@@ -502,14 +508,9 @@ export function TransactionForm({
   const categoryValue = selectedCategory
     ? `${selectedCategory.icon ? `${selectedCategory.icon} ` : ''}${selectedCategory.name}`
     : ''
-  // Two-level category selection for the mobile inline list.
+  // Top-level categories for the mobile picker's first level.
   const mobileParentCategories = compatibleCategories.filter(
     (c) => c.parent_category_id === null
-  )
-  const mobileCurrentParentId =
-    selectedCategory?.parent_category_id ?? selectedCategory?.id ?? ''
-  const mobileChildCategories = compatibleCategories.filter(
-    (c) => c.parent_category_id === mobileCurrentParentId
   )
   const repeatValue =
     RECURRING_FREQUENCIES.find((f) => f.value === recurringFrequency)?.label ??
@@ -538,7 +539,15 @@ export function TransactionForm({
         <button
           type="button"
           aria-expanded={open}
-          onClick={() => setExpandedField(open ? null : id)}
+          onClick={() => {
+            // Reset each picker's sub-state when the row it belongs to opens.
+            setCategorySearch('')
+            setCategoryDrillParentId(null)
+            setAccountSearch('')
+            setShowAccountCreate(false)
+            setCreateError('')
+            setExpandedField(open ? null : id)
+          }}
           className="flex w-full items-center gap-3 px-1 py-3 text-left"
         >
           <span className="shrink-0 text-muted-foreground">{icon}</span>
@@ -620,8 +629,8 @@ export function TransactionForm({
     { value: 'other', label: 'Other' },
   ]
 
-  async function handleCreateCategory() {
-    const name = newCategoryName.trim()
+  async function handleCreateCategory(rawName: string) {
+    const name = rawName.trim()
     if (!name || creatingCategory || isTransfer) return
     setCreatingCategory(true)
     setCreateError('')
@@ -634,7 +643,6 @@ export function TransactionForm({
     const created = result.category as TransactionFormCategory
     setCreatedCategories((prev) => [...prev, created])
     setCategoryId(created.id)
-    setNewCategoryName('')
     setExpandedField(null)
   }
 
@@ -666,50 +674,258 @@ export function TransactionForm({
     setExpandedField(null)
   }
 
-  // Inline "create account" mini-form shared by the account / from / to rows.
-  const createAccountForm = (
-    <div className="mt-2 border-t pt-2">
-      <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">New account</p>
-      <div className="space-y-2 px-2">
-        <Input
-          placeholder="Account name"
-          value={newAccountName}
-          onChange={(e) => setNewAccountName(e.target.value)}
-        />
-        <div className="flex gap-2">
-          <select
-            aria-label="Account type"
-            className={nativeSelectCls}
-            value={newAccountType}
-            onChange={(e) => setNewAccountType(e.target.value)}
-          >
-            {ACCOUNT_TYPE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-          <select
-            aria-label="Currency"
-            className={nativeSelectCls}
-            value={newAccountCurrency || baseCurrency}
-            onChange={(e) => setNewAccountCurrency(e.target.value)}
-          >
-            {currencyOptions.map((code) => (
-              <option key={code} value={code}>{code}</option>
-            ))}
-          </select>
-        </div>
-        {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
-        <Button
-          type="button"
-          size="sm"
-          disabled={creatingAccount || !newAccountName.trim()}
-          onClick={handleCreateAccount}
-        >
-          {creatingAccount ? 'Creating…' : 'Create account'}
-        </Button>
-      </div>
-    </div>
+  const backButton = (onClick: () => void, label: string) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mb-1 flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+    >
+      <ChevronDown className="size-4 rotate-90" aria-hidden="true" />
+      {label}
+    </button>
   )
+
+  // Account picker used by the account / from / to rows: a searchable list plus
+  // a "Create …" row that drills into a compact create sub-view (name +
+  // type + currency) so the row stays lean until you actually add an account.
+  const accountPicker = (
+    fieldName: string,
+    selectedId: string,
+    onSelect: (id: string) => void,
+    disabledId?: string
+  ) => {
+    const query = accountSearch.trim().toLowerCase()
+    const matches = availableAccounts.filter((a) =>
+      formatAccountLabel(a).toLowerCase().includes(query)
+    )
+    const hasExact = availableAccounts.some(
+      (a) => a.name.toLowerCase() === query && query !== ''
+    )
+    return (
+      <>
+        <input type="hidden" name={fieldName} value={selectedId} />
+        {showAccountCreate ? (
+          <div className="space-y-2">
+            {backButton(() => setShowAccountCreate(false), 'Back to accounts')}
+            <Input
+              placeholder="Account name"
+              value={newAccountName}
+              onChange={(e) => setNewAccountName(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <select
+                aria-label="Account type"
+                className={nativeSelectCls}
+                value={newAccountType}
+                onChange={(e) => setNewAccountType(e.target.value)}
+              >
+                {ACCOUNT_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <select
+                aria-label="Currency"
+                className={nativeSelectCls}
+                value={newAccountCurrency || baseCurrency}
+                onChange={(e) => setNewAccountCurrency(e.target.value)}
+              >
+                {currencyOptions.map((code) => (
+                  <option key={code} value={code}>{code}</option>
+                ))}
+              </select>
+            </div>
+            {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
+            <Button
+              type="button"
+              size="sm"
+              disabled={creatingAccount || !newAccountName.trim()}
+              onClick={handleCreateAccount}
+            >
+              {creatingAccount ? 'Creating…' : 'Create account'}
+            </Button>
+          </div>
+        ) : (
+          <>
+            <Input
+              placeholder="Search or add an account"
+              value={accountSearch}
+              onChange={(e) => setAccountSearch(e.target.value)}
+            />
+            <div className="mt-2 max-h-72 overflow-y-auto">
+              {matches.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  disabled={a.id === disabledId}
+                  onClick={() => {
+                    onSelect(a.id)
+                    setExpandedField(null)
+                  }}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm disabled:opacity-40',
+                    selectedId === a.id
+                      ? 'bg-primary/10 font-medium text-primary'
+                      : 'hover:bg-muted'
+                  )}
+                >
+                  <span className="flex-1 truncate">{formatAccountLabel(a)}</span>
+                  {selectedId === a.id ? (
+                    <Check className="size-4 shrink-0" aria-hidden="true" />
+                  ) : null}
+                </button>
+              ))}
+              {accountSearch.trim() && !hasExact ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewAccountName(accountSearch.trim())
+                    setCreateError('')
+                    setShowAccountCreate(true)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-muted"
+                >
+                  <Plus className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span className="flex-1 truncate">
+                    Create “<span className="font-semibold">{accountSearch.trim()}</span>”
+                  </span>
+                </button>
+              ) : null}
+            </div>
+          </>
+        )}
+      </>
+    )
+  }
+
+  // Category picker: searchable parent list that drills into a parent's
+  // subcategories (hiding the parent list so there's no scrolling), plus a
+  // payee-style "Create …" row for a brand-new top-level category.
+  const categoryPicker = () => {
+    const query = categorySearch.trim().toLowerCase()
+    const parents = mobileParentCategories.filter((c) =>
+      c.name.toLowerCase().includes(query)
+    )
+    const hasExact = compatibleCategories.some(
+      (c) => c.name.toLowerCase() === query && query !== ''
+    )
+    const drillParent = categoryDrillParentId
+      ? categories.find((c) => c.id === categoryDrillParentId)
+      : null
+    const drillChildren = categoryDrillParentId
+      ? compatibleCategories.filter((c) => c.parent_category_id === categoryDrillParentId)
+      : []
+
+    return (
+      <>
+        <input type="hidden" name="category_id" value={categoryId} />
+        {drillParent ? (
+          <div>
+            {backButton(() => setCategoryDrillParentId(null), 'All categories')}
+            {optionList(
+              [
+                { value: drillParent.id, label: 'General' },
+                ...drillChildren.map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
+              ],
+              categoryId,
+              (value) => {
+                setCategoryId(value)
+                setExpandedField(null)
+              }
+            )}
+          </div>
+        ) : (
+          <>
+            <Input
+              placeholder="Search or add a category"
+              value={categorySearch}
+              onChange={(e) => setCategorySearch(e.target.value)}
+            />
+            <div className="mt-2 max-h-72 overflow-y-auto">
+              {parents.map((parent) => {
+                const kids = compatibleCategories.filter(
+                  (c) => c.parent_category_id === parent.id
+                )
+                const isSelected =
+                  categoryId === parent.id ||
+                  kids.some((k) => k.id === categoryId)
+                return (
+                  <button
+                    key={parent.id}
+                    type="button"
+                    onClick={() => {
+                      if (kids.length > 0) {
+                        setCategoryDrillParentId(parent.id)
+                        setCategorySearch('')
+                      } else {
+                        setCategoryId(parent.id)
+                        setExpandedField(null)
+                      }
+                    }}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
+                      isSelected ? 'bg-primary/10 font-medium text-primary' : 'hover:bg-muted'
+                    )}
+                  >
+                    {parent.icon ? (
+                      <span className="shrink-0" aria-hidden="true">{parent.icon}</span>
+                    ) : null}
+                    <span className="flex-1 truncate">{parent.name}</span>
+                    {kids.length > 0 ? (
+                      <ChevronDown className="size-4 shrink-0 -rotate-90 text-muted-foreground" aria-hidden="true" />
+                    ) : isSelected ? (
+                      <Check className="size-4 shrink-0" aria-hidden="true" />
+                    ) : null}
+                  </button>
+                )
+              })}
+              {categorySearch.trim() && !hasExact ? (
+                <button
+                  type="button"
+                  disabled={creatingCategory}
+                  onClick={() => handleCreateCategory(categorySearch)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-muted disabled:opacity-50"
+                >
+                  <Plus className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span className="flex-1 truncate">
+                    {creatingCategory ? (
+                      'Creating…'
+                    ) : (
+                      <>Create “<span className="font-semibold">{categorySearch.trim()}</span>”</>
+                    )}
+                  </span>
+                </button>
+              ) : null}
+            </div>
+
+            {frequentCategories.length > 0 && !categorySearch.trim() ? (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t pt-2">
+                <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
+                {frequentCategories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => {
+                      setCategoryId(category.id)
+                      setExpandedField(null)
+                    }}
+                    className={cn(
+                      'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
+                      categoryId === category.id
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                  >
+                    {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </>
+        )}
+      </>
+    )
+  }
 
   const mobileFields = (
     <div className="rounded-xl border px-2">
@@ -730,24 +946,14 @@ export function TransactionForm({
             label: t('transactionForm.fromAccount'),
             value: selectedFromAccount ? formatAccountLabel(selectedFromAccount) : '',
             placeholder: t('transactionForm.selectSource'),
-            children: (
-              <>
-                <input type="hidden" name="from_account_id" value={fromAccountId} />
-                {optionList(
-                  availableAccounts.map((a) => ({
-                    value: a.id,
-                    label: formatAccountLabel(a),
-                    disabled: a.id === toAccountId,
-                  })),
-                  fromAccountId,
-                  (value) => {
-                    setFromAccountId(value)
-                    if (value === toAccountId) setToAccountId('')
-                    setExpandedField(null)
-                  }
-                )}
-                {createAccountForm}
-              </>
+            children: accountPicker(
+              'from_account_id',
+              fromAccountId,
+              (id) => {
+                setFromAccountId(id)
+                if (id === toAccountId) setToAccountId('')
+              },
+              toAccountId
             ),
           })}
           {editRow({
@@ -756,24 +962,14 @@ export function TransactionForm({
             label: t('transactionForm.toAccount'),
             value: selectedToAccount ? formatAccountLabel(selectedToAccount) : '',
             placeholder: t('transactionForm.selectDestination'),
-            children: (
-              <>
-                <input type="hidden" name="to_account_id" value={toAccountId} />
-                {optionList(
-                  availableAccounts.map((a) => ({
-                    value: a.id,
-                    label: formatAccountLabel(a),
-                    disabled: a.id === fromAccountId,
-                  })),
-                  toAccountId,
-                  (value) => {
-                    setToAccountId(value)
-                    if (value === fromAccountId) setFromAccountId('')
-                    setExpandedField(null)
-                  }
-                )}
-                {createAccountForm}
-              </>
+            children: accountPicker(
+              'to_account_id',
+              toAccountId,
+              (id) => {
+                setToAccountId(id)
+                if (id === fromAccountId) setFromAccountId('')
+              },
+              fromAccountId
             ),
           })}
         </>
@@ -785,23 +981,12 @@ export function TransactionForm({
             label: t('transactionForm.account'),
             value: selectedAccount ? formatAccountLabel(selectedAccount) : '',
             placeholder: t('transactionForm.selectAccount'),
-            children: (
-              <>
-                <input type="hidden" name="account_id" value={accountId} />
-                {optionList(
-                  availableAccounts.map((a) => ({ value: a.id, label: formatAccountLabel(a) })),
-                  accountId,
-                  (value) => {
-                    setAccountId(value)
-                    setUserRate('')
-                    setFxNote('')
-                    setFxError('')
-                    setExpandedField(null)
-                  }
-                )}
-                {createAccountForm}
-              </>
-            ),
+            children: accountPicker('account_id', accountId, (id) => {
+              setAccountId(id)
+              setUserRate('')
+              setFxNote('')
+              setFxError('')
+            }),
           })}
           {editRow({
             id: 'category',
@@ -809,101 +994,7 @@ export function TransactionForm({
             label: 'Category',
             value: categoryValue,
             placeholder: 'Select category',
-            children: (
-              <>
-                <input type="hidden" name="category_id" value={categoryId} />
-                {optionList(
-                  mobileParentCategories.map((c) => ({
-                    value: c.id,
-                    label: c.name,
-                    icon: c.icon,
-                  })),
-                  mobileCurrentParentId,
-                  (parentId) => {
-                    const kids = compatibleCategories.filter(
-                      (c) => c.parent_category_id === parentId
-                    )
-                    setCategoryId(parentId)
-                    // A parent with no subcategories is a complete choice; one
-                    // with children keeps the row open to pick the subcategory.
-                    if (kids.length === 0) setExpandedField(null)
-                  }
-                )}
-
-                {mobileChildCategories.length > 0 ? (
-                  <>
-                    <p className="px-2 pt-3 pb-1 text-xs font-medium text-muted-foreground">
-                      Subcategory
-                    </p>
-                    {optionList(
-                      [
-                        { value: mobileCurrentParentId, label: 'General' },
-                        ...mobileChildCategories.map((c) => ({
-                          value: c.id,
-                          label: c.name,
-                          icon: c.icon,
-                        })),
-                      ],
-                      categoryId,
-                      (value) => {
-                        setCategoryId(value)
-                        setExpandedField(null)
-                      }
-                    )}
-                  </>
-                ) : null}
-
-                {frequentCategories.length > 0 ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
-                    {frequentCategories.map((category) => (
-                      <button
-                        key={category.id}
-                        type="button"
-                        onClick={() => {
-                          setCategoryId(category.id)
-                          setExpandedField(null)
-                        }}
-                        className={cn(
-                          'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
-                          categoryId === category.id
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-                        )}
-                      >
-                        {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
-                        {category.name}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-
-                <div className="mt-3 border-t pt-2">
-                  <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">
-                    New category
-                  </p>
-                  <div className="flex gap-2 px-2">
-                    <Input
-                      placeholder="Category name"
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="shrink-0"
-                      disabled={creatingCategory || !newCategoryName.trim()}
-                      onClick={handleCreateCategory}
-                    >
-                      {creatingCategory ? 'Creating…' : 'Create'}
-                    </Button>
-                  </div>
-                  {createError ? (
-                    <p className="mt-1 px-2 text-xs text-destructive">{createError}</p>
-                  ) : null}
-                </div>
-              </>
-            ),
+            children: categoryPicker(),
           })}
           {editRow({
             id: 'payee',
