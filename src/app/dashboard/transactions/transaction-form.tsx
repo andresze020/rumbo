@@ -69,6 +69,8 @@ type TransactionFormProps = {
   onCancel?: () => void
   categories: TransactionFormCategory[]
   payees: PayeeOption[]
+  /** Active currency codes for the inline "create account" form. */
+  currencies?: string[]
   defaultDate: string
   defaultAccountId?: string
   defaultType?: TransactionType
@@ -126,6 +128,7 @@ export function TransactionForm({
   onCancel,
   categories,
   payees,
+  currencies,
   defaultDate,
   defaultAccountId,
   defaultType,
@@ -617,7 +620,12 @@ export function TransactionForm({
   // plus any already used by an existing account (a brand-new currency still
   // goes through the full accounts page).
   const currencyOptions = Array.from(
-    new Set([baseCurrency, ...availableAccounts.map((a) => a.currency_code)])
+    new Set([
+      baseCurrency,
+      ...(currencies && currencies.length > 0
+        ? currencies
+        : availableAccounts.map((a) => a.currency_code)),
+    ])
   )
   const ACCOUNT_TYPE_OPTIONS: { value: string; label: string }[] = [
     { value: 'cash', label: 'Cash' },
@@ -802,9 +810,12 @@ export function TransactionForm({
   // payee-style "Create …" row for a brand-new top-level category.
   const categoryPicker = () => {
     const query = categorySearch.trim().toLowerCase()
-    const parents = mobileParentCategories.filter((c) =>
-      c.name.toLowerCase().includes(query)
-    )
+    const parents = mobileParentCategories
+    // While searching, match across every compatible category (parents AND
+    // subcategories), so a subcategory can be found and picked directly.
+    const searchMatches = query
+      ? compatibleCategories.filter((c) => c.name.toLowerCase().includes(query))
+      : []
     const hasExact = compatibleCategories.some(
       (c) => c.name.toLowerCase() === query && query !== ''
     )
@@ -841,43 +852,77 @@ export function TransactionForm({
               onChange={(e) => setCategorySearch(e.target.value)}
             />
             <div className="mt-2 max-h-72 overflow-y-auto">
-              {parents.map((parent) => {
-                const kids = compatibleCategories.filter(
-                  (c) => c.parent_category_id === parent.id
-                )
-                const isSelected =
-                  categoryId === parent.id ||
-                  kids.some((k) => k.id === categoryId)
-                return (
-                  <button
-                    key={parent.id}
-                    type="button"
-                    onClick={() => {
-                      if (kids.length > 0) {
-                        setCategoryDrillParentId(parent.id)
-                        setCategorySearch('')
-                      } else {
-                        setCategoryId(parent.id)
-                        setExpandedField(null)
-                      }
-                    }}
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
-                      isSelected ? 'bg-primary/10 font-medium text-primary' : 'hover:bg-muted'
-                    )}
-                  >
-                    {parent.icon ? (
-                      <span className="shrink-0" aria-hidden="true">{parent.icon}</span>
-                    ) : null}
-                    <span className="flex-1 truncate">{parent.name}</span>
-                    {kids.length > 0 ? (
-                      <ChevronDown className="size-4 shrink-0 -rotate-90 text-muted-foreground" aria-hidden="true" />
-                    ) : isSelected ? (
-                      <Check className="size-4 shrink-0" aria-hidden="true" />
-                    ) : null}
-                  </button>
-                )
-              })}
+              {query
+                ? searchMatches.map((c) => {
+                    const parent = c.parent_category_id
+                      ? availableCategories.find((p) => p.id === c.parent_category_id)
+                      : null
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setCategoryId(c.id)
+                          setExpandedField(null)
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
+                          categoryId === c.id
+                            ? 'bg-primary/10 font-medium text-primary'
+                            : 'hover:bg-muted'
+                        )}
+                      >
+                        {c.icon ? (
+                          <span className="shrink-0" aria-hidden="true">{c.icon}</span>
+                        ) : null}
+                        <span className="min-w-0 flex-1 truncate">
+                          {c.name}
+                          {parent ? (
+                            <span className="text-muted-foreground"> · {parent.name}</span>
+                          ) : null}
+                        </span>
+                        {categoryId === c.id ? (
+                          <Check className="size-4 shrink-0" aria-hidden="true" />
+                        ) : null}
+                      </button>
+                    )
+                  })
+                : parents.map((parent) => {
+                    const kids = compatibleCategories.filter(
+                      (c) => c.parent_category_id === parent.id
+                    )
+                    const isSelected =
+                      categoryId === parent.id || kids.some((k) => k.id === categoryId)
+                    return (
+                      <button
+                        key={parent.id}
+                        type="button"
+                        onClick={() => {
+                          if (kids.length > 0) {
+                            setCategoryDrillParentId(parent.id)
+                            setCategorySearch('')
+                          } else {
+                            setCategoryId(parent.id)
+                            setExpandedField(null)
+                          }
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
+                          isSelected ? 'bg-primary/10 font-medium text-primary' : 'hover:bg-muted'
+                        )}
+                      >
+                        {parent.icon ? (
+                          <span className="shrink-0" aria-hidden="true">{parent.icon}</span>
+                        ) : null}
+                        <span className="flex-1 truncate">{parent.name}</span>
+                        {kids.length > 0 ? (
+                          <ChevronDown className="size-4 shrink-0 -rotate-90 text-muted-foreground" aria-hidden="true" />
+                        ) : isSelected ? (
+                          <Check className="size-4 shrink-0" aria-hidden="true" />
+                        ) : null}
+                      </button>
+                    )
+                  })}
               {categorySearch.trim() && !hasExact ? (
                 <button
                   type="button"
