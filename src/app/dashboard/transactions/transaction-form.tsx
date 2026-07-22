@@ -1,24 +1,33 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { Popover } from '@base-ui/react/popover'
 import {
   ArrowDownRight,
   ArrowLeftRight,
   ArrowUpRight,
+  CalendarDays,
+  Check,
   ChevronDown,
+  FileText,
+  ListChecks,
+  Plus,
   Repeat,
+  Shapes,
+  Store,
+  StickyNote,
   Wallet,
 } from 'lucide-react'
 import {
   createManualTransactionAction,
   createTransferTransactionAction,
 } from './actions'
-import { CategoryPicker } from './category-picker'
 import { PayeePicker, type PayeeOption } from './payee-picker'
+import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
 import { AdvancedFields } from '@/components/advanced-fields'
 import { AmountInput } from '@/components/amount-input'
-import { DateField, SegmentedField, SelectField } from '@/components/form-field'
+import { DateField, SegmentedField, SelectField, nativeSelectCls } from '@/components/form-field'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -60,6 +69,8 @@ type TransactionFormProps = {
   onCancel?: () => void
   categories: TransactionFormCategory[]
   payees: PayeeOption[]
+  /** Active currency codes for the inline "create account" form. */
+  currencies?: string[]
   defaultDate: string
   defaultAccountId?: string
   defaultType?: TransactionType
@@ -93,6 +104,23 @@ function accountLeading(account: TransactionFormAccount | undefined) {
   return account?.icon ? null : <Wallet className="size-4.5" />
 }
 
+/**
+ * True on phone-width viewports. Drives the mobile "row list" layout (each field
+ * is a compact tap-to-expand row) vs the desktop two-column grid. Starts false
+ * so SSR/first paint is deterministic, then resolves on mount.
+ */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)')
+    const onChange = () => setIsMobile(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return isMobile
+}
+
 export function TransactionForm({
   accounts,
   baseCurrency,
@@ -100,6 +128,7 @@ export function TransactionForm({
   onCancel,
   categories,
   payees,
+  currencies,
   defaultDate,
   defaultAccountId,
   defaultType,
@@ -119,11 +148,68 @@ export function TransactionForm({
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
   const [amountInput, setAmountInput] = useState(defaultAmount ?? '')
   const [status, setStatus] = useState(defaultStatus ?? 'posted')
-  // Secondary fields (description, payee, notes, status, repeat) collapse behind
-  // a "More details" toggle on mobile so the essentials + action buttons fit on
-  // one screen; on desktop (sm+) they always show in the two-column grid.
+  // Secondary fields (notes) collapse behind a "More details" toggle on the
+  // desktop grid; on mobile the row layout replaces this entirely.
   const [showMoreDetails, setShowMoreDetails] = useState(false)
   const [recurringFrequency, setRecurringFrequency] = useState('')
+  // Controlled copies of the free-text fields so the mobile row layout can show
+  // the current value inside each collapsed row. On desktop these controls stay
+  // uncontrolled (defaultValue), so this state only matters on mobile.
+  const [description, setDescription] = useState(defaultDescription ?? '')
+  const [payeeName, setPayeeName] = useState(defaultMerchantName ?? '')
+  const [notes, setNotes] = useState('')
+  // Which mobile row is expanded for editing (accordion; null = all collapsed).
+  const [expandedField, setExpandedField] = useState<string | null>(null)
+  const isMobile = useIsMobile()
+
+  // Accounts/categories created inline from the mobile pickers, merged into the
+  // prop lists so they show up and can be selected without a page reload.
+  const [createdCategories, setCreatedCategories] = useState<TransactionFormCategory[]>([])
+  const [createdAccounts, setCreatedAccounts] = useState<TransactionFormAccount[]>([])
+  const availableAccounts = useMemo(
+    () => [...accounts, ...createdAccounts],
+    [accounts, createdAccounts]
+  )
+  const availableCategories = useMemo(
+    () => [...categories, ...createdCategories],
+    [categories, createdCategories]
+  )
+  // Category picker: search text + which parent we've drilled into (null = show
+  // the parent list; a parent id = show only that parent's subcategories).
+  const [categorySearch, setCategorySearch] = useState('')
+  const [categoryDrillParentId, setCategoryDrillParentId] = useState<string | null>(null)
+  const [creatingCategory, setCreatingCategory] = useState(false)
+  // Account picker: search text + whether the inline "create account" sub-view
+  // is showing (reveals the extra fields only when needed, keeping it lean).
+  const [accountSearch, setAccountSearch] = useState('')
+  const [showAccountCreate, setShowAccountCreate] = useState(false)
+  const [newAccountName, setNewAccountName] = useState('')
+  const [newAccountType, setNewAccountType] = useState('cash')
+  const [newAccountCurrency, setNewAccountCurrency] = useState('')
+  const [creatingAccount, setCreatingAccount] = useState(false)
+  const [createError, setCreateError] = useState('')
+
+  // When a mobile row expands, focus its control so choosing a value is a single
+  // tap: text fields get the keyboard, the date field opens its native picker.
+  // Rows backed by an inline option list have no text input, so this is a no-op
+  // for them (they already show the list on expand).
+  useEffect(() => {
+    if (!expandedField) return
+    const panel = document.querySelector(`[data-field-panel="${expandedField}"]`)
+    const el = panel?.querySelector('input:not([type="hidden"]), textarea') as
+      | HTMLInputElement
+      | HTMLTextAreaElement
+      | null
+    if (!el) return
+    el.focus()
+    if (el instanceof HTMLInputElement && el.type === 'date') {
+      try {
+        el.showPicker?.()
+      } catch {
+        // showPicker() can throw outside a user gesture; focus already happened.
+      }
+    }
+  }, [expandedField])
   const [userRate, setUserRate] = useState('')
   const [fetchingRate, setFetchingRate] = useState(false)
   const [fxNote, setFxNote] = useState('')
@@ -153,7 +239,7 @@ export function TransactionForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const selectedAccount = accounts.find((a) => a.id === accountId)
+  const selectedAccount = availableAccounts.find((a) => a.id === accountId)
   const isMultiCurrency = Boolean(
     selectedAccount && selectedAccount.currency_code !== baseCurrency
   )
@@ -172,10 +258,10 @@ export function TransactionForm({
 
   const compatibleCategories = useMemo(
     () =>
-      categories.filter(
+      availableCategories.filter(
         (c) => transactionType !== 'transfer' && c.category_type === transactionType
       ),
-    [categories, transactionType]
+    [availableCategories, transactionType]
   )
 
   // Most-used categories (for the current type) as one-tap chips.
@@ -203,8 +289,8 @@ export function TransactionForm({
     return () => window.cancelAnimationFrame(frame)
   }, [compatibleCategories])
   const isTransfer = transactionType === 'transfer'
-  const selectedFromAccount = accounts.find((a) => a.id === fromAccountId)
-  const selectedToAccount = accounts.find((a) => a.id === toAccountId)
+  const selectedFromAccount = availableAccounts.find((a) => a.id === fromAccountId)
+  const selectedToAccount = availableAccounts.find((a) => a.id === toAccountId)
   const amountCurrencyCode =
     (isTransfer ? selectedFromAccount?.currency_code : selectedAccount?.currency_code) ??
     baseCurrency
@@ -220,7 +306,7 @@ export function TransactionForm({
     ? createTransferTransactionAction
     : createManualTransactionAction
   const canSubmit = isTransfer
-    ? accounts.length >= 2 &&
+    ? availableAccounts.length >= 2 &&
       Boolean(fromAccountId) &&
       Boolean(toAccountId) &&
       !isCrossCurrencyTransfer &&
@@ -417,6 +503,786 @@ export function TransactionForm({
     )
   }
 
+  // ── Mobile row layout ──────────────────────────────────────────────────
+  // Each field is a compact row (icon + label + current value); tapping expands
+  // its real control inline. The controls stay mounted (hidden when collapsed),
+  // so they submit exactly like the desktop grid — no separate hidden inputs.
+  const selectedCategory = availableCategories.find((c) => c.id === categoryId)
+  const categoryValue = selectedCategory
+    ? `${selectedCategory.icon ? `${selectedCategory.icon} ` : ''}${selectedCategory.name}`
+    : ''
+  // Top-level categories for the mobile picker's first level.
+  const mobileParentCategories = compatibleCategories.filter(
+    (c) => c.parent_category_id === null
+  )
+  const repeatValue =
+    RECURRING_FREQUENCIES.find((f) => f.value === recurringFrequency)?.label ??
+    t('transactionForm.repeatNever')
+  const statusValue =
+    status === 'pending' ? t('transactionForm.statusPending') : t('transactionForm.statusPosted')
+
+  // Reset every picker's transient sub-state (search text, drill level, create
+  // sub-view) whenever a field opens, so it starts clean.
+  const resetPickerState = () => {
+    setCategorySearch('')
+    setCategoryDrillParentId(null)
+    setAccountSearch('')
+    setShowAccountCreate(false)
+    setCreateError('')
+  }
+
+  const editRow = ({
+    id,
+    icon,
+    label,
+    value,
+    placeholder,
+    children,
+  }: {
+    id: string
+    icon: ReactNode
+    label: string
+    value?: string
+    placeholder: string
+    children: ReactNode
+  }) => {
+    const open = expandedField === id
+    return (
+      <div key={id} className="border-t first:border-t-0">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => {
+            resetPickerState()
+            setExpandedField(open ? null : id)
+          }}
+          className="flex w-full items-center gap-3 px-1 py-3 text-left"
+        >
+          <span className="shrink-0 text-muted-foreground">{icon}</span>
+          <span className="shrink-0 text-sm font-medium">{label}</span>
+          <span
+            className={cn(
+              'ml-auto max-w-[52%] truncate text-sm',
+              value ? 'text-foreground' : 'text-muted-foreground'
+            )}
+          >
+            {value || placeholder}
+          </span>
+          <ChevronDown
+            className={cn(
+              'size-4 shrink-0 text-muted-foreground transition-transform',
+              open && 'rotate-180'
+            )}
+            aria-hidden="true"
+          />
+        </button>
+        <div
+          data-field-panel={id}
+          className={cn('px-1 pb-3 [&_label]:sr-only', open ? 'block' : 'hidden')}
+        >
+          {children}
+        </div>
+      </div>
+    )
+  }
+
+  // Inline single-select list: tapping a row shows these directly (one tap),
+  // and tapping an option selects it — no native <select> to open first.
+  const optionList = (
+    options: { value: string; label: string; icon?: ReactNode; disabled?: boolean }[],
+    selected: string,
+    onSelect: (value: string) => void
+  ) => (
+    <div className="max-h-72 overflow-y-auto">
+      {options.map((option) => (
+        <button
+          key={option.value || '__none__'}
+          type="button"
+          disabled={option.disabled}
+          onClick={() => onSelect(option.value)}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm disabled:opacity-40',
+            selected === option.value
+              ? 'bg-primary/10 font-medium text-primary'
+              : 'hover:bg-muted'
+          )}
+        >
+          {option.icon ? (
+            <span className="shrink-0" aria-hidden="true">
+              {option.icon}
+            </span>
+          ) : null}
+          <span className="flex-1 truncate">{option.label}</span>
+          {selected === option.value ? (
+            <Check className="size-4 shrink-0" aria-hidden="true" />
+          ) : null}
+        </button>
+      ))}
+    </div>
+  )
+
+  // Currencies offered by the inline "create account" form: the base currency
+  // plus any already used by an existing account (a brand-new currency still
+  // goes through the full accounts page).
+  const currencyOptions = Array.from(
+    new Set([
+      baseCurrency,
+      ...(currencies && currencies.length > 0
+        ? currencies
+        : availableAccounts.map((a) => a.currency_code)),
+    ])
+  )
+  const ACCOUNT_TYPE_OPTIONS: { value: string; label: string }[] = [
+    { value: 'cash', label: 'Cash' },
+    { value: 'checking', label: 'Checking' },
+    { value: 'savings', label: 'Savings' },
+    { value: 'credit_card', label: 'Credit card' },
+    { value: 'debt', label: 'Debt / loan' },
+    { value: 'investment', label: 'Investment' },
+    { value: 'other', label: 'Other' },
+  ]
+
+  async function handleCreateCategory(rawName: string) {
+    const name = rawName.trim()
+    if (!name || creatingCategory || isTransfer) return
+    setCreatingCategory(true)
+    setCreateError('')
+    const result = await quickCreateCategory(name, transactionType as 'income' | 'expense')
+    setCreatingCategory(false)
+    if ('error' in result) {
+      setCreateError(result.error)
+      return
+    }
+    const created = result.category as TransactionFormCategory
+    setCreatedCategories((prev) => [...prev, created])
+    setCategoryId(created.id)
+    setExpandedField(null)
+  }
+
+  async function handleCreateAccount() {
+    const name = newAccountName.trim()
+    const currencyCode = newAccountCurrency || baseCurrency
+    if (!name || creatingAccount) return
+    setCreatingAccount(true)
+    setCreateError('')
+    const result = await quickCreateAccount({ name, accountType: newAccountType, currencyCode })
+    setCreatingAccount(false)
+    if ('error' in result) {
+      setCreateError(result.error)
+      return
+    }
+    const created = result.account as TransactionFormAccount
+    setCreatedAccounts((prev) => [...prev, created])
+    // Select the new account into whichever slot is being edited.
+    if (isTransfer) {
+      if (expandedField === 'to') setToAccountId(created.id)
+      else setFromAccountId(created.id)
+    } else {
+      setAccountId(created.id)
+      setUserRate('')
+      setFxNote('')
+      setFxError('')
+    }
+    setNewAccountName('')
+    setExpandedField(null)
+  }
+
+  const backButton = (onClick: () => void, label: string) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mb-1 flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+    >
+      <ChevronDown className="size-4 rotate-90" aria-hidden="true" />
+      {label}
+    </button>
+  )
+
+  // Account picker used by the account / from / to rows: a searchable list plus
+  // a "Create …" row that drills into a compact create sub-view (name +
+  // type + currency) so the row stays lean until you actually add an account.
+  const accountPickerBody = (
+    selectedId: string,
+    onSelect: (id: string) => void,
+    disabledId?: string
+  ) => {
+    const query = accountSearch.trim().toLowerCase()
+    const matches = availableAccounts.filter((a) =>
+      formatAccountLabel(a).toLowerCase().includes(query)
+    )
+    const hasExact = availableAccounts.some(
+      (a) => a.name.toLowerCase() === query && query !== ''
+    )
+    return (
+      <>
+        {showAccountCreate ? (
+          <div className="space-y-2">
+            {backButton(() => setShowAccountCreate(false), 'Back to accounts')}
+            <Input
+              placeholder="Account name"
+              value={newAccountName}
+              onChange={(e) => setNewAccountName(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <select
+                aria-label="Account type"
+                className={nativeSelectCls}
+                value={newAccountType}
+                onChange={(e) => setNewAccountType(e.target.value)}
+              >
+                {ACCOUNT_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <select
+                aria-label="Currency"
+                className={nativeSelectCls}
+                value={newAccountCurrency || baseCurrency}
+                onChange={(e) => setNewAccountCurrency(e.target.value)}
+              >
+                {currencyOptions.map((code) => (
+                  <option key={code} value={code}>{code}</option>
+                ))}
+              </select>
+            </div>
+            {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
+            <Button
+              type="button"
+              size="sm"
+              disabled={creatingAccount || !newAccountName.trim()}
+              onClick={handleCreateAccount}
+            >
+              {creatingAccount ? 'Creating…' : 'Create account'}
+            </Button>
+          </div>
+        ) : (
+          <>
+            <Input
+              placeholder="Search or add an account"
+              value={accountSearch}
+              onChange={(e) => setAccountSearch(e.target.value)}
+            />
+            <div className="mt-2 max-h-72 overflow-y-auto">
+              {matches.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  disabled={a.id === disabledId}
+                  onClick={() => {
+                    onSelect(a.id)
+                    setExpandedField(null)
+                  }}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm disabled:opacity-40',
+                    selectedId === a.id
+                      ? 'bg-primary/10 font-medium text-primary'
+                      : 'hover:bg-muted'
+                  )}
+                >
+                  <span className="flex-1 truncate">{formatAccountLabel(a)}</span>
+                  {selectedId === a.id ? (
+                    <Check className="size-4 shrink-0" aria-hidden="true" />
+                  ) : null}
+                </button>
+              ))}
+              {accountSearch.trim() && !hasExact ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewAccountName(accountSearch.trim())
+                    setCreateError('')
+                    setShowAccountCreate(true)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-muted"
+                >
+                  <Plus className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span className="flex-1 truncate">
+                    Create “<span className="font-semibold">{accountSearch.trim()}</span>”
+                  </span>
+                </button>
+              ) : null}
+            </div>
+          </>
+        )}
+      </>
+    )
+  }
+
+  // Category picker: searchable parent list that drills into a parent's
+  // subcategories (hiding the parent list so there's no scrolling), plus a
+  // payee-style "Create …" row for a brand-new top-level category.
+  const categoryPickerBody = () => {
+    const query = categorySearch.trim().toLowerCase()
+    const parents = mobileParentCategories
+    // While searching, match across every compatible category (parents AND
+    // subcategories), so a subcategory can be found and picked directly.
+    const searchMatches = query
+      ? compatibleCategories.filter((c) => c.name.toLowerCase().includes(query))
+      : []
+    const hasExact = compatibleCategories.some(
+      (c) => c.name.toLowerCase() === query && query !== ''
+    )
+    const drillParent = categoryDrillParentId
+      ? categories.find((c) => c.id === categoryDrillParentId)
+      : null
+    const drillChildren = categoryDrillParentId
+      ? compatibleCategories.filter((c) => c.parent_category_id === categoryDrillParentId)
+      : []
+
+    return (
+      <>
+        {drillParent ? (
+          <div>
+            {backButton(() => setCategoryDrillParentId(null), 'All categories')}
+            {optionList(
+              [
+                { value: drillParent.id, label: 'General' },
+                ...drillChildren.map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
+              ],
+              categoryId,
+              (value) => {
+                setCategoryId(value)
+                setExpandedField(null)
+              }
+            )}
+          </div>
+        ) : (
+          <>
+            <Input
+              placeholder="Search or add a category"
+              value={categorySearch}
+              onChange={(e) => setCategorySearch(e.target.value)}
+            />
+            <div className="mt-2 max-h-72 overflow-y-auto">
+              {query
+                ? searchMatches.map((c) => {
+                    const parent = c.parent_category_id
+                      ? availableCategories.find((p) => p.id === c.parent_category_id)
+                      : null
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setCategoryId(c.id)
+                          setExpandedField(null)
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
+                          categoryId === c.id
+                            ? 'bg-primary/10 font-medium text-primary'
+                            : 'hover:bg-muted'
+                        )}
+                      >
+                        {c.icon ? (
+                          <span className="shrink-0" aria-hidden="true">{c.icon}</span>
+                        ) : null}
+                        <span className="min-w-0 flex-1 truncate">
+                          {c.name}
+                          {parent ? (
+                            <span className="text-muted-foreground"> · {parent.name}</span>
+                          ) : null}
+                        </span>
+                        {categoryId === c.id ? (
+                          <Check className="size-4 shrink-0" aria-hidden="true" />
+                        ) : null}
+                      </button>
+                    )
+                  })
+                : parents.map((parent) => {
+                    const kids = compatibleCategories.filter(
+                      (c) => c.parent_category_id === parent.id
+                    )
+                    const isSelected =
+                      categoryId === parent.id || kids.some((k) => k.id === categoryId)
+                    return (
+                      <button
+                        key={parent.id}
+                        type="button"
+                        onClick={() => {
+                          if (kids.length > 0) {
+                            setCategoryDrillParentId(parent.id)
+                            setCategorySearch('')
+                          } else {
+                            setCategoryId(parent.id)
+                            setExpandedField(null)
+                          }
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
+                          isSelected ? 'bg-primary/10 font-medium text-primary' : 'hover:bg-muted'
+                        )}
+                      >
+                        {parent.icon ? (
+                          <span className="shrink-0" aria-hidden="true">{parent.icon}</span>
+                        ) : null}
+                        <span className="flex-1 truncate">{parent.name}</span>
+                        {kids.length > 0 ? (
+                          <ChevronDown className="size-4 shrink-0 -rotate-90 text-muted-foreground" aria-hidden="true" />
+                        ) : isSelected ? (
+                          <Check className="size-4 shrink-0" aria-hidden="true" />
+                        ) : null}
+                      </button>
+                    )
+                  })}
+              {categorySearch.trim() && !hasExact ? (
+                <button
+                  type="button"
+                  disabled={creatingCategory}
+                  onClick={() => handleCreateCategory(categorySearch)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-muted disabled:opacity-50"
+                >
+                  <Plus className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span className="flex-1 truncate">
+                    {creatingCategory ? (
+                      'Creating…'
+                    ) : (
+                      <>Create “<span className="font-semibold">{categorySearch.trim()}</span>”</>
+                    )}
+                  </span>
+                </button>
+              ) : null}
+            </div>
+
+            {frequentCategories.length > 0 && !categorySearch.trim() ? (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t pt-2">
+                <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
+                {frequentCategories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => {
+                      setCategoryId(category.id)
+                      setExpandedField(null)
+                    }}
+                    className={cn(
+                      'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
+                      categoryId === category.id
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                  >
+                    {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </>
+        )}
+      </>
+    )
+  }
+
+  // Desktop combobox: a labelled trigger (styled like a select) that expands
+  // the same searchable picker body inline. Reuses expandedField as the
+  // open-state and keeps the hidden input in-form so submission is unchanged.
+  const desktopCombo = ({
+    id,
+    label,
+    leading,
+    valueText,
+    placeholder,
+    hiddenName,
+    hiddenValue,
+    body,
+    className,
+  }: {
+    id: string
+    label: ReactNode
+    leading?: ReactNode
+    valueText?: string
+    placeholder: string
+    hiddenName: string
+    hiddenValue: string
+    body: ReactNode
+    className?: string
+  }) => {
+    const open = expandedField === id
+    return (
+      <div className={cn('space-y-1.5', className)}>
+        <Label>{label}</Label>
+        <input type="hidden" name={hiddenName} value={hiddenValue} />
+        <Popover.Root
+          open={open}
+          onOpenChange={(next) => {
+            if (next) resetPickerState()
+            setExpandedField(next ? id : null)
+          }}
+        >
+          <Popover.Trigger
+            render={
+              <button
+                type="button"
+                className={cn(
+                  'flex h-11 w-full items-center gap-2 rounded-xl border bg-background px-3 text-left text-sm transition-colors',
+                  open ? 'ring-2 ring-ring' : 'hover:bg-muted/50'
+                )}
+              />
+            }
+          >
+            {leading ? <span className="shrink-0 text-muted-foreground">{leading}</span> : null}
+            <span className={cn('flex-1 truncate', valueText ? '' : 'text-muted-foreground')}>
+              {valueText || placeholder}
+            </span>
+            <ChevronDown
+              className={cn(
+                'size-4 shrink-0 text-muted-foreground transition-transform',
+                open && 'rotate-180'
+              )}
+              aria-hidden="true"
+            />
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Positioner
+              sideOffset={4}
+              align="start"
+              className="isolate z-50 w-(--anchor-width)"
+            >
+              <Popover.Popup
+                data-field-panel={id}
+                className="max-h-(--available-height) w-(--anchor-width) overflow-y-auto rounded-xl border bg-popover p-2 text-popover-foreground shadow-md ring-1 ring-foreground/10 [&_label]:sr-only"
+              >
+                {body}
+              </Popover.Popup>
+            </Popover.Positioner>
+          </Popover.Portal>
+        </Popover.Root>
+      </div>
+    )
+  }
+
+  const mobileFields = (
+    <div className="rounded-xl border px-2">
+      {editRow({
+        id: 'date',
+        icon: <CalendarDays className="size-4.5" />,
+        label: t('transactionForm.date'),
+        value: transactionDate,
+        placeholder: '—',
+        children: dateField,
+      })}
+
+      {isTransfer ? (
+        <>
+          {editRow({
+            id: 'from',
+            icon: <Wallet className="size-4.5" />,
+            label: t('transactionForm.fromAccount'),
+            value: selectedFromAccount ? formatAccountLabel(selectedFromAccount) : '',
+            placeholder: t('transactionForm.selectSource'),
+            children: (
+              <>
+                <input type="hidden" name="from_account_id" value={fromAccountId} />
+                {accountPickerBody(
+                  fromAccountId,
+                  (id) => {
+                    setFromAccountId(id)
+                    if (id === toAccountId) setToAccountId('')
+                  },
+                  toAccountId
+                )}
+              </>
+            ),
+          })}
+          {editRow({
+            id: 'to',
+            icon: <Wallet className="size-4.5" />,
+            label: t('transactionForm.toAccount'),
+            value: selectedToAccount ? formatAccountLabel(selectedToAccount) : '',
+            placeholder: t('transactionForm.selectDestination'),
+            children: (
+              <>
+                <input type="hidden" name="to_account_id" value={toAccountId} />
+                {accountPickerBody(
+                  toAccountId,
+                  (id) => {
+                    setToAccountId(id)
+                    if (id === fromAccountId) setFromAccountId('')
+                  },
+                  fromAccountId
+                )}
+              </>
+            ),
+          })}
+        </>
+      ) : (
+        <>
+          {editRow({
+            id: 'account',
+            icon: <Wallet className="size-4.5" />,
+            label: t('transactionForm.account'),
+            value: selectedAccount ? formatAccountLabel(selectedAccount) : '',
+            placeholder: t('transactionForm.selectAccount'),
+            children: (
+              <>
+                <input type="hidden" name="account_id" value={accountId} />
+                {accountPickerBody(accountId, (id) => {
+                  setAccountId(id)
+                  setUserRate('')
+                  setFxNote('')
+                  setFxError('')
+                })}
+              </>
+            ),
+          })}
+          {editRow({
+            id: 'category',
+            icon: <Shapes className="size-4.5" />,
+            label: 'Category',
+            value: categoryValue,
+            placeholder: 'Select category',
+            children: (
+              <>
+                <input type="hidden" name="category_id" value={categoryId} />
+                {categoryPickerBody()}
+              </>
+            ),
+          })}
+          {editRow({
+            id: 'payee',
+            icon: <Store className="size-4.5" />,
+            label: t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee'),
+            value: payeeName,
+            placeholder: '—',
+            children: (
+              <>
+                <input type="hidden" name="payee_name" value={payeeName} />
+                <Input
+                  id="payee_name"
+                  placeholder="Search or add a payee"
+                  value={payeeName}
+                  onChange={(e) => setPayeeName(e.target.value)}
+                />
+                <div className="mt-2 max-h-56 overflow-y-auto">
+                  {payees
+                    .filter((p) =>
+                      p.name.toLowerCase().includes(payeeName.trim().toLowerCase())
+                    )
+                    .slice(0, 50)
+                    .map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setPayeeName(p.name)
+                          setExpandedField(null)
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
+                          payeeName === p.name
+                            ? 'bg-primary/10 font-medium text-primary'
+                            : 'hover:bg-muted'
+                        )}
+                      >
+                        <Store className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <span className="flex-1 truncate">{p.name}</span>
+                      </button>
+                    ))}
+                  {payeeName.trim() &&
+                  !payees.some(
+                    (p) => p.name.toLowerCase() === payeeName.trim().toLowerCase()
+                  ) ? (
+                    <button
+                      type="button"
+                      onClick={() => setExpandedField(null)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-muted"
+                    >
+                      <Plus className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                      <span className="flex-1 truncate">
+                        Create “<span className="font-semibold">{payeeName.trim()}</span>”
+                      </span>
+                    </button>
+                  ) : null}
+                </div>
+              </>
+            ),
+          })}
+          {editRow({
+            id: 'repeat',
+            icon: <Repeat className="size-4.5" />,
+            label: t('transactionForm.repeat'),
+            value: repeatValue,
+            placeholder: t('transactionForm.repeatNever'),
+            children: (
+              <>
+                <input type="hidden" name="frequency" value={recurringFrequency} />
+                {optionList(
+                  [
+                    { value: '', label: t('transactionForm.repeatNever') },
+                    ...RECURRING_FREQUENCIES.map((f) => ({ value: f.value, label: f.label })),
+                  ],
+                  recurringFrequency,
+                  (value) => {
+                    setRecurringFrequency(value)
+                    setExpandedField(null)
+                  }
+                )}
+              </>
+            ),
+          })}
+        </>
+      )}
+
+      {editRow({
+        id: 'description',
+        icon: <FileText className="size-4.5" />,
+        label: t('transactionForm.description'),
+        value: description,
+        placeholder: '—',
+        children: (
+          <div className="space-y-1.5">
+            <Label htmlFor="description">{t('transactionForm.description')}</Label>
+            <Input
+              id="description"
+              name="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+        ),
+      })}
+      {editRow({
+        id: 'note',
+        icon: <StickyNote className="size-4.5" />,
+        label: t('transactionForm.notes'),
+        value: notes,
+        placeholder: '—',
+        children: (
+          <div className="space-y-1.5">
+            <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
+            <Textarea
+              id="notes"
+              name="notes"
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+        ),
+      })}
+      {editRow({
+        id: 'status',
+        icon: <ListChecks className="size-4.5" />,
+        label: t('transactionForm.status'),
+        value: statusValue,
+        placeholder: '',
+        children: statusField,
+      })}
+
+      {isTransfer && availableAccounts.length < 2 ? (
+        <p className="border-t px-1 py-3 text-sm text-muted-foreground">
+          {t('transactionForm.needTwoAccounts')}
+        </p>
+      ) : null}
+      {isCrossCurrencyTransfer ? (
+        <p className="border-t px-1 py-3 text-sm text-destructive">
+          {t('transactionForm.crossCurrencyNotSupported')}
+        </p>
+      ) : null}
+    </div>
+  )
+
   return (
     <form action={submitAction} onSubmit={rememberDefaults} className="space-y-3">
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
@@ -464,50 +1330,46 @@ export function TransactionForm({
         />
       </div>
 
-      {/* ── Essentials: dense two-column grid on both mobile and desktop ─ */}
+      {/* ── Fields: mobile row-list vs desktop two-column grid ─────────── */}
+      {isMobile ? mobileFields : (
+      <>
       {isTransfer ? (
         <div className="grid grid-cols-2 gap-3">
-          <SelectField
-            id="from_account_id"
-            name="from_account_id"
-            label={t('transactionForm.fromAccount')}
-            leading={accountLeading(selectedFromAccount)}
-            required
-            value={fromAccountId}
-            onChange={(e) => {
-              const next = e.target.value
-              setFromAccountId(next)
-              if (next === toAccountId) setToAccountId('')
-            }}
-          >
-            <option value="" disabled>{t('transactionForm.selectSource')}</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id} disabled={a.id === toAccountId}>
-                {formatAccountLabel(a)}
-              </option>
-            ))}
-          </SelectField>
+          {desktopCombo({
+            id: 'from',
+            label: t('transactionForm.fromAccount'),
+            leading: accountLeading(selectedFromAccount),
+            valueText: selectedFromAccount ? formatAccountLabel(selectedFromAccount) : '',
+            placeholder: t('transactionForm.selectSource'),
+            hiddenName: 'from_account_id',
+            hiddenValue: fromAccountId,
+            body: accountPickerBody(
+              fromAccountId,
+              (id) => {
+                setFromAccountId(id)
+                if (id === toAccountId) setToAccountId('')
+              },
+              toAccountId
+            ),
+          })}
 
-          <SelectField
-            id="to_account_id"
-            name="to_account_id"
-            label={t('transactionForm.toAccount')}
-            leading={accountLeading(selectedToAccount)}
-            required
-            value={toAccountId}
-            onChange={(e) => {
-              const next = e.target.value
-              setToAccountId(next)
-              if (next === fromAccountId) setFromAccountId('')
-            }}
-          >
-            <option value="" disabled>{t('transactionForm.selectDestination')}</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id} disabled={a.id === fromAccountId}>
-                {formatAccountLabel(a)}
-              </option>
-            ))}
-          </SelectField>
+          {desktopCombo({
+            id: 'to',
+            label: t('transactionForm.toAccount'),
+            leading: accountLeading(selectedToAccount),
+            valueText: selectedToAccount ? formatAccountLabel(selectedToAccount) : '',
+            placeholder: t('transactionForm.selectDestination'),
+            hiddenName: 'to_account_id',
+            hiddenValue: toAccountId,
+            body: accountPickerBody(
+              toAccountId,
+              (id) => {
+                setToAccountId(id)
+                if (id === fromAccountId) setFromAccountId('')
+              },
+              fromAccountId
+            ),
+          })}
 
           {dateField}
           {statusField}
@@ -518,7 +1380,7 @@ export function TransactionForm({
             <Input id="description" name="description" defaultValue={defaultDescription} />
           </div>
 
-          {accounts.length < 2 ? (
+          {availableAccounts.length < 2 ? (
             <p className="text-sm text-muted-foreground col-span-2">
               {t('transactionForm.needTwoAccounts')}
             </p>
@@ -532,61 +1394,34 @@ export function TransactionForm({
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          <SelectField
-            id="account_id"
-            name="account_id"
-            label={t('transactionForm.account')}
-            leading={accountLeading(selectedAccount)}
-            required
-            value={accountId}
-            onChange={(e) => {
-              setAccountId(e.target.value)
+          {desktopCombo({
+            id: 'account',
+            label: t('transactionForm.account'),
+            leading: accountLeading(selectedAccount),
+            valueText: selectedAccount ? formatAccountLabel(selectedAccount) : '',
+            placeholder: t('transactionForm.selectAccount'),
+            hiddenName: 'account_id',
+            hiddenValue: accountId,
+            body: accountPickerBody(accountId, (id) => {
+              setAccountId(id)
               setUserRate('')
               setFxNote('')
               setFxError('')
-            }}
-          >
-            <option value="" disabled>{t('transactionForm.selectAccount')}</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {formatAccountLabel(a)}
-              </option>
-            ))}
-          </SelectField>
+            }),
+          })}
 
           {dateField}
 
-          <div className="space-y-1.5 col-span-2">
-            <CategoryPicker
-              key={transactionType}
-              categories={compatibleCategories}
-              transactionType={transactionType}
-              onCategoryChange={setCategoryId}
-              selectedCategoryId={categoryId}
-            />
-
-            {frequentCategories.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
-                {frequentCategories.map((category) => (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => setCategoryId(category.id)}
-                    className={cn(
-                      'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
-                      categoryId === category.id
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
-                    {category.name}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          {desktopCombo({
+            id: 'category',
+            label: 'Category',
+            valueText: categoryValue,
+            placeholder: 'Select category',
+            hiddenName: 'category_id',
+            hiddenValue: categoryId,
+            body: categoryPickerBody(),
+            className: 'col-span-2',
+          })}
 
           {/* Description & Payee: kept essential (visible on mobile too) and
               full-width so they're comfortable to type into. */}
@@ -656,6 +1491,8 @@ export function TransactionForm({
           <Textarea id="notes" name="notes" rows={2} />
         </div>
       </div>
+      </>
+      )}
 
       {/* ── Exchange rate (only for non-base-currency entries) ────────── */}
       {isTransfer ? (

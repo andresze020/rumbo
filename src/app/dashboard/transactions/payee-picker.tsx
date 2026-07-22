@@ -21,6 +21,10 @@ type PayeePickerProps = {
   inputId?: string
   /** Override the label styling (e.g. the compact inline quick-edit). */
   labelClassName?: string
+  /** Controlled value. Pair with `onValueChange` when the parent needs to read
+   *  the current payee text (e.g. to show it in a collapsed mobile row). */
+  value?: string
+  onValueChange?: (value: string) => void
 }
 
 /** Cap the rendered list so a large household doesn't paint hundreds of rows. */
@@ -49,11 +53,20 @@ export function PayeePicker({
   helpText,
   inputId,
   labelClassName,
+  value,
+  onValueChange,
 }: PayeePickerProps) {
   const generatedId = useId()
   const id = inputId ?? `payee_${generatedId}`
 
-  const [query, setQuery] = useState(defaultValue ?? '')
+  // Controlled when `value` is provided; otherwise falls back to internal state
+  // so existing call sites keep working unchanged.
+  const [internalQuery, setInternalQuery] = useState(defaultValue ?? '')
+  const query = value !== undefined ? value : internalQuery
+  const setQuery = (next: string) => {
+    if (value === undefined) setInternalQuery(next)
+    onValueChange?.(next)
+  }
   const trimmed = query.trim()
   const normalized = trimmed.toLowerCase()
 
