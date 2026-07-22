@@ -48,14 +48,21 @@ type CreateCategoryResult =
   | { error: string }
 
 /**
- * Creates a top-level category of the given type. The reporting type is derived
- * from the category type (income→income, expense→expense), the only pairings a
- * plain income/expense entry needs — see isCompatibleReportingType in
- * categories/actions.ts.
+ * Creates a category while entering a transaction.
+ *
+ * Top-level (no parent): the reporting type is derived from the category type
+ * (income→income, expense→expense), the only pairings a plain income/expense
+ * entry needs — see isCompatibleReportingType in categories/actions.ts.
+ *
+ * Subcategory (parentCategoryId given): inherits the parent's category_type and
+ * reporting_type so a child can never drift into an incompatible pairing. The
+ * parent is re-read under RLS (household_id filter) so a child can only be hung
+ * off a category the caller's household actually owns.
  */
 export async function quickCreateCategory(
   name: string,
-  categoryType: 'income' | 'expense'
+  categoryType: 'income' | 'expense',
+  parentCategoryId?: string | null
 ): Promise<CreateCategoryResult> {
   const trimmed = name.trim()
   if (!trimmed) return { error: 'Category name is required.' }
@@ -67,21 +74,42 @@ export async function quickCreateCategory(
   if (!auth) return { error: 'Not authenticated.' }
   const { supabase, householdId } = auth
 
-  const reportingType = categoryType === 'income' ? 'income' : 'expense'
+  const parentId = parentCategoryId?.trim() || null
+  let effectiveType: string = categoryType
+  let reportingType = categoryType === 'income' ? 'income' : 'expense'
+
+  if (parentId) {
+    const { data: parent } = await supabase
+      .from('categories')
+      .select('category_type, reporting_type')
+      .eq('id', parentId)
+      .eq('household_id', householdId)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (!parent) return { error: 'Parent category not found.' }
+    effectiveType = parent.category_type
+    reportingType = parent.reporting_type
+  }
 
   const { data, error } = await supabase
     .from('categories')
     .insert({
       household_id: householdId,
       name: trimmed,
-      category_type: categoryType,
+      category_type: effectiveType,
       reporting_type: reportingType,
-      parent_category_id: null,
+      parent_category_id: parentId,
     })
     .select('id, name, category_type, reporting_type, parent_category_id, icon, color')
     .single()
 
   if (error || !data) {
+    // The unique index (household, lower(name), parent) surfaces a duplicate
+    // as a 23505 — give that its own message so the picker can show it inline.
+    if (error?.code === '23505') {
+      return { error: 'A category with that name already exists here.' }
+    }
     return { error: 'Could not create the category.' }
   }
 

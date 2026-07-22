@@ -10,6 +10,7 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronRight,
   FileText,
   ListChecks,
   Plus,
@@ -24,6 +25,7 @@ import {
   createTransferTransactionAction,
 } from './actions'
 import { PayeePicker, type PayeeOption } from './payee-picker'
+import { SelectorSheet } from './selector-sheet'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
 import { AdvancedFields } from '@/components/advanced-fields'
 import { AmountInput } from '@/components/amount-input'
@@ -174,10 +176,18 @@ export function TransactionForm({
     () => [...categories, ...createdCategories],
     [categories, createdCategories]
   )
+  // Which selector the mobile full-screen sheet is showing (null = closed).
+  // Distinct from `expandedField` (the inline accordion used by the remaining
+  // mobile rows and, on desktop, by the Popover combobox).
+  const [sheetField, setSheetField] = useState<
+    null | 'account' | 'from' | 'to' | 'category' | 'payee'
+  >(null)
   // Category picker: search text + which parent we've drilled into (null = show
   // the parent list; a parent id = show only that parent's subcategories).
   const [categorySearch, setCategorySearch] = useState('')
   const [categoryDrillParentId, setCategoryDrillParentId] = useState<string | null>(null)
+  // Search text inside a drilled-in parent's subcategory list.
+  const [subcategorySearch, setSubcategorySearch] = useState('')
   const [creatingCategory, setCreatingCategory] = useState(false)
   // Account picker: search text + whether the inline "create account" sub-view
   // is showing (reveals the extra fields only when needed, keeping it lean).
@@ -526,9 +536,26 @@ export function TransactionForm({
   const resetPickerState = () => {
     setCategorySearch('')
     setCategoryDrillParentId(null)
+    setSubcategorySearch('')
     setAccountSearch('')
     setShowAccountCreate(false)
     setCreateError('')
+  }
+
+  // Close whichever picker surface is open — the desktop/inline accordion
+  // (expandedField) or the mobile full-screen sheet (sheetField). Only one is
+  // ever open, so clearing both is safe and lets the shared picker bodies close
+  // themselves without knowing which surface hosts them.
+  const closePicker = () => {
+    setExpandedField(null)
+    setSheetField(null)
+  }
+
+  // Open the category picker drilled straight into the currently selected
+  // subcategory's parent, so the chosen child is visible without re-navigating.
+  const syncCategoryDrillToSelection = () => {
+    const selected = availableCategories.find((c) => c.id === categoryId)
+    setCategoryDrillParentId(selected?.parent_category_id ?? null)
   }
 
   const editRow = ({
@@ -586,6 +613,54 @@ export function TransactionForm({
     )
   }
 
+  // A mobile row that opens the full-screen SelectorSheet (Account / Category /
+  // Payee) instead of expanding inline — this is what keeps the soft keyboard
+  // from ever covering the option list. The chevron points right (navigation)
+  // rather than down (accordion) to signal it opens a new surface.
+  const pickerRow = ({
+    id,
+    icon,
+    label,
+    value,
+    placeholder,
+    onOpen,
+  }: {
+    id: 'account' | 'from' | 'to' | 'category' | 'payee'
+    icon: ReactNode
+    label: string
+    value?: string
+    placeholder: string
+    onOpen?: () => void
+  }) => (
+    <div key={id} className="border-t first:border-t-0">
+      <button
+        type="button"
+        onClick={() => {
+          setExpandedField(null)
+          resetPickerState()
+          onOpen?.()
+          setSheetField(id)
+        }}
+        className="flex w-full items-center gap-3 px-1 py-3 text-left"
+      >
+        <span className="shrink-0 text-muted-foreground">{icon}</span>
+        <span className="shrink-0 text-sm font-medium">{label}</span>
+        <span
+          className={cn(
+            'ml-auto max-w-[52%] truncate text-sm',
+            value ? 'text-foreground' : 'text-muted-foreground'
+          )}
+        >
+          {value || placeholder}
+        </span>
+        <ChevronRight
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+      </button>
+    </div>
+  )
+
   // Inline single-select list: tapping a row shows these directly (one tap),
   // and tapping an option selects it — no native <select> to open first.
   const optionList = (
@@ -642,12 +717,16 @@ export function TransactionForm({
     { value: 'other', label: 'Other' },
   ]
 
-  async function handleCreateCategory(rawName: string) {
+  async function handleCreateCategory(rawName: string, parentId?: string | null) {
     const name = rawName.trim()
     if (!name || creatingCategory || isTransfer) return
     setCreatingCategory(true)
     setCreateError('')
-    const result = await quickCreateCategory(name, transactionType as 'income' | 'expense')
+    const result = await quickCreateCategory(
+      name,
+      transactionType as 'income' | 'expense',
+      parentId ?? null
+    )
     setCreatingCategory(false)
     if ('error' in result) {
       setCreateError(result.error)
@@ -656,7 +735,7 @@ export function TransactionForm({
     const created = result.category as TransactionFormCategory
     setCreatedCategories((prev) => [...prev, created])
     setCategoryId(created.id)
-    setExpandedField(null)
+    closePicker()
   }
 
   async function handleCreateAccount() {
@@ -673,9 +752,11 @@ export function TransactionForm({
     }
     const created = result.account as TransactionFormAccount
     setCreatedAccounts((prev) => [...prev, created])
-    // Select the new account into whichever slot is being edited.
+    // Select the new account into whichever slot is being edited (works whether
+    // the picker is hosted by the inline accordion or the mobile sheet).
+    const editingSlot = expandedField ?? sheetField
     if (isTransfer) {
-      if (expandedField === 'to') setToAccountId(created.id)
+      if (editingSlot === 'to') setToAccountId(created.id)
       else setFromAccountId(created.id)
     } else {
       setAccountId(created.id)
@@ -684,7 +765,7 @@ export function TransactionForm({
       setFxError('')
     }
     setNewAccountName('')
-    setExpandedField(null)
+    closePicker()
   }
 
   const backButton = (onClick: () => void, label: string) => (
@@ -770,7 +851,7 @@ export function TransactionForm({
                   disabled={a.id === disabledId}
                   onClick={() => {
                     onSelect(a.id)
-                    setExpandedField(null)
+                    closePicker()
                   }}
                   className={cn(
                     'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm disabled:opacity-40',
@@ -823,28 +904,80 @@ export function TransactionForm({
       (c) => c.name.toLowerCase() === query && query !== ''
     )
     const drillParent = categoryDrillParentId
-      ? categories.find((c) => c.id === categoryDrillParentId)
+      ? availableCategories.find((c) => c.id === categoryDrillParentId)
       : null
+    const subQuery = subcategorySearch.trim().toLowerCase()
     const drillChildren = categoryDrillParentId
-      ? compatibleCategories.filter((c) => c.parent_category_id === categoryDrillParentId)
+      ? compatibleCategories.filter(
+          (c) =>
+            c.parent_category_id === categoryDrillParentId &&
+            (!subQuery || c.name.toLowerCase().includes(subQuery))
+        )
       : []
+    const subHasExact = drillParent
+      ? compatibleCategories.some(
+          (c) =>
+            c.parent_category_id === drillParent.id &&
+            c.name.toLowerCase() === subQuery &&
+            subQuery !== ''
+        )
+      : false
 
     return (
       <>
         {drillParent ? (
-          <div>
-            {backButton(() => setCategoryDrillParentId(null), 'All categories')}
+          <div className="space-y-2">
+            {backButton(() => {
+              setCategoryDrillParentId(null)
+              setSubcategorySearch('')
+            }, 'All categories')}
+            <div className="flex items-center gap-2 px-1 text-sm font-medium">
+              {drillParent.icon ? (
+                <span aria-hidden="true">{drillParent.icon}</span>
+              ) : null}
+              <span className="truncate">{drillParent.name}</span>
+            </div>
+            <Input
+              placeholder="Search or add a subcategory"
+              value={subcategorySearch}
+              onChange={(e) => setSubcategorySearch(e.target.value)}
+            />
             {optionList(
               [
-                { value: drillParent.id, label: 'General' },
+                // Select the parent itself (e.g. "All Travel") — the "no
+                // subcategory" case, kept selectable even when children exist.
+                ...(subQuery ? [] : [{ value: drillParent.id, label: `All ${drillParent.name}` }]),
                 ...drillChildren.map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
               ],
               categoryId,
               (value) => {
                 setCategoryId(value)
-                setExpandedField(null)
+                closePicker()
               }
             )}
+            {subcategorySearch.trim() && !subHasExact ? (
+              <button
+                type="button"
+                disabled={creatingCategory}
+                onClick={() => handleCreateCategory(subcategorySearch, drillParent.id)}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-muted disabled:opacity-50"
+              >
+                <Plus className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">
+                  {creatingCategory ? (
+                    'Creating…'
+                  ) : (
+                    <>
+                      Create “<span className="font-semibold">{subcategorySearch.trim()}</span>” in{' '}
+                      {drillParent.name}
+                    </>
+                  )}
+                </span>
+              </button>
+            ) : null}
+            {createError ? (
+              <p className="px-1 text-xs text-destructive">{createError}</p>
+            ) : null}
           </div>
         ) : (
           <>
@@ -865,7 +998,7 @@ export function TransactionForm({
                         type="button"
                         onClick={() => {
                           setCategoryId(c.id)
-                          setExpandedField(null)
+                          closePicker()
                         }}
                         className={cn(
                           'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
@@ -878,10 +1011,10 @@ export function TransactionForm({
                           <span className="shrink-0" aria-hidden="true">{c.icon}</span>
                         ) : null}
                         <span className="min-w-0 flex-1 truncate">
-                          {c.name}
                           {parent ? (
-                            <span className="text-muted-foreground"> · {parent.name}</span>
+                            <span className="text-muted-foreground">{parent.name} › </span>
                           ) : null}
+                          {c.name}
                         </span>
                         {categoryId === c.id ? (
                           <Check className="size-4 shrink-0" aria-hidden="true" />
@@ -903,9 +1036,10 @@ export function TransactionForm({
                           if (kids.length > 0) {
                             setCategoryDrillParentId(parent.id)
                             setCategorySearch('')
+                            setSubcategorySearch('')
                           } else {
                             setCategoryId(parent.id)
-                            setExpandedField(null)
+                            closePicker()
                           }
                         }}
                         className={cn(
@@ -953,7 +1087,7 @@ export function TransactionForm({
                     type="button"
                     onClick={() => {
                       setCategoryId(category.id)
-                      setExpandedField(null)
+                      closePicker()
                     }}
                     className={cn(
                       'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
@@ -974,6 +1108,63 @@ export function TransactionForm({
     )
   }
 
+  // Payee picker (mobile sheet): a flat searchable list — payees have no
+  // hierarchy — plus a "Create …" row. The name is resolved to a payee_id by
+  // the server action on submit (get-or-create), so "creating" here is just
+  // keeping the typed text and closing.
+  const payeePickerBody = () => {
+    const trimmed = payeeName.trim()
+    const normalized = trimmed.toLowerCase()
+    return (
+      <>
+        <Input
+          placeholder="Search or add a payee"
+          value={payeeName}
+          onChange={(e) => setPayeeName(e.target.value)}
+        />
+        <div className="mt-2 max-h-[60vh] overflow-y-auto">
+          {payees
+            .filter((p) => p.name.toLowerCase().includes(normalized))
+            .slice(0, 50)
+            .map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => {
+                  setPayeeName(p.name)
+                  closePicker()
+                }}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
+                  payeeName === p.name
+                    ? 'bg-primary/10 font-medium text-primary'
+                    : 'hover:bg-muted'
+                )}
+              >
+                <Store className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="flex-1 truncate">{p.name}</span>
+                {payeeName === p.name ? (
+                  <Check className="size-4 shrink-0" aria-hidden="true" />
+                ) : null}
+              </button>
+            ))}
+          {trimmed && !payees.some((p) => p.name.toLowerCase() === normalized) ? (
+            <button
+              type="button"
+              onClick={() => closePicker()}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-muted"
+            >
+              <Plus className="size-4 shrink-0 text-primary" aria-hidden="true" />
+              <span className="flex-1 truncate">
+                Create “<span className="font-semibold">{trimmed}</span>”
+              </span>
+            </button>
+          ) : null}
+        </div>
+      </>
+    )
+  }
+
   // Desktop combobox: a labelled trigger (styled like a select) that expands
   // the same searchable picker body inline. Reuses expandedField as the
   // open-state and keeps the hidden input in-form so submission is unchanged.
@@ -987,6 +1178,7 @@ export function TransactionForm({
     hiddenValue,
     body,
     className,
+    onOpen,
   }: {
     id: string
     label: ReactNode
@@ -997,6 +1189,8 @@ export function TransactionForm({
     hiddenValue: string
     body: ReactNode
     className?: string
+    /** Runs after the picker state resets when the combobox opens. */
+    onOpen?: () => void
   }) => {
     const open = expandedField === id
     return (
@@ -1006,7 +1200,10 @@ export function TransactionForm({
         <Popover.Root
           open={open}
           onOpenChange={(next) => {
-            if (next) resetPickerState()
+            if (next) {
+              resetPickerState()
+              onOpen?.()
+            }
             setExpandedField(next ? id : null)
           }}
         >
@@ -1054,6 +1251,22 @@ export function TransactionForm({
 
   const mobileFields = (
     <div className="rounded-xl border px-2">
+      {/* Selection lives in hidden inputs that stay mounted regardless of the
+          sheet's open state — the full-screen SelectorSheet unmounts when it
+          closes, so the values it sets must be submitted from here. */}
+      {isTransfer ? (
+        <>
+          <input type="hidden" name="from_account_id" value={fromAccountId} />
+          <input type="hidden" name="to_account_id" value={toAccountId} />
+        </>
+      ) : (
+        <>
+          <input type="hidden" name="account_id" value={accountId} />
+          <input type="hidden" name="category_id" value={categoryId} />
+          <input type="hidden" name="payee_name" value={payeeName} />
+        </>
+      )}
+
       {editRow({
         id: 'date',
         icon: <CalendarDays className="size-4.5" />,
@@ -1065,138 +1278,44 @@ export function TransactionForm({
 
       {isTransfer ? (
         <>
-          {editRow({
+          {pickerRow({
             id: 'from',
             icon: <Wallet className="size-4.5" />,
             label: t('transactionForm.fromAccount'),
             value: selectedFromAccount ? formatAccountLabel(selectedFromAccount) : '',
             placeholder: t('transactionForm.selectSource'),
-            children: (
-              <>
-                <input type="hidden" name="from_account_id" value={fromAccountId} />
-                {accountPickerBody(
-                  fromAccountId,
-                  (id) => {
-                    setFromAccountId(id)
-                    if (id === toAccountId) setToAccountId('')
-                  },
-                  toAccountId
-                )}
-              </>
-            ),
           })}
-          {editRow({
+          {pickerRow({
             id: 'to',
             icon: <Wallet className="size-4.5" />,
             label: t('transactionForm.toAccount'),
             value: selectedToAccount ? formatAccountLabel(selectedToAccount) : '',
             placeholder: t('transactionForm.selectDestination'),
-            children: (
-              <>
-                <input type="hidden" name="to_account_id" value={toAccountId} />
-                {accountPickerBody(
-                  toAccountId,
-                  (id) => {
-                    setToAccountId(id)
-                    if (id === fromAccountId) setFromAccountId('')
-                  },
-                  fromAccountId
-                )}
-              </>
-            ),
           })}
         </>
       ) : (
         <>
-          {editRow({
+          {pickerRow({
             id: 'account',
             icon: <Wallet className="size-4.5" />,
             label: t('transactionForm.account'),
             value: selectedAccount ? formatAccountLabel(selectedAccount) : '',
             placeholder: t('transactionForm.selectAccount'),
-            children: (
-              <>
-                <input type="hidden" name="account_id" value={accountId} />
-                {accountPickerBody(accountId, (id) => {
-                  setAccountId(id)
-                  setUserRate('')
-                  setFxNote('')
-                  setFxError('')
-                })}
-              </>
-            ),
           })}
-          {editRow({
+          {pickerRow({
             id: 'category',
             icon: <Shapes className="size-4.5" />,
             label: 'Category',
             value: categoryValue,
             placeholder: 'Select category',
-            children: (
-              <>
-                <input type="hidden" name="category_id" value={categoryId} />
-                {categoryPickerBody()}
-              </>
-            ),
+            onOpen: syncCategoryDrillToSelection,
           })}
-          {editRow({
+          {pickerRow({
             id: 'payee',
             icon: <Store className="size-4.5" />,
             label: t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee'),
             value: payeeName,
             placeholder: '—',
-            children: (
-              <>
-                <input type="hidden" name="payee_name" value={payeeName} />
-                <Input
-                  id="payee_name"
-                  placeholder="Search or add a payee"
-                  value={payeeName}
-                  onChange={(e) => setPayeeName(e.target.value)}
-                />
-                <div className="mt-2 max-h-56 overflow-y-auto">
-                  {payees
-                    .filter((p) =>
-                      p.name.toLowerCase().includes(payeeName.trim().toLowerCase())
-                    )
-                    .slice(0, 50)
-                    .map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setPayeeName(p.name)
-                          setExpandedField(null)
-                        }}
-                        className={cn(
-                          'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
-                          payeeName === p.name
-                            ? 'bg-primary/10 font-medium text-primary'
-                            : 'hover:bg-muted'
-                        )}
-                      >
-                        <Store className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <span className="flex-1 truncate">{p.name}</span>
-                      </button>
-                    ))}
-                  {payeeName.trim() &&
-                  !payees.some(
-                    (p) => p.name.toLowerCase() === payeeName.trim().toLowerCase()
-                  ) ? (
-                    <button
-                      type="button"
-                      onClick={() => setExpandedField(null)}
-                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-muted"
-                    >
-                      <Plus className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                      <span className="flex-1 truncate">
-                        Create “<span className="font-semibold">{payeeName.trim()}</span>”
-                      </span>
-                    </button>
-                  ) : null}
-                </div>
-              </>
-            ),
           })}
           {editRow({
             id: 'repeat',
@@ -1283,9 +1402,60 @@ export function TransactionForm({
     </div>
   )
 
+  // ── Mobile full-screen selector sheet ──────────────────────────────────
+  // A single sheet instance drives every sheet-backed row; its title and body
+  // switch on which row opened it. The picker bodies are the same ones the
+  // desktop Popover uses, so behaviour stays consistent across breakpoints.
+  const sheetTitle =
+    sheetField === 'category'
+      ? 'Category'
+      : sheetField === 'payee'
+        ? t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')
+        : sheetField === 'from'
+          ? t('transactionForm.fromAccount')
+          : sheetField === 'to'
+            ? t('transactionForm.toAccount')
+            : t('transactionForm.account')
+
+  let sheetBody: ReactNode = null
+  if (sheetField === 'category') {
+    sheetBody = categoryPickerBody()
+  } else if (sheetField === 'payee') {
+    sheetBody = payeePickerBody()
+  } else if (sheetField === 'account') {
+    sheetBody = accountPickerBody(accountId, (id) => {
+      setAccountId(id)
+      setUserRate('')
+      setFxNote('')
+      setFxError('')
+    })
+  } else if (sheetField === 'from') {
+    sheetBody = accountPickerBody(
+      fromAccountId,
+      (id) => {
+        setFromAccountId(id)
+        if (id === toAccountId) setToAccountId('')
+      },
+      toAccountId
+    )
+  } else if (sheetField === 'to') {
+    sheetBody = accountPickerBody(
+      toAccountId,
+      (id) => {
+        setToAccountId(id)
+        if (id === fromAccountId) setFromAccountId('')
+      },
+      fromAccountId
+    )
+  }
+
   return (
     <form action={submitAction} onSubmit={rememberDefaults} className="space-y-3">
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
+
+      <SelectorSheet open={sheetField !== null} onClose={closePicker} title={sheetTitle}>
+        {sheetBody}
+      </SelectorSheet>
 
       {/* ── Type: segmented control ──────────────────────────────────── */}
       <SegmentedField
@@ -1421,6 +1591,7 @@ export function TransactionForm({
             hiddenValue: categoryId,
             body: categoryPickerBody(),
             className: 'col-span-2',
+            onOpen: syncCategoryDrillToSelection,
           })}
 
           {/* Description & Payee: kept essential (visible on mobile too) and
