@@ -11,6 +11,7 @@ import {
   ChevronDown,
   FileText,
   ListChecks,
+  Plus,
   Repeat,
   Shapes,
   Store,
@@ -23,9 +24,10 @@ import {
 } from './actions'
 import { CategoryPicker } from './category-picker'
 import { PayeePicker, type PayeeOption } from './payee-picker'
+import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
 import { AdvancedFields } from '@/components/advanced-fields'
 import { AmountInput } from '@/components/amount-input'
-import { DateField, SegmentedField, SelectField } from '@/components/form-field'
+import { DateField, SegmentedField, SelectField, nativeSelectCls } from '@/components/form-field'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -157,6 +159,27 @@ export function TransactionForm({
   const [expandedField, setExpandedField] = useState<string | null>(null)
   const isMobile = useIsMobile()
 
+  // Accounts/categories created inline from the mobile pickers, merged into the
+  // prop lists so they show up and can be selected without a page reload.
+  const [createdCategories, setCreatedCategories] = useState<TransactionFormCategory[]>([])
+  const [createdAccounts, setCreatedAccounts] = useState<TransactionFormAccount[]>([])
+  const availableAccounts = useMemo(
+    () => [...accounts, ...createdAccounts],
+    [accounts, createdAccounts]
+  )
+  const availableCategories = useMemo(
+    () => [...categories, ...createdCategories],
+    [categories, createdCategories]
+  )
+  // Inline create form state (category + account).
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [creatingCategory, setCreatingCategory] = useState(false)
+  const [newAccountName, setNewAccountName] = useState('')
+  const [newAccountType, setNewAccountType] = useState('cash')
+  const [newAccountCurrency, setNewAccountCurrency] = useState('')
+  const [creatingAccount, setCreatingAccount] = useState(false)
+  const [createError, setCreateError] = useState('')
+
   // When a mobile row expands, focus its control so choosing a value is a single
   // tap: text fields get the keyboard, the date field opens its native picker.
   // Rows backed by an inline option list have no text input, so this is a no-op
@@ -207,7 +230,7 @@ export function TransactionForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const selectedAccount = accounts.find((a) => a.id === accountId)
+  const selectedAccount = availableAccounts.find((a) => a.id === accountId)
   const isMultiCurrency = Boolean(
     selectedAccount && selectedAccount.currency_code !== baseCurrency
   )
@@ -226,10 +249,10 @@ export function TransactionForm({
 
   const compatibleCategories = useMemo(
     () =>
-      categories.filter(
+      availableCategories.filter(
         (c) => transactionType !== 'transfer' && c.category_type === transactionType
       ),
-    [categories, transactionType]
+    [availableCategories, transactionType]
   )
 
   // Most-used categories (for the current type) as one-tap chips.
@@ -257,8 +280,8 @@ export function TransactionForm({
     return () => window.cancelAnimationFrame(frame)
   }, [compatibleCategories])
   const isTransfer = transactionType === 'transfer'
-  const selectedFromAccount = accounts.find((a) => a.id === fromAccountId)
-  const selectedToAccount = accounts.find((a) => a.id === toAccountId)
+  const selectedFromAccount = availableAccounts.find((a) => a.id === fromAccountId)
+  const selectedToAccount = availableAccounts.find((a) => a.id === toAccountId)
   const amountCurrencyCode =
     (isTransfer ? selectedFromAccount?.currency_code : selectedAccount?.currency_code) ??
     baseCurrency
@@ -274,7 +297,7 @@ export function TransactionForm({
     ? createTransferTransactionAction
     : createManualTransactionAction
   const canSubmit = isTransfer
-    ? accounts.length >= 2 &&
+    ? availableAccounts.length >= 2 &&
       Boolean(fromAccountId) &&
       Boolean(toAccountId) &&
       !isCrossCurrencyTransfer &&
@@ -475,7 +498,7 @@ export function TransactionForm({
   // Each field is a compact row (icon + label + current value); tapping expands
   // its real control inline. The controls stay mounted (hidden when collapsed),
   // so they submit exactly like the desktop grid — no separate hidden inputs.
-  const selectedCategory = categories.find((c) => c.id === categoryId)
+  const selectedCategory = availableCategories.find((c) => c.id === categoryId)
   const categoryValue = selectedCategory
     ? `${selectedCategory.icon ? `${selectedCategory.icon} ` : ''}${selectedCategory.name}`
     : ''
@@ -581,6 +604,113 @@ export function TransactionForm({
     </div>
   )
 
+  // Currencies offered by the inline "create account" form: the base currency
+  // plus any already used by an existing account (a brand-new currency still
+  // goes through the full accounts page).
+  const currencyOptions = Array.from(
+    new Set([baseCurrency, ...availableAccounts.map((a) => a.currency_code)])
+  )
+  const ACCOUNT_TYPE_OPTIONS: { value: string; label: string }[] = [
+    { value: 'cash', label: 'Cash' },
+    { value: 'checking', label: 'Checking' },
+    { value: 'savings', label: 'Savings' },
+    { value: 'credit_card', label: 'Credit card' },
+    { value: 'debt', label: 'Debt / loan' },
+    { value: 'investment', label: 'Investment' },
+    { value: 'other', label: 'Other' },
+  ]
+
+  async function handleCreateCategory() {
+    const name = newCategoryName.trim()
+    if (!name || creatingCategory || isTransfer) return
+    setCreatingCategory(true)
+    setCreateError('')
+    const result = await quickCreateCategory(name, transactionType as 'income' | 'expense')
+    setCreatingCategory(false)
+    if ('error' in result) {
+      setCreateError(result.error)
+      return
+    }
+    const created = result.category as TransactionFormCategory
+    setCreatedCategories((prev) => [...prev, created])
+    setCategoryId(created.id)
+    setNewCategoryName('')
+    setExpandedField(null)
+  }
+
+  async function handleCreateAccount() {
+    const name = newAccountName.trim()
+    const currencyCode = newAccountCurrency || baseCurrency
+    if (!name || creatingAccount) return
+    setCreatingAccount(true)
+    setCreateError('')
+    const result = await quickCreateAccount({ name, accountType: newAccountType, currencyCode })
+    setCreatingAccount(false)
+    if ('error' in result) {
+      setCreateError(result.error)
+      return
+    }
+    const created = result.account as TransactionFormAccount
+    setCreatedAccounts((prev) => [...prev, created])
+    // Select the new account into whichever slot is being edited.
+    if (isTransfer) {
+      if (expandedField === 'to') setToAccountId(created.id)
+      else setFromAccountId(created.id)
+    } else {
+      setAccountId(created.id)
+      setUserRate('')
+      setFxNote('')
+      setFxError('')
+    }
+    setNewAccountName('')
+    setExpandedField(null)
+  }
+
+  // Inline "create account" mini-form shared by the account / from / to rows.
+  const createAccountForm = (
+    <div className="mt-2 border-t pt-2">
+      <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">New account</p>
+      <div className="space-y-2 px-2">
+        <Input
+          placeholder="Account name"
+          value={newAccountName}
+          onChange={(e) => setNewAccountName(e.target.value)}
+        />
+        <div className="flex gap-2">
+          <select
+            aria-label="Account type"
+            className={nativeSelectCls}
+            value={newAccountType}
+            onChange={(e) => setNewAccountType(e.target.value)}
+          >
+            {ACCOUNT_TYPE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <select
+            aria-label="Currency"
+            className={nativeSelectCls}
+            value={newAccountCurrency || baseCurrency}
+            onChange={(e) => setNewAccountCurrency(e.target.value)}
+          >
+            {currencyOptions.map((code) => (
+              <option key={code} value={code}>{code}</option>
+            ))}
+          </select>
+        </div>
+        {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
+        <Button
+          type="button"
+          size="sm"
+          disabled={creatingAccount || !newAccountName.trim()}
+          onClick={handleCreateAccount}
+        >
+          {creatingAccount ? 'Creating…' : 'Create account'}
+        </Button>
+      </div>
+    </div>
+  )
+
   const mobileFields = (
     <div className="rounded-xl border px-2">
       {editRow({
@@ -604,7 +734,7 @@ export function TransactionForm({
               <>
                 <input type="hidden" name="from_account_id" value={fromAccountId} />
                 {optionList(
-                  accounts.map((a) => ({
+                  availableAccounts.map((a) => ({
                     value: a.id,
                     label: formatAccountLabel(a),
                     disabled: a.id === toAccountId,
@@ -616,6 +746,7 @@ export function TransactionForm({
                     setExpandedField(null)
                   }
                 )}
+                {createAccountForm}
               </>
             ),
           })}
@@ -629,7 +760,7 @@ export function TransactionForm({
               <>
                 <input type="hidden" name="to_account_id" value={toAccountId} />
                 {optionList(
-                  accounts.map((a) => ({
+                  availableAccounts.map((a) => ({
                     value: a.id,
                     label: formatAccountLabel(a),
                     disabled: a.id === fromAccountId,
@@ -641,6 +772,7 @@ export function TransactionForm({
                     setExpandedField(null)
                   }
                 )}
+                {createAccountForm}
               </>
             ),
           })}
@@ -657,7 +789,7 @@ export function TransactionForm({
               <>
                 <input type="hidden" name="account_id" value={accountId} />
                 {optionList(
-                  accounts.map((a) => ({ value: a.id, label: formatAccountLabel(a) })),
+                  availableAccounts.map((a) => ({ value: a.id, label: formatAccountLabel(a) })),
                   accountId,
                   (value) => {
                     setAccountId(value)
@@ -667,6 +799,7 @@ export function TransactionForm({
                     setExpandedField(null)
                   }
                 )}
+                {createAccountForm}
               </>
             ),
           })}
@@ -744,6 +877,31 @@ export function TransactionForm({
                     ))}
                   </div>
                 ) : null}
+
+                <div className="mt-3 border-t pt-2">
+                  <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">
+                    New category
+                  </p>
+                  <div className="flex gap-2 px-2">
+                    <Input
+                      placeholder="Category name"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="shrink-0"
+                      disabled={creatingCategory || !newCategoryName.trim()}
+                      onClick={handleCreateCategory}
+                    >
+                      {creatingCategory ? 'Creating…' : 'Create'}
+                    </Button>
+                  </div>
+                  {createError ? (
+                    <p className="mt-1 px-2 text-xs text-destructive">{createError}</p>
+                  ) : null}
+                </div>
               </>
             ),
           })}
@@ -754,14 +912,56 @@ export function TransactionForm({
             value: payeeName,
             placeholder: '—',
             children: (
-              <PayeePicker
-                payees={payees}
-                value={payeeName}
-                onValueChange={setPayeeName}
-                label={t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')}
-                helpText={t('transactionForm.payeeHelp')}
-                inputId="payee_name"
-              />
+              <>
+                <input type="hidden" name="payee_name" value={payeeName} />
+                <Input
+                  id="payee_name"
+                  placeholder="Search or add a payee"
+                  value={payeeName}
+                  onChange={(e) => setPayeeName(e.target.value)}
+                />
+                <div className="mt-2 max-h-56 overflow-y-auto">
+                  {payees
+                    .filter((p) =>
+                      p.name.toLowerCase().includes(payeeName.trim().toLowerCase())
+                    )
+                    .slice(0, 50)
+                    .map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setPayeeName(p.name)
+                          setExpandedField(null)
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
+                          payeeName === p.name
+                            ? 'bg-primary/10 font-medium text-primary'
+                            : 'hover:bg-muted'
+                        )}
+                      >
+                        <Store className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <span className="flex-1 truncate">{p.name}</span>
+                      </button>
+                    ))}
+                  {payeeName.trim() &&
+                  !payees.some(
+                    (p) => p.name.toLowerCase() === payeeName.trim().toLowerCase()
+                  ) ? (
+                    <button
+                      type="button"
+                      onClick={() => setExpandedField(null)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-muted"
+                    >
+                      <Plus className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                      <span className="flex-1 truncate">
+                        Create “<span className="font-semibold">{payeeName.trim()}</span>”
+                      </span>
+                    </button>
+                  ) : null}
+                </div>
+              </>
             ),
           })}
           {editRow({
@@ -836,7 +1036,7 @@ export function TransactionForm({
         children: statusField,
       })}
 
-      {isTransfer && accounts.length < 2 ? (
+      {isTransfer && availableAccounts.length < 2 ? (
         <p className="border-t px-1 py-3 text-sm text-muted-foreground">
           {t('transactionForm.needTwoAccounts')}
         </p>
@@ -915,7 +1115,7 @@ export function TransactionForm({
             }}
           >
             <option value="" disabled>{t('transactionForm.selectSource')}</option>
-            {accounts.map((a) => (
+            {availableAccounts.map((a) => (
               <option key={a.id} value={a.id} disabled={a.id === toAccountId}>
                 {formatAccountLabel(a)}
               </option>
@@ -936,7 +1136,7 @@ export function TransactionForm({
             }}
           >
             <option value="" disabled>{t('transactionForm.selectDestination')}</option>
-            {accounts.map((a) => (
+            {availableAccounts.map((a) => (
               <option key={a.id} value={a.id} disabled={a.id === fromAccountId}>
                 {formatAccountLabel(a)}
               </option>
@@ -952,7 +1152,7 @@ export function TransactionForm({
             <Input id="description" name="description" defaultValue={defaultDescription} />
           </div>
 
-          {accounts.length < 2 ? (
+          {availableAccounts.length < 2 ? (
             <p className="text-sm text-muted-foreground col-span-2">
               {t('transactionForm.needTwoAccounts')}
             </p>
@@ -981,7 +1181,7 @@ export function TransactionForm({
             }}
           >
             <option value="" disabled>{t('transactionForm.selectAccount')}</option>
-            {accounts.map((a) => (
+            {availableAccounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {formatAccountLabel(a)}
               </option>
