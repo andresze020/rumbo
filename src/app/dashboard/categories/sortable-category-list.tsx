@@ -215,6 +215,7 @@ export function SortableCategoryList({
                 <span className="sr-only">Actions</span>
               </div>
               <DndContext
+                id={`categories-${group.value}-roots`}
                 sensors={sensors}
                 collisionDetection={closestCenter}
                 onDragEnd={({ active, over }) => {
@@ -261,6 +262,7 @@ export function SortableCategoryList({
                         {children.length ? (
                           <div className="divide-y bg-muted/20 md:bg-muted/[0.08]">
                             <DndContext
+                              id={`categories-${group.value}-${category.id}-children`}
                               sensors={sensors}
                               collisionDetection={closestCenter}
                               onDragEnd={({ active, over }) => {
