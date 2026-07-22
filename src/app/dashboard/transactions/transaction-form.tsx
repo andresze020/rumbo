@@ -22,7 +22,6 @@ import {
   createManualTransactionAction,
   createTransferTransactionAction,
 } from './actions'
-import { CategoryPicker } from './category-picker'
 import { PayeePicker, type PayeeOption } from './payee-picker'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
 import { AdvancedFields } from '@/components/advanced-fields'
@@ -521,6 +520,16 @@ export function TransactionForm({
   const statusValue =
     status === 'pending' ? t('transactionForm.statusPending') : t('transactionForm.statusPosted')
 
+  // Reset every picker's transient sub-state (search text, drill level, create
+  // sub-view) whenever a field opens, so it starts clean.
+  const resetPickerState = () => {
+    setCategorySearch('')
+    setCategoryDrillParentId(null)
+    setAccountSearch('')
+    setShowAccountCreate(false)
+    setCreateError('')
+  }
+
   const editRow = ({
     id,
     icon,
@@ -543,12 +552,7 @@ export function TransactionForm({
           type="button"
           aria-expanded={open}
           onClick={() => {
-            // Reset each picker's sub-state when the row it belongs to opens.
-            setCategorySearch('')
-            setCategoryDrillParentId(null)
-            setAccountSearch('')
-            setShowAccountCreate(false)
-            setCreateError('')
+            resetPickerState()
             setExpandedField(open ? null : id)
           }}
           className="flex w-full items-center gap-3 px-1 py-3 text-left"
@@ -696,8 +700,7 @@ export function TransactionForm({
   // Account picker used by the account / from / to rows: a searchable list plus
   // a "Create …" row that drills into a compact create sub-view (name +
   // type + currency) so the row stays lean until you actually add an account.
-  const accountPicker = (
-    fieldName: string,
+  const accountPickerBody = (
     selectedId: string,
     onSelect: (id: string) => void,
     disabledId?: string
@@ -711,7 +714,6 @@ export function TransactionForm({
     )
     return (
       <>
-        <input type="hidden" name={fieldName} value={selectedId} />
         {showAccountCreate ? (
           <div className="space-y-2">
             {backButton(() => setShowAccountCreate(false), 'Back to accounts')}
@@ -808,7 +810,7 @@ export function TransactionForm({
   // Category picker: searchable parent list that drills into a parent's
   // subcategories (hiding the parent list so there's no scrolling), plus a
   // payee-style "Create …" row for a brand-new top-level category.
-  const categoryPicker = () => {
+  const categoryPickerBody = () => {
     const query = categorySearch.trim().toLowerCase()
     const parents = mobileParentCategories
     // While searching, match across every compatible category (parents AND
@@ -828,7 +830,6 @@ export function TransactionForm({
 
     return (
       <>
-        <input type="hidden" name="category_id" value={categoryId} />
         {drillParent ? (
           <div>
             {backButton(() => setCategoryDrillParentId(null), 'All categories')}
@@ -972,6 +973,68 @@ export function TransactionForm({
     )
   }
 
+  // Desktop combobox: a labelled trigger (styled like a select) that expands
+  // the same searchable picker body inline. Reuses expandedField as the
+  // open-state and keeps the hidden input in-form so submission is unchanged.
+  const desktopCombo = ({
+    id,
+    label,
+    leading,
+    valueText,
+    placeholder,
+    hiddenName,
+    hiddenValue,
+    body,
+    className,
+  }: {
+    id: string
+    label: ReactNode
+    leading?: ReactNode
+    valueText?: string
+    placeholder: string
+    hiddenName: string
+    hiddenValue: string
+    body: ReactNode
+    className?: string
+  }) => {
+    const open = expandedField === id
+    return (
+      <div className={cn('space-y-1.5', className)}>
+        <Label>{label}</Label>
+        <input type="hidden" name={hiddenName} value={hiddenValue} />
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => {
+            resetPickerState()
+            setExpandedField(open ? null : id)
+          }}
+          className={cn(
+            'flex h-11 w-full items-center gap-2 rounded-xl border bg-background px-3 text-left text-sm transition-colors',
+            open ? 'ring-2 ring-ring' : 'hover:bg-muted/50'
+          )}
+        >
+          {leading ? <span className="shrink-0 text-muted-foreground">{leading}</span> : null}
+          <span className={cn('flex-1 truncate', valueText ? '' : 'text-muted-foreground')}>
+            {valueText || placeholder}
+          </span>
+          <ChevronDown
+            className={cn(
+              'size-4 shrink-0 text-muted-foreground transition-transform',
+              open && 'rotate-180'
+            )}
+            aria-hidden="true"
+          />
+        </button>
+        {open ? (
+          <div data-field-panel={id} className="rounded-xl border p-2 [&_label]:sr-only">
+            {body}
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   const mobileFields = (
     <div className="rounded-xl border px-2">
       {editRow({
@@ -991,14 +1054,18 @@ export function TransactionForm({
             label: t('transactionForm.fromAccount'),
             value: selectedFromAccount ? formatAccountLabel(selectedFromAccount) : '',
             placeholder: t('transactionForm.selectSource'),
-            children: accountPicker(
-              'from_account_id',
-              fromAccountId,
-              (id) => {
-                setFromAccountId(id)
-                if (id === toAccountId) setToAccountId('')
-              },
-              toAccountId
+            children: (
+              <>
+                <input type="hidden" name="from_account_id" value={fromAccountId} />
+                {accountPickerBody(
+                  fromAccountId,
+                  (id) => {
+                    setFromAccountId(id)
+                    if (id === toAccountId) setToAccountId('')
+                  },
+                  toAccountId
+                )}
+              </>
             ),
           })}
           {editRow({
@@ -1007,14 +1074,18 @@ export function TransactionForm({
             label: t('transactionForm.toAccount'),
             value: selectedToAccount ? formatAccountLabel(selectedToAccount) : '',
             placeholder: t('transactionForm.selectDestination'),
-            children: accountPicker(
-              'to_account_id',
-              toAccountId,
-              (id) => {
-                setToAccountId(id)
-                if (id === fromAccountId) setFromAccountId('')
-              },
-              fromAccountId
+            children: (
+              <>
+                <input type="hidden" name="to_account_id" value={toAccountId} />
+                {accountPickerBody(
+                  toAccountId,
+                  (id) => {
+                    setToAccountId(id)
+                    if (id === fromAccountId) setFromAccountId('')
+                  },
+                  fromAccountId
+                )}
+              </>
             ),
           })}
         </>
@@ -1026,12 +1097,17 @@ export function TransactionForm({
             label: t('transactionForm.account'),
             value: selectedAccount ? formatAccountLabel(selectedAccount) : '',
             placeholder: t('transactionForm.selectAccount'),
-            children: accountPicker('account_id', accountId, (id) => {
-              setAccountId(id)
-              setUserRate('')
-              setFxNote('')
-              setFxError('')
-            }),
+            children: (
+              <>
+                <input type="hidden" name="account_id" value={accountId} />
+                {accountPickerBody(accountId, (id) => {
+                  setAccountId(id)
+                  setUserRate('')
+                  setFxNote('')
+                  setFxError('')
+                })}
+              </>
+            ),
           })}
           {editRow({
             id: 'category',
@@ -1039,7 +1115,12 @@ export function TransactionForm({
             label: 'Category',
             value: categoryValue,
             placeholder: 'Select category',
-            children: categoryPicker(),
+            children: (
+              <>
+                <input type="hidden" name="category_id" value={categoryId} />
+                {categoryPickerBody()}
+              </>
+            ),
           })}
           {editRow({
             id: 'payee',
@@ -1237,47 +1318,41 @@ export function TransactionForm({
       <>
       {isTransfer ? (
         <div className="grid grid-cols-2 gap-3">
-          <SelectField
-            id="from_account_id"
-            name="from_account_id"
-            label={t('transactionForm.fromAccount')}
-            leading={accountLeading(selectedFromAccount)}
-            required
-            value={fromAccountId}
-            onChange={(e) => {
-              const next = e.target.value
-              setFromAccountId(next)
-              if (next === toAccountId) setToAccountId('')
-            }}
-          >
-            <option value="" disabled>{t('transactionForm.selectSource')}</option>
-            {availableAccounts.map((a) => (
-              <option key={a.id} value={a.id} disabled={a.id === toAccountId}>
-                {formatAccountLabel(a)}
-              </option>
-            ))}
-          </SelectField>
+          {desktopCombo({
+            id: 'from',
+            label: t('transactionForm.fromAccount'),
+            leading: accountLeading(selectedFromAccount),
+            valueText: selectedFromAccount ? formatAccountLabel(selectedFromAccount) : '',
+            placeholder: t('transactionForm.selectSource'),
+            hiddenName: 'from_account_id',
+            hiddenValue: fromAccountId,
+            body: accountPickerBody(
+              fromAccountId,
+              (id) => {
+                setFromAccountId(id)
+                if (id === toAccountId) setToAccountId('')
+              },
+              toAccountId
+            ),
+          })}
 
-          <SelectField
-            id="to_account_id"
-            name="to_account_id"
-            label={t('transactionForm.toAccount')}
-            leading={accountLeading(selectedToAccount)}
-            required
-            value={toAccountId}
-            onChange={(e) => {
-              const next = e.target.value
-              setToAccountId(next)
-              if (next === fromAccountId) setFromAccountId('')
-            }}
-          >
-            <option value="" disabled>{t('transactionForm.selectDestination')}</option>
-            {availableAccounts.map((a) => (
-              <option key={a.id} value={a.id} disabled={a.id === fromAccountId}>
-                {formatAccountLabel(a)}
-              </option>
-            ))}
-          </SelectField>
+          {desktopCombo({
+            id: 'to',
+            label: t('transactionForm.toAccount'),
+            leading: accountLeading(selectedToAccount),
+            valueText: selectedToAccount ? formatAccountLabel(selectedToAccount) : '',
+            placeholder: t('transactionForm.selectDestination'),
+            hiddenName: 'to_account_id',
+            hiddenValue: toAccountId,
+            body: accountPickerBody(
+              toAccountId,
+              (id) => {
+                setToAccountId(id)
+                if (id === fromAccountId) setFromAccountId('')
+              },
+              fromAccountId
+            ),
+          })}
 
           {dateField}
           {statusField}
@@ -1302,61 +1377,34 @@ export function TransactionForm({
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          <SelectField
-            id="account_id"
-            name="account_id"
-            label={t('transactionForm.account')}
-            leading={accountLeading(selectedAccount)}
-            required
-            value={accountId}
-            onChange={(e) => {
-              setAccountId(e.target.value)
+          {desktopCombo({
+            id: 'account',
+            label: t('transactionForm.account'),
+            leading: accountLeading(selectedAccount),
+            valueText: selectedAccount ? formatAccountLabel(selectedAccount) : '',
+            placeholder: t('transactionForm.selectAccount'),
+            hiddenName: 'account_id',
+            hiddenValue: accountId,
+            body: accountPickerBody(accountId, (id) => {
+              setAccountId(id)
               setUserRate('')
               setFxNote('')
               setFxError('')
-            }}
-          >
-            <option value="" disabled>{t('transactionForm.selectAccount')}</option>
-            {availableAccounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {formatAccountLabel(a)}
-              </option>
-            ))}
-          </SelectField>
+            }),
+          })}
 
           {dateField}
 
-          <div className="space-y-1.5 col-span-2">
-            <CategoryPicker
-              key={transactionType}
-              categories={compatibleCategories}
-              transactionType={transactionType}
-              onCategoryChange={setCategoryId}
-              selectedCategoryId={categoryId}
-            />
-
-            {frequentCategories.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
-                {frequentCategories.map((category) => (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => setCategoryId(category.id)}
-                    className={cn(
-                      'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
-                      categoryId === category.id
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
-                    {category.name}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          {desktopCombo({
+            id: 'category',
+            label: 'Category',
+            valueText: categoryValue,
+            placeholder: 'Select category',
+            hiddenName: 'category_id',
+            hiddenValue: categoryId,
+            body: categoryPickerBody(),
+            className: 'col-span-2',
+          })}
 
           {/* Description & Payee: kept essential (visible on mobile too) and
               full-width so they're comfortable to type into. */}

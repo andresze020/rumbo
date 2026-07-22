@@ -80,7 +80,21 @@ export function DateField({
           aria-hidden="true"
           className="pointer-events-none absolute left-3 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground"
         />
-        <Input id={id} type="date" className={cn('pl-10', className)} {...inputProps} />
+        <Input
+          id={id}
+          type="date"
+          className={cn('pl-10', className)}
+          // Open the native calendar on any click/focus of the field, so the
+          // user doesn't have to hit the small picker glyph.
+          onClick={(e) => {
+            try {
+              ;(e.currentTarget as HTMLInputElement).showPicker?.()
+            } catch {
+              // showPicker() throws if the picker is already open; ignore.
+            }
+          }}
+          {...inputProps}
+        />
       </div>
     </div>
   )
