@@ -6,6 +6,11 @@
 > pointer to its source of truth, not a duplicate — update the linked doc
 > first, then update this index to match. Kept in sync by the
 > `app-finanzas-state-sync` skill at sprint close.
+>
+> **Last refreshed 2026-07-22.** Since the previous refresh: the Tier-1
+> easy-wins sprint and the transaction-form mobile redesign (PR #33) merged
+> to `main`, and BR-023 (tags) + BR-024 (CSV presets/revert) are now in
+> review as PR #34 / PR #35 (migrations pending `db push`).
 
 ---
 
@@ -49,8 +54,8 @@ Full detail, "why soon," and acceptance criteria live in
 | BR-014 | Recurring | Auto-post scheduler + failure log (depends on BR-002 reliability) |
 | BR-017 | Accounts | ✅ Built on branch `feat/br-017-balance-adjustment` (migration `20260716130000`): `create_balance_adjustment` RPC + "Adjust balance" action on the accounts edit dialog — posts a ledger-safe `adjustment` entry to reconcile the posted balance, no allocation (excluded from reports/budgets), history preserved |
 | BR-018 | Budgeting | ✅ Built on branch `feat/br-018-budget-rollover` (migration `20260716140000`): per-line `rollover_enabled` toggle + `get_budget_line_carryovers` RPC (accumulated planned−actual of prior rollover months). "Available = planned + carryover" folds into line remaining/progress and budget totals when enabled |
-| BR-023 | Tags | `tags` + `transaction_tags` for flexible slicing |
-| BR-024 | CSV import | Saved column-mapping presets + import revert |
+| ~~BR-023~~ 🟡 | Tags | **In review (PR #34, `feat/br-023-tags`).** `tags` + `transaction_tags` junction, `/dashboard/tags` CRUD, `TagMultiSelect` in add/edit forms, tag chips on rows, `tag_id` filter. Migration `20260722120000` pending `db push`. |
+| ~~BR-024~~ 🟡 | CSV import | **In review (PR #35, `feat/br-024-csv-presets-revert`).** Saved column-mapping presets (`csv_import_presets`) + confirm-gated import revert (`revert_csv_import` soft-deletes a batch). Migration `20260722130000` pending `db push`. |
 | ~~BR-029~~ ✅ | Transactions filters | **Merged to `main`** (PR #17) — broadened date presets + fixed the Apply-resets regression (BF-024) |
 
 ## Partially resolved (shipped, with a known gap)
@@ -58,10 +63,10 @@ Full detail, "why soon," and acceptance criteria live in
 | ID / Feature | What shipped | What's still missing | Doc |
 |---|---|---|---|
 | BR-021 | `/dashboard/month-review` recap + (branch `feat/br-021-health-score-close-month`, migration `20260716150000`) a **real** documented health score (`lib/health/score.ts`: savings rate 65% + budget adherence 35%, shared by dashboard + month-review, "Demo" labels removed) and a **light Close month** (`month_closures` marker + snapshot; reopenable; does NOT lock the ledger) | Close month is a soft marker only — no month-locking of transactions (deliberate, per product decision) | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-009 | ✅ **Fully resolved.** Slice 1 (payee picker, migration `20260716120000`) + Slice 2 (payees CRUD + search + filter, migration `20260717120000`). Slice 1: `create_manual_transaction`/`update_manual_transaction` take `p_payee_name` (+ `get_or_create_payee`) to write `payee_id`, merchant_name kept in sync; covers add/edit/inline/assistant forms. Slice 2: (a) `/dashboard/payees` management page — list with usage stats, create, rename → propagates to linked `merchant_name`, archive/restore, and **merge** duplicates via `merge_payees` RPC (reassign transactions, archive source); added `payees.is_archived` + `get_payees_with_stats` RPC + Money-group nav entry; (b) payee field is now a **searchable combobox** on Base UI Autocomplete (floating portal, no dialog clipping) across add/edit/inline; (c) transactions list takes a `payee_id` filter (all-time default + dismissible chip) reached from each payee's "View transactions" button; (d) field labeled **Payer** on income vs **Payee** on expense (`transactionForm.payer`, en/es/fr). | CSV import does not set `payee_id` yet; recurring templates carry no payee; no bulk merge | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-015 | Reusable `AlertDialog` now also adopted for account/category archive (previously fired with **zero** confirmation, not "no archive action" as this doc used to say — both actions already existed, just unguarded); toast+Undo added via the existing `ToastProvider` (PR #23, merged to `main`) | No archive action elsewhere in the app to standardize yet (e.g. goals, recurring templates don't have one); void-transaction confirm has no undo | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-025 | ~20 files' duplicated `formatCurrency`/`formatMonthLabel`/label-casing helpers consolidated into `lib/format.ts` imports (PR #22, merged to `main`) | `formatPercent` still duplicated with diverging digit options per file (needs case-by-case verification before centralizing); day-level date formatters have no shared helper yet; `lib/format.ts`'s `LOCALE` is still hardcoded `'en-CA'` regardless of the user's selected app language — dedup makes that a single-point fix later, doesn't implement it | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-028 | PWA manifest `shortcuts` (Quick add / Transactions / Recurring) added; Quick add deep-links via a new `quick_add` URL param the transaction dialog provider recognizes (PR #21, merged to `main`) | No manifest `share_target`; shortcut behavior not yet verified in a real browser/installed PWA | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-009 | ✅ **Fully resolved.** Slice 1 (payee picker, migration `20260716120000`) + Slice 2 (payees CRUD + search + filter, migration `20260717120000`). Slice 1: `create_manual_transaction`/`update_manual_transaction` take `p_payee_name` (+ `get_or_create_payee`) to write `payee_id`, merchant_name kept in sync; covers add/edit/inline/assistant forms. Slice 2: (a) `/dashboard/payees` management page — list with usage stats, create, rename → propagates to linked `merchant_name`, archive/restore, and **merge** duplicates via `merge_payees` RPC (reassign transactions, archive source); added `payees.is_archived` + `get_payees_with_stats` RPC + Money-group nav entry; (b) payee field is now a **searchable combobox** on Base UI Autocomplete (floating portal, no dialog clipping) across add/edit/inline; (c) transactions list takes a `payee_id` filter (all-time default + dismissible chip) reached from each payee's "View transactions" button; (d) field labeled **Payer** on income vs **Payee** on expense (`transactionForm.payer`, en/es/fr). | ✅ CSV import + recurring templates now carry a payee (Tier-1 residuals, migration `20260720130000`). Remaining: no **bulk** merge (one source at a time). | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-015 | Reusable `AlertDialog` now also adopted for account/category archive (previously fired with **zero** confirmation, not "no archive action" as this doc used to say — both actions already existed, just unguarded); toast+Undo added via the existing `ToastProvider` (PR #23, merged to `main`) | ✅ Void now has **Undo** (`unvoid_transaction` RPC, migration `20260720120000`); archive+undo generalized to goals and recurring templates (Tier-1). Nothing outstanding. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-025 | ~20 files' duplicated `formatCurrency`/`formatMonthLabel`/label-casing helpers consolidated into `lib/format.ts` imports (PR #22, merged to `main`) | `formatPercent` still duplicated with diverging digit options per file (needs case-by-case verification before centralizing); day-level date formatters have no shared helper yet; ✅ locale now threads through dashboard/plan/budgets/transactions via `localeToBcp47(locale)` and `formatPercent` is deduped (Tier-1). Remaining: deep leaf cards still default to `'en'`; day-level date formatters have no shared helper yet | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-028 | PWA manifest `shortcuts` (Quick add / Transactions / Recurring) added; Quick add deep-links via a new `quick_add` URL param the transaction dialog provider recognizes (PR #21, merged to `main`) | ✅ Manifest `share_target` added (Tier-1) — a PWA share opens the expense quick-add prefilled. Remaining: shortcut/share behavior not yet verified in a real installed PWA. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | Goals — linked-account progress | Manual `current_amount`, contribute/withdraw via atomic RPC | Could eventually derive progress from the linked account's real ledger balance instead of manual entry — deliberately deferred | [features/goals.md](./features/goals.md) (Open Decisions) |
 
 ## Open decisions across feature docs
@@ -104,4 +109,10 @@ fixes, and the transaction-filter/recurring/nav cluster (BF-024, BF-025,
 BR-029, UC-10 inline recurring); PR #18 merged the native-form-design rollout
 (shared `form-field.tsx` / `form-styles.ts` primitives) to every other entry
 form — see [features/native-form-design.md](./features/native-form-design.md).
+The **Tier-1 easy-wins** sprint (merged `3517c4b`) then landed BR-025 locale
+threading, BR-028 `share_target`, BR-015 void Undo + goals/recurring archive,
+and the BR-009 CSV/recurring payee residuals; and the **transaction-form
+mobile redesign** (PR #33 + the `transaction-form-mobile-rows` / `-dense-mobile`
+/ `-single-screen` merges) reworked the add/edit form into a mobile row-list +
+full-screen `SelectorSheet` with a desktop popover-combobox grid.
 See `AGENTS.md` → Current status for the up-to-date shipped-feature summary.
