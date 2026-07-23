@@ -33,6 +33,29 @@ export type ImportCurrency = {
   code: string
 }
 
+// BR-024: a saved column-mapping preset (name + partial CsvMapping + default
+// account) the user can reload on a future import.
+export type ImportPreset = {
+  id: string
+  name: string
+  mapping: Partial<CsvMapping>
+  targetAccountId: string
+}
+
+// BR-024: a past import batch shown in the "Import history" / revert section.
+export type ImportBatch = {
+  id: string
+  fileName: string
+  status: string
+  totalRows: number
+  importedCount: number
+  invalidRows: number
+  duplicateRows: number
+  createdAt: string
+  /** Set once the batch has been reverted (number of transactions removed). */
+  revertedCount: number | null
+}
+
 export type MappedImportRow = {
   rowNumber: number
   rawData: CsvRow
