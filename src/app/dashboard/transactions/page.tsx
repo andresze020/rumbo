@@ -1058,7 +1058,8 @@ export default async function TransactionsPage({
               transactionDate={selectedEditRow.transaction.transaction_date}
               fromAccountId={selectedEditRow.transferOutEntry.account_id}
               toAccountId={selectedEditRow.transferInEntry.account_id}
-              amount={Math.abs(Number(selectedEditRow.transferInEntry.amount_account_currency))}
+              amount={Math.abs(Number(selectedEditRow.transferOutEntry.amount_account_currency))}
+              initialToAmount={Math.abs(Number(selectedEditRow.transferInEntry.amount_account_currency))}
               cancelHref={returnTo}
               description={selectedEditRow.transaction.description ?? ''}
               notes={selectedEditRow.transaction.notes ?? ''}

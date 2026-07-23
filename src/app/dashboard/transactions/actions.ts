@@ -315,6 +315,9 @@ export async function createTransferTransactionAction(formData: FormData) {
     exchangeRateToBaseRaw !== '' && Number.isFinite(exchangeRateToBase) && exchangeRateToBase > 0
       ? exchangeRateToBase
       : 1
+  // BR-007: destination amount (to-account currency) for cross-currency
+  // transfers; null for same-currency transfers.
+  const toAmount = parsePositiveNumber(formData.get('to_amount'))
 
   if (!fromAccountId) {
     redirectWithError('Select the source account.')
@@ -377,6 +380,7 @@ export async function createTransferTransactionAction(formData: FormData) {
       p_notes: notes || null,
       p_status: status,
       p_exchange_rate_to_base: validExchangeRate,
+      p_to_amount: toAmount,
     }
   )
 
@@ -526,6 +530,9 @@ export async function updateTransferTransactionAction(formData: FormData) {
   const status = String(formData.get('status') ?? '').trim()
   const returnTo = String(formData.get('return_to') ?? '').trim()
   const exchangeRateToBase = parsePositiveNumber(formData.get('exchange_rate_to_base'))
+  // BR-007: destination amount (in the to-account currency) for cross-currency
+  // transfers; null for same-currency transfers.
+  const toAmount = parsePositiveNumber(formData.get('to_amount'))
 
   if (!transactionId) {
     redirectWithTransactionError('Transaction id is required.', returnTo)
@@ -595,6 +602,7 @@ export async function updateTransferTransactionAction(formData: FormData) {
       p_notes: notes || null,
       p_status: status,
       p_exchange_rate_to_base: exchangeRateToBase ?? 1,
+      p_to_amount: toAmount,
     }
   )
 
