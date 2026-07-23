@@ -38,6 +38,9 @@ type TransferEditFormProps = {
   returnTo: string
   baseCurrency: string
   initialExchangeRateToBase: number
+  // BR-007: amount that arrived in the destination account (its own currency).
+  // Equals `amount` for same-currency transfers.
+  initialToAmount: number
 }
 
 function formatAccountLabel(account: TransferAccount) {
@@ -67,11 +70,15 @@ export function TransferEditForm({
   returnTo,
   baseCurrency,
   initialExchangeRateToBase,
+  initialToAmount,
 }: TransferEditFormProps) {
   const [selectedFromAccountId, setSelectedFromAccountId] = useState(fromAccountId)
   const [selectedToAccountId, setSelectedToAccountId] = useState(toAccountId)
   const [currentDate, setCurrentDate] = useState(transactionDate)
   const [amountInput, setAmountInput] = useState(amount.toFixed(2))
+  const [toAmountInput, setToAmountInput] = useState(
+    initialToAmount ? initialToAmount.toFixed(2) : ''
+  )
 
   // userRate is expressed as "1 baseCurrency = X foreignCurrency" (what the user sees)
   // exchange_rate_to_base = 1 / userRate (what the DB stores)
@@ -91,10 +98,13 @@ export function TransferEditForm({
     Boolean(selectedFromAccount && selectedToAccount) &&
     selectedFromAccount?.currency_code !== selectedToAccount?.currency_code
 
-  const isNonBaseCurrencyTransfer =
-    !isCrossCurrencyTransfer &&
+  // A rate to base is only required when NEITHER leg is the base currency. When
+  // one leg is base, the RPC derives both legs' rates from the two amounts so
+  // the transfer stays value-neutral.
+  const needsFromRate =
     Boolean(selectedFromAccount) &&
-    selectedFromAccount?.currency_code !== baseCurrency
+    selectedFromAccount?.currency_code !== baseCurrency &&
+    (!selectedToAccount || selectedToAccount.currency_code !== baseCurrency)
 
   const parsedRate = Number(userRate)
   const rateIsValid =
@@ -103,6 +113,9 @@ export function TransferEditForm({
 
   const parsedAmount = Number(amountInput)
   const amountIsValid = Number.isFinite(parsedAmount) && parsedAmount > 0
+
+  const parsedToAmount = Number(toAmountInput)
+  const toAmountValid = Number.isFinite(parsedToAmount) && parsedToAmount > 0
 
   function conversionPreview() {
     if (!selectedFromAccount || !rateIsValid || !amountIsValid) return null
@@ -113,8 +126,9 @@ export function TransferEditForm({
     selectedFromAccountId &&
       selectedToAccountId &&
       selectedFromAccountId !== selectedToAccountId &&
-      !isCrossCurrencyTransfer &&
-      (!isNonBaseCurrencyTransfer || rateIsValid)
+      amountIsValid &&
+      (!isCrossCurrencyTransfer || toAmountValid) &&
+      (!needsFromRate || rateIsValid)
   )
 
   async function autoFetch(accountCurrency: string, date: string) {
@@ -137,7 +151,7 @@ export function TransferEditForm({
 
   // Auto-fetch rate when account or date changes
   useEffect(() => {
-    if (!isNonBaseCurrencyTransfer || !selectedFromAccount || !currentDate) return
+    if (!needsFromRate || !selectedFromAccount || !currentDate) return
     const frame = window.requestAnimationFrame(() => {
       void autoFetch(selectedFromAccount.currency_code, currentDate)
     })
@@ -249,12 +263,30 @@ export function TransferEditForm({
       </div>
 
       {isCrossCurrencyTransfer ? (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          Cross-currency transfers are not supported yet.
-        </p>
+        <div className="space-y-2">
+          <Label htmlFor={`transfer_to_amount_${transactionId}`}>
+            Amount received{' '}
+            <span className="font-normal text-muted-foreground">
+              (in {selectedToAccount?.currency_code})
+            </span>
+          </Label>
+          <AmountInput
+            id={`transfer_to_amount_${transactionId}`}
+            name="to_amount"
+            currencyCode={selectedToAccount?.currency_code ?? baseCurrency}
+            value={toAmountInput}
+            onValueChange={setToAmountInput}
+            withCalculator
+            required
+          />
+          <p className="text-xs text-muted-foreground">
+            How much actually arrived in the destination account, in its own
+            currency.
+          </p>
+        </div>
       ) : null}
 
-      {isNonBaseCurrencyTransfer ? (
+      {needsFromRate ? (
         <AdvancedFields
           defaultOpen
           summary={

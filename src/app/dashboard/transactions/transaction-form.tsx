@@ -153,6 +153,8 @@ export function TransactionForm({
   const [toAccountId, setToAccountId] = useState('')
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
   const [amountInput, setAmountInput] = useState(defaultAmount ?? '')
+  // BR-007: destination amount for a cross-currency transfer (to-account currency).
+  const [toAmountInput, setToAmountInput] = useState('')
   const [status, setStatus] = useState(defaultStatus ?? 'posted')
   // Secondary fields (notes) collapse behind a "More details" toggle on the
   // desktop grid; on mobile the row layout replaces this entirely.
@@ -311,11 +313,19 @@ export function TransactionForm({
   const isCrossCurrencyTransfer =
     Boolean(selectedFromAccount && selectedToAccount) &&
     selectedFromAccount?.currency_code !== selectedToAccount?.currency_code
-  const isTransferNonBaseCurrency =
+  // A rate to base is only required when NEITHER transfer leg is the base
+  // currency (incl. same-currency non-base, preserving the BF-020 fix). When one
+  // leg is base, the RPC derives both legs' rates from the two amounts.
+  const needsFromRate =
     isTransfer &&
-    !isCrossCurrencyTransfer &&
     Boolean(selectedFromAccount) &&
-    selectedFromAccount?.currency_code !== baseCurrency
+    selectedFromAccount?.currency_code !== baseCurrency &&
+    (!selectedToAccount || selectedToAccount.currency_code !== baseCurrency)
+  const parsedToAmount = Number(toAmountInput)
+  const toAmountValid =
+    toAmountInput.trim() !== '' &&
+    Number.isFinite(parsedToAmount) &&
+    parsedToAmount > 0
   const submitAction = isTransfer
     ? createTransferTransactionAction
     : createManualTransactionAction
@@ -323,8 +333,8 @@ export function TransactionForm({
     ? availableAccounts.length >= 2 &&
       Boolean(fromAccountId) &&
       Boolean(toAccountId) &&
-      !isCrossCurrencyTransfer &&
-      (!isTransferNonBaseCurrency || rateIsValid)
+      (!isCrossCurrencyTransfer || toAmountValid) &&
+      (!needsFromRate || rateIsValid)
     : compatibleCategories.length > 0 &&
       Boolean(categoryId) &&
       (!isMultiCurrency || rateIsValid)
@@ -336,7 +346,7 @@ export function TransactionForm({
   }, [accountId, transactionDate])
 
   useEffect(() => {
-    if (!isTransferNonBaseCurrency || !selectedFromAccount || !transactionDate) return
+    if (!needsFromRate || !selectedFromAccount || !transactionDate) return
     void autoFetch(selectedFromAccount.currency_code, transactionDate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromAccountId, transactionDate])
@@ -1398,11 +1408,6 @@ export function TransactionForm({
           {t('transactionForm.needTwoAccounts')}
         </p>
       ) : null}
-      {isCrossCurrencyTransfer ? (
-        <p className="border-t px-1 py-3 text-sm text-destructive">
-          {t('transactionForm.crossCurrencyNotSupported')}
-        </p>
-      ) : null}
     </div>
   )
 
@@ -1559,12 +1564,6 @@ export function TransactionForm({
               {t('transactionForm.needTwoAccounts')}
             </p>
           ) : null}
-
-          {isCrossCurrencyTransfer ? (
-            <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive col-span-2">
-              {t('transactionForm.crossCurrencyNotSupported')}
-            </p>
-          ) : null}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
@@ -1682,9 +1681,40 @@ export function TransactionForm({
         />
       ) : null}
 
-      {/* ── Exchange rate (only for non-base-currency entries) ────────── */}
+      {/* ── Cross-currency: amount that arrives in the destination ─────── */}
+      {isTransfer && isCrossCurrencyTransfer ? (
+        <div className="rounded-2xl border bg-muted/30 p-3">
+          <div className="flex items-center justify-between">
+            <Label
+              htmlFor="to_amount"
+              className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
+            >
+              {t('transactionForm.amountReceived')}
+            </Label>
+            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
+              {selectedToAccount?.currency_code}
+            </span>
+          </div>
+          <AmountInput
+            id="to_amount"
+            name="to_amount"
+            currencyCode={selectedToAccount?.currency_code ?? baseCurrency}
+            value={toAmountInput}
+            onValueChange={setToAmountInput}
+            size="lg"
+            withCalculator
+            required
+            className="mt-1.5"
+          />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {t('transactionForm.amountReceivedHelp')}
+          </p>
+        </div>
+      ) : null}
+
+      {/* ── Exchange rate (only when neither leg is the base currency) ── */}
       {isTransfer ? (
-        isCrossCurrencyTransfer ? null : isTransferNonBaseCurrency ? (
+        needsFromRate ? (
           fxFields(selectedFromAccount)
         ) : (
           <input type="hidden" name="exchange_rate_to_base" value="1" />
