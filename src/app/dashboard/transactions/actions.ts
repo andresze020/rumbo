@@ -81,6 +81,13 @@ export async function createManualTransactionAction(formData: FormData) {
   const status = String(formData.get('status') ?? '').trim()
   const returnTo = String(formData.get('return_to') ?? '').trim() || undefined
   const addNext = formData.get('add_next') === 'true'
+  // BR-023: the tag multi-select submits `tags_present=1` plus one `tag_id` per
+  // selected tag. Absent sentinel = the form didn't manage tags (leave as-is).
+  const tagsProvided = formData.get('tags_present') !== null
+  const tagIds = formData
+    .getAll('tag_id')
+    .map((value) => String(value).trim())
+    .filter(Boolean)
   // Optional recurrence: when set, we also create a recurring template so the
   // entry repeats. Empty string = "Does not repeat".
   const frequency = String(formData.get('frequency') ?? '').trim()
@@ -165,7 +172,7 @@ export async function createManualTransactionAction(formData: FormData) {
     )
   }
 
-  const { error: transactionError } = await supabase.rpc(
+  const { data: newTransactionId, error: transactionError } = await supabase.rpc(
     'create_manual_transaction',
     {
       p_household_id: profile.default_household_id,
@@ -187,6 +194,21 @@ export async function createManualTransactionAction(formData: FormData) {
     redirectWithError(
       'Could not create the transaction. Please check the form and try again.'
     )
+  }
+
+  // BR-023: attach the selected tags to the just-created transaction. A failure
+  // here doesn't undo the (already posted) transaction — surface a soft error.
+  if (tagsProvided && newTransactionId) {
+    const { error: tagError } = await supabase.rpc('set_transaction_tags', {
+      p_transaction_id: newTransactionId as string,
+      p_tag_ids: tagIds,
+    })
+    if (tagError) {
+      redirectWithError(
+        'Transaction created, but its tags could not be saved. Edit it to add them.'
+      )
+    }
+    revalidatePath('/dashboard/tags')
   }
 
   // UC-10: if a frequency was chosen, also create a recurring template. The
@@ -389,6 +411,13 @@ export async function updateManualTransactionAction(formData: FormData) {
   const notes = String(formData.get('notes') ?? '').trim()
   const status = String(formData.get('status') ?? '').trim()
   const returnTo = String(formData.get('return_to') ?? '').trim()
+  // BR-023: only touch tags when the form managed them (edit form), so the
+  // inline quick-edit (which has no tag field) never wipes a transaction's tags.
+  const tagsProvided = formData.get('tags_present') !== null
+  const tagIds = formData
+    .getAll('tag_id')
+    .map((value) => String(value).trim())
+    .filter(Boolean)
 
   if (!transactionId) {
     redirectWithTransactionError('Transaction id is required.', returnTo)
@@ -463,6 +492,21 @@ export async function updateManualTransactionAction(formData: FormData) {
       ),
       returnTo
     )
+  }
+
+  // BR-023: replace the transaction's tag set with the form's selection.
+  if (tagsProvided) {
+    const { error: tagError } = await supabase.rpc('set_transaction_tags', {
+      p_transaction_id: transactionId,
+      p_tag_ids: tagIds,
+    })
+    if (tagError) {
+      redirectWithTransactionError(
+        'Transaction saved, but its tags could not be updated. Try again.',
+        returnTo
+      )
+    }
+    revalidatePath('/dashboard/tags')
   }
 
   revalidatePath('/dashboard/transactions')

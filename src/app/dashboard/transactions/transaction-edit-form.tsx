@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { updateManualTransactionAction } from './actions'
 import { CategoryPicker } from './category-picker'
 import { PayeePicker, type PayeeOption } from './payee-picker'
+import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
 import { AmountInput } from '@/components/amount-input'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,6 +48,8 @@ type TransactionEditFormProps = {
   accounts: EditAccount[]
   categories: EditCategory[]
   payees: PayeeOption[]
+  tags: TagOption[]
+  selectedTagIds: string[]
   returnTo: string
 }
 
@@ -76,6 +79,8 @@ export function TransactionEditForm({
   accounts,
   categories,
   payees,
+  tags,
+  selectedTagIds,
   returnTo,
 }: TransactionEditFormProps) {
   const [selectedAccountId, setSelectedAccountId] = useState(accountId)
@@ -179,6 +184,17 @@ export function TransactionEditForm({
           defaultValue={notes}
         />
       </div>
+
+      {tags.length > 0 ? (
+        <TagMultiSelect
+          tags={tags}
+          defaultValue={selectedTagIds}
+          label="Tags"
+          helpText="Attach one or more labels to slice this transaction later."
+          emptyHint="No tags yet. Create some on the Tags page."
+          manageLabel="Manage tags"
+        />
+      ) : null}
 
       <div className={formActionsCls}>
         <SubmitButton type="submit" className={formBtnCls} pendingText="Saving transaction">
