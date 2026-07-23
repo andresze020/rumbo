@@ -23,6 +23,32 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Tags — BR-023** and **CSV import presets + revert — BR-024** (2026-07-22,
+  **in review**: PR #34 `feat/br-023-tags`, PR #35
+  `feat/br-024-csv-presets-revert`; migrations not yet `db push`ed). BR-023
+  adds a free-form tagging layer orthogonal to categories (many-to-many):
+  `tags` + `transaction_tags` junction, a `/dashboard/tags` CRUD page (Money
+  nav group), a `TagMultiSelect` wired into the add + edit forms (tags are
+  set via a separate `set_transaction_tags` RPC after the transaction RPC, so
+  no new overloads), tag chips on transaction rows, and an all-time `tag_id`
+  filter. BR-024 adds saved column-mapping presets (`csv_import_presets`) and
+  a confirm-gated import **revert** (`revert_csv_import` soft-deletes a
+  batch's transactions and marks the batch `reverted`).
+- **Transaction form — mobile redesign** (2026-07-21, PR #33 + merges of
+  `feat/transaction-form-mobile-rows` / `fix/transaction-form-dense-mobile` /
+  `fix/transaction-form-single-screen`). The add/edit form now uses an
+  AndroMoney-style compact **row list** on phones (each field a tap-to-expand
+  row) and a two-column grid on desktop; account/category/payee open a
+  full-screen `SelectorSheet` on mobile and a floating popover combobox on
+  desktop, both with inline search + create. Single-screen layout, denser
+  spacing, one-tap payee list, and category drill-down into subcategories.
+- **Tier-1 easy wins** (2026-07-20, merged `3517c4b`). BR-025 focused locale
+  formatting (`localeToBcp47`, threaded locale through dashboard/plan/budgets/
+  transactions; deduped `formatPercent`), BR-028 PWA `share_target`, BR-015
+  void **Undo** (`unvoid_transaction` RPC) + generalized archive+undo to goals
+  and recurring templates, and BR-009 residuals (CSV import + recurring
+  templates now carry a payee; migration `20260720130000` adds
+  `recurring_transactions.payee_id`).
 - **Payees maintenance — BR-009 slice 2** (2026-07-20, PR on
   `feat/br-009-payee-crud`). BR-009 is now fully closed. New
   `/dashboard/payees` CRUD page (Money nav group): list with usage stats
@@ -201,6 +227,10 @@ The product is household-first. All financial data must belong to a household.
 - payees
 - import_batches
 - import_rows
+
+Pending (migrations written but **not yet `db push`ed**, in open PRs): `tags`
++ `transaction_tags` (PR #34, `20260722120000`); `csv_import_presets` (PR #35,
+`20260722130000`, which also adds a `reverted` status to `import_batches`).
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 

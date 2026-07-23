@@ -15,6 +15,61 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## BR-023 tags + BR-024 CSV presets/revert (2026-07-22, in review)
+- Goal: two backlog items — a flexible tagging layer, and CSV importer
+  quality-of-life (reusable mappings + an undo for a whole import.)
+- Shipped (PR #34 `feat/br-023-tags`, PR #35 `feat/br-024-csv-presets-revert`;
+  both pass tsc/lint/build, **not yet merged**, migrations **not yet
+  `db push`ed**):
+  - BR-023: `tags` + `transaction_tags` junction; `/dashboard/tags` CRUD
+    (list/usage/create/rename/color/archive) in the Money nav group;
+    reusable `TagChip` + `TagMultiSelect` (emits hidden `tag_id` + a
+    `tags_present` sentinel); tags wired into the add + edit forms via a
+    separate `set_transaction_tags` RPC (transaction RPCs untouched → no new
+    overloads); tag chips on transaction rows; all-time `tag_id` filter with a
+    focus chip. Deferred: inline tag-create from the form, tag facet in the
+    main filter panel.
+  - BR-024: `csv_import_presets` (named column mapping + default account,
+    save/load, delete); confirm-gated **Import history → Revert** that calls
+    `revert_csv_import` (soft-deletes a batch's transactions, marks batch
+    `reverted`).
+- Migrations added: `20260722120000_br_023_tags.sql`,
+  `20260722130000_br_024_csv_import_presets_revert.sql` (the latter also adds
+  `reverted` to the `import_batches` status check).
+- Tables changed: new `tags`, `transaction_tags`, `csv_import_presets`.
+- Follow-ups / known gaps: both PRs need review + `npx supabase db push`
+  before they work in any environment. Housekeeping done alongside: 79 merged
+  remote branches + 4 merged local branches pruned (only `main` + these two
+  feature branches remain).
+
+## Transaction-form mobile redesign (2026-07-21, PR #33)
+- Goal: make the add/edit transaction form comfortable on a phone (it was
+  scroll-heavy and used native selects covered by the keyboard).
+- Shipped: AndroMoney-style compact **row list** on phones (each field a
+  tap-to-expand row) vs a two-column grid on desktop; account/category/payee
+  open a full-screen `SelectorSheet` on mobile and a floating popover combobox
+  on desktop, both with inline search + create-new; category drill-down into
+  subcategories; single-screen, denser layout.
+- Migrations added: none.
+- Tables changed: none.
+- Follow-ups / known gaps: none tracked.
+
+## Tier-1 easy wins — BR-025/028/015/009 residuals (2026-07-20, merged 3517c4b)
+- Goal: knock out a cluster of small, high-value backlog residuals.
+- Shipped: BR-025 focused locale formatting (`localeToBcp47`, locale threaded
+  through dashboard/plan/budgets/transactions, `formatPercent` deduped);
+  BR-028 PWA `share_target` (a share opens the expense quick-add prefilled);
+  BR-015 void **Undo** + archive+undo generalized to goals and recurring
+  templates; BR-009 residuals (CSV import + recurring templates now carry a
+  payee).
+- Migrations added: `20260720120000_unvoid_transaction_rpc.sql`,
+  `20260720130000_br_009_recurring_payee.sql` (adds
+  `recurring_transactions.payee_id`).
+- Tables changed: `recurring_transactions` (+`payee_id`).
+- Follow-ups / known gaps: deep leaf cards still default to `'en'`; no shared
+  day-level date formatter; share/shortcut behavior unverified in an installed
+  PWA.
+
 ## Payees maintenance — BR-009 slice 2 (2026-07-20)
 - Goal: close BR-009 by making the backfilled `payees` table maintainable and
   the transaction-form payee field genuinely searchable.
