@@ -125,21 +125,27 @@ Navegación en un rail izquierdo con icono + label. Colapsable a solo iconos. Av
 
 ## Decisión
 
-**[pendiente]** — En discusión entre Opción C y Opción D.
+**Opción D — Sidebar colapsable. ✅ Implementada.** (Decidida 2026-07-23.)
+
+El nav horizontal descrito arriba ya no existe: `dashboard/layout.tsx` monta un
+`AppSidebar` colapsable en desktop (grupos Overview / Money / Planning /
+Analysis / Automation / Settings desde `lib/nav/config.ts`, colapso a solo
+iconos con persistencia en `localStorage`, tooltips en estado colapsado). En
+mobile la navegación vive en `MobileNav` (top bar delgado: marca + tema),
+`MobileBottomNav` (5 slots + FAB con drawer de quick-add) y la página
+`/dashboard/more`.
 
 ---
 
-## Tareas (cuando se decida)
+## Tareas (Opción D)
 
-**Opción C:**
-- [ ] Crear `NavMoreDropdown` con links utilitarios
-- [ ] Crear `UserAvatarMenu` con Settings / Sign out
-- [ ] Actualizar `dashboard/layout.tsx` y `mobile-menu.tsx`
-- [ ] Conectar con `/dashboard/settings` cuando exista
+- [x] Crear `AppSidebar` (expandido + colapsado, state en localStorage)
+- [x] Refactorizar `dashboard/layout.tsx` a sidebar + content
+- [x] Navegación mobile (`MobileNav` top bar + `MobileBottomNav` + `/dashboard/more`)
+- [x] Mover ThemeToggle y Sign out al fondo del sidebar
+- [x] Bloque de usuario (avatar con iniciales + email) al fondo del sidebar → `/dashboard/settings`
+- [x] Conectar con `/dashboard/settings` (existe y está en el grupo Settings)
 
-**Opción D:**
-- [ ] Crear `AppSidebar` (expandido + colapsado, state en localStorage)
-- [ ] Refactorizar `dashboard/layout.tsx` a grid sidebar + content
-- [ ] Crear `MobileSidebarDrawer` (Sheet de shadcn/ui)
-- [ ] Mover ThemeToggle y UserAvatar al fondo del sidebar
-- [ ] Conectar con `/dashboard/settings` cuando exista
+### Pendiente menor / futuro
+- [ ] Un menú de avatar más rico (cambiar household, perfil) cuando exista gestión de miembros
+- [ ] Considerar un `Sheet` deslizable en mobile si el bottom-nav + More se queda corto

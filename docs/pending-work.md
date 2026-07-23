@@ -18,8 +18,8 @@
 
 | Feature | Status | Blocked by | Doc |
 |---|---|---|---|
-| Navbar redesign | Open decision — Opción C (More dropdown + avatar menu) vs. Opción D (collapsible sidebar) | Nothing; needs a decision | [features/navbar-redesign.md](./features/navbar-redesign.md) |
-| User Settings page (`/dashboard/settings`) | Pending | Navbar redesign decision (needs an entry point) | [features/user-settings.md](./features/user-settings.md) |
+| ~~Navbar redesign~~ ✅ | **Shipped — Opción D (collapsible sidebar).** `AppSidebar` (desktop, grouped, collapsible w/ localStorage) + `MobileNav`/`MobileBottomNav`/`/dashboard/more` (mobile) + bottom user-avatar block → settings. | — | [features/navbar-redesign.md](./features/navbar-redesign.md) |
+| User Settings page (`/dashboard/settings`) | Pending | Entry point exists (sidebar Settings group + bottom avatar block) | [features/user-settings.md](./features/user-settings.md) |
 | Recurring transactions — Sprint B (auto-posting) | Pending | Multi-currency FX strategy must be reliable first | [features/recurring-transactions.md](./features/recurring-transactions.md) |
 | Recurring transactions — Sprint C (dashboard widget + recurring transfers) | Pending | Needs a `to_account_id` schema migration | [features/recurring-transactions.md](./features/recurring-transactions.md) |
 | Recurring transactions — inline create from the transaction form (UC-10) | 🟢 Inline-create **merged to `main`** (PR #17): frequency field posts the first + creates the template, `auto_post=false`. "repeats **automatically**" half still pending = Sprint B auto-posting | Auto-post half blocked by Sprint B (cron infra + FX-at-post) | [features/recurring-transactions.md](./features/recurring-transactions.md) |
@@ -73,7 +73,6 @@ Full detail, "why soon," and acceptance criteria live in
 
 | Doc | Question |
 |---|---|
-| [features/navbar-redesign.md](./features/navbar-redesign.md) | "More" dropdown + avatar menu vs. collapsible sidebar |
 | [features/recurring-transactions.md](./features/recurring-transactions.md) | Exchange rate to use at auto-post time (last known rate vs. API vs. fixed); cron infra (`pg_cron` vs. Vercel Cron) |
 | [features/goals.md](./features/goals.md) | Whether a linked goal should derive progress from the account's real ledger balance instead of a manually-tracked `current_amount` |
 
