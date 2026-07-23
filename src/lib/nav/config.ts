@@ -177,11 +177,11 @@ export const navGroups: NavGroup[] = [
     titleKey: 'nav.groupAutomation',
     items: [
       {
-        href: '/dashboard/coming-soon/rules',
+        href: '/dashboard/rules',
         labelKey: 'nav.rules',
         icon: Zap,
-        phase: 'soon',
-        descriptionKey: 'comingSoon.descriptions.rules',
+        phase: 'alpha',
+        hint: 'Auto-categorize imported transactions by merchant, amount, or account',
       },
       {
         // BR-011: the review queue is shipped — it's the transactions list
