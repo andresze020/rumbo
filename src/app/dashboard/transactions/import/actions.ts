@@ -5,6 +5,11 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { cleanSupabaseActionError as cleanRpcError } from '@/lib/supabase/errors'
 
+// Postgres unique_violation — a preset name collides with an existing one.
+const UNIQUE_VIOLATION = '23505'
+
+const PRESET_NAME_MAX_LENGTH = 80
+
 function redirectWithError(message: string): never {
   redirect(`/dashboard/transactions/import?error=${encodeURIComponent(message)}`)
 }
@@ -163,4 +168,101 @@ export async function createCsvImportAction(formData: FormData) {
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/budgets')
   redirect(`/dashboard/transactions/import?imported=1&batch=${batchId}`)
+}
+
+// ── BR-024: saved column-mapping presets ────────────────────────────────────
+
+export async function saveCsvPresetAction(formData: FormData) {
+  const name = String(formData.get('preset_name') ?? '')
+    .trim()
+    .slice(0, PRESET_NAME_MAX_LENGTH)
+  const mappingJson = String(formData.get('mapping_json') ?? '').trim()
+  const targetAccountId = String(formData.get('target_account_id') ?? '').trim()
+
+  if (!name) {
+    redirectWithError('Name your mapping before saving it.')
+  }
+
+  let mapping: unknown
+  try {
+    mapping = mappingJson ? JSON.parse(mappingJson) : {}
+  } catch {
+    redirectWithError('Could not read the current mapping.')
+  }
+
+  const { supabase, householdId } = await getAuthenticatedHousehold()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { error } = await supabase.from('csv_import_presets').insert({
+    household_id: householdId,
+    name,
+    mapping,
+    target_account_id: targetAccountId || null,
+    created_by: user.id,
+  })
+
+  if (error) {
+    if (error.code === UNIQUE_VIOLATION) {
+      redirectWithError(`A saved mapping named "${name}" already exists.`)
+    }
+    redirectWithError('Could not save the mapping. Please try again.')
+  }
+
+  revalidatePath('/dashboard/transactions/import')
+  redirect('/dashboard/transactions/import?preset_saved=1')
+}
+
+export async function deleteCsvPresetAction(formData: FormData) {
+  const presetId = String(formData.get('preset_id') ?? '').trim()
+
+  if (!presetId) {
+    redirectWithError('Preset is required.')
+  }
+
+  const { supabase, householdId } = await getAuthenticatedHousehold()
+
+  const { error } = await supabase
+    .from('csv_import_presets')
+    .delete()
+    .eq('id', presetId)
+    .eq('household_id', householdId)
+
+  if (error) {
+    redirectWithError('Could not delete the saved mapping.')
+  }
+
+  revalidatePath('/dashboard/transactions/import')
+  redirect('/dashboard/transactions/import?preset_deleted=1')
+}
+
+// ── BR-024: revert a whole import batch ─────────────────────────────────────
+
+export async function revertCsvImportAction(formData: FormData) {
+  const batchId = String(formData.get('batch_id') ?? '').trim()
+
+  if (!batchId) {
+    redirectWithError('Import batch is required.')
+  }
+
+  const { supabase } = await getAuthenticatedHousehold()
+
+  const { data: reverted, error } = await supabase.rpc('revert_csv_import', {
+    p_batch_id: batchId,
+  })
+
+  if (error) {
+    redirectWithError(
+      cleanRpcError(error.message, 'Could not revert this import. Please try again.')
+    )
+  }
+
+  revalidatePath('/dashboard/transactions')
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/budgets')
+  revalidatePath('/dashboard/transactions/import')
+  redirect(`/dashboard/transactions/import?reverted=${reverted ?? 0}`)
 }
