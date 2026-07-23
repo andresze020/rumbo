@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Store, Tags, X } from 'lucide-react'
+import { Store, X } from 'lucide-react'
 import { TransactionEditForm } from './transaction-edit-form'
 import { TransferEditForm } from './transfer-edit-form'
 import { TransactionFilters } from './transaction-filters'
@@ -111,7 +111,7 @@ type TransactionFilters = {
   review: string
   type: string
   payeeId: string
-  tagId: string
+  tagIds: string[]
 }
 
 type TransactionRow = {
@@ -183,8 +183,16 @@ function formatDateRangeLabel(dateFrom: string, dateTo: string): string {
   if (fromMonth === toMonth) {
     return formatMonthLabel(fromMonth)
   }
-  const fmt = new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
-  return `${fmt.format(new Date(dateFrom))} – ${fmt.format(new Date(dateTo))}`
+  // Format in UTC: the dates are calendar dates (YYYY-MM-DD), not instants, so
+  // they must render the same regardless of the server/viewer timezone.
+  // Without timeZone:'UTC', a behind-UTC runtime shows the previous day.
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+  return `${fmt.format(new Date(`${dateFrom}T00:00:00Z`))} – ${fmt.format(new Date(`${dateTo}T00:00:00Z`))}`
 }
 
 function normalizeOption(value: string | undefined, allowedValues: string[]) {
@@ -199,10 +207,14 @@ type TransactionGroup = {
 
 function formatGroupDateLabel(date: string, locale: Locale) {
   const [yr, mo, dy] = date.split('-').map(Number)
+  // timeZone:'UTC' pairs with the Date.UTC construction so the label matches the
+  // stored calendar date on any runtime timezone (a behind-UTC server would
+  // otherwise render the previous day).
   return new Intl.DateTimeFormat(localeToBcp47(locale), {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
+    timeZone: 'UTC',
   }).format(new Date(Date.UTC(yr, mo - 1, dy)))
 }
 
@@ -253,7 +265,7 @@ function transactionsPath(
   if (filters.dateFrom && filters.dateTo) {
     params.set('date_from', filters.dateFrom)
     params.set('date_to', filters.dateTo)
-  } else if (!filters.payeeId && !filters.tagId) {
+  } else if (!filters.payeeId && filters.tagIds.length === 0) {
     // A payee/tag filter with no explicit range is an all-time view of that
     // payee/tag — don't pin it to the current month, or navigating back to this
     // URL would hide its transactions from other months.
@@ -267,7 +279,7 @@ function transactionsPath(
   for (const id of filters.categoryIds) params.append('category_id', id)
   if (filters.search) params.set('search', filters.search)
   if (filters.payeeId) params.set('payee_id', filters.payeeId)
-  if (filters.tagId) params.set('tag_id', filters.tagId)
+  for (const id of filters.tagIds) params.append('tag_id', id)
   if (panel?.mode) params.set('mode', panel.mode)
   if (panel?.edit) params.set('edit', panel.edit)
 
@@ -347,15 +359,17 @@ export default async function TransactionsPage({
     typeof params.payee_id === 'string' && params.payee_id.trim()
       ? params.payee_id.trim()
       : ''
-  const selectedTagId =
-    typeof params.tag_id === 'string' && params.tag_id.trim()
-      ? params.tag_id.trim()
-      : ''
+  const rawTagIds = params.tag_id
+  const selectedTagIds: string[] = (
+    Array.isArray(rawTagIds) ? rawTagIds : rawTagIds ? [rawTagIds] : []
+  )
+    .map((id) => id.trim())
+    .filter(Boolean)
 
   // A payee/tag filter defaults to an all-time view; only constrain by date when
   // the user has explicitly picked a month or a custom range.
   const applyDateWindow =
-    (!selectedPayeeId && !selectedTagId) ||
+    (!selectedPayeeId && selectedTagIds.length === 0) ||
     hasCustomDateRange ||
     params.month !== undefined
 
@@ -370,7 +384,7 @@ export default async function TransactionsPage({
     review: selectedReview,
     type: selectedType,
     payeeId: selectedPayeeId,
-    tagId: selectedTagId,
+    tagIds: selectedTagIds,
   }
 
   const hasActiveFilters =
@@ -383,7 +397,7 @@ export default async function TransactionsPage({
     selectedCategoryIds.length > 0 ||
     searchText.length > 0 ||
     selectedPayeeId.length > 0 ||
-    selectedTagId.length > 0
+    selectedTagIds.length > 0
 
   const editTransactionId =
     typeof params.edit === 'string' ? params.edit : null
@@ -460,21 +474,28 @@ export default async function TransactionsPage({
   const activeTagOptions = householdTags
     .filter((tg) => !tg.is_archived)
     .map((tg) => ({ id: tg.id, name: tg.name, color: tg.color }))
-  const selectedTagName = selectedTagId
-    ? tagsById.get(selectedTagId)?.name ?? null
-    : null
-  const clearTagHref = transactionsPath({ ...filters, tagId: '' })
+  // Options for the filter panel's tag facet (active tags whose id is either
+  // active or currently selected, so a since-archived selected tag still shows).
+  const tagFilterOptions = [
+    ...activeTagOptions.map((tg) => ({ id: tg.id, label: tg.name })),
+    ...selectedTagIds
+      .filter((id) => !activeTagOptions.some((tg) => tg.id === id))
+      .map((id) => ({ id, label: tagsById.get(id)?.name ?? 'Unknown tag', isArchived: true })),
+  ]
 
-  // Filtering by tag: resolve the matching transaction ids up front (junction
-  // table has no direct column to filter the main query on).
+  // Filtering by tag(s): resolve the matching transaction ids up front (junction
+  // table has no direct column to filter the main query on). Multiple tags are
+  // OR'd — a transaction matches if it carries any of the selected tags.
   let tagFilterIds: string[] | null = null
-  if (selectedTagId) {
+  if (selectedTagIds.length > 0) {
     const { data: taggedRows } = await supabase
       .from('transaction_tags')
       .select('transaction_id')
       .eq('household_id', household.id)
-      .eq('tag_id', selectedTagId)
-    tagFilterIds = (taggedRows ?? []).map((r) => r.transaction_id as string)
+      .in('tag_id', selectedTagIds)
+    tagFilterIds = Array.from(
+      new Set((taggedRows ?? []).map((r) => r.transaction_id as string))
+    )
   }
 
   let transactionsQuery = supabase
@@ -974,22 +995,6 @@ export default async function TransactionsPage({
         </div>
       ) : null}
 
-      {/* ── Tag focus chip (BR-023) ────────────────────────────────────── */}
-      {selectedTagId ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-primary/5 px-3 py-2 text-sm">
-          <Tags className="size-4 shrink-0 text-primary" aria-hidden="true" />
-          <span className="text-muted-foreground">Showing transactions tagged</span>
-          <span className="font-semibold">{selectedTagName ?? 'this tag'}</span>
-          <Link
-            href={clearTagHref}
-            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'ml-auto gap-1')}
-          >
-            <X className="size-3.5" aria-hidden="true" />
-            Clear
-          </Link>
-        </div>
-      ) : null}
-
       {/* ── Filters ────────────────────────────────────────────────────── */}
       <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
         <TransactionFilters
@@ -1004,6 +1009,8 @@ export default async function TransactionsPage({
           hasActiveFilters={hasActiveFilters}
           accountOptions={accountOptions}
           categoryOptions={categoryOpts}
+          tagOptions={tagFilterOptions}
+          selectedTagIds={selectedTagIds}
           presetLinks={presetLinks}
           payeeId={selectedPayeeId}
         />

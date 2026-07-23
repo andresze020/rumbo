@@ -185,16 +185,13 @@ export function TransactionEditForm({
         />
       </div>
 
-      {tags.length > 0 ? (
-        <TagMultiSelect
-          tags={tags}
-          defaultValue={selectedTagIds}
-          label="Tags"
-          helpText="Attach one or more labels to slice this transaction later."
-          emptyHint="No tags yet. Create some on the Tags page."
-          manageLabel="Manage tags"
-        />
-      ) : null}
+      <TagMultiSelect
+        tags={tags}
+        defaultValue={selectedTagIds}
+        label="Tags"
+        helpText="Attach one or more labels to slice this transaction later."
+        manageLabel="Manage tags"
+      />
 
       <div className={formActionsCls}>
         <SubmitButton type="submit" className={formBtnCls} pendingText="Saving transaction">

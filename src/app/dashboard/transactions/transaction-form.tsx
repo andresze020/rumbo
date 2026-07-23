@@ -1671,13 +1671,13 @@ export function TransactionForm({
 
       {/* ── Tags (income/expense only; BR-023) ────────────────────────── */}
       {/* Rendered outside the mobile/desktop branch so the selection survives a
-          breakpoint change, and only when the household has tags to offer. */}
-      {!isTransfer && tags.length > 0 ? (
+          breakpoint change. Shown even with no tags yet — the picker can create
+          the first one inline. */}
+      {!isTransfer ? (
         <TagMultiSelect
           tags={tags}
           label={t('transactionForm.tags')}
           helpText={t('transactionForm.tagsHelp')}
-          emptyHint={t('transactionForm.tagsEmpty')}
           manageLabel={t('transactionForm.tagsManage')}
         />
       ) : null}

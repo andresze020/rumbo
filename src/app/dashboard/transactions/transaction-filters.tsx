@@ -19,6 +19,12 @@ type CategoryOption = {
   isArchived: boolean
 }
 
+type TagOption = {
+  id: string
+  label: string
+  isArchived?: boolean
+}
+
 type PresetLink = {
   label: string
   href: string
@@ -37,6 +43,8 @@ type TransactionFiltersProps = {
   hasActiveFilters: boolean
   accountOptions: AccountOption[]
   categoryOptions: CategoryOption[]
+  tagOptions: TagOption[]
+  selectedTagIds: string[]
   presetLinks: PresetLink[]
   /** Active payee focus filter, carried through the form so Apply keeps it. */
   payeeId?: string
@@ -135,6 +143,8 @@ export function TransactionFilters({
   hasActiveFilters,
   accountOptions,
   categoryOptions,
+  tagOptions,
+  selectedTagIds,
   presetLinks,
   payeeId,
 }: TransactionFiltersProps) {
@@ -152,6 +162,7 @@ export function TransactionFilters({
   const moreFiltersCount =
     selectedAccountIds.length +
     selectedCategoryIds.length +
+    selectedTagIds.length +
     (selectedStatus !== 'all' ? 1 : 0)
 
   return (
@@ -238,6 +249,15 @@ export function TransactionFilters({
             options={categoryOptions}
             selectedIds={selectedCategoryIds}
           />
+
+          {tagOptions.length > 0 || selectedTagIds.length > 0 ? (
+            <MultiSelectChip
+              label="Tags"
+              name="tag_id"
+              options={tagOptions}
+              selectedIds={selectedTagIds}
+            />
+          ) : null}
 
           <label className={chipLabelClassName}>
             <span className="text-xs font-medium text-muted-foreground">Status</span>
