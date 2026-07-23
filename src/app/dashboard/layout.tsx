@@ -9,16 +9,24 @@ import { AssistantDrawer } from '@/components/assistant-drawer'
 import { InstallAppHint } from '@/components/install-app-hint'
 import { LanguageProvider } from '@/components/language-provider'
 import { getLocale } from '@/lib/i18n/server'
+import { createClient } from '@/lib/supabase/server'
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const locale = await getLocale()
+
+  // Signed-in identity for the sidebar's bottom user block (Option D).
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const userEmail = user?.email ?? null
 
   return (
     <LanguageProvider locale={locale}>
       <TransactionDialogProvider>
         <div className="flex min-h-screen">
           {/* Desktop sidebar */}
-          <AppSidebar className="hidden lg:flex" />
+          <AppSidebar className="hidden lg:flex" userEmail={userEmail} />
 
           {/* Main content area */}
           <div className="flex min-w-0 flex-1 flex-col">
