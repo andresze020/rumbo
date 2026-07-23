@@ -174,3 +174,46 @@ export async function quickCreateAccount(input: {
   revalidatePath('/dashboard/accounts')
   return { account: data as QuickAddAccount }
 }
+
+type CreatedTag = { id: string; name: string; color: string | null }
+type CreateTagResult = { tag: CreatedTag } | { error: string }
+
+/**
+ * BR-023: create a tag while entering/editing a transaction, so the user
+ * doesn't have to leave a half-filled form to go to the Tags page. Returns the
+ * new row (or the existing one on a name collision, so "create" of a duplicate
+ * just resolves to the existing tag) for the picker to select inline.
+ */
+export async function quickCreateTag(name: string): Promise<CreateTagResult> {
+  const trimmed = name.trim().slice(0, 60)
+  if (!trimmed) return { error: 'Tag name is required.' }
+
+  const auth = await getAuthenticatedHousehold()
+  if (!auth) return { error: 'Not authenticated.' }
+  const { supabase, householdId } = auth
+
+  const { data, error } = await supabase
+    .from('tags')
+    .insert({ household_id: householdId, name: trimmed })
+    .select('id, name, color')
+    .single()
+
+  if (error || !data) {
+    // Name already exists (case/whitespace-insensitive unique index): resolve to
+    // the existing active tag instead of surfacing an error.
+    if (error?.code === '23505') {
+      const { data: existing } = await supabase
+        .from('tags')
+        .select('id, name, color')
+        .eq('household_id', householdId)
+        .ilike('name', trimmed)
+        .maybeSingle()
+      if (existing) return { tag: existing as CreatedTag }
+      return { error: 'A tag with that name already exists.' }
+    }
+    return { error: 'Could not create the tag.' }
+  }
+
+  revalidatePath('/dashboard/tags')
+  return { tag: data as CreatedTag }
+}
