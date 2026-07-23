@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Store, X } from 'lucide-react'
+import { Store, Tags, X } from 'lucide-react'
 import { TransactionEditForm } from './transaction-edit-form'
 import { TransferEditForm } from './transfer-edit-form'
 import { TransactionFilters } from './transaction-filters'
@@ -40,6 +40,7 @@ type TransactionsPageProps = {
     category_id?: string | string[]
     search?: string
     payee_id?: string
+    tag_id?: string
     mode?: string
     edit?: string
   }>
@@ -110,6 +111,7 @@ type TransactionFilters = {
   review: string
   type: string
   payeeId: string
+  tagId: string
 }
 
 type TransactionRow = {
@@ -251,10 +253,10 @@ function transactionsPath(
   if (filters.dateFrom && filters.dateTo) {
     params.set('date_from', filters.dateFrom)
     params.set('date_to', filters.dateTo)
-  } else if (!filters.payeeId) {
-    // A payee filter with no explicit range is an all-time view of that payee —
-    // don't pin it to the current month, or navigating back to this URL would
-    // hide the payee's transactions from other months.
+  } else if (!filters.payeeId && !filters.tagId) {
+    // A payee/tag filter with no explicit range is an all-time view of that
+    // payee/tag — don't pin it to the current month, or navigating back to this
+    // URL would hide its transactions from other months.
     params.set('month', filters.month || currentMonth())
   }
 
@@ -265,6 +267,7 @@ function transactionsPath(
   for (const id of filters.categoryIds) params.append('category_id', id)
   if (filters.search) params.set('search', filters.search)
   if (filters.payeeId) params.set('payee_id', filters.payeeId)
+  if (filters.tagId) params.set('tag_id', filters.tagId)
   if (panel?.mode) params.set('mode', panel.mode)
   if (panel?.edit) params.set('edit', panel.edit)
 
@@ -344,11 +347,17 @@ export default async function TransactionsPage({
     typeof params.payee_id === 'string' && params.payee_id.trim()
       ? params.payee_id.trim()
       : ''
+  const selectedTagId =
+    typeof params.tag_id === 'string' && params.tag_id.trim()
+      ? params.tag_id.trim()
+      : ''
 
-  // A payee filter defaults to an all-time view; only constrain by date when the
-  // user has explicitly picked a month or a custom range.
+  // A payee/tag filter defaults to an all-time view; only constrain by date when
+  // the user has explicitly picked a month or a custom range.
   const applyDateWindow =
-    !selectedPayeeId || hasCustomDateRange || params.month !== undefined
+    (!selectedPayeeId && !selectedTagId) ||
+    hasCustomDateRange ||
+    params.month !== undefined
 
   const filters: TransactionFilters = {
     accountIds: selectedAccountIds,
@@ -361,6 +370,7 @@ export default async function TransactionsPage({
     review: selectedReview,
     type: selectedType,
     payeeId: selectedPayeeId,
+    tagId: selectedTagId,
   }
 
   const hasActiveFilters =
@@ -372,7 +382,8 @@ export default async function TransactionsPage({
     selectedAccountIds.length > 0 ||
     selectedCategoryIds.length > 0 ||
     searchText.length > 0 ||
-    selectedPayeeId.length > 0
+    selectedPayeeId.length > 0 ||
+    selectedTagId.length > 0
 
   const editTransactionId =
     typeof params.edit === 'string' ? params.edit : null
@@ -431,6 +442,41 @@ export default async function TransactionsPage({
     : null
   const clearPayeeHref = transactionsPath({ ...filters, payeeId: '' })
 
+  // BR-023: household tags for the edit picker + list chips. Load all (incl.
+  // archived) so a transaction tagged with a since-archived tag still renders
+  // and isn't silently dropped when editing.
+  const { data: tagRows } = await supabase
+    .from('tags')
+    .select('id, name, color, is_archived')
+    .eq('household_id', household.id)
+    .order('name', { ascending: true })
+  const householdTags = (tagRows ?? []) as {
+    id: string
+    name: string
+    color: string | null
+    is_archived: boolean
+  }[]
+  const tagsById = new Map(householdTags.map((tg) => [tg.id, tg]))
+  const activeTagOptions = householdTags
+    .filter((tg) => !tg.is_archived)
+    .map((tg) => ({ id: tg.id, name: tg.name, color: tg.color }))
+  const selectedTagName = selectedTagId
+    ? tagsById.get(selectedTagId)?.name ?? null
+    : null
+  const clearTagHref = transactionsPath({ ...filters, tagId: '' })
+
+  // Filtering by tag: resolve the matching transaction ids up front (junction
+  // table has no direct column to filter the main query on).
+  let tagFilterIds: string[] | null = null
+  if (selectedTagId) {
+    const { data: taggedRows } = await supabase
+      .from('transaction_tags')
+      .select('transaction_id')
+      .eq('household_id', household.id)
+      .eq('tag_id', selectedTagId)
+    tagFilterIds = (taggedRows ?? []).map((r) => r.transaction_id as string)
+  }
+
   let transactionsQuery = supabase
     .from('transactions')
     .select(
@@ -448,6 +494,10 @@ export default async function TransactionsPage({
   }
   if (selectedPayeeId) {
     transactionsQuery = transactionsQuery.eq('payee_id', selectedPayeeId)
+  }
+  if (tagFilterIds !== null) {
+    // Empty list → `.in('id', [])` correctly matches nothing.
+    transactionsQuery = transactionsQuery.in('id', tagFilterIds)
   }
 
   if (selectedType !== 'all') {
@@ -470,6 +520,29 @@ export default async function TransactionsPage({
   if (transactionsError) throw new Error('Could not load transactions.')
 
   const transactionIds = (transactions ?? []).map((t) => t.id)
+
+  // BR-023: tag links for the loaded transactions → chips on each row + the
+  // edit form's current selection.
+  const tagIdsByTransaction = new Map<string, string[]>()
+  if (transactionIds.length) {
+    const { data: tagLinks } = await supabase
+      .from('transaction_tags')
+      .select('transaction_id, tag_id')
+      .eq('household_id', household.id)
+      .in('transaction_id', transactionIds)
+    for (const link of tagLinks ?? []) {
+      const list = tagIdsByTransaction.get(link.transaction_id) ?? []
+      list.push(link.tag_id as string)
+      tagIdsByTransaction.set(link.transaction_id, list)
+    }
+  }
+
+  function tagsForTransaction(id: string) {
+    return (tagIdsByTransaction.get(id) ?? [])
+      .map((tid) => tagsById.get(tid))
+      .filter((tg): tg is NonNullable<typeof tg> => Boolean(tg))
+      .map((tg) => ({ id: tg.id, name: tg.name, color: tg.color }))
+  }
 
   let transactionEntries: TransactionEntry[] = []
   let transactionAllocations: TransactionAllocation[] = []
@@ -712,6 +785,22 @@ export default async function TransactionsPage({
   const selectedEditRow = transactionRows.find(
     (row) => row.transaction.id === editTransactionId
   )
+  // Tags currently on the edited transaction, plus a picker list that includes
+  // any archived tag already on it (so editing never silently drops it).
+  const selectedEditTagIds = selectedEditRow
+    ? tagIdsByTransaction.get(selectedEditRow.transaction.id) ?? []
+    : []
+  const editFormTags = (() => {
+    const list = [...activeTagOptions]
+    const known = new Set(list.map((tag) => tag.id))
+    for (const tid of selectedEditTagIds) {
+      if (!known.has(tid)) {
+        const tg = tagsById.get(tid)
+        if (tg) list.push({ id: tg.id, name: tg.name, color: tg.color })
+      }
+    }
+    return list
+  })()
   const transactionGroups = groupRowsByDate(transactionRows, locale, t)
   const visibleCount = transactionRows.length
   const pendingCount = transactionRows.filter((r) => r.transaction.status === 'pending').length
@@ -815,6 +904,7 @@ export default async function TransactionsPage({
         row.amountEntry && row.displayAmount !== undefined
           ? formatCurrency(row.displayAmount, row.amountEntry.currency_code)
           : null,
+      tags: tagsForTransaction(row.transaction.id),
       canEdit: row.canEdit,
       canEditTransfer: row.canEditTransfer,
       canVoid: row.canVoid,
@@ -884,6 +974,22 @@ export default async function TransactionsPage({
         </div>
       ) : null}
 
+      {/* ── Tag focus chip (BR-023) ────────────────────────────────────── */}
+      {selectedTagId ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-primary/5 px-3 py-2 text-sm">
+          <Tags className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <span className="text-muted-foreground">Showing transactions tagged</span>
+          <span className="font-semibold">{selectedTagName ?? 'this tag'}</span>
+          <Link
+            href={clearTagHref}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'ml-auto gap-1')}
+          >
+            <X className="size-3.5" aria-hidden="true" />
+            Clear
+          </Link>
+        </div>
+      ) : null}
+
       {/* ── Filters ────────────────────────────────────────────────────── */}
       <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
         <TransactionFilters
@@ -931,6 +1037,8 @@ export default async function TransactionsPage({
               accounts={activeAccounts}
               categories={activeCategories}
               payees={payeeOptions}
+              tags={editFormTags}
+              selectedTagIds={selectedEditTagIds}
               returnTo={returnTo}
             />
           ) : null}

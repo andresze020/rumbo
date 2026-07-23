@@ -26,6 +26,7 @@ import {
 } from './actions'
 import { PayeePicker, type PayeeOption } from './payee-picker'
 import { SelectorSheet } from './selector-sheet'
+import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
 import { AdvancedFields } from '@/components/advanced-fields'
 import { AmountInput } from '@/components/amount-input'
@@ -71,6 +72,8 @@ type TransactionFormProps = {
   onCancel?: () => void
   categories: TransactionFormCategory[]
   payees: PayeeOption[]
+  /** Active household tags for the tag multi-select (income/expense only). */
+  tags?: TagOption[]
   /** Active currency codes for the inline "create account" form. */
   currencies?: string[]
   defaultDate: string
@@ -130,6 +133,7 @@ export function TransactionForm({
   onCancel,
   categories,
   payees,
+  tags = [],
   currencies,
   defaultDate,
   defaultAccountId,
@@ -1664,6 +1668,19 @@ export function TransactionForm({
       </div>
       </>
       )}
+
+      {/* ── Tags (income/expense only; BR-023) ────────────────────────── */}
+      {/* Rendered outside the mobile/desktop branch so the selection survives a
+          breakpoint change, and only when the household has tags to offer. */}
+      {!isTransfer && tags.length > 0 ? (
+        <TagMultiSelect
+          tags={tags}
+          label={t('transactionForm.tags')}
+          helpText={t('transactionForm.tagsHelp')}
+          emptyHint={t('transactionForm.tagsEmpty')}
+          manageLabel={t('transactionForm.tagsManage')}
+        />
+      ) : null}
 
       {/* ── Exchange rate (only for non-base-currency entries) ────────── */}
       {isTransfer ? (

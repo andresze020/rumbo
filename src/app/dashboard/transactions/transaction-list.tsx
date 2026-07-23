@@ -24,6 +24,7 @@ import { CategoryPicker } from './category-picker'
 import { VoidTransactionForm } from './void-transaction-form'
 import { AmountInput } from '@/components/amount-input'
 import { SubmitButton } from '@/components/submit-button'
+import { TagChip } from '@/components/tag-chip'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { StatusBadge } from '@/components/status-badge'
@@ -60,6 +61,7 @@ export type TransactionListRow = {
   voidReason: string | null
   currencyCode: string | null
   amountFormatted: string | null
+  tags: { id: string; name: string; color: string | null }[]
   canEdit: boolean
   canEditTransfer: boolean
   canVoid: boolean
@@ -476,6 +478,14 @@ function DisplayRow({
 
         {row.notes ? (
           <p className="text-xs italic text-muted-foreground/70">{row.notes}</p>
+        ) : null}
+
+        {row.tags.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1">
+            {row.tags.map((tag) => (
+              <TagChip key={tag.id} name={tag.name} color={tag.color} size="sm" />
+            ))}
+          </div>
         ) : null}
 
         <div className="flex flex-wrap items-center gap-1.5">
