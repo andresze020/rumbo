@@ -20,8 +20,8 @@
 |---|---|---|---|
 | ~~Navbar redesign~~ ✅ | **Shipped — Opción D (collapsible sidebar).** `AppSidebar` (desktop, grouped, collapsible w/ localStorage) + `MobileNav`/`MobileBottomNav`/`/dashboard/more` (mobile) + bottom user-avatar block → settings. | — | [features/navbar-redesign.md](./features/navbar-redesign.md) |
 | User Settings page (`/dashboard/settings`) | Pending | Entry point exists (sidebar Settings group + bottom avatar block) | [features/user-settings.md](./features/user-settings.md) |
-| Recurring transactions — Sprint B (auto-posting) | Pending | Multi-currency FX strategy must be reliable first | [features/recurring-transactions.md](./features/recurring-transactions.md) |
-| Recurring transactions — Sprint C (dashboard widget + recurring transfers) | Pending | Needs a `to_account_id` schema migration | [features/recurring-transactions.md](./features/recurring-transactions.md) |
+| ~~Recurring — Sprint B (auto-posting)~~ 🟡 | **Built** (branch `feat/recurring-autopost-br014`, BR-014): `run_recurring_autopost()` SECURITY DEFINER job + `auto_post` toggle + failure log/badges. FX = last known ledger rate. Migration `20260723150000` pending `db push`; pg_cron enable + schedule is a documented manual step. | — | [features/recurring-transactions.md](./features/recurring-transactions.md) |
+| Recurring — Sprint C: recurring transfers (UC-9) | Pending — the "due soon" widget (UC-8) already shipped | Needs a `to_account_id` migration + transfer support in the form, manual post, and the auto-post job | [features/recurring-transactions.md](./features/recurring-transactions.md) |
 | Recurring transactions — inline create from the transaction form (UC-10) | 🟢 Inline-create **merged to `main`** (PR #17): frequency field posts the first + creates the template, `auto_post=false`. "repeats **automatically**" half still pending = Sprint B auto-posting | Auto-post half blocked by Sprint B (cron infra + FX-at-post) | [features/recurring-transactions.md](./features/recurring-transactions.md) |
 
 ## Open bugs / friction (Alpha real usage)

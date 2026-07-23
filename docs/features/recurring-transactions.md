@@ -1,18 +1,38 @@
 # Recurring Transactions
 
 ## Status
-**Sprint A shipped (2026-06-12) — manual posting MVP.** Merged to `main`.
+**Sprint A + Sprint B shipped.** Auto-posting is built (2026-07-23, branch
+`feat/recurring-autopost-br014`); migration pending `db push` + pg_cron enable.
 
 - ✅ **Sprint A — Manual posting MVP** (UC-1, UC-2, UC-3, UC-5, UC-6, UC-7):
   `/dashboard/recurring` list with Due/Upcoming/Inactive sections, create/edit
   form (income + expense), one-click **Post** with confirmation dialog,
   activate/deactivate, delete, and a sidebar/mobile-nav link (`Repeat` icon).
-- ⬜ **Sprint B — Auto-posting** (UC-4): `auto_post` toggle + scheduled job +
-  failure flag/notification. Pending. Blocked on the multi-currency FX strategy
-  for unattended posting (see Open Decision #3).
-- ⬜ **Sprint C — Dashboard widget + transfers** (UC-8, UC-9): "Due soon" widget
-  on `/dashboard`; recurring transfers require a schema migration to add
-  `to_account_id`. Pending.
+- ✅ **Sprint B — Auto-posting / BR-014** (UC-4): `auto_post` toggle on the form;
+  a SECURITY DEFINER `run_recurring_autopost()` posts every due income/expense
+  template (FX = last known rate from the ledger, non-base with no prior rate is
+  flagged + skipped, never 1:1); `recurring_autopost_log` + per-template
+  `last_error`/`consecutive_failures`; the list shows **Auto** / **Auto-post
+  failed** badges + the error. Scheduling is a documented **manual** pg_cron step
+  (Open Decision #3 = last known rate, #7 = pg_cron — both resolved). Migration
+  `20260723150000_br_014_recurring_autopost.sql`.
+- 🟡 **Sprint C** — UC-8 (**Dashboard "Upcoming payments" widget**) already
+  shipped on `/dashboard`. **UC-9 (recurring transfers) is the only remaining
+  piece** and is deliberately deferred (see below).
+
+### UC-9 — recurring transfers (remaining Sprint C work, deferred)
+Needs, as one focused sprint (touches financial posting — must be DB-tested):
+1. Migration: add `to_account_id uuid references accounts(id)` to
+   `recurring_transactions` (+ relax the account/category NOT-NULL expectations
+   for transfer rows).
+2. Recurring form: allow `transfer` type — swap the account+category fields for
+   From/To accounts (mirror the transaction form), incl. cross-currency
+   `to_amount` now that BR-007 supports it.
+3. Manual post (`postRecurringAction` / `post-form.tsx`): route transfer
+   templates to `create_transfer_transaction`.
+4. Auto-post: add a `transfer` branch to `run_recurring_autopost()` that mirrors
+   `create_transfer_transaction`'s two-entry ledger writes (it currently rejects
+   non-income/expense templates).
 - 🟡 **Requested evolution — inline creation from the transaction form** (UC-10):
   the normal create-transaction form now has a **Repeat** frequency field; a
   single submit posts the first transaction and creates the template

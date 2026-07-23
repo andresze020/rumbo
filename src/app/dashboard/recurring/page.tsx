@@ -46,6 +46,9 @@ type RecurringTransaction = {
   end_date: string | null
   next_run_date: string | null
   is_active: boolean
+  auto_post: boolean
+  last_error: string | null
+  last_error_at: string | null
 }
 
 type Payee = {
@@ -117,7 +120,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
     supabase
       .from('recurring_transactions')
       .select(
-        'id, name, transaction_type, account_id, category_id, payee_id, amount, currency_code, frequency, start_date, end_date, next_run_date, is_active'
+        'id, name, transaction_type, account_id, category_id, payee_id, amount, currency_code, frequency, start_date, end_date, next_run_date, is_active, auto_post, last_error, last_error_at'
       )
       .eq('household_id', household.id)
       .order('next_run_date', { ascending: true, nullsFirst: false }),
@@ -168,6 +171,8 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
       end_date: row.end_date,
       is_active: row.is_active,
       isDue: Boolean(row.next_run_date && row.next_run_date <= today),
+      autoPost: row.auto_post,
+      lastError: row.last_error,
       accountName: account?.name ?? 'Unknown account',
       categoryName: categoryPath(category, categoriesById),
       categoryIcon: category?.icon ?? null,

@@ -83,6 +83,8 @@ type ValidatedTemplate = {
   endDate: string | null
   /** BR-009: resolved payee (null when the field is empty). */
   payeeId: string | null
+  /** Sprint B / BR-014: post automatically on schedule. */
+  autoPost: boolean
 }
 
 /** Shared field parsing + validation for create/update. Verifies the account
@@ -103,6 +105,7 @@ async function parseAndValidateTemplate(
   const endDateRaw = String(formData.get('end_date') ?? '').trim()
   const endDate = endDateRaw || null
   const payeeName = String(formData.get('payee_name') ?? '').trim()
+  const autoPost = String(formData.get('auto_post') ?? '') === 'true'
 
   if (!name) {
     redirectWithError('Name is required.')
@@ -195,6 +198,7 @@ async function parseAndValidateTemplate(
     startDate,
     endDate,
     payeeId,
+    autoPost,
   }
 }
 
@@ -221,7 +225,7 @@ export async function createRecurringAction(formData: FormData) {
     start_date: t.startDate,
     end_date: t.endDate,
     next_run_date: nextRunDate,
-    auto_post: false,
+    auto_post: t.autoPost,
     is_active: true,
     created_by: userId,
   })
@@ -282,6 +286,7 @@ export async function updateRecurringAction(formData: FormData) {
       start_date: t.startDate,
       end_date: t.endDate,
       next_run_date: nextRunDate,
+      auto_post: t.autoPost,
     })
     .eq('id', recurringId)
     .eq('household_id', householdId)
