@@ -2,113 +2,70 @@
 
 import { useRef, useState } from 'react'
 import Link from 'next/link'
-import { Search, SlidersHorizontal } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import { SlidersHorizontal } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
-import { MultiSelectChip } from '@/components/multi-select-chip'
+import { MultiSelectChip, type MultiSelectOption } from '@/components/multi-select-chip'
 import { cn } from '@/lib/utils'
 
-type AccountOption = {
-  id: string
-  label: string
-  isArchived: boolean
-}
+type PresetLink = { label: string; href: string; isActive: boolean }
 
-type CategoryOption = {
-  id: string
-  label: string
-  isArchived: boolean
-}
-
-type TagOption = {
-  id: string
-  label: string
-  isArchived?: boolean
-}
-
-type PresetLink = {
-  label: string
-  href: string
-  isActive: boolean
-}
-
-type TransactionFiltersProps = {
-  searchText: string
+type ReportFiltersProps = {
+  view: string
   selectedType: string
-  selectedStatus: string
-  selectedReview: string
   selectedAccountIds: string[]
   selectedCategoryIds: string[]
+  selectedTagIds: string[]
   resolvedDateFrom: string
   resolvedDateTo: string
   hasActiveFilters: boolean
-  accountOptions: AccountOption[]
-  categoryOptions: CategoryOption[]
-  tagOptions: TagOption[]
-  selectedTagIds: string[]
+  accountOptions: MultiSelectOption[]
+  categoryOptions: MultiSelectOption[]
+  tagOptions: MultiSelectOption[]
   presetLinks: PresetLink[]
-  /** Active payee focus filter, carried through the form so Apply keeps it. */
-  payeeId?: string
 }
 
 const TYPE_OPTIONS = [
   { value: 'all', label: 'All' },
-  { value: 'income', label: 'Income' },
   { value: 'expense', label: 'Expense' },
-  { value: 'transfer', label: 'Transfer' },
+  { value: 'income', label: 'Income' },
 ] as const
-
-const chipSelectClassName =
-  'max-w-[150px] cursor-pointer truncate bg-transparent text-sm font-medium text-foreground outline-none'
 
 const chipLabelClassName =
   'flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-background px-2.5'
 
-export function TransactionFilters({
-  searchText,
+export function ReportFilters({
+  view,
   selectedType,
-  selectedStatus,
-  selectedReview,
   selectedAccountIds,
   selectedCategoryIds,
+  selectedTagIds,
   resolvedDateFrom,
   resolvedDateTo,
   hasActiveFilters,
   accountOptions,
   categoryOptions,
   tagOptions,
-  selectedTagIds,
   presetLinks,
-  payeeId,
-}: TransactionFiltersProps) {
+}: ReportFiltersProps) {
   const typeRef = useRef<HTMLInputElement>(null)
   const [moreOpen, setMoreOpen] = useState(false)
 
   function selectType(form: HTMLFormElement | null, value: string) {
     if (!form) return
-    // The chip selects auto-submit without a submitter, so `type` is carried by
-    // this single hidden input rather than per-button submit values.
     if (typeRef.current) typeRef.current.value = value
     form.requestSubmit()
   }
 
   const moreFiltersCount =
-    selectedAccountIds.length +
-    selectedCategoryIds.length +
-    selectedTagIds.length +
-    (selectedStatus !== 'all' ? 1 : 0)
+    selectedAccountIds.length + selectedCategoryIds.length + selectedTagIds.length
 
   return (
-    <form method="get" action="/dashboard/transactions" className="space-y-2.5">
+    <form method="get" action="/dashboard/reports" className="space-y-2.5">
       <input type="hidden" name="type" ref={typeRef} defaultValue={selectedType} />
-      {selectedReview !== 'all' ? (
-        <input type="hidden" name="review" value={selectedReview} />
-      ) : null}
-      {payeeId ? <input type="hidden" name="payee_id" value={payeeId} /> : null}
+      <input type="hidden" name="view" value={view} />
 
-      {/* ── Primary bar: type toggle · search · mobile filters toggle ──── */}
+      {/* ── Primary bar: type toggle · mobile filters toggle ──────────────── */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Type segmented control */}
         <div className="flex shrink-0 rounded-lg border bg-background p-0.5">
           {TYPE_OPTIONS.map((option) => {
             const isActive = selectedType === option.value
@@ -131,22 +88,6 @@ export function TransactionFilters({
           })}
         </div>
 
-        {/* Search */}
-        <div className="relative min-w-[140px] flex-1">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            name="search"
-            defaultValue={searchText}
-            placeholder="Search transactions…"
-            className="pl-9"
-            aria-label="Search transactions"
-          />
-        </div>
-
-        {/* Mobile-only toggle for the secondary filter row */}
         <button
           type="button"
           onClick={() => setMoreOpen((v) => !v)}
@@ -164,9 +105,18 @@ export function TransactionFilters({
             </span>
           ) : null}
         </button>
+
+        {hasActiveFilters ? (
+          <Link
+            href="/dashboard/reports"
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'ml-auto')}
+          >
+            Clear all
+          </Link>
+        ) : null}
       </div>
 
-      {/* ── Secondary bar: account/category/status + date range ─────────── */}
+      {/* ── Secondary bar: account/category/tag + date range ──────────────── */}
       <div className={cn('flex-col gap-2.5 sm:flex', moreOpen ? 'flex' : 'hidden')}>
         <div className="flex flex-wrap items-center gap-2">
           <MultiSelectChip
@@ -175,14 +125,12 @@ export function TransactionFilters({
             options={accountOptions}
             selectedIds={selectedAccountIds}
           />
-
           <MultiSelectChip
             label="Category"
             name="category_id"
             options={categoryOptions}
             selectedIds={selectedCategoryIds}
           />
-
           {tagOptions.length > 0 || selectedTagIds.length > 0 ? (
             <MultiSelectChip
               label="Tags"
@@ -191,21 +139,6 @@ export function TransactionFilters({
               selectedIds={selectedTagIds}
             />
           ) : null}
-
-          <label className={chipLabelClassName}>
-            <span className="text-xs font-medium text-muted-foreground">Status</span>
-            <select
-              name="status"
-              defaultValue={selectedStatus}
-              className={chipSelectClassName}
-              aria-label="Filter by status"
-            >
-              <option value="all">All</option>
-              <option value="posted">Posted</option>
-              <option value="pending">Pending</option>
-              <option value="voided">Voided</option>
-            </select>
-          </label>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
@@ -215,8 +148,6 @@ export function TransactionFilters({
               href={link.href}
               aria-current={link.isActive ? 'true' : undefined}
               className={buttonVariants({
-                // Solid primary fill for the active preset (matching the type
-                // toggle) so the selected range is obvious, not a faint tint.
                 variant: link.isActive ? 'default' : 'outline',
                 size: 'sm',
               })}
@@ -225,11 +156,6 @@ export function TransactionFilters({
             </Link>
           ))}
 
-          {/* `key` ties each uncontrolled input to the server-resolved range so a
-              client-side preset navigation remounts it with the new value. Without
-              this, `defaultValue` is ignored on re-render and the field keeps its
-              stale (e.g. this-month) value, which "Apply filters" would then
-              re-submit and clobber the range the user just picked (BF-024). */}
           <label className={chipLabelClassName}>
             <span className="text-xs font-medium text-muted-foreground">From</span>
             <input
@@ -254,29 +180,11 @@ export function TransactionFilters({
             />
           </label>
 
-          <div className="ml-auto flex items-center gap-1.5">
-            {hasActiveFilters ? (
-              <Link
-                href="/dashboard/transactions"
-                className={buttonVariants({ variant: 'ghost', size: 'sm' })}
-              >
-                Clear all
-              </Link>
-            ) : null}
-            <button
-              type="submit"
-              className={buttonVariants({ size: 'sm' })}
-            >
-              Apply filters
-            </button>
-          </div>
+          <button type="submit" className={cn(buttonVariants({ size: 'sm' }), 'ml-auto')}>
+            Apply filters
+          </button>
         </div>
       </div>
-
-      {/* Submit fallback for keyboard users editing the search field */}
-      <button type="submit" className="sr-only">
-        Apply filters
-      </button>
     </form>
   )
 }
