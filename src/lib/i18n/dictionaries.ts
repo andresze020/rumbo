@@ -229,6 +229,10 @@ export const en = {
     amountReceived: 'Amount received',
     amountReceivedHelp:
       'How much actually arrived in the destination account, in its own currency.',
+    transferCost: 'Transfer cost (fees + exchange)',
+    transferCostCategory: 'Choose a category…',
+    transferCostHelp:
+      'We estimate what this transfer cost you — bank fees plus the exchange difference — and file it as an expense. Adjust it, or set it to 0 if there was no cost.',
     createTransaction: 'Create transaction',
     createTransfer: 'Create transfer',
     creatingTransaction: 'Creating transaction',
@@ -621,6 +625,10 @@ export const es: DeepStringify<typeof en> = {
     amountReceived: 'Monto recibido',
     amountReceivedHelp:
       'Cuánto llegó realmente a la cuenta destino, en su propia moneda.',
+    transferCost: 'Costo de la transferencia (comisión + cambio)',
+    transferCostCategory: 'Elige una categoría…',
+    transferCostHelp:
+      'Estimamos lo que te costó esta transferencia —comisiones más la diferencia de cambio— y lo registramos como gasto. Ajústalo, o ponlo en 0 si no hubo costo.',
     createTransaction: 'Crear transacción',
     createTransfer: 'Crear transferencia',
     creatingTransaction: 'Creando transacción',
@@ -1013,6 +1021,10 @@ export const fr: DeepStringify<typeof en> = {
     amountReceived: 'Montant reçu',
     amountReceivedHelp:
       'Le montant réellement arrivé sur le compte de destination, dans sa propre devise.',
+    transferCost: 'Coût du virement (frais + change)',
+    transferCostCategory: 'Choisir une catégorie…',
+    transferCostHelp:
+      'Nous estimons ce que ce virement vous a coûté — frais bancaires plus l’écart de change — et l’enregistrons comme dépense. Ajustez-le, ou mettez 0 s’il n’y a pas eu de coût.',
     createTransaction: 'Créer la transaction',
     createTransfer: 'Créer le virement',
     creatingTransaction: 'Création de la transaction',

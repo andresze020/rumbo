@@ -66,6 +66,17 @@ function parsePositiveNumber(value: FormDataEntryValue | null) {
   return numberValue
 }
 
+// Like parsePositiveNumber but allows 0 (used for the optional transfer cost).
+function parseNonNegativeNumber(value: FormDataEntryValue | null) {
+  const raw = String(value ?? '').trim()
+  if (raw === '') return null
+  const numberValue = Number(raw)
+  if (!Number.isFinite(numberValue) || numberValue < 0) {
+    return null
+  }
+  return numberValue
+}
+
 export async function createManualTransactionAction(formData: FormData) {
   const transactionType = String(formData.get('transaction_type') ?? '').trim()
   const transactionDate = String(formData.get('transaction_date') ?? '').trim()
@@ -318,6 +329,9 @@ export async function createTransferTransactionAction(formData: FormData) {
   // BR-007: destination amount (to-account currency) for cross-currency
   // transfers; null for same-currency transfers.
   const toAmount = parsePositiveNumber(formData.get('to_amount'))
+  // Unified transfer cost (FX spread + fee) in base currency + its category.
+  const costBase = parseNonNegativeNumber(formData.get('cost_base'))
+  const costCategoryId = String(formData.get('cost_category_id') ?? '').trim() || null
 
   if (!fromAccountId) {
     redirectWithError('Select the source account.')
@@ -381,6 +395,8 @@ export async function createTransferTransactionAction(formData: FormData) {
       p_status: status,
       p_exchange_rate_to_base: validExchangeRate,
       p_to_amount: toAmount,
+      p_cost_base: costBase,
+      p_cost_category_id: costCategoryId,
     }
   )
 
@@ -533,6 +549,9 @@ export async function updateTransferTransactionAction(formData: FormData) {
   // BR-007: destination amount (in the to-account currency) for cross-currency
   // transfers; null for same-currency transfers.
   const toAmount = parsePositiveNumber(formData.get('to_amount'))
+  // Unified transfer cost (FX spread + fee) in base currency + its category.
+  const costBase = parseNonNegativeNumber(formData.get('cost_base'))
+  const costCategoryId = String(formData.get('cost_category_id') ?? '').trim() || null
 
   if (!transactionId) {
     redirectWithTransactionError('Transaction id is required.', returnTo)
@@ -603,6 +622,8 @@ export async function updateTransferTransactionAction(formData: FormData) {
       p_status: status,
       p_exchange_rate_to_base: exchangeRateToBase ?? 1,
       p_to_amount: toAmount,
+      p_cost_base: costBase,
+      p_cost_category_id: costCategoryId,
     }
   )
 

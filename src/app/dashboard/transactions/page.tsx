@@ -112,6 +112,7 @@ type TransactionEntry = {
 type TransactionAllocation = {
   transaction_id: string
   category_id: string
+  amount_base_currency?: number | string
 }
 
 type AccountLookup = { id: string; name: string }
@@ -520,6 +521,17 @@ export default async function TransactionsPage({
       !c.is_archived &&
       (c.category_type === 'income' || c.category_type === 'expense')
   )
+  // Active expense categories (path-labelled) for the transfer-cost picker.
+  const allCategoriesById = new Map(allCategories.map((c) => [c.id, c]))
+  const costCategoryOptions = allCategories
+    .filter((c) => !c.is_archived && c.category_type === 'expense')
+    .map((c) => {
+      const parent = c.parent_category_id
+        ? allCategoriesById.get(c.parent_category_id)
+        : null
+      const name = parent ? `${parent.name} / ${c.name}` : c.name
+      return { id: c.id, label: c.icon ? `${c.icon} ${name}` : name }
+    })
 
   // Selecting a parent category should also match transactions filed under any
   // of its child categories (e.g. "Transport" matches "Transport / Subway").
@@ -626,7 +638,7 @@ export default async function TransactionsPage({
 
     const { data: allocations, error: allocationsError } = await supabase
       .from('transaction_allocations')
-      .select('transaction_id, category_id')
+      .select('transaction_id, category_id, amount_base_currency')
       .eq('household_id', household.id)
       .in('transaction_id', transactionIds)
 
@@ -1070,6 +1082,11 @@ export default async function TransactionsPage({
               returnTo={returnTo}
               baseCurrency={household.base_currency}
               initialExchangeRateToBase={Number(selectedEditRow.transferOutEntry.exchange_rate_to_base ?? 1)}
+              costCategories={costCategoryOptions}
+              initialCost={Math.abs(
+                Number(selectedEditRow.allocation?.amount_base_currency ?? 0)
+              )}
+              initialCostCategoryId={selectedEditRow.allocation?.category_id ?? null}
             />
           ) : null}
         </FormDialog>
