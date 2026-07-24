@@ -104,6 +104,35 @@ export function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+/** A YYYY-MM-DD string `days` after `fromIso` (UTC-safe). */
+export function addDaysIso(fromIso: string, days: number): string {
+  const [y, m, d] = fromIso.split('-').map(Number)
+  return toIsoDate(new Date(Date.UTC(y, m - 1, d + days)))
+}
+
+/**
+ * Project a template's upcoming occurrence dates from `fromIso` (its
+ * `next_run_date`) forward, up to and including `horizonIso`, stopping at
+ * `endIso` if the template ends sooner. `maxCount` caps runaway daily series.
+ * Returns YYYY-MM-DD strings in ascending order.
+ */
+export function projectOccurrences(
+  fromIso: string,
+  frequency: Frequency,
+  horizonIso: string,
+  endIso: string | null = null,
+  maxCount = 60
+): string[] {
+  const dates: string[] = []
+  const limit = endIso && endIso < horizonIso ? endIso : horizonIso
+  let current = fromIso
+  for (let i = 0; i < maxCount && current <= limit; i += 1) {
+    dates.push(current)
+    current = computeNextRunDate(current, frequency)
+  }
+  return dates
+}
+
 /** Advance a run date forward by `frequency` until it is strictly after
  * `today`, so reactivating or posting never schedules a date in the past. */
 export function advanceUntilFuture(
