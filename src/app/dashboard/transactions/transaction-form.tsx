@@ -94,11 +94,20 @@ function lastCategoryKey(transactionType: TransactionType) {
   return `af_last_category_id_${transactionType}`
 }
 
+// Only the account name is shown: the currency already appears above the amount,
+// and users typically name accounts after their bank, so the institution and
+// currency are redundant here — and long "name · bank · CUR" strings overflow
+// the picker row on mobile.
 function formatAccountLabel(account: TransactionFormAccount) {
-  const label = [account.name, account.institution_name || null, account.currency_code]
+  return account.icon ? `${account.icon} ${account.name}` : account.name
+}
+
+// Search still matches on the fuller text (name + institution + currency) even
+// though only the name is displayed.
+function accountSearchText(account: TransactionFormAccount) {
+  return [account.name, account.institution_name || null, account.currency_code]
     .filter(Boolean)
     .join(' · ')
-  return account.icon ? `${account.icon} ${label}` : label
 }
 
 /**
@@ -803,7 +812,7 @@ export function TransactionForm({
   ) => {
     const query = accountSearch.trim().toLowerCase()
     const matches = availableAccounts.filter((a) =>
-      formatAccountLabel(a).toLowerCase().includes(query)
+      accountSearchText(a).toLowerCase().includes(query)
     )
     const hasExact = availableAccounts.some(
       (a) => a.name.toLowerCase() === query && query !== ''
@@ -857,7 +866,7 @@ export function TransactionForm({
               value={accountSearch}
               onChange={(e) => setAccountSearch(e.target.value)}
             />
-            <div className="mt-2 max-h-72 overflow-y-auto">
+            <div className="mt-2 sm:max-h-72 sm:overflow-y-auto">
               {matches.map((a) => (
                 <button
                   key={a.id}
@@ -1000,7 +1009,7 @@ export function TransactionForm({
               value={categorySearch}
               onChange={(e) => setCategorySearch(e.target.value)}
             />
-            <div className="mt-2 max-h-72 overflow-y-auto">
+            <div className="mt-2 sm:max-h-72 sm:overflow-y-auto">
               {query
                 ? searchMatches.map((c) => {
                     const parent = c.parent_category_id
@@ -1136,7 +1145,7 @@ export function TransactionForm({
           value={payeeName}
           onChange={(e) => setPayeeName(e.target.value)}
         />
-        <div className="mt-2 max-h-[60vh] overflow-y-auto">
+        <div className="mt-2 sm:max-h-[60vh] sm:overflow-y-auto">
           {payees
             .filter((p) => p.name.toLowerCase().includes(normalized))
             .slice(0, 50)
