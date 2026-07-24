@@ -14,7 +14,13 @@ import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { ArchiveToast } from '@/components/archive-toast'
 import { formatCurrency } from '@/lib/format'
-import { frequencyLabel, todayIsoDate } from '@/lib/recurring/shared'
+import {
+  addDaysIso,
+  frequencyLabel,
+  projectOccurrences,
+  todayIsoDate,
+  type Frequency,
+} from '@/lib/recurring/shared'
 import { toggleRecurringActiveAction } from './actions'
 
 type RecurringPageProps = {
@@ -195,6 +201,58 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
   const monthlyExpenseEstimate = active
     .filter((r) => r.transaction_type === 'expense' && r.currency_code === baseCurrency)
     .reduce((sum, r) => sum + estimateMonthly(Number(r.amount), r.frequency), 0)
+
+  // Forecast: project each active template's occurrences over the next 60 days
+  // so the user can see what's coming before it's actually posted.
+  const FORECAST_DAYS = 60
+  const horizonIso = addDaysIso(today, FORECAST_DAYS)
+  type ForecastItem = {
+    date: string
+    id: string
+    name: string
+    type: string
+    amount: number
+    currency: string
+    autoPost: boolean
+  }
+  const forecastItems: ForecastItem[] = []
+  for (const r of active) {
+    if (!r.next_run_date) continue
+    for (const date of projectOccurrences(
+      r.next_run_date,
+      r.frequency as Frequency,
+      horizonIso,
+      r.end_date
+    )) {
+      forecastItems.push({
+        date,
+        id: r.id,
+        name: r.name,
+        type: r.transaction_type,
+        amount: Number(r.amount),
+        currency: r.currency_code,
+        autoPost: r.auto_post,
+      })
+    }
+  }
+  forecastItems.sort(
+    (a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name)
+  )
+  const forecastGroups: { date: string; items: ForecastItem[] }[] = []
+  for (const item of forecastItems.slice(0, 80)) {
+    const last = forecastGroups[forecastGroups.length - 1]
+    if (last && last.date === item.date) last.items.push(item)
+    else forecastGroups.push({ date: item.date, items: [item] })
+  }
+  function formatForecastDate(iso: string) {
+    const [y, m, d] = iso.split('-').map(Number)
+    return new Intl.DateTimeFormat('en-CA', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(Date.UTC(y, m - 1, d)))
+  }
 
   // Form data (active accounts + categories only).
   const formAccounts = allAccounts
@@ -381,6 +439,58 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
                 {upcomingRows.map((vm) => (
                   <RecurringRow key={vm.id} vm={vm} />
                 ))}
+              </div>
+            </section>
+          ) : null}
+
+          {forecastItems.length ? (
+            <section className="space-y-3">
+              <SectionHeading
+                title="Upcoming occurrences"
+                description={`Projected for the next ${FORECAST_DAYS} days — not posted until due.`}
+              />
+              <div className="overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
+                {forecastGroups.map((group) => (
+                  <div key={group.date} className="border-b last:border-b-0">
+                    <div className="bg-muted/40 px-4 py-1.5 text-xs font-semibold text-muted-foreground">
+                      {formatForecastDate(group.date)}
+                    </div>
+                    {group.items.map((item, i) => (
+                      <div
+                        key={`${item.id}-${item.date}-${i}`}
+                        className="flex items-center justify-between gap-3 px-4 py-2.5"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm">{item.name}</span>
+                          {item.autoPost ? (
+                            <span className="shrink-0 rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-600 dark:text-sky-400">
+                              Auto
+                            </span>
+                          ) : (
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                              Manual
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          className={`shrink-0 text-sm font-semibold tabular-nums ${
+                            item.type === 'income'
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : ''
+                          }`}
+                        >
+                          {item.type === 'income' ? '+' : '−'}
+                          {formatCurrency(item.amount, item.currency)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {forecastItems.length > 80 ? (
+                  <div className="px-4 py-2 text-xs text-muted-foreground">
+                    +{forecastItems.length - 80} more in the next {FORECAST_DAYS} days
+                  </div>
+                ) : null}
               </div>
             </section>
           ) : null}
