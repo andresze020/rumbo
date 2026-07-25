@@ -100,32 +100,55 @@ export function GoalCard({
         </span>
       </div>
 
-      <div className="mt-auto flex items-center justify-between gap-2 border-t pt-3.5">
+      <div className="mt-auto flex flex-col items-stretch gap-2 border-t pt-3.5 sm:flex-row sm:items-center sm:justify-between">
         <span className="min-w-0 truncate text-xs text-muted-foreground">
           {linkedAccountName ?? 'No linked account'}
         </span>
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-          <Link href={editHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:shrink-0 sm:flex-wrap sm:items-center">
+          <Link
+            href={editHref}
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full sm:w-auto')}
+          >
             Edit
           </Link>
           {!isArchived ? (
-            <Link href={contributeHref} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>
+            <Link
+              href={contributeHref}
+              className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'w-full sm:w-auto')}
+            >
               Add funds
             </Link>
           ) : null}
           {!isArchived && currentAmount > 0 ? (
-            <Link href={withdrawHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+            <Link
+              href={withdrawHref}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full sm:w-auto')}
+            >
               Withdraw
             </Link>
           ) : null}
           {goal.status === 'active' ? (
-            <StatusForm goalId={goal.id} status="paused" label="Pause" />
+            <StatusForm goalId={goal.id} status="paused" label="Pause" className="w-full sm:w-auto" />
           ) : null}
-          {isPaused ? <StatusForm goalId={goal.id} status="active" label="Resume" /> : null}
+          {isPaused ? (
+            <StatusForm goalId={goal.id} status="active" label="Resume" className="w-full sm:w-auto" />
+          ) : null}
           {!isArchived ? (
-            <StatusForm goalId={goal.id} status="archived" label="Archive" variant="ghost" />
+            <StatusForm
+              goalId={goal.id}
+              status="archived"
+              label="Archive"
+              variant="ghost"
+              className="w-full sm:w-auto"
+            />
           ) : (
-            <StatusForm goalId={goal.id} status="active" label="Restore" variant="ghost" />
+            <StatusForm
+              goalId={goal.id}
+              status="active"
+              label="Restore"
+              variant="ghost"
+              className="w-full sm:w-auto"
+            />
           )}
         </div>
       </div>
@@ -138,17 +161,25 @@ function StatusForm({
   status,
   label,
   variant = 'outline',
+  className,
 }: {
   goalId: string
   status: string
   label: string
   variant?: 'outline' | 'ghost'
+  className?: string
 }) {
   return (
-    <form action={setGoalStatusAction}>
+    <form action={setGoalStatusAction} className={className}>
       <input type="hidden" name="goal_id" value={goalId} />
       <input type="hidden" name="status" value={status} />
-      <SubmitButton type="submit" size="sm" variant={variant} pendingText={`${label}…`}>
+      <SubmitButton
+        type="submit"
+        size="sm"
+        variant={variant}
+        pendingText={`${label}…`}
+        className="w-full sm:w-auto"
+      >
         {label}
       </SubmitButton>
     </form>
