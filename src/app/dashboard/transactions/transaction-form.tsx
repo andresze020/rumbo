@@ -357,6 +357,13 @@ export function TransactionForm({
     costTouched || suggestedCost == null ? costInput : suggestedCost.toFixed(2)
   const parsedCost = Number(costValue)
   const costIsPositive = Number.isFinite(parsedCost) && parsedCost > 0
+  // The cost can't exceed what you sent (you can't lose more than you moved).
+  const sentBaseValue =
+    fromRateToBase != null && amountIsValid
+      ? Math.abs(parsedAmount) * fromRateToBase
+      : null
+  const costExceedsSent =
+    costIsPositive && sentBaseValue != null && parsedCost > sentBaseValue + 0.01
   // Active expense categories (path-labelled) for the transfer-cost picker.
   const expenseCategoryOptions = availableCategories
     .filter((c) => c.category_type === 'expense')
@@ -367,9 +374,13 @@ export function TransactionForm({
       const name = parent ? `${parent.name} / ${c.name}` : c.name
       return { id: c.id, label: c.icon ? `${c.icon} ${name}` : name }
     })
-  // Default the cost category to the first expense category until the user picks.
-  const effectiveCostCategoryId =
-    costCategoryId || expenseCategoryOptions[0]?.id || ''
+  // Default the cost category to a fee-like expense category if one exists;
+  // otherwise leave it unpicked (never silently file FX cost under, say, "Rent").
+  const defaultCostCategoryId =
+    expenseCategoryOptions.find((c) =>
+      /fee|comis|charg|bank|banc|cargo|surcharg/i.test(c.label)
+    )?.id ?? ''
+  const effectiveCostCategoryId = costCategoryId || defaultCostCategoryId
   const submitAction = isTransfer
     ? createTransferTransactionAction
     : createManualTransactionAction
@@ -379,7 +390,8 @@ export function TransactionForm({
       Boolean(toAccountId) &&
       (!isCrossCurrencyTransfer || toAmountValid) &&
       (!needsFromRate || rateIsValid) &&
-      (!isCrossCurrencyTransfer || !costIsPositive || Boolean(effectiveCostCategoryId))
+      (!isCrossCurrencyTransfer || !costIsPositive || Boolean(effectiveCostCategoryId)) &&
+      (!isCrossCurrencyTransfer || !costExceedsSent)
     : compatibleCategories.length > 0 &&
       Boolean(categoryId) &&
       (!isMultiCurrency || rateIsValid)
@@ -1571,7 +1583,11 @@ export function TransactionForm({
           name="amount"
           currencyCode={amountCurrencyCode}
           value={amountInput}
-          onValueChange={setAmountInput}
+          onValueChange={(v) => {
+            setAmountInput(v)
+            // Changing what you sent re-enables the transfer-cost estimate.
+            if (isTransfer) setCostTouched(false)
+          }}
           size="lg"
           withCalculator
           required
@@ -1770,7 +1786,11 @@ export function TransactionForm({
             name="to_amount"
             currencyCode={selectedToAccount?.currency_code ?? baseCurrency}
             value={toAmountInput}
-            onValueChange={setToAmountInput}
+            onValueChange={(v) => {
+              setToAmountInput(v)
+              // Changing what you received re-estimates the cost.
+              setCostTouched(false)
+            }}
             size="lg"
             withCalculator
             required
@@ -1826,9 +1846,15 @@ export function TransactionForm({
               ))}
             </select>
           </div>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            {t('transactionForm.transferCostHelp')}
-          </p>
+          {costExceedsSent ? (
+            <p className="mt-1.5 text-xs text-destructive">
+              {t('transactionForm.transferCostTooLarge')}
+            </p>
+          ) : (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {t('transactionForm.transferCostHelp')}
+            </p>
+          )}
           <input
             type="hidden"
             name="cost_category_id"

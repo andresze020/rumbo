@@ -94,7 +94,11 @@ export function TransferEditForm({
   const [costInput, setCostInput] = useState(initialCost ? initialCost.toFixed(2) : '')
   const [costTouched, setCostTouched] = useState(initialCost > 0)
   const [costCategoryId, setCostCategoryId] = useState(
-    initialCostCategoryId ?? costCategories[0]?.id ?? ''
+    initialCostCategoryId ??
+      costCategories.find((c) =>
+        /fee|comis|charg|bank|banc|cargo|surcharg/i.test(c.label)
+      )?.id ??
+      ''
   )
   // Each leg's market rate to base (1 for the base currency), fetched to suggest
   // the cost = sent·rateFrom − received·rateTo.
@@ -152,6 +156,13 @@ export function TransferEditForm({
     costTouched || suggestedCost == null ? costInput : suggestedCost.toFixed(2)
   const parsedCost = Number(costValue)
   const costIsPositive = Number.isFinite(parsedCost) && parsedCost > 0
+  // The cost can't exceed what you sent (you can't lose more than you moved).
+  const sentBaseValue =
+    fromRateToBase != null && amountIsValid
+      ? parsedAmount * fromRateToBase
+      : null
+  const costExceedsSent =
+    costIsPositive && sentBaseValue != null && parsedCost > sentBaseValue + 0.01
 
   function conversionPreview() {
     if (!selectedFromAccount || !rateIsValid || !amountIsValid) return null
@@ -165,7 +176,8 @@ export function TransferEditForm({
       amountIsValid &&
       (!isCrossCurrencyTransfer || toAmountValid) &&
       (!needsFromRate || rateIsValid) &&
-      (!isCrossCurrencyTransfer || !costIsPositive || Boolean(costCategoryId))
+      (!isCrossCurrencyTransfer || !costIsPositive || Boolean(costCategoryId)) &&
+      (!isCrossCurrencyTransfer || !costExceedsSent)
   )
 
   // Fetch each cross-currency leg's market rate to base to suggest the cost.
@@ -324,7 +336,10 @@ export function TransferEditForm({
             name="amount"
             currencyCode={selectedFromAccount?.currency_code ?? baseCurrency}
             value={amountInput}
-            onValueChange={setAmountInput}
+            onValueChange={(v) => {
+              setAmountInput(v)
+              setCostTouched(false)
+            }}
             withCalculator
             required
           />
@@ -344,7 +359,10 @@ export function TransferEditForm({
             name="to_amount"
             currencyCode={selectedToAccount?.currency_code ?? baseCurrency}
             value={toAmountInput}
-            onValueChange={setToAmountInput}
+            onValueChange={(v) => {
+              setToAmountInput(v)
+              setCostTouched(false)
+            }}
             withCalculator
             required
           />
@@ -393,11 +411,17 @@ export function TransferEditForm({
               ))}
             </select>
           </div>
-          <p className="text-xs text-muted-foreground">
-            We estimate what this transfer cost you — bank fees plus the exchange
-            difference — and file it as an expense. Adjust it if you know the
-            exact amount, or set it to 0 if there was no cost.
-          </p>
+          {costExceedsSent ? (
+            <p className="text-xs text-destructive">
+              The cost can&rsquo;t be more than what you sent.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              We estimate what this transfer cost you — bank fees plus the
+              exchange difference — and file it as an expense. Adjust it if you
+              know the exact amount, or set it to 0 if there was no cost.
+            </p>
+          )}
           <input
             type="hidden"
             name="cost_category_id"
