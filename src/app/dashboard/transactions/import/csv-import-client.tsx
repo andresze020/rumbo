@@ -27,6 +27,7 @@ import { SubmitButton } from '@/components/submit-button'
 import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
 import { parseCsv, guessCsvMapping } from '@/lib/imports/csv-parser'
 import { buildValidatedRows } from '@/lib/imports/csv-validation'
+import type { CategorizationRule } from '@/lib/rules/match'
 import type {
   CsvMapping,
   CsvRow,
@@ -44,6 +45,7 @@ type CsvImportClientProps = {
   accounts: ImportAccount[]
   categories: ImportCategory[]
   currencies: ImportCurrency[]
+  rules: CategorizationRule[]
   presets: ImportPreset[]
   batches: ImportBatch[]
   errorMessage: string | null
@@ -122,6 +124,7 @@ export function CsvImportClient({
   accounts,
   categories,
   currencies,
+  rules,
   presets,
   batches,
   errorMessage,
@@ -148,8 +151,9 @@ export function CsvImportClient({
         accounts,
         categories,
         currencies,
+        rules,
       }),
-    [accounts, categories, currencies, mapping, rows, targetAccountId]
+    [accounts, categories, currencies, rules, mapping, rows, targetAccountId]
   )
   const validRows = previewRows.filter((row) => row.status === 'valid')
   const invalidRows = previewRows.filter((row) => row.status === 'invalid')

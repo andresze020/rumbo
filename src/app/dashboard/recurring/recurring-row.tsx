@@ -22,6 +22,8 @@ export type RecurringRowVM = {
   end_date: string | null
   is_active: boolean
   isDue: boolean
+  autoPost: boolean
+  lastError: string | null
   accountName: string
   categoryName: string
   categoryIcon: string | null
@@ -81,6 +83,22 @@ export function RecurringRow({ vm }: { vm: RecurringRowVM }) {
                 Due
               </Badge>
             ) : null}
+            {vm.autoPost ? (
+              <Badge
+                variant="outline"
+                className="text-xs text-sky-600 dark:text-sky-400"
+              >
+                Auto
+              </Badge>
+            ) : null}
+            {vm.lastError ? (
+              <Badge
+                variant="outline"
+                className="text-xs text-red-600 dark:text-red-400"
+              >
+                Auto-post failed
+              </Badge>
+            ) : null}
             {!vm.is_active ? <StatusBadge status="inactive" /> : null}
           </div>
           <p className="text-xs text-muted-foreground">
@@ -123,6 +141,13 @@ export function RecurringRow({ vm }: { vm: RecurringRowVM }) {
                 </span>
               </span>
             </div>
+
+            {vm.lastError ? (
+              <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+                Last auto-post failed: {vm.lastError}. Fix the issue (or post
+                manually), then it will retry on the next run.
+              </p>
+            ) : null}
 
             <div className="flex flex-wrap gap-1.5">
               {vm.is_active ? (

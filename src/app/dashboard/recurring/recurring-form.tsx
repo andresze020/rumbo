@@ -40,6 +40,8 @@ export type RecurringTemplate = {
   end_date: string | null
   /** BR-009: resolved payee name for the edit prefill (empty when none). */
   payee_name?: string
+  /** Sprint B / BR-014: post automatically on schedule (vs. manual "Post"). */
+  auto_post?: boolean
 }
 
 const selectClassName = nativeSelectCls
@@ -79,6 +81,7 @@ export function RecurringForm({
   )
   const [accountId, setAccountId] = useState(template?.account_id ?? '')
   const [categoryId, setCategoryId] = useState(template?.category_id ?? '')
+  const [autoPost, setAutoPost] = useState(template?.auto_post ?? false)
 
   const categoriesById = useMemo(
     () => new Map(categories.map((c) => [c.id, c])),
@@ -252,6 +255,24 @@ export function RecurringForm({
         label={transactionType === 'income' ? 'Payer (optional)' : 'Payee (optional)'}
         helpText="Search an existing payee or type a new name to create one."
       />
+
+      {/* Sprint B / BR-014: auto-post toggle. */}
+      <input type="hidden" name="auto_post" value={autoPost ? 'true' : 'false'} />
+      <label className="flex items-start gap-3 rounded-xl border p-3 text-sm">
+        <input
+          type="checkbox"
+          checked={autoPost}
+          onChange={(e) => setAutoPost(e.target.checked)}
+          className="mt-0.5 size-4 rounded border-input"
+        />
+        <span>
+          <span className="font-medium">Post automatically</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            A daily job posts this on its due date using the last known exchange
+            rate. Leave off to post it yourself from the list.
+          </span>
+        </span>
+      </label>
 
       <div className={formActionsCls}>
         <SubmitButton

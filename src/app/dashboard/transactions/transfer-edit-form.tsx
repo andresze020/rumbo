@@ -38,6 +38,14 @@ type TransferEditFormProps = {
   returnTo: string
   baseCurrency: string
   initialExchangeRateToBase: number
+  // BR-007: amount that arrived in the destination account (its own currency).
+  // Equals `amount` for same-currency transfers.
+  initialToAmount: number
+  // Unified transfer cost (FX spread + fee): expense categories to file it
+  // under, plus the currently-saved cost (base currency) + category.
+  costCategories: { id: string; label: string }[]
+  initialCost: number
+  initialCostCategoryId: string | null
 }
 
 function formatAccountLabel(account: TransferAccount) {
@@ -67,11 +75,35 @@ export function TransferEditForm({
   returnTo,
   baseCurrency,
   initialExchangeRateToBase,
+  initialToAmount,
+  costCategories,
+  initialCost,
+  initialCostCategoryId,
 }: TransferEditFormProps) {
   const [selectedFromAccountId, setSelectedFromAccountId] = useState(fromAccountId)
   const [selectedToAccountId, setSelectedToAccountId] = useState(toAccountId)
   const [currentDate, setCurrentDate] = useState(transactionDate)
   const [amountInput, setAmountInput] = useState(amount.toFixed(2))
+  const [toAmountInput, setToAmountInput] = useState(
+    initialToAmount ? initialToAmount.toFixed(2) : ''
+  )
+
+  // Unified transfer cost (FX spread + fee), in the household base currency.
+  // Pre-filled from the saved value; if none, it is suggested from market rates
+  // (below) until the user edits it.
+  const [costInput, setCostInput] = useState(initialCost ? initialCost.toFixed(2) : '')
+  const [costTouched, setCostTouched] = useState(initialCost > 0)
+  const [costCategoryId, setCostCategoryId] = useState(
+    initialCostCategoryId ??
+      costCategories.find((c) =>
+        /fee|comis|charg|bank|banc|cargo|surcharg/i.test(c.label)
+      )?.id ??
+      ''
+  )
+  // Each leg's market rate to base (1 for the base currency), fetched to suggest
+  // the cost = sent·rateFrom − received·rateTo.
+  const [fromRateToBase, setFromRateToBase] = useState<number | null>(null)
+  const [toRateToBase, setToRateToBase] = useState<number | null>(null)
 
   // userRate is expressed as "1 baseCurrency = X foreignCurrency" (what the user sees)
   // exchange_rate_to_base = 1 / userRate (what the DB stores)
@@ -91,10 +123,13 @@ export function TransferEditForm({
     Boolean(selectedFromAccount && selectedToAccount) &&
     selectedFromAccount?.currency_code !== selectedToAccount?.currency_code
 
-  const isNonBaseCurrencyTransfer =
-    !isCrossCurrencyTransfer &&
+  // A rate to base is only required when NEITHER leg is the base currency. When
+  // one leg is base, the RPC derives both legs' rates from the two amounts so
+  // the transfer stays value-neutral.
+  const needsFromRate =
     Boolean(selectedFromAccount) &&
-    selectedFromAccount?.currency_code !== baseCurrency
+    selectedFromAccount?.currency_code !== baseCurrency &&
+    (!selectedToAccount || selectedToAccount.currency_code !== baseCurrency)
 
   const parsedRate = Number(userRate)
   const rateIsValid =
@@ -103,6 +138,38 @@ export function TransferEditForm({
 
   const parsedAmount = Number(amountInput)
   const amountIsValid = Number.isFinite(parsedAmount) && parsedAmount > 0
+
+  const parsedToAmount = Number(toAmountInput)
+  const toAmountValid = Number.isFinite(parsedToAmount) && parsedToAmount > 0
+
+  // Suggested cost from market rates: what you sent minus what you received,
+  // both in base currency. 0 when we can't estimate or you came out ahead.
+  const suggestedCost =
+    isCrossCurrencyTransfer &&
+    amountIsValid &&
+    toAmountValid &&
+    fromRateToBase != null &&
+    toRateToBase != null
+      ? Math.max(0, parsedAmount * fromRateToBase - parsedToAmount * toRateToBase)
+      : null
+  const costValue =
+    costTouched || suggestedCost == null ? costInput : suggestedCost.toFixed(2)
+  const parsedCost = Number(costValue)
+  const costIsPositive = Number.isFinite(parsedCost) && parsedCost > 0
+  // The cost can't exceed what you sent (you can't lose more than you moved).
+  const sentBaseValue =
+    fromRateToBase != null && amountIsValid
+      ? parsedAmount * fromRateToBase
+      : null
+  const costExceedsSent =
+    costIsPositive && sentBaseValue != null && parsedCost > sentBaseValue + 0.01
+  // Soft advisory: the entered cost is far from what market rates suggest.
+  const costLooksOff =
+    costTouched &&
+    costIsPositive &&
+    !costExceedsSent &&
+    suggestedCost != null &&
+    Math.abs(parsedCost - suggestedCost) > Math.max(1, suggestedCost * 0.2)
 
   function conversionPreview() {
     if (!selectedFromAccount || !rateIsValid || !amountIsValid) return null
@@ -113,9 +180,37 @@ export function TransferEditForm({
     selectedFromAccountId &&
       selectedToAccountId &&
       selectedFromAccountId !== selectedToAccountId &&
-      !isCrossCurrencyTransfer &&
-      (!isNonBaseCurrencyTransfer || rateIsValid)
+      amountIsValid &&
+      (!isCrossCurrencyTransfer || toAmountValid) &&
+      (!needsFromRate || rateIsValid) &&
+      (!isCrossCurrencyTransfer || !costIsPositive || Boolean(costCategoryId)) &&
+      (!isCrossCurrencyTransfer || !costExceedsSent)
   )
+
+  // Fetch each cross-currency leg's market rate to base to suggest the cost.
+  useEffect(() => {
+    if (!isCrossCurrencyTransfer || !selectedFromAccount || !selectedToAccount || !currentDate) {
+      return
+    }
+    let cancelled = false
+    const rateToBase = async (currency: string) => {
+      if (currency === baseCurrency) return 1
+      const r = await fetchFxRate(baseCurrency, currency, currentDate)
+      return r.rate && r.rate > 0 ? 1 / r.rate : null
+    }
+    void Promise.all([
+      rateToBase(selectedFromAccount.currency_code),
+      rateToBase(selectedToAccount.currency_code),
+    ]).then(([fr, tr]) => {
+      if (cancelled) return
+      setFromRateToBase(fr)
+      setToRateToBase(tr)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFromAccountId, selectedToAccountId, currentDate])
 
   async function autoFetch(accountCurrency: string, date: string) {
     setFetchingRate(true)
@@ -137,7 +232,7 @@ export function TransferEditForm({
 
   // Auto-fetch rate when account or date changes
   useEffect(() => {
-    if (!isNonBaseCurrencyTransfer || !selectedFromAccount || !currentDate) return
+    if (!needsFromRate || !selectedFromAccount || !currentDate) return
     const frame = window.requestAnimationFrame(() => {
       void autoFetch(selectedFromAccount.currency_code, currentDate)
     })
@@ -235,13 +330,23 @@ export function TransferEditForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`transfer_amount_${transactionId}`}>Amount</Label>
+          <Label htmlFor={`transfer_amount_${transactionId}`}>
+            {isCrossCurrencyTransfer ? 'You sent' : 'Amount'}
+            {isCrossCurrencyTransfer ? (
+              <span className="font-normal text-muted-foreground">
+                {' '}(in {selectedFromAccount?.currency_code})
+              </span>
+            ) : null}
+          </Label>
           <AmountInput
             id={`transfer_amount_${transactionId}`}
             name="amount"
             currencyCode={selectedFromAccount?.currency_code ?? baseCurrency}
             value={amountInput}
-            onValueChange={setAmountInput}
+            onValueChange={(v) => {
+              setAmountInput(v)
+              setCostTouched(false)
+            }}
             withCalculator
             required
           />
@@ -249,14 +354,97 @@ export function TransferEditForm({
       </div>
 
       {isCrossCurrencyTransfer ? (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          Cross-currency transfers are not supported yet.
-        </p>
+        <div className="space-y-2">
+          <Label htmlFor={`transfer_to_amount_${transactionId}`}>
+            You received{' '}
+            <span className="font-normal text-muted-foreground">
+              (in {selectedToAccount?.currency_code})
+            </span>
+          </Label>
+          <AmountInput
+            id={`transfer_to_amount_${transactionId}`}
+            name="to_amount"
+            currencyCode={selectedToAccount?.currency_code ?? baseCurrency}
+            value={toAmountInput}
+            onValueChange={(v) => {
+              setToAmountInput(v)
+              setCostTouched(false)
+            }}
+            withCalculator
+            required
+          />
+          <p className="text-xs text-muted-foreground">
+            How much actually arrived in the destination account, in its own
+            currency.
+          </p>
+        </div>
       ) : null}
 
-      {isNonBaseCurrencyTransfer ? (
+      {isCrossCurrencyTransfer ? (
+        <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
+          <Label htmlFor={`transfer_cost_${transactionId}`}>
+            Transfer cost{' '}
+            <span className="font-normal text-muted-foreground">
+              (fees + exchange difference, in {baseCurrency})
+            </span>
+          </Label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              id={`transfer_cost_${transactionId}`}
+              name="cost_base"
+              inputMode="decimal"
+              value={costValue}
+              onChange={(e) => {
+                setCostInput(e.target.value)
+                setCostTouched(true)
+              }}
+              placeholder="0.00"
+              className="sm:flex-1"
+            />
+            <select
+              aria-label="Transfer cost category"
+              value={costCategoryId}
+              onChange={(e) => setCostCategoryId(e.target.value)}
+              className={cn(selectCls, 'sm:flex-1')}
+              disabled={!costIsPositive}
+            >
+              <option value="" disabled>
+                Choose a category…
+              </option>
+              {costCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {costExceedsSent ? (
+            <p className="text-xs text-destructive">
+              The cost can&rsquo;t be more than what you sent.
+            </p>
+          ) : costLooksOff && suggestedCost != null ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              We estimated about {formatCurrency(suggestedCost, baseCurrency)} —
+              double-check this cost.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              We estimate what this transfer cost you — bank fees plus the
+              exchange difference — and file it as an expense. Adjust it if you
+              know the exact amount, or set it to 0 if there was no cost.
+            </p>
+          )}
+          <input
+            type="hidden"
+            name="cost_category_id"
+            value={costIsPositive ? costCategoryId : ''}
+          />
+        </div>
+      ) : null}
+
+      {needsFromRate ? (
         <AdvancedFields
-          defaultOpen
+          defaultOpen={isCrossCurrencyTransfer}
           summary={
             rateIsValid
               ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${selectedFromAccount?.currency_code}`

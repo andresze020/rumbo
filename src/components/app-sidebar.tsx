@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { LucideIcon } from 'lucide-react'
-import { ChevronLeft, ChevronRight, LogOut, Wallet } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LogOut, Settings, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -64,7 +64,22 @@ function SidebarLink({ href, label, icon: Icon, active, collapsed, phase, phaseL
   )
 }
 
-export function AppSidebar({ className }: { className?: string }) {
+/** Two-letter initials from an email's local part (falls back to "?"). */
+function emailInitials(email: string | null | undefined) {
+  if (!email) return '?'
+  const local = email.split('@')[0] ?? ''
+  const cleaned = local.replace(/[^a-zA-Z0-9]/g, '')
+  if (!cleaned) return '?'
+  return cleaned.slice(0, 2).toUpperCase()
+}
+
+export function AppSidebar({
+  className,
+  userEmail,
+}: {
+  className?: string
+  userEmail?: string | null
+}) {
   const pathname = usePathname()
   const { t } = useLanguage()
   const [collapsed, setCollapsed] = useState(false)
@@ -154,6 +169,40 @@ export function AppSidebar({ className }: { className?: string }) {
 
       {/* Bottom controls */}
       <div className="shrink-0 space-y-1 border-t px-2 py-3">
+        {/* Signed-in user → settings (Option D avatar block) */}
+        {userEmail ? (
+          <Link
+            href="/dashboard/settings"
+            title={collapsed ? userEmail : undefined}
+            aria-current={isActive('/dashboard/settings') ? 'page' : undefined}
+            className={cn(
+              'flex items-center gap-2 rounded-lg py-1.5 text-sm transition-colors',
+              isActive('/dashboard/settings')
+                ? 'bg-primary/10'
+                : 'hover:bg-muted',
+              collapsed ? 'justify-center px-0' : 'px-1.5'
+            )}
+          >
+            <span
+              className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary"
+              aria-hidden="true"
+            >
+              {emailInitials(userEmail)}
+            </span>
+            {!collapsed && (
+              <>
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                  {userEmail}
+                </span>
+                <Settings
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </>
+            )}
+          </Link>
+        ) : null}
+
         <div className={cn('flex items-center', collapsed ? 'justify-center' : 'px-1')}>
           <ThemeToggle />
           {!collapsed && (

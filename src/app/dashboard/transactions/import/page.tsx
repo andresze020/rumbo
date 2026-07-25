@@ -6,6 +6,7 @@ import type {
   ImportBatch,
   ImportPreset,
 } from '@/lib/imports/types'
+import type { CategorizationRule } from '@/lib/rules/match'
 
 type ImportPageProps = {
   searchParams: Promise<{
@@ -110,6 +111,25 @@ export default async function CsvImportPage({ searchParams }: ImportPageProps) {
     throw new Error('Could not load CSV import options.')
   }
 
+  // BR-010: active categorization rules auto-fill a row's category when the CSV
+  // has none mapped. Ordered by priority so the highest-priority rule wins.
+  const { data: ruleRows } = await supabase
+    .from('categorization_rules')
+    .select('id, name, match_field, operator, match_value, category_id, priority')
+    .eq('household_id', household.id)
+    .eq('is_active', true)
+    .order('priority', { ascending: true })
+
+  const rules: CategorizationRule[] = (ruleRows ?? []).map((row) => ({
+    id: row.id as string,
+    name: (row.name as string | null) ?? null,
+    matchField: row.match_field as CategorizationRule['matchField'],
+    operator: row.operator as CategorizationRule['operator'],
+    matchValue: row.match_value as string,
+    categoryId: row.category_id as string,
+    priority: Number(row.priority ?? 100),
+  }))
+
   // BR-024: saved column-mapping presets for this household.
   const { data: presetRows } = await supabase
     .from('csv_import_presets')
@@ -162,6 +182,7 @@ export default async function CsvImportPage({ searchParams }: ImportPageProps) {
       accounts={(accounts ?? []) as Account[]}
       categories={(categories ?? []) as Category[]}
       currencies={(currencies ?? []) as Currency[]}
+      rules={rules}
       presets={presets}
       batches={batches}
       errorMessage={errorMessage}

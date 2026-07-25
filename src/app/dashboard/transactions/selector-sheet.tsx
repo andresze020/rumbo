@@ -54,31 +54,46 @@ export function SelectorSheet({
   if (!open) return null
 
   return (
+    // A bottom sheet that hugs its content instead of a full-screen surface:
+    // short lists (a handful of accounts) leave no dead space, and the sheet
+    // only grows to `max-h` when there are enough items to need scrolling. When
+    // the user taps the search field the keyboard raises the sheet and the list
+    // scrolls within its own max-height — the picker never gets buried.
     <div
       role="dialog"
       aria-modal="true"
-      className={cn(
-        'fixed inset-0 z-[60] flex flex-col bg-background sm:hidden',
-        'animate-in fade-in-0 slide-in-from-bottom-4 duration-200'
-      )}
+      className="fixed inset-0 z-[60] flex flex-col justify-end sm:hidden"
     >
-      <header className="flex items-center gap-2 border-b px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
-        {leading ? <div className="shrink-0">{leading}</div> : null}
-        <h2 className="min-w-0 flex-1 truncate px-1 font-heading text-base font-medium text-foreground">
-          {title}
-        </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <X className="size-5" aria-hidden="true" />
-        </button>
-      </header>
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-black/40 animate-in fade-in-0 duration-200"
+        onClick={onClose}
+      />
 
-      <div className="flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
-        {children}
+      <div
+        className={cn(
+          'relative flex max-h-[85dvh] flex-col rounded-t-2xl border-t bg-background',
+          'animate-in slide-in-from-bottom-4 duration-200'
+        )}
+      >
+        <header className="flex items-center gap-2 border-b px-2 pb-2 pt-2">
+          {leading ? <div className="shrink-0">{leading}</div> : null}
+          <h2 className="min-w-0 flex-1 truncate px-1 font-heading text-base font-medium text-foreground">
+            {title}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <X className="size-5" aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+          {children}
+        </div>
       </div>
     </div>
   )

@@ -43,6 +43,7 @@ type TransactionsPageProps = {
     tag_id?: string
     mode?: string
     edit?: string
+    page?: string
   }>
 }
 
@@ -78,6 +79,28 @@ type Transaction = {
   void_reason: string | null
 }
 
+// Row shape returned by the search_household_transactions RPC (BR-008): each row
+// is a page transaction plus the full-filtered-set aggregates repeated on every
+// row (count, income/expense base totals, pending/imported counts).
+type SearchTransactionRow = {
+  id: string
+  transaction_date: string
+  created_at: string
+  transaction_type: string
+  status: string
+  review_status: string
+  description: string | null
+  merchant_name: string | null
+  notes: string | null
+  source: string
+  void_reason: string | null
+  total_count: number | string
+  total_income_base: number | string
+  total_expense_base: number | string
+  total_pending: number | string
+  total_imported: number | string
+}
+
 type TransactionEntry = {
   transaction_id: string
   account_id: string
@@ -89,6 +112,7 @@ type TransactionEntry = {
 type TransactionAllocation = {
   transaction_id: string
   category_id: string
+  amount_base_currency?: number | string
 }
 
 type AccountLookup = { id: string; name: string }
@@ -483,64 +507,98 @@ export default async function TransactionsPage({
       .map((id) => ({ id, label: tagsById.get(id)?.name ?? 'Unknown tag', isArchived: true })),
   ]
 
-  // Filtering by tag(s): resolve the matching transaction ids up front (junction
-  // table has no direct column to filter the main query on). Multiple tags are
-  // OR'd — a transaction matches if it carries any of the selected tags.
-  let tagFilterIds: string[] | null = null
-  if (selectedTagIds.length > 0) {
-    const { data: taggedRows } = await supabase
-      .from('transaction_tags')
-      .select('transaction_id')
-      .eq('household_id', household.id)
-      .in('tag_id', selectedTagIds)
-    tagFilterIds = Array.from(
-      new Set((taggedRows ?? []).map((r) => r.transaction_id as string))
-    )
+  // ── BR-008: server-side filtering + pagination ────────────────────────────
+  // Every filter (date/type/status/review/search/payee/account/category/tag)
+  // plus pagination runs in a single RPC round trip. Account/category/tag
+  // filters used to be applied in JS after loading the entire date window; they
+  // now live in SQL (search_household_transactions), which also returns the
+  // whole-set aggregates so the header + totals stay correct across pages.
+  const allAccounts = (accounts ?? []) as Account[]
+  const allCategories = (categories ?? []) as Category[]
+  const activeAccounts = allAccounts.filter((a) => !a.is_archived)
+  const activeCategories = allCategories.filter(
+    (c) =>
+      !c.is_archived &&
+      (c.category_type === 'income' || c.category_type === 'expense')
+  )
+  // Active expense categories (path-labelled) for the transfer-cost picker.
+  const allCategoriesById = new Map(allCategories.map((c) => [c.id, c]))
+  const costCategoryOptions = allCategories
+    .filter((c) => !c.is_archived && c.category_type === 'expense')
+    .map((c) => {
+      const parent = c.parent_category_id
+        ? allCategoriesById.get(c.parent_category_id)
+        : null
+      const name = parent ? `${parent.name} / ${c.name}` : c.name
+      return { id: c.id, label: c.icon ? `${c.icon} ${name}` : name }
+    })
+
+  // Selecting a parent category should also match transactions filed under any
+  // of its child categories (e.g. "Transport" matches "Transport / Subway").
+  const selectedCategoryIdSet = new Set(selectedCategoryIds)
+  const effectiveCategoryIds = new Set(selectedCategoryIds)
+  if (selectedCategoryIds.length > 0) {
+    for (const category of allCategories) {
+      if (
+        category.parent_category_id &&
+        selectedCategoryIdSet.has(category.parent_category_id)
+      ) {
+        effectiveCategoryIds.add(category.id)
+      }
+    }
   }
 
-  let transactionsQuery = supabase
-    .from('transactions')
-    .select(
-      'id, transaction_date, transaction_type, status, review_status, description, merchant_name, notes, source, void_reason'
-    )
-    .eq('household_id', household.id)
-    .is('deleted_at', null)
-    .order('transaction_date', { ascending: false })
-    .order('created_at', { ascending: false })
+  const PAGE_SIZE = 50
+  const rawPage = Number(params.page)
+  const currentPage =
+    Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1
+  const pageOffset = (currentPage - 1) * PAGE_SIZE
 
-  if (applyDateWindow) {
-    transactionsQuery = transactionsQuery
-      .gte('transaction_date', resolvedDateFrom)
-      .lte('transaction_date', resolvedDateTo)
-  }
-  if (selectedPayeeId) {
-    transactionsQuery = transactionsQuery.eq('payee_id', selectedPayeeId)
-  }
-  if (tagFilterIds !== null) {
-    // Empty list → `.in('id', [])` correctly matches nothing.
-    transactionsQuery = transactionsQuery.in('id', tagFilterIds)
-  }
-
-  if (selectedType !== 'all') {
-    transactionsQuery = transactionsQuery.eq('transaction_type', selectedType)
-  }
-  if (selectedStatus !== 'all') {
-    transactionsQuery = transactionsQuery.eq('status', selectedStatus)
-  }
-  if (selectedReview !== 'all') {
-    transactionsQuery = transactionsQuery.eq('review_status', selectedReview)
-  }
-  if (searchText) {
-    const escaped = searchText.replaceAll('%', '\\%').replaceAll('_', '\\_')
-    transactionsQuery = transactionsQuery.or(
-      `description.ilike.%${escaped}%,merchant_name.ilike.%${escaped}%,notes.ilike.%${escaped}%`
-    )
-  }
-
-  const { data: transactions, error: transactionsError } = await transactionsQuery
+  const { data: rpcRows, error: transactionsError } = await supabase.rpc(
+    'search_household_transactions',
+    {
+      p_household_id: household.id,
+      p_date_from: applyDateWindow ? resolvedDateFrom : null,
+      p_date_to: applyDateWindow ? resolvedDateTo : null,
+      p_type: selectedType !== 'all' ? selectedType : null,
+      p_status: selectedStatus !== 'all' ? selectedStatus : null,
+      p_review: selectedReview !== 'all' ? selectedReview : null,
+      p_search: searchText || null,
+      p_payee_id: selectedPayeeId || null,
+      p_account_ids: selectedAccountIds.length ? selectedAccountIds : null,
+      p_category_ids: effectiveCategoryIds.size
+        ? Array.from(effectiveCategoryIds)
+        : null,
+      p_tag_ids: selectedTagIds.length ? selectedTagIds : null,
+      p_limit: PAGE_SIZE,
+      p_offset: pageOffset,
+    }
+  )
   if (transactionsError) throw new Error('Could not load transactions.')
 
-  const transactionIds = (transactions ?? []).map((t) => t.id)
+  const rpcData = (rpcRows ?? []) as SearchTransactionRow[]
+  const transactions: Transaction[] = rpcData.map((r) => ({
+    id: r.id,
+    transaction_date: r.transaction_date,
+    transaction_type: r.transaction_type,
+    status: r.status,
+    review_status: r.review_status,
+    description: r.description,
+    merchant_name: r.merchant_name,
+    notes: r.notes,
+    source: r.source,
+    void_reason: r.void_reason,
+  }))
+  const totalCount = rpcData.length ? Number(rpcData[0].total_count) : 0
+  const totalIncomeBase = rpcData.length
+    ? Number(rpcData[0].total_income_base)
+    : 0
+  const totalExpenseBase = rpcData.length
+    ? Number(rpcData[0].total_expense_base)
+    : 0
+  const totalPending = rpcData.length ? Number(rpcData[0].total_pending) : 0
+  const totalImported = rpcData.length ? Number(rpcData[0].total_imported) : 0
+  const transactionIds = transactions.map((t) => t.id)
 
   // BR-023: tag links for the loaded transactions → chips on each row + the
   // edit form's current selection.
@@ -580,7 +638,7 @@ export default async function TransactionsPage({
 
     const { data: allocations, error: allocationsError } = await supabase
       .from('transaction_allocations')
-      .select('transaction_id, category_id')
+      .select('transaction_id, category_id, amount_base_currency')
       .eq('household_id', household.id)
       .in('transaction_id', transactionIds)
 
@@ -621,8 +679,6 @@ export default async function TransactionsPage({
   const allocationsByTransactionId = new Map(
     transactionAllocations.map((a) => [a.transaction_id, a])
   )
-  const allAccounts = (accounts ?? []) as Account[]
-  const allCategories = (categories ?? []) as Category[]
   const accountNamesById = new Map([
     ...allAccounts.map((a) => [a.id, a.name] as const),
     ...accountLookupRows.map((a) => [a.id, a.name] as const),
@@ -638,41 +694,6 @@ export default async function TransactionsPage({
     categoryLookupRows.map((c) => [c.id, c.color ?? null])
   )
   const categoryOptionsById = new Map(allCategories.map((c) => [c.id, c]))
-  const activeAccounts = allAccounts.filter((a) => !a.is_archived)
-  const activeCategories = allCategories.filter(
-    (c) =>
-      !c.is_archived &&
-      (c.category_type === 'income' || c.category_type === 'expense')
-  )
-
-  // Selecting a parent category should also match transactions filed under any
-  // of its child categories (e.g. "Transport" matches "Transport / Subway").
-  const selectedCategoryIdSet = new Set(selectedCategoryIds)
-  const effectiveCategoryIds = new Set(selectedCategoryIds)
-  if (selectedCategoryIds.length > 0) {
-    for (const category of allCategories) {
-      if (
-        category.parent_category_id &&
-        selectedCategoryIdSet.has(category.parent_category_id)
-      ) {
-        effectiveCategoryIds.add(category.id)
-      }
-    }
-  }
-
-  const filteredTransactions = ((transactions ?? []) as Transaction[]).filter(
-    (transaction) => {
-      const entries = entriesByTransactionId.get(transaction.id) ?? []
-      const allocation = allocationsByTransactionId.get(transaction.id)
-      const matchesAccount =
-        selectedAccountIds.length === 0 ||
-        entries.some((e) => selectedAccountIds.includes(e.account_id))
-      const matchesCategory =
-        selectedCategoryIds.length === 0 ||
-        (allocation !== undefined && effectiveCategoryIds.has(allocation.category_id))
-      return matchesAccount && matchesCategory
-    }
-  )
 
   function buildTransactionRow(transaction: Transaction): TransactionRow {
     const isOpeningBalance = transaction.transaction_type === 'opening_balance'
@@ -713,7 +734,9 @@ export default async function TransactionsPage({
     const title = isOpeningBalance
       ? 'Opening balance'
       : isTransfer
-      ? `Transfer: ${transferFromAccountName} -> ${transferToAccountName}`
+      ? // Show the user's description when present; the from → to route already
+        // shows in the row subtitle, so fall back to a plain "Transfer".
+        transaction.description || 'Transfer'
       : isDebtPayment
       ? transaction.description || `Debt payment: ${transferFromAccountName} -> ${transferToAccountName}`
       : transaction.description || 'Transaction'
@@ -773,33 +796,14 @@ export default async function TransactionsPage({
     }
   }
 
-  const transactionRows = filteredTransactions.map(buildTransactionRow)
+  const transactionRows = transactions.map(buildTransactionRow)
 
-  // Totals for the currently filtered set, converted to the household base
-  // currency. Transfers, debt payments and opening balances are excluded so the
-  // figures stay aligned with income/expense reporting; voided rows are skipped.
-  let filteredIncomeBase = 0
-  let filteredExpenseBase = 0
-  for (const row of transactionRows) {
-    if (
-      row.isVoided ||
-      row.isTransfer ||
-      row.isDebtPayment ||
-      row.isOpeningBalance
-    ) {
-      continue
-    }
-    const entry = row.amountEntry
-    if (!entry) continue
-    const baseAmount =
-      Number(entry.amount_account_currency) *
-      Number(entry.exchange_rate_to_base ?? 1)
-    if (row.transaction.transaction_type === 'income') {
-      filteredIncomeBase += baseAmount
-    } else if (row.transaction.transaction_type === 'expense') {
-      filteredExpenseBase += Math.abs(baseAmount)
-    }
-  }
+  // Totals for the WHOLE filtered set (every page), converted to the household
+  // base currency by the RPC. Transfers, debt payments, opening balances and
+  // voided rows are excluded server-side so the figures stay aligned with
+  // income/expense reporting.
+  const filteredIncomeBase = totalIncomeBase
+  const filteredExpenseBase = totalExpenseBase
   const filteredNetBase = filteredIncomeBase - filteredExpenseBase
   const hasFilteredTotals = filteredIncomeBase > 0 || filteredExpenseBase > 0
 
@@ -823,10 +827,22 @@ export default async function TransactionsPage({
     return list
   })()
   const transactionGroups = groupRowsByDate(transactionRows, locale, t)
-  const visibleCount = transactionRows.length
-  const pendingCount = transactionRows.filter((r) => r.transaction.status === 'pending').length
-  const importedCount = transactionRows.filter((r) => r.isImported).length
+  // Header/summary counts reflect the whole filtered set (from the RPC), not
+  // just the current page.
+  const visibleCount = totalCount
+  const pendingCount = totalPending
+  const importedCount = totalImported
   const dateRangeLabel = formatDateRangeLabel(resolvedDateFrom, resolvedDateTo)
+
+  // BR-008 pagination: page links reuse the current filters and append ?page.
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const pageStart = totalCount === 0 ? 0 : pageOffset + 1
+  const pageEnd = Math.min(pageOffset + transactionRows.length, totalCount)
+  const listBasePath = transactionsPath(filters)
+  const pageHref = (page: number) =>
+    page <= 1
+      ? listBasePath
+      : `${listBasePath}${listBasePath.includes('?') ? '&' : '?'}page=${page}`
 
   // Presets — computed server-side to bake in current non-date filters
   const todayStr = todayIsoDate()
@@ -926,6 +942,18 @@ export default async function TransactionsPage({
           ? formatCurrency(row.displayAmount, row.amountEntry.currency_code)
           : null,
       tags: tagsForTransaction(row.transaction.id),
+      // Cross-currency transfers carry their cost (FX spread + fee) as an
+      // expense allocation — surface it on the row so it's visible, not just in
+      // reports.
+      transferCostFormatted:
+        row.isTransfer &&
+        row.allocation &&
+        Number(row.allocation.amount_base_currency ?? 0) > 0
+          ? formatCurrency(
+              Number(row.allocation.amount_base_currency),
+              household.base_currency
+            )
+          : null,
       canEdit: row.canEdit,
       canEditTransfer: row.canEditTransfer,
       canVoid: row.canVoid,
@@ -1058,7 +1086,8 @@ export default async function TransactionsPage({
               transactionDate={selectedEditRow.transaction.transaction_date}
               fromAccountId={selectedEditRow.transferOutEntry.account_id}
               toAccountId={selectedEditRow.transferInEntry.account_id}
-              amount={Math.abs(Number(selectedEditRow.transferInEntry.amount_account_currency))}
+              amount={Math.abs(Number(selectedEditRow.transferOutEntry.amount_account_currency))}
+              initialToAmount={Math.abs(Number(selectedEditRow.transferInEntry.amount_account_currency))}
               cancelHref={returnTo}
               description={selectedEditRow.transaction.description ?? ''}
               notes={selectedEditRow.transaction.notes ?? ''}
@@ -1067,6 +1096,11 @@ export default async function TransactionsPage({
               returnTo={returnTo}
               baseCurrency={household.base_currency}
               initialExchangeRateToBase={Number(selectedEditRow.transferOutEntry.exchange_rate_to_base ?? 1)}
+              costCategories={costCategoryOptions}
+              initialCost={Math.abs(
+                Number(selectedEditRow.allocation?.amount_base_currency ?? 0)
+              )}
+              initialCostCategoryId={selectedEditRow.allocation?.category_id ?? null}
             />
           ) : null}
         </FormDialog>
@@ -1175,6 +1209,61 @@ export default async function TransactionsPage({
             actionLabel={hasActiveFilters ? 'Clear filters' : 'Add transaction'}
           />
         )}
+
+        {/* ── Pagination ──────────────────────────────────────────────── */}
+        {serializedGroups.length > 0 && totalPages > 1 ? (
+          <nav
+            className="flex flex-wrap items-center justify-between gap-2 px-1 pt-3"
+            aria-label="Transaction pages"
+          >
+            <span className="text-sm text-muted-foreground">
+              Showing {pageStart}–{pageEnd} of {totalCount}
+            </span>
+            <div className="flex items-center gap-2">
+              {currentPage > 1 ? (
+                <Link
+                  href={pageHref(currentPage - 1)}
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  rel="prev"
+                >
+                  Previous
+                </Link>
+              ) : (
+                <span
+                  aria-disabled="true"
+                  className={cn(
+                    buttonVariants({ variant: 'outline', size: 'sm' }),
+                    'pointer-events-none opacity-50'
+                  )}
+                >
+                  Previous
+                </span>
+              )}
+              <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              {currentPage < totalPages ? (
+                <Link
+                  href={pageHref(currentPage + 1)}
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  rel="next"
+                >
+                  Next
+                </Link>
+              ) : (
+                <span
+                  aria-disabled="true"
+                  className={cn(
+                    buttonVariants({ variant: 'outline', size: 'sm' }),
+                    'pointer-events-none opacity-50'
+                  )}
+                >
+                  Next
+                </span>
+              )}
+            </div>
+          </nav>
+        ) : null}
       </section>
     </main>
   )

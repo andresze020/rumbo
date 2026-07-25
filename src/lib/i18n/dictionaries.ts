@@ -226,6 +226,19 @@ export const en = {
       'Posts this entry now and creates a recurring template. Manage upcoming occurrences under Recurring.',
     needTwoAccounts: 'Create at least two accounts to transfer between them.',
     crossCurrencyNotSupported: 'Cross-currency transfers are not supported yet.',
+    amountReceived: 'Amount received',
+    amountReceivedHelp:
+      'How much actually arrived in the destination account, in its own currency.',
+    transferCost: 'Transfer cost (fees + exchange)',
+    transferCostCategory: 'Choose a category…',
+    transferCostHelp:
+      'We estimate what this transfer cost you — bank fees plus the exchange difference — and file it as an expense. Adjust it, or set it to 0 if there was no cost.',
+    transferCostTooLarge: "The cost can't be more than what you sent.",
+    transferCostLooksOff:
+      'We estimated about {amount} — double-check this cost.',
+    transferFee: 'Fee (optional)',
+    transferFeeHelp:
+      'Bank or wire fee charged for this transfer. Recorded as a separate expense on the source account.',
     createTransaction: 'Create transaction',
     createTransfer: 'Create transfer',
     creatingTransaction: 'Creating transaction',
@@ -615,6 +628,19 @@ export const es: DeepStringify<typeof en> = {
       'Publica este movimiento ahora y crea una plantilla recurrente. Gestiona las próximas veces en Recurrentes.',
     needTwoAccounts: 'Crea al menos dos cuentas para transferir entre ellas.',
     crossCurrencyNotSupported: 'Las transferencias entre monedas distintas aún no son compatibles.',
+    amountReceived: 'Monto recibido',
+    amountReceivedHelp:
+      'Cuánto llegó realmente a la cuenta destino, en su propia moneda.',
+    transferCost: 'Costo de la transferencia (comisión + cambio)',
+    transferCostCategory: 'Elige una categoría…',
+    transferCostHelp:
+      'Estimamos lo que te costó esta transferencia —comisiones más la diferencia de cambio— y lo registramos como gasto. Ajústalo, o ponlo en 0 si no hubo costo.',
+    transferCostTooLarge: 'El costo no puede ser mayor que lo que enviaste.',
+    transferCostLooksOff:
+      'Estimamos alrededor de {amount} — revisa este costo.',
+    transferFee: 'Comisión (opcional)',
+    transferFeeHelp:
+      'Comisión bancaria o de giro cobrada por esta transferencia. Se registra como un gasto aparte en la cuenta de origen.',
     createTransaction: 'Crear transacción',
     createTransfer: 'Crear transferencia',
     creatingTransaction: 'Creando transacción',
@@ -1004,6 +1030,19 @@ export const fr: DeepStringify<typeof en> = {
       'Enregistre cette écriture maintenant et crée un modèle récurrent. Gérez les prochaines occurrences dans Récurrents.',
     needTwoAccounts: 'Créez au moins deux comptes pour effectuer des virements entre eux.',
     crossCurrencyNotSupported: 'Les virements entre devises différentes ne sont pas encore pris en charge.',
+    amountReceived: 'Montant reçu',
+    amountReceivedHelp:
+      'Le montant réellement arrivé sur le compte de destination, dans sa propre devise.',
+    transferCost: 'Coût du virement (frais + change)',
+    transferCostCategory: 'Choisir une catégorie…',
+    transferCostHelp:
+      'Nous estimons ce que ce virement vous a coûté — frais bancaires plus l’écart de change — et l’enregistrons comme dépense. Ajustez-le, ou mettez 0 s’il n’y a pas eu de coût.',
+    transferCostTooLarge: 'Le coût ne peut pas dépasser ce que vous avez envoyé.',
+    transferCostLooksOff:
+      'Nous estimons environ {amount} — vérifiez ce coût.',
+    transferFee: 'Frais (optionnel)',
+    transferFeeHelp:
+      'Frais bancaires ou de virement facturés pour ce virement. Enregistrés comme une dépense distincte sur le compte source.',
     createTransaction: 'Créer la transaction',
     createTransfer: 'Créer le virement',
     creatingTransaction: 'Création de la transaction',

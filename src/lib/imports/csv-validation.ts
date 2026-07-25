@@ -6,6 +6,7 @@ import type {
   ImportCurrency,
   MappedImportRow,
 } from './types'
+import { findMatchingRule, type CategorizationRule } from '@/lib/rules/match'
 
 function normalize(value: string) {
   return value.trim().toLowerCase()
@@ -104,6 +105,7 @@ export function buildValidatedRows({
   accounts,
   categories,
   currencies,
+  rules = [],
 }: {
   rows: CsvRow[]
   mapping: CsvMapping
@@ -111,6 +113,9 @@ export function buildValidatedRows({
   accounts: ImportAccount[]
   categories: ImportCategory[]
   currencies: ImportCurrency[]
+  // BR-010: active categorization rules — auto-fill a row's category when none
+  // is mapped/found in the CSV.
+  rules?: CategorizationRule[]
 }) {
   const accountsById = new Map(accounts.map((account) => [account.id, account]))
   const accountsByName = new Map<string, ImportAccount>()
@@ -161,10 +166,30 @@ export function buildValidatedRows({
         : targetAccountId
           ? accountsById.get(targetAccountId)
           : undefined
-    const category =
+    let category =
       rawCategory && categoriesByName.has(normalizeLookup(rawCategory))
         ? categoriesByName.get(normalizeLookup(rawCategory))
         : undefined
+
+    // BR-010: no category came from the CSV → try the household's rules against
+    // this row (description / merchant / amount / account name). First matching
+    // rule (by priority) wins; the normal reporting-type checks below still run.
+    let ruleApplied = false
+    if (!category && rules.length) {
+      const matched = findMatchingRule(rules, {
+        description: rawDescription || null,
+        merchantName: getMappedValue(row, mapping.merchant_name) || null,
+        amount,
+        accountName: account?.name ?? null,
+      })
+      if (matched) {
+        const ruleCategory = categoriesById.get(matched.categoryId)
+        if (ruleCategory) {
+          category = ruleCategory
+          ruleApplied = true
+        }
+      }
+    }
 
     if (!transactionDate) {
       errors.push('Date is required and must be YYYY-MM-DD or MM/DD/YYYY.')
@@ -208,6 +233,12 @@ export function buildValidatedRows({
       !['expense', 'debt_interest'].includes(category.reporting_type)
     ) {
       errors.push('Expense rows require an expense category.')
+    }
+
+    if (ruleApplied && category) {
+      warnings.push(
+        `Category set to "${getCategoryPath(category, categoriesById)}" by a rule.`
+      )
     }
 
     if (rawCurrency && !currencyCodes.has(rawCurrency)) {

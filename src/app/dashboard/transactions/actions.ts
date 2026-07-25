@@ -66,6 +66,17 @@ function parsePositiveNumber(value: FormDataEntryValue | null) {
   return numberValue
 }
 
+// Like parsePositiveNumber but allows 0 (used for the optional transfer cost).
+function parseNonNegativeNumber(value: FormDataEntryValue | null) {
+  const raw = String(value ?? '').trim()
+  if (raw === '') return null
+  const numberValue = Number(raw)
+  if (!Number.isFinite(numberValue) || numberValue < 0) {
+    return null
+  }
+  return numberValue
+}
+
 export async function createManualTransactionAction(formData: FormData) {
   const transactionType = String(formData.get('transaction_type') ?? '').trim()
   const transactionDate = String(formData.get('transaction_date') ?? '').trim()
@@ -315,6 +326,12 @@ export async function createTransferTransactionAction(formData: FormData) {
     exchangeRateToBaseRaw !== '' && Number.isFinite(exchangeRateToBase) && exchangeRateToBase > 0
       ? exchangeRateToBase
       : 1
+  // BR-007: destination amount (to-account currency) for cross-currency
+  // transfers; null for same-currency transfers.
+  const toAmount = parsePositiveNumber(formData.get('to_amount'))
+  // Unified transfer cost (FX spread + fee) in base currency + its category.
+  const costBase = parseNonNegativeNumber(formData.get('cost_base'))
+  const costCategoryId = String(formData.get('cost_category_id') ?? '').trim() || null
 
   if (!fromAccountId) {
     redirectWithError('Select the source account.')
@@ -377,6 +394,9 @@ export async function createTransferTransactionAction(formData: FormData) {
       p_notes: notes || null,
       p_status: status,
       p_exchange_rate_to_base: validExchangeRate,
+      p_to_amount: toAmount,
+      p_cost_base: costBase,
+      p_cost_category_id: costCategoryId,
     }
   )
 
@@ -387,6 +407,33 @@ export async function createTransferTransactionAction(formData: FormData) {
         'Could not create the transfer. Please check the form and try again.'
       )
     )
+  }
+
+  // Same-currency transfers can carry an explicit fee (wire/bank charge). It's a
+  // real cash outflow, so it's recorded as its own visible expense on the from
+  // account. (Cross-currency fees are already captured by the transfer cost.)
+  const feeAmount = parsePositiveNumber(formData.get('fee_amount'))
+  const feeCategoryId = String(formData.get('fee_category_id') ?? '').trim() || null
+  if (feeAmount && feeCategoryId) {
+    const { error: feeError } = await supabase.rpc('create_manual_transaction', {
+      p_household_id: profile.default_household_id,
+      p_transaction_type: 'expense',
+      p_transaction_date: transactionDate,
+      p_account_id: fromAccountId,
+      p_category_id: feeCategoryId,
+      p_amount: feeAmount,
+      p_description: 'Transfer fee',
+      p_merchant_name: null,
+      p_notes: null,
+      p_status: status,
+      p_exchange_rate_to_base: validExchangeRate,
+      p_payee_name: null,
+    })
+    if (feeError) {
+      redirectWithError(
+        'Transfer created, but its fee could not be recorded. Add it as an expense.'
+      )
+    }
   }
 
   revalidatePath('/dashboard/transactions')
@@ -526,6 +573,12 @@ export async function updateTransferTransactionAction(formData: FormData) {
   const status = String(formData.get('status') ?? '').trim()
   const returnTo = String(formData.get('return_to') ?? '').trim()
   const exchangeRateToBase = parsePositiveNumber(formData.get('exchange_rate_to_base'))
+  // BR-007: destination amount (in the to-account currency) for cross-currency
+  // transfers; null for same-currency transfers.
+  const toAmount = parsePositiveNumber(formData.get('to_amount'))
+  // Unified transfer cost (FX spread + fee) in base currency + its category.
+  const costBase = parseNonNegativeNumber(formData.get('cost_base'))
+  const costCategoryId = String(formData.get('cost_category_id') ?? '').trim() || null
 
   if (!transactionId) {
     redirectWithTransactionError('Transaction id is required.', returnTo)
@@ -595,6 +648,9 @@ export async function updateTransferTransactionAction(formData: FormData) {
       p_notes: notes || null,
       p_status: status,
       p_exchange_rate_to_base: exchangeRateToBase ?? 1,
+      p_to_amount: toAmount,
+      p_cost_base: costBase,
+      p_cost_category_id: costCategoryId,
     }
   )
 

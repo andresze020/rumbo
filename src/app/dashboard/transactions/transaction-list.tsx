@@ -61,6 +61,7 @@ export type TransactionListRow = {
   voidReason: string | null
   currencyCode: string | null
   amountFormatted: string | null
+  transferCostFormatted: string | null
   tags: { id: string; name: string; color: string | null }[]
   canEdit: boolean
   canEditTransfer: boolean
@@ -473,6 +474,11 @@ function DisplayRow({
           ) : null}
           {row.currencyCode ? <span>{row.currencyCode}</span> : null}
           {row.merchantName ? <span>· {row.merchantName}</span> : null}
+          {row.transferCostFormatted ? (
+            <span className="text-amber-600 dark:text-amber-400">
+              · incl. {row.transferCostFormatted} cost
+            </span>
+          ) : null}
           {row.voidReason ? <span>· Voided: {row.voidReason}</span> : null}
         </div>
 
