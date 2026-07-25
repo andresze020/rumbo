@@ -427,9 +427,6 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
         </Link>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[15px] font-bold leading-tight">Budgets</h1>
-          <p className="truncate text-[11px] text-muted-foreground">
-            {formatMonthLabel(selectedMonth, locale)}
-          </p>
         </div>
         {renderAddLineButton('New')}
       </div>
