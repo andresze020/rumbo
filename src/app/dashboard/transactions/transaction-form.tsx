@@ -364,6 +364,13 @@ export function TransactionForm({
       : null
   const costExceedsSent =
     costIsPositive && sentBaseValue != null && parsedCost > sentBaseValue + 0.01
+  // Soft advisory: the entered cost is far from what market rates suggest.
+  const costLooksOff =
+    costTouched &&
+    costIsPositive &&
+    !costExceedsSent &&
+    suggestedCost != null &&
+    Math.abs(parsedCost - suggestedCost) > Math.max(1, suggestedCost * 0.2)
   // Active expense categories (path-labelled) for the transfer-cost picker.
   const expenseCategoryOptions = availableCategories
     .filter((c) => c.category_type === 'expense')
@@ -541,11 +548,11 @@ export function TransactionForm({
   // Exchange-rate block, shared by the transfer and single-account paths. Stays
   // outside the "More details" collapse because the rate is required to submit a
   // non-base-currency entry, so it must always be visible.
-  function fxFields(account: TransactionFormAccount | undefined) {
+  function fxFields(account: TransactionFormAccount | undefined, defaultOpen = true) {
     if (!account) return null
     return (
       <AdvancedFields
-        defaultOpen
+        defaultOpen={defaultOpen}
         summary={
           rateIsValid
             ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${account.currency_code}`
@@ -1850,6 +1857,12 @@ export function TransactionForm({
             <p className="mt-1.5 text-xs text-destructive">
               {t('transactionForm.transferCostTooLarge')}
             </p>
+          ) : costLooksOff && suggestedCost != null ? (
+            <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+              {t('transactionForm.transferCostLooksOff', {
+                amount: formatCurrency(suggestedCost, baseCurrency),
+              })}
+            </p>
           ) : (
             <p className="mt-1.5 text-xs text-muted-foreground">
               {t('transactionForm.transferCostHelp')}
@@ -1866,7 +1879,10 @@ export function TransactionForm({
       {/* ── Exchange rate (only when neither leg is the base currency) ── */}
       {isTransfer ? (
         needsFromRate ? (
-          fxFields(selectedFromAccount)
+          // Same-currency non-base transfers only need the rate for report
+          // totals — keep it collapsed. Cross-currency (neither leg base) needs
+          // it entered, so open it.
+          fxFields(selectedFromAccount, isCrossCurrencyTransfer)
         ) : (
           <input type="hidden" name="exchange_rate_to_base" value="1" />
         )

@@ -234,6 +234,8 @@ export const en = {
     transferCostHelp:
       'We estimate what this transfer cost you — bank fees plus the exchange difference — and file it as an expense. Adjust it, or set it to 0 if there was no cost.',
     transferCostTooLarge: "The cost can't be more than what you sent.",
+    transferCostLooksOff:
+      'We estimated about {amount} — double-check this cost.',
     createTransaction: 'Create transaction',
     createTransfer: 'Create transfer',
     creatingTransaction: 'Creating transaction',
@@ -631,6 +633,8 @@ export const es: DeepStringify<typeof en> = {
     transferCostHelp:
       'Estimamos lo que te costó esta transferencia —comisiones más la diferencia de cambio— y lo registramos como gasto. Ajústalo, o ponlo en 0 si no hubo costo.',
     transferCostTooLarge: 'El costo no puede ser mayor que lo que enviaste.',
+    transferCostLooksOff:
+      'Estimamos alrededor de {amount} — revisa este costo.',
     createTransaction: 'Crear transacción',
     createTransfer: 'Crear transferencia',
     creatingTransaction: 'Creando transacción',
@@ -1028,6 +1032,8 @@ export const fr: DeepStringify<typeof en> = {
     transferCostHelp:
       'Nous estimons ce que ce virement vous a coûté — frais bancaires plus l’écart de change — et l’enregistrons comme dépense. Ajustez-le, ou mettez 0 s’il n’y a pas eu de coût.',
     transferCostTooLarge: 'Le coût ne peut pas dépasser ce que vous avez envoyé.',
+    transferCostLooksOff:
+      'Nous estimons environ {amount} — vérifiez ce coût.',
     createTransaction: 'Créer la transaction',
     createTransfer: 'Créer le virement',
     creatingTransaction: 'Création de la transaction',
