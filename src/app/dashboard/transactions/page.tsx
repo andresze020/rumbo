@@ -734,7 +734,9 @@ export default async function TransactionsPage({
     const title = isOpeningBalance
       ? 'Opening balance'
       : isTransfer
-      ? `Transfer: ${transferFromAccountName} -> ${transferToAccountName}`
+      ? // Show the user's description when present; the from → to route already
+        // shows in the row subtitle, so fall back to a plain "Transfer".
+        transaction.description || 'Transfer'
       : isDebtPayment
       ? transaction.description || `Debt payment: ${transferFromAccountName} -> ${transferToAccountName}`
       : transaction.description || 'Transaction'
