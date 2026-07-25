@@ -3,8 +3,10 @@ import { StatusBadge } from '@/components/status-badge'
 import { SubmitButton } from '@/components/submit-button'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { formatCurrency, formatPercent } from '@/lib/format'
-import { goalProgress, goalTypeLabel } from '@/lib/goals/shared'
+import { formatCurrency, formatPercent, localeToBcp47 } from '@/lib/format'
+import { goalProgress } from '@/lib/goals/shared'
+import type { Locale } from '@/lib/i18n/dictionaries'
+import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import { setGoalStatusAction } from './actions'
 
 type Goal = {
@@ -24,11 +26,12 @@ type GoalCardProps = {
   editHref: string
   contributeHref: string
   withdrawHref: string
+  locale: Locale
 }
 
-function formatDate(iso: string) {
+function formatDate(iso: string, locale: Locale) {
   const [y, m, d] = iso.split('-').map(Number)
-  return new Intl.DateTimeFormat('en-CA', {
+  return new Intl.DateTimeFormat(localeToBcp47(locale), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -41,12 +44,23 @@ export function GoalCard({
   editHref,
   contributeHref,
   withdrawHref,
+  locale,
 }: GoalCardProps) {
   const targetAmount = Number(goal.target_amount)
   const currentAmount = Number(goal.current_amount)
   const progress = goalProgress(currentAmount, targetAmount)
   const isArchived = goal.status === 'archived'
   const isPaused = goal.status === 'paused'
+  const goalTypeKey: Record<string, TranslationKey> = {
+    emergency_fund: 'goals.types.emergencyFund',
+    debt_payoff: 'goals.types.debtPayoff',
+    down_payment: 'goals.types.downPayment',
+    travel: 'goals.types.travel',
+    retirement: 'goals.types.retirement',
+    custom: 'goals.types.custom',
+  }
+  const typeKey = goalTypeKey[goal.goal_type]
+  const typeLabel = typeKey ? translate(locale, typeKey) : goal.goal_type
 
   return (
     <div
@@ -62,14 +76,18 @@ export function GoalCard({
             {goal.status !== 'active' ? <StatusBadge status={goal.status} /> : null}
           </div>
           <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground">
-            {goalTypeLabel(goal.goal_type)}
-            {goal.target_date ? ` · Target ${formatDate(goal.target_date)}` : ''}
+            {typeLabel}
+            {goal.target_date
+              ? ` · ${translate(locale, 'goals.targetDate', {
+                  date: formatDate(goal.target_date, locale),
+                })}`
+              : ''}
           </p>
         </div>
       </div>
 
       <p className="mt-3.5 font-mono text-2xl font-bold tabular-nums">
-        {formatCurrency(currentAmount, goal.currency_code)}
+        {formatCurrency(currentAmount, goal.currency_code, locale)}
       </p>
 
       <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-muted">
@@ -79,8 +97,16 @@ export function GoalCard({
         />
       </div>
       <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-        <span className="tabular-nums">{formatPercent(progress, 'en', { minimumFractionDigits: 0 })} of goal</span>
-        <span className="tabular-nums">Target {formatCurrency(targetAmount, goal.currency_code)}</span>
+        <span className="tabular-nums">
+          {translate(locale, 'goals.progress', {
+            progress: formatPercent(progress, locale, { minimumFractionDigits: 0 }),
+          })}
+        </span>
+        <span className="tabular-nums">
+          {translate(locale, 'goals.target', {
+            amount: formatCurrency(targetAmount, goal.currency_code, locale),
+          })}
+        </span>
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-2 border-t pt-3.5">

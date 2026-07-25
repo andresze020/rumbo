@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { LockedFeatureCard } from '@/components/locked-feature-card'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { findNavItemByFeature, PHASE_LABEL_KEY } from '@/lib/nav/config'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'

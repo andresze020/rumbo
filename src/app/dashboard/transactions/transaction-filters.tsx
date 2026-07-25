@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { buttonVariants } from '@/components/ui/button'
 import { MultiSelectChip } from '@/components/multi-select-chip'
 import { cn } from '@/lib/utils'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
 type AccountOption = {
   id: string
@@ -81,6 +82,7 @@ export function TransactionFilters({
   presetLinks,
   payeeId,
 }: TransactionFiltersProps) {
+  const ui = useUiTranslation()
   const typeRef = useRef<HTMLInputElement>(null)
   const [moreOpen, setMoreOpen] = useState(false)
 
@@ -125,7 +127,7 @@ export function TransactionFilters({
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                {option.label}
+                {ui(option.label)}
               </button>
             )
           })}
@@ -157,7 +159,7 @@ export function TransactionFilters({
           )}
         >
           <SlidersHorizontal className="size-4" aria-hidden="true" />
-          Filters
+          {ui('Filters')}
           {moreFiltersCount > 0 ? (
             <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
               {moreFiltersCount}
@@ -170,14 +172,14 @@ export function TransactionFilters({
       <div className={cn('flex-col gap-2.5 sm:flex', moreOpen ? 'flex' : 'hidden')}>
         <div className="flex flex-wrap items-center gap-2">
           <MultiSelectChip
-            label="Account"
+            label={ui('Account')}
             name="account_id"
             options={accountOptions}
             selectedIds={selectedAccountIds}
           />
 
           <MultiSelectChip
-            label="Category"
+            label={ui('Category')}
             name="category_id"
             options={categoryOptions}
             selectedIds={selectedCategoryIds}
@@ -185,7 +187,7 @@ export function TransactionFilters({
 
           {tagOptions.length > 0 || selectedTagIds.length > 0 ? (
             <MultiSelectChip
-              label="Tags"
+              label={ui('Tags')}
               name="tag_id"
               options={tagOptions}
               selectedIds={selectedTagIds}
@@ -193,17 +195,17 @@ export function TransactionFilters({
           ) : null}
 
           <label className={chipLabelClassName}>
-            <span className="text-xs font-medium text-muted-foreground">Status</span>
+            <span className="text-xs font-medium text-muted-foreground">{ui('Status')}</span>
             <select
               name="status"
               defaultValue={selectedStatus}
               className={chipSelectClassName}
-              aria-label="Filter by status"
+              aria-label={ui('Filter by status')}
             >
-              <option value="all">All</option>
-              <option value="posted">Posted</option>
-              <option value="pending">Pending</option>
-              <option value="voided">Voided</option>
+              <option value="all">{ui('All')}</option>
+              <option value="posted">{ui('Posted')}</option>
+              <option value="pending">{ui('Pending')}</option>
+              <option value="voided">{ui('Voided')}</option>
             </select>
           </label>
         </div>
@@ -221,7 +223,7 @@ export function TransactionFilters({
                 size: 'sm',
               })}
             >
-              {link.label}
+              {ui(link.label)}
             </Link>
           ))}
 
@@ -231,26 +233,26 @@ export function TransactionFilters({
               stale (e.g. this-month) value, which "Apply filters" would then
               re-submit and clobber the range the user just picked (BF-024). */}
           <label className={chipLabelClassName}>
-            <span className="text-xs font-medium text-muted-foreground">From</span>
+            <span className="text-xs font-medium text-muted-foreground">{ui('From')}</span>
             <input
               key={resolvedDateFrom}
               type="date"
               name="date_from"
               defaultValue={resolvedDateFrom}
               className="bg-transparent text-sm text-foreground outline-none"
-              aria-label="From date"
+              aria-label={ui('From date')}
             />
           </label>
 
           <label className={chipLabelClassName}>
-            <span className="text-xs font-medium text-muted-foreground">To</span>
+            <span className="text-xs font-medium text-muted-foreground">{ui('To')}</span>
             <input
               key={resolvedDateTo}
               type="date"
               name="date_to"
               defaultValue={resolvedDateTo}
               className="bg-transparent text-sm text-foreground outline-none"
-              aria-label="To date"
+              aria-label={ui('To date')}
             />
           </label>
 
@@ -260,14 +262,14 @@ export function TransactionFilters({
                 href="/dashboard/transactions"
                 className={buttonVariants({ variant: 'ghost', size: 'sm' })}
               >
-                Clear all
+                {ui('Clear all')}
               </Link>
             ) : null}
             <button
               type="submit"
               className={buttonVariants({ size: 'sm' })}
             >
-              Apply filters
+              {ui('Apply filters')}
             </button>
           </div>
         </div>
@@ -275,7 +277,7 @@ export function TransactionFilters({
 
       {/* Submit fallback for keyboard users editing the search field */}
       <button type="submit" className="sr-only">
-        Apply filters
+        {ui('Apply filters')}
       </button>
     </form>
   )

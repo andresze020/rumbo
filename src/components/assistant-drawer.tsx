@@ -16,6 +16,7 @@ import type {
   TransactionFormAccount,
   TransactionFormCategory,
 } from '@/app/dashboard/transactions/transaction-form'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
 type AssistantContext = {
   baseCurrency: string
@@ -25,6 +26,7 @@ type AssistantContext = {
 }
 
 export function AssistantDrawer() {
+  const ui = useUiTranslation()
   const [open, setOpen] = useState(false)
   const [context, setContext] = useState<AssistantContext | null>(null)
   const [, startTransition] = useTransition()
@@ -45,8 +47,8 @@ export function AssistantDrawer() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Open assistant"
-        title="AI Assistant"
+        aria-label={ui('Open assistant')}
+        title={ui('AI Assistant')}
         className="fixed bottom-24 right-6 z-50 flex size-12 items-center justify-center rounded-full bg-secondary text-secondary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <Bot className="size-5" aria-hidden="true" />
@@ -58,14 +60,14 @@ export function AssistantDrawer() {
           className="flex flex-col gap-0 p-0 sm:max-w-lg"
         >
           <SheetHeader className="border-b px-5 py-4">
-            <SheetTitle>Assistant</SheetTitle>
+            <SheetTitle>{ui('Assistant')}</SheetTitle>
             <SheetDescription>
-              Ask about your finances or log a transaction from a receipt photo or voice note.
+              {ui('Ask about your finances or log a transaction from a receipt photo or voice note.')}
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto p-4">
             {!context ? (
-              <p className="text-sm text-muted-foreground">Loading…</p>
+              <p className="text-sm text-muted-foreground">{ui('Loading…')}</p>
             ) : (
               <AssistantChat
                 baseCurrency={context.baseCurrency}

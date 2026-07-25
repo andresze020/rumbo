@@ -7,7 +7,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function ExportPage() {
@@ -41,6 +42,7 @@ export default async function ExportPage() {
   }
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <PageHeader
         eyebrow={household.name}
@@ -68,5 +70,6 @@ export default async function ExportPage() {
         </CardContent>
       </Card>
     </main>
+    </LocalizedClientBoundary>
   )
 }

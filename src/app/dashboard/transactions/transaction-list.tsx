@@ -29,6 +29,10 @@ import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { StatusBadge } from '@/components/status-badge'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/components/language-provider'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
+import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
+import type { Locale } from '@/lib/i18n/dictionaries'
 
 export type ReviewStatus = 'unreviewed' | 'reviewed' | 'flagged'
 
@@ -38,6 +42,7 @@ export type TransactionListCategory = {
   category_type: string
   parent_category_id: string | null
   icon?: string | null
+  is_system?: boolean
 }
 
 export type TransactionListRow = {
@@ -132,12 +137,21 @@ function RowTypeIcon({
 
 function categoryLabel(
   category: TransactionListCategory,
-  categoriesById: Map<string, TransactionListCategory>
+  categoriesById: Map<string, TransactionListCategory>,
+  locale: Locale
 ) {
   const parent = category.parent_category_id
     ? categoriesById.get(category.parent_category_id)
     : null
-  const name = parent ? `${parent.name} / ${category.name}` : category.name
+  const ownName = localizeSystemCategoryName(
+    category.name,
+    Boolean(category.is_system),
+    locale
+  )
+  const parentName = parent
+    ? localizeSystemCategoryName(parent.name, Boolean(parent.is_system), locale)
+    : null
+  const name = parentName ? `${parentName} / ${ownName}` : ownName
   return category.icon ? `${category.icon} ${name}` : name
 }
 
@@ -147,6 +161,8 @@ export function TransactionList({
   payeeSuggestions,
   returnTo,
 }: TransactionListProps) {
+  const { t, locale } = useLanguage()
+  const ui = useUiTranslation()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editingId, setEditingId] = useState<string | null>(null)
   // On mobile each row collapses to a single compact line; tapping it expands
@@ -164,9 +180,9 @@ export function TransactionList({
   const categoryOptions = useMemo(
     () =>
       categories
-        .map((c) => ({ id: c.id, label: categoryLabel(c, categoriesById) }))
+        .map((c) => ({ id: c.id, label: categoryLabel(c, categoriesById, locale) }))
         .sort((a, b) => a.label.localeCompare(b.label)),
-    [categories, categoriesById]
+    [categories, categoriesById, locale]
   )
   // Unique payee names → options for the inline quick-edit combobox. (Names are
   // unique per household, so the name doubles as a stable key.)
@@ -196,7 +212,7 @@ export function TransactionList({
       {selectedIds.length > 0 ? (
         <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border bg-primary px-3 py-2 text-primary-foreground shadow-sm">
           <span className="text-sm font-semibold">
-            {selectedIds.length} selected
+            {selectedIds.length} {ui('selected')}
           </span>
           <span className="hidden h-4 w-px bg-primary-foreground/30 sm:block" />
 
@@ -214,7 +230,7 @@ export function TransactionList({
               pendingText="Saving…"
             >
               <Check className="size-3.5" aria-hidden="true" />
-              Mark reviewed
+              {ui('Mark reviewed')}
             </SubmitButton>
           </form>
 
@@ -232,7 +248,7 @@ export function TransactionList({
               pendingText="Saving…"
             >
               <Flag className="size-3.5" aria-hidden="true" />
-              Flag
+              {ui('Flag')}
             </SubmitButton>
           </form>
 
@@ -250,7 +266,7 @@ export function TransactionList({
               pendingText="Saving…"
             >
               <RotateCcw className="size-3.5" aria-hidden="true" />
-              Mark unreviewed
+              {ui('Mark unreviewed')}
             </SubmitButton>
           </form>
 
@@ -264,11 +280,11 @@ export function TransactionList({
               name="category_id"
               defaultValue=""
               required
-              aria-label="Categorize selected transactions"
+              aria-label={ui('Categorize selected transactions')}
               className="h-7 max-w-[180px] rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               <option value="" disabled>
-                Categorize…
+                {ui('Categorize…')}
               </option>
               {categoryOptions.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -283,7 +299,7 @@ export function TransactionList({
               className="h-7"
               pendingText="Saving…"
             >
-              Apply
+              {ui('Apply')}
             </SubmitButton>
           </form>
 
@@ -293,7 +309,7 @@ export function TransactionList({
             className="ml-auto inline-flex items-center gap-1 text-xs font-semibold opacity-90 hover:opacity-100"
           >
             <X className="size-3.5" aria-hidden="true" />
-            Clear
+            {ui('Clear')}
           </button>
         </div>
       ) : null}
@@ -306,9 +322,13 @@ export function TransactionList({
             checked={allSelected}
             onChange={toggleAll}
             className="size-4 rounded border-input accent-primary"
-            aria-label="Select all transactions"
+            aria-label={ui('Select all transactions')}
           />
-          <span>{allSelected ? 'Deselect all' : 'Select all'}</span>
+          <span>
+            {allSelected
+              ? t('transactionsList.deselectAll')
+              : t('transactionsList.selectAll')}
+          </span>
         </label>
 
         {groups.map((group) => (
@@ -351,6 +371,7 @@ export function TransactionList({
 }
 
 function ReviewControl({ row, returnTo }: { row: TransactionListRow; returnTo: string }) {
+  const ui = useUiTranslation()
   const style = reviewStyles[row.reviewStatus]
   return (
     <form action={updateReviewStatusAction}>
@@ -359,7 +380,7 @@ function ReviewControl({ row, returnTo }: { row: TransactionListRow; returnTo: s
       <select
         name="review_status"
         value={row.reviewStatus}
-        aria-label="Review status"
+        aria-label={ui('Review status')}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
         className={cn(
           'cursor-pointer appearance-none rounded-full border px-2 py-0.5 text-[10px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
@@ -368,7 +389,7 @@ function ReviewControl({ row, returnTo }: { row: TransactionListRow; returnTo: s
       >
         {REVIEW_ORDER.map((value) => (
           <option key={value} value={value} className="text-foreground">
-            {reviewStyles[value].label}
+            {ui(reviewStyles[value].label)}
           </option>
         ))}
       </select>
@@ -393,6 +414,7 @@ function DisplayRow({
   onToggleExpand: () => void
   onEdit: () => void
 }) {
+  const ui = useUiTranslation()
   return (
     <div
       className={cn(
@@ -411,7 +433,7 @@ function DisplayRow({
           checked={selected}
           onChange={onToggle}
           className="size-4 shrink-0 rounded border-input accent-primary"
-          aria-label={`Select ${row.title}`}
+          aria-label={ui(`Select ${row.title}`)}
         />
 
         <button
@@ -469,17 +491,17 @@ function DisplayRow({
           <StatusBadge status={row.status} />
           {row.isImported ? (
             <Badge variant="outline" className="text-xs">
-              Imported
+              {ui('Imported')}
             </Badge>
           ) : null}
           {row.currencyCode ? <span>{row.currencyCode}</span> : null}
           {row.merchantName ? <span>· {row.merchantName}</span> : null}
           {row.transferCostFormatted ? (
             <span className="text-amber-600 dark:text-amber-400">
-              · incl. {row.transferCostFormatted} cost
+              {ui('· incl.')} {row.transferCostFormatted} {ui('cost')}
             </span>
           ) : null}
-          {row.voidReason ? <span>· Voided: {row.voidReason}</span> : null}
+          {row.voidReason ? <span>{ui('· Voided:')} {row.voidReason}</span> : null}
         </div>
 
         {row.notes ? (
@@ -503,7 +525,7 @@ function DisplayRow({
               className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
             >
               <Pencil className="size-3.5" aria-hidden="true" />
-              Quick edit
+              {ui('Quick edit')}
             </button>
           ) : null}
           {row.canEdit || row.canEditTransfer ? (
@@ -511,7 +533,7 @@ function DisplayRow({
               href={row.editHref}
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
-              Edit
+              {ui('Edit')}
             </Link>
           ) : null}
           {row.canVoid ? <VoidTransactionForm transactionId={row.id} /> : null}
@@ -534,11 +556,12 @@ function InlineEditRow({
   returnTo: string
   onCancel: () => void
 }) {
+  const ui = useUiTranslation()
   const transactionType = row.transactionType === 'income' ? 'income' : 'expense'
   return (
     <div className="bg-primary/5 p-4">
       <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-primary">
-        Quick edit
+        {ui('Quick edit')}
       </p>
       <form action={updateManualTransactionAction} className="space-y-3">
         <input type="hidden" name="transaction_id" value={row.id} />
@@ -554,7 +577,7 @@ function InlineEditRow({
             <PayeePicker
               payees={payees}
               defaultValue={row.merchantName ?? ''}
-              label={row.transactionType === 'income' ? 'Payer' : 'Payee'}
+              label={ui(row.transactionType === 'income' ? 'Payer' : 'Payee')}
               labelClassName="text-xs font-normal text-muted-foreground"
               inputId={`inline_payee_${row.id}`}
             />
@@ -565,7 +588,7 @@ function InlineEditRow({
               htmlFor={`inline_amount_${row.id}`}
               className="text-xs text-muted-foreground"
             >
-              Amount
+              {ui('Amount')}
             </label>
             <AmountInput
               id={`inline_amount_${row.id}`}
@@ -588,14 +611,14 @@ function InlineEditRow({
 
         <div className="flex flex-wrap gap-2">
           <SubmitButton type="submit" size="sm" pendingText="Saving…">
-            Save
+            {ui('Save')}
           </SubmitButton>
           <button
             type="button"
             onClick={onCancel}
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
           >
-            Cancel
+            {ui('Cancel')}
           </button>
         </div>
       </form>

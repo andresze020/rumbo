@@ -18,11 +18,14 @@ import { ArchiveToast } from '@/components/archive-toast'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Callout } from '@/components/callout'
 import { formatLabel } from '@/lib/format'
+import { getLocale } from '@/lib/i18n/server'
+import { createUiTranslator } from '@/lib/i18n/ui'
 import { cn } from '@/lib/utils'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 
 type CategoriesPageProps = {
   searchParams: Promise<{
@@ -112,6 +115,8 @@ export default async function CategoriesPage({
   searchParams,
 }: CategoriesPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
+  const ui = createUiTranslator(locale)
   const errorMessage = typeof params.error === 'string' ? params.error : null
   const showArchived = params.showArchived === 'true'
   const categoryTypeFilter =
@@ -265,10 +270,10 @@ export default async function CategoriesPage({
         eyebrow={household.name}
         title={
           <span className="flex items-center gap-1.5">
-            Categories
+            {ui('Categories')}
             <InfoTooltip
-              label="Categories"
-              text="Master list used to classify transactions and control category behavior in reports."
+              label={ui('Categories')}
+              text={ui('Master list used to classify transactions and control category behavior in reports.')}
             />
           </span>
         }
@@ -285,7 +290,7 @@ export default async function CategoriesPage({
               className={buttonVariants({ size: 'sm' })}
             >
               <Plus aria-hidden="true" />
-              New
+              {ui('New')}
             </Link>
             <Link
               href={categoriesPath({
@@ -295,7 +300,7 @@ export default async function CategoriesPage({
               })}
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
-              {showArchived ? 'Hide archived' : 'Show archived'}
+              {ui(showArchived ? 'Hide archived' : 'Show archived')}
             </Link>
           </>
         }
@@ -305,14 +310,14 @@ export default async function CategoriesPage({
         <Link
           href="/dashboard/more"
           className={buttonVariants({ variant: 'outline', size: 'icon' })}
-          aria-label="Back to More"
+          aria-label={ui('Back to More')}
         >
           <ArrowLeft aria-hidden="true" />
         </Link>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[15px] font-bold leading-tight">Categories</h1>
+          <h1 className="truncate text-[15px] font-bold leading-tight">{ui('Categories')}</h1>
           <p className="truncate text-[11px] text-muted-foreground">
-            Master list
+            {ui('Master list')}
           </p>
         </div>
         <Link
@@ -325,7 +330,7 @@ export default async function CategoriesPage({
           className={buttonVariants({ size: 'sm' })}
         >
           <Plus aria-hidden="true" />
-          New
+          {ui('New')}
         </Link>
       </div>
 
@@ -339,19 +344,19 @@ export default async function CategoriesPage({
 
       {/* ── Notifications ──────────────────────────────────────────────── */}
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
-      {params.created === '1' ? <Callout variant="success">Category created.</Callout> : null}
-      {params.updated === '1' ? <Callout variant="success">Category updated.</Callout> : null}
+      {params.created === '1' ? <Callout variant="success">{ui('Category created.')}</Callout> : null}
+      {params.updated === '1' ? <Callout variant="success">{ui('Category updated.')}</Callout> : null}
 
       {/* ── Summary cards ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-2 md:hidden">
         <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
-          <p className="mb-1 text-[10px] text-muted-foreground">Active</p>
+          <p className="mb-1 text-[10px] text-muted-foreground">{ui('Active')}</p>
           <p className="font-mono text-sm font-bold leading-snug tabular-nums">
             {activeCategories.length}
           </p>
         </div>
         <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
-          <p className="mb-1 text-[10px] text-muted-foreground">Subcategories</p>
+          <p className="mb-1 text-[10px] text-muted-foreground">{ui('Subcategories')}</p>
           <p className="font-mono text-sm font-bold leading-snug tabular-nums">
             {subcategoryCount}
           </p>
@@ -365,7 +370,7 @@ export default async function CategoriesPage({
           description={
             categoryTypeFilter === 'all'
               ? 'All types'
-              : `${formatLabel(categoryTypeFilter)} categories`
+              : `${ui(formatLabel(categoryTypeFilter))} ${ui('categories')}`
           }
           icon={<Tag />}
           accent="bg-primary/10 text-primary"
@@ -447,7 +452,7 @@ export default async function CategoriesPage({
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   )}
                 >
-                  {filter.label}
+                  {ui(filter.label)}
                 </Link>
               ))}
             </div>
@@ -462,13 +467,13 @@ export default async function CategoriesPage({
                 <input
                   name="q"
                   defaultValue={searchQuery}
-                  placeholder="Search categories..."
+                  placeholder={ui('Search categories...')}
                   className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                 />
               </div>
               <button
                 type="submit"
-                aria-label="Search categories"
+                aria-label={ui('Search categories')}
                 className={buttonVariants({ variant: 'outline', size: 'icon' })}
               >
                 <Search aria-hidden="true" />
@@ -485,15 +490,17 @@ export default async function CategoriesPage({
               className={cn(buttonVariants({ size: 'sm' }), 'hidden sm:ml-auto md:inline-flex')}
             >
               <Plus aria-hidden="true" />
-              New
+              {ui('New')}
             </Link>
           </div>
 
           {/* ── Category list ───────────────────────────────────────────── */}
           {categoriesError ? (
-            <Callout variant="error">Could not load categories. Try refreshing.</Callout>
+            <Callout variant="error">{ui('Could not load categories. Try refreshing.')}</Callout>
           ) : categoryGroups.length ? (
-            <SortableCategoryList groups={categoryGroups} showArchived={showArchived} />
+            <LocalizedClientBoundary>
+              <SortableCategoryList groups={categoryGroups} showArchived={showArchived} />
+            </LocalizedClientBoundary>
           ) : (
             <EmptyState
               title={
@@ -531,12 +538,12 @@ export default async function CategoriesPage({
           <div className="overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
             <div className="flex items-center gap-2 border-b px-4 py-3">
               <Tag className="size-4 text-primary" aria-hidden="true" />
-              <h2 className="text-sm font-bold">Category mix</h2>
+              <h2 className="text-sm font-bold">{ui('Category mix')}</h2>
             </div>
             <div className="divide-y">
               {typeCounts.map((type) => (
                 <div key={type.value} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <span className="text-xs font-medium text-muted-foreground">{type.label}</span>
+                  <span className="text-xs font-medium text-muted-foreground">{ui(type.label)}</span>
                   <span className="font-mono text-sm font-bold tabular-nums">{type.count}</span>
                 </div>
               ))}
@@ -546,7 +553,7 @@ export default async function CategoriesPage({
           <div className="overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
             <div className="flex items-center gap-2 border-b px-4 py-3">
               <Settings className="size-4 text-muted-foreground" aria-hidden="true" />
-              <h2 className="text-sm font-bold">Configuration checks</h2>
+              <h2 className="text-sm font-bold">{ui('Configuration checks')}</h2>
             </div>
             <div className="flex flex-col gap-2 p-3">
               {configurationNotes.map((note) => (
@@ -554,7 +561,7 @@ export default async function CategoriesPage({
                   key={note}
                   className="rounded-lg border bg-muted/25 p-2.5 text-xs leading-relaxed text-muted-foreground"
                 >
-                  {note}
+                  {ui(note)}
                 </div>
               ))}
             </div>

@@ -9,7 +9,8 @@ import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { ArchiveToast } from '@/components/archive-toast'
@@ -285,6 +286,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
   }
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <PageHeader
         eyebrow={household.name}
@@ -508,6 +510,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
         </div>
       )}
     </main>
+    </LocalizedClientBoundary>
   )
 }
 

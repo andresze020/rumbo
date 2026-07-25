@@ -8,11 +8,14 @@ import { TransactionDialogProvider } from '@/components/transaction-dialog-provi
 import { AssistantDrawer } from '@/components/assistant-drawer'
 import { InstallAppHint } from '@/components/install-app-hint'
 import { LanguageProvider } from '@/components/language-provider'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { getLocale } from '@/lib/i18n/server'
+import { createUiTranslator } from '@/lib/i18n/ui'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const locale = await getLocale()
+  const ui = createUiTranslator(locale)
 
   // Signed-in identity for the sidebar's bottom user block (Option D).
   const supabase = await createClient()
@@ -24,7 +27,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   return (
     <LanguageProvider locale={locale}>
       <TransactionDialogProvider>
-        <div className="flex min-h-screen">
+        <LocalizedClientBoundary>
+          <div className="flex min-h-screen">
           {/* Desktop sidebar */}
           <AppSidebar className="hidden lg:flex" userEmail={userEmail} />
 
@@ -46,13 +50,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           {/* FABs — assistant + add transaction (desktop only for add) */}
           <AssistantDrawer />
           <GlobalAddTransactionButton
-            aria-label="Add transaction"
-            title="Add transaction"
+            aria-label={ui('Add transaction')}
+            title={ui('Add transaction')}
             className="fixed bottom-6 right-6 z-50 hidden size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:flex"
           >
             <Plus className="size-6" aria-hidden="true" />
           </GlobalAddTransactionButton>
-        </div>
+          </div>
+        </LocalizedClientBoundary>
       </TransactionDialogProvider>
     </LanguageProvider>
   )

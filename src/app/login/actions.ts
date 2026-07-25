@@ -1,6 +1,8 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
+import { LOCALE_COOKIE, normalizeLocale } from '@/lib/i18n/server'
 import { createClient } from '@/lib/supabase/server'
 
 function redirectWithLoginError(message: string, mode?: string): never {
@@ -18,13 +20,32 @@ export async function signInAction(formData: FormData) {
 
   const supabase = await createClient()
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   })
 
   if (error) {
     redirectWithLoginError('Could not sign in with those credentials.')
+  }
+
+  if (data.user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('locale')
+      .eq('id', data.user.id)
+      .maybeSingle()
+    const locale = normalizeLocale(profile?.locale)
+
+    if (locale) {
+      const store = await cookies()
+      store.set(LOCALE_COOKIE, locale, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      })
+    }
   }
 
   redirect('/dashboard')

@@ -7,7 +7,7 @@ import {
   Scale,
   Target,
 } from 'lucide-react'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { EmptyState } from '@/components/empty-state'

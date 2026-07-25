@@ -6,6 +6,8 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { getLocale } from '@/lib/i18n/server'
+import { createUiTranslator } from '@/lib/i18n/ui'
 
 type MetricCardProps = {
   label: string
@@ -28,7 +30,7 @@ type MetricCardProps = {
  * (/dashboard/trends), which has room for full-width, interactive charts —
  * the tile stays a clean at-a-glance figure.
  */
-export function MetricCard({
+export async function MetricCard({
   label,
   value,
   description,
@@ -38,6 +40,7 @@ export function MetricCard({
   valueClassName,
   tooltip,
 }: MetricCardProps) {
+  const ui = createUiTranslator(await getLocale())
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -54,7 +57,7 @@ export function MetricCard({
             </span>
           ) : null}
           <CardTitle className="flex min-w-0 items-center gap-1 text-sm font-medium leading-snug text-muted-foreground">
-            <span className="min-w-0">{label}</span>
+            <span className="min-w-0">{ui(label)}</span>
             {tooltip}
           </CardTitle>
         </div>
@@ -65,7 +68,7 @@ export function MetricCard({
         </p>
         {delta ? <div className="mt-1.5">{delta}</div> : null}
         {description ? (
-          <p className="mt-1.5 text-xs text-muted-foreground">{description}</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">{ui(description)}</p>
         ) : null}
       </CardContent>
     </Card>

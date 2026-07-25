@@ -11,9 +11,13 @@ import { ArchiveToast } from '@/components/archive-toast'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Callout } from '@/components/callout'
+import { localeToBcp47 } from '@/lib/format'
+import type { Locale } from '@/lib/i18n/dictionaries'
+import { getLocale } from '@/lib/i18n/server'
+import { createUiTranslator } from '@/lib/i18n/ui'
 import { cn } from '@/lib/utils'
 
 type PayeesPageProps = {
@@ -65,11 +69,11 @@ function payeesPath({
 }
 
 /** Short, locale-stable "last used" date (matches lib/format's en-CA base). */
-function formatLastUsed(date: string | null) {
+function formatLastUsed(date: string | null, locale: Locale) {
   if (!date) return null
   const parsed = new Date(`${date}T00:00:00`)
   if (Number.isNaN(parsed.getTime())) return null
-  return parsed.toLocaleDateString('en-CA', {
+  return parsed.toLocaleDateString(localeToBcp47(locale), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -78,6 +82,8 @@ function formatLastUsed(date: string | null) {
 
 export default async function PayeesPage({ searchParams }: PayeesPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
+  const ui = createUiTranslator(locale)
   const errorMessage = typeof params.error === 'string' ? params.error : null
   const showArchived = params.showArchived === 'true'
   const searchQuery = typeof params.q === 'string' ? params.q.trim() : ''
@@ -140,7 +146,7 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
     name: p.name,
     isArchived: p.isArchived,
     txnCount: p.txnCount,
-    lastUsedLabel: formatLastUsed(p.lastTxnDate),
+    lastUsedLabel: formatLastUsed(p.lastTxnDate, locale),
     editHref: payeesPath({ showArchived, q: searchQuery, edit: p.id }),
     mergeHref: payeesPath({ showArchived, q: searchQuery, merge: p.id }),
     transactionsHref: `/dashboard/transactions?payee_id=${p.id}`,
@@ -165,10 +171,10 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
         eyebrow={household.name}
         title={
           <span className="flex items-center gap-1.5">
-            Payees
+            {ui('Payees')}
             <InfoTooltip
-              label="Payees"
-              text="The merchants and people you transact with. Rename to tidy them up, or merge duplicates that the import created."
+              label={ui('Payees')}
+              text={ui('The merchants and people you transact with. Rename to tidy them up, or merge duplicates that the import created.')}
             />
           </span>
         }
@@ -180,13 +186,13 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
               className={buttonVariants({ size: 'sm' })}
             >
               <Plus aria-hidden="true" />
-              New
+              {ui('New')}
             </Link>
             <Link
               href={payeesPath({ showArchived: !showArchived, q: searchQuery })}
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
-              {showArchived ? 'Hide archived' : 'Show archived'}
+              {ui(showArchived ? 'Hide archived' : 'Show archived')}
             </Link>
           </>
         }
@@ -196,20 +202,20 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
         <Link
           href="/dashboard/more"
           className={buttonVariants({ variant: 'outline', size: 'icon' })}
-          aria-label="Back to More"
+          aria-label={ui('Back to More')}
         >
           <ArrowLeft aria-hidden="true" />
         </Link>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[15px] font-bold leading-tight">Payees</h1>
-          <p className="truncate text-[11px] text-muted-foreground">Merchant list</p>
+          <h1 className="truncate text-[15px] font-bold leading-tight">{ui('Payees')}</h1>
+          <p className="truncate text-[11px] text-muted-foreground">{ui('Merchant list')}</p>
         </div>
         <Link
           href={payeesPath({ showArchived, q: searchQuery, mode: 'create' })}
           className={buttonVariants({ size: 'sm' })}
         >
           <Plus aria-hidden="true" />
-          New
+          {ui('New')}
         </Link>
       </div>
 
@@ -223,12 +229,12 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
 
       {/* ── Notifications ──────────────────────────────────────────────── */}
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
-      {params.created === '1' ? <Callout variant="success">Payee created.</Callout> : null}
-      {params.updated === '1' ? <Callout variant="success">Payee updated.</Callout> : null}
+      {params.created === '1' ? <Callout variant="success">{ui('Payee created.')}</Callout> : null}
+      {params.updated === '1' ? <Callout variant="success">{ui('Payee updated.')}</Callout> : null}
       {params.merged !== undefined ? (
         <Callout variant="success">
-          Payees merged — {params.merged} transaction
-          {params.merged === '1' ? '' : 's'} moved.
+          {ui('Payees merged —')} {params.merged}{' '}
+          {ui(params.merged === '1' ? 'transaction' : 'transactions')} {ui('moved.')}
         </Callout>
       ) : null}
 
@@ -311,13 +317,13 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
             <input
               name="q"
               defaultValue={searchQuery}
-              placeholder="Search payees..."
+              placeholder={ui('Search payees...')}
               className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
           <button
             type="submit"
-            aria-label="Search payees"
+            aria-label={ui('Search payees')}
             className={buttonVariants({ variant: 'outline', size: 'icon' })}
           >
             <Search aria-hidden="true" />
@@ -328,13 +334,13 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
           href={payeesPath({ showArchived: !showArchived, q: searchQuery })}
           className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'hidden sm:ml-auto md:inline-flex')}
         >
-          {showArchived ? 'Hide archived' : 'Show archived'}
+          {ui(showArchived ? 'Hide archived' : 'Show archived')}
         </Link>
       </div>
 
       {/* ── Payee list ─────────────────────────────────────────────────── */}
       {payeesError ? (
-        <Callout variant="error">Could not load payees. Try refreshing.</Callout>
+        <Callout variant="error">{ui('Could not load payees. Try refreshing.')}</Callout>
       ) : rows.length ? (
         <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
           {rows.map((payee) => (

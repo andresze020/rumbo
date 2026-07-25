@@ -1,7 +1,10 @@
+'use client'
+
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { formatMonthLabel } from '@/lib/format'
+import { useLanguage } from '@/components/language-provider'
 
 type MonthNavProps = {
   /** Currently selected month, formatted as `YYYY-MM`. */
@@ -37,6 +40,7 @@ export function MonthNav({
   previousLabel,
   nextLabel,
 }: MonthNavProps) {
+  const { locale } = useLanguage()
   const previousMonth = shiftMonth(month, -1)
   const nextMonth = shiftMonth(month, 1)
 
@@ -50,7 +54,7 @@ export function MonthNav({
         <ChevronLeft />
       </Link>
       <span className="min-w-[8rem] text-center text-sm font-medium">
-        {formatMonthLabel(month)}
+        {formatMonthLabel(month, locale)}
       </span>
       <Link
         href={buildHref(basePath, nextMonth, searchParams)}

@@ -41,6 +41,8 @@ import { fetchFxRate } from '@/lib/fx'
 import { formatCurrency } from '@/lib/format'
 import { useLanguage } from '@/components/language-provider'
 import { RECURRING_FREQUENCIES } from '@/lib/recurring/shared'
+import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { cn } from '@/lib/utils'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
@@ -63,6 +65,7 @@ export type TransactionFormCategory = {
   parent_category_id: string | null
   icon?: string | null
   color?: string | null
+  is_system?: boolean
 }
 
 type TransactionFormProps = {
@@ -154,7 +157,10 @@ export function TransactionForm({
   defaultMerchantName,
   returnTo,
 }: TransactionFormProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
+  const ui = useUiTranslation()
+  const categoryName = (category: TransactionFormCategory) =>
+    localizeSystemCategoryName(category.name, Boolean(category.is_system), locale)
   const [transactionType, setTransactionType] = useState<TransactionType>(defaultType ?? 'expense')
   const [transactionDate, setTransactionDate] = useState(defaultDate)
   const [accountId, setAccountId] = useState(defaultAccountId ?? '')
@@ -378,7 +384,9 @@ export function TransactionForm({
       const parent = c.parent_category_id
         ? availableCategories.find((p) => p.id === c.parent_category_id)
         : null
-      const name = parent ? `${parent.name} / ${c.name}` : c.name
+      const name = parent
+        ? `${categoryName(parent)} / ${categoryName(c)}`
+        : categoryName(c)
       return { id: c.id, label: c.icon ? `${c.icon} ${name}` : name }
     })
   // Default the cost category to a fee-like expense category if one exists;
@@ -622,14 +630,14 @@ export function TransactionForm({
   // so they submit exactly like the desktop grid — no separate hidden inputs.
   const selectedCategory = availableCategories.find((c) => c.id === categoryId)
   const categoryValue = selectedCategory
-    ? `${selectedCategory.icon ? `${selectedCategory.icon} ` : ''}${selectedCategory.name}`
+    ? `${selectedCategory.icon ? `${selectedCategory.icon} ` : ''}${categoryName(selectedCategory)}`
     : ''
   // Top-level categories for the mobile picker's first level.
   const mobileParentCategories = compatibleCategories.filter(
     (c) => c.parent_category_id === null
   )
   const repeatValue =
-    RECURRING_FREQUENCIES.find((f) => f.value === recurringFrequency)?.label ??
+    ui(RECURRING_FREQUENCIES.find((f) => f.value === recurringFrequency)?.label ?? '') ||
     t('transactionForm.repeatNever')
   const statusValue =
     status === 'pending' ? t('transactionForm.statusPending') : t('transactionForm.statusPosted')
@@ -1038,7 +1046,7 @@ export function TransactionForm({
               {drillParent.icon ? (
                 <span aria-hidden="true">{drillParent.icon}</span>
               ) : null}
-              <span className="truncate">{drillParent.name}</span>
+              <span className="truncate">{categoryName(drillParent)}</span>
             </div>
             <Input
               placeholder="Search or add a subcategory"
@@ -1049,8 +1057,8 @@ export function TransactionForm({
               [
                 // Select the parent itself (e.g. "All Travel") — the "no
                 // subcategory" case, kept selectable even when children exist.
-                ...(subQuery ? [] : [{ value: drillParent.id, label: `All ${drillParent.name}` }]),
-                ...drillChildren.map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
+                ...(subQuery ? [] : [{ value: drillParent.id, label: `${ui('All')} ${categoryName(drillParent)}` }]),
+                ...drillChildren.map((c) => ({ value: c.id, label: categoryName(c), icon: c.icon })),
               ],
               categoryId,
               (value) => {
@@ -1072,7 +1080,7 @@ export function TransactionForm({
                   ) : (
                     <>
                       Create “<span className="font-semibold">{subcategorySearch.trim()}</span>” in{' '}
-                      {drillParent.name}
+                      {categoryName(drillParent)}
                     </>
                   )}
                 </span>
@@ -1115,9 +1123,9 @@ export function TransactionForm({
                         ) : null}
                         <span className="min-w-0 flex-1 truncate">
                           {parent ? (
-                            <span className="text-muted-foreground">{parent.name} › </span>
+                            <span className="text-muted-foreground">{categoryName(parent)} › </span>
                           ) : null}
-                          {c.name}
+                          {categoryName(c)}
                         </span>
                         {categoryId === c.id ? (
                           <Check className="size-4 shrink-0" aria-hidden="true" />
@@ -1153,7 +1161,7 @@ export function TransactionForm({
                         {parent.icon ? (
                           <span className="shrink-0" aria-hidden="true">{parent.icon}</span>
                         ) : null}
-                        <span className="flex-1 truncate">{parent.name}</span>
+                        <span className="flex-1 truncate">{categoryName(parent)}</span>
                         {kids.length > 0 ? (
                           <ChevronDown className="size-4 shrink-0 -rotate-90 text-muted-foreground" aria-hidden="true" />
                         ) : isSelected ? (
@@ -1200,7 +1208,7 @@ export function TransactionForm({
                     )}
                   >
                     {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
-                    {category.name}
+                    {categoryName(category)}
                   </button>
                 ))}
               </div>
@@ -1408,9 +1416,9 @@ export function TransactionForm({
           {pickerRow({
             id: 'category',
             icon: <Shapes className="size-4.5" />,
-            label: 'Category',
+            label: t('transactionForm.category'),
             value: categoryValue,
-            placeholder: 'Select category',
+            placeholder: t('transactionForm.selectCategory'),
             onOpen: syncCategoryDrillToSelection,
           })}
           {pickerRow({
@@ -1432,7 +1440,7 @@ export function TransactionForm({
                 {optionList(
                   [
                     { value: '', label: t('transactionForm.repeatNever') },
-                    ...RECURRING_FREQUENCIES.map((f) => ({ value: f.value, label: f.label })),
+                    ...RECURRING_FREQUENCIES.map((f) => ({ value: f.value, label: ui(f.label) })),
                   ],
                   recurringFrequency,
                   (value) => {
@@ -1680,9 +1688,9 @@ export function TransactionForm({
 
           {desktopCombo({
             id: 'category',
-            label: 'Category',
+            label: t('transactionForm.category'),
             valueText: categoryValue,
-            placeholder: 'Select category',
+            placeholder: t('transactionForm.selectCategory'),
             hiddenName: 'category_id',
             hiddenValue: categoryId,
             body: categoryPickerBody(),
@@ -1724,7 +1732,7 @@ export function TransactionForm({
               <option value="">{t('transactionForm.repeatNever')}</option>
               {RECURRING_FREQUENCIES.map((frequency) => (
                 <option key={frequency.value} value={frequency.value}>
-                  {frequency.label}
+                  {ui(frequency.label)}
                 </option>
               ))}
             </SelectField>

@@ -1,9 +1,13 @@
 import Link from 'next/link'
 import { ArrowDownRight, ArrowUpRight, PiggyBank, TrendingUp } from 'lucide-react'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { Callout } from '@/components/callout'
 import { LineTrendChart } from '@/components/analysis/charts'
 import { formatCurrency, formatCurrencyCompact, formatPercent } from '@/lib/format'
+import { getLocale } from '@/lib/i18n/server'
+import { localeToBcp47 } from '@/lib/format'
+import type { Locale } from '@/lib/i18n/dictionaries'
 import { cn } from '@/lib/utils'
 import { getDashboardTrend } from '@/app/dashboard/trend-actions'
 import {
@@ -32,13 +36,14 @@ function parseRange(range: string | undefined): (typeof RANGES)[number] {
 function deltaLabel(
   current: number,
   previous: number,
+  locale: Locale,
   higherIsBad = false
 ): { text: string; good: boolean } | null {
   if (previous === 0) return null
   const diff = (current - previous) / Math.abs(previous)
   if (Math.abs(diff) < 0.0005) return { text: 'No change vs prev. month', good: true }
   const isUp = diff > 0
-  const pct = new Intl.NumberFormat('en-CA', {
+  const pct = new Intl.NumberFormat(localeToBcp47(locale), {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   }).format(Math.abs(diff) * 100)
@@ -47,6 +52,7 @@ function deltaLabel(
 
 export default async function TrendsPage({ searchParams }: TrendsPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
   const month = parseMonthParam(params.month)
   const range = parseRange(params.range)
   const ctx = await getHousehold()
@@ -54,7 +60,7 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
 
   const months = lastNMonths(month, range)
   const [series, netWorthResult] = await Promise.all([
-    getMonthlySeries(ctx, months),
+    getMonthlySeries(ctx, months, locale),
     getDashboardTrend('net-worth', month, range),
   ])
   const netWorth = netWorthResult.ok ? netWorthResult.data : []
@@ -83,9 +89,9 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
   const lastNetWorth = netWorth[netWorth.length - 1]?.value ?? 0
   const netWorthChange = lastNetWorth - firstNetWorth
 
-  const incomeDelta = deltaLabel(thisMonth.income, prevMonth.income, false)
-  const expensesDelta = deltaLabel(thisMonth.expenses, prevMonth.expenses, true)
-  const savingsDelta = deltaLabel(thisMonth.savings, prevMonth.savings, false)
+  const incomeDelta = deltaLabel(thisMonth.income, prevMonth.income, locale, false)
+  const expensesDelta = deltaLabel(thisMonth.expenses, prevMonth.expenses, locale, true)
+  const savingsDelta = deltaLabel(thisMonth.savings, prevMonth.savings, locale, false)
 
   const hasActivity =
     series.some((m) => m.income !== 0 || m.expenses !== 0) || netWorth.some((p) => p.value !== 0)
@@ -93,7 +99,7 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
   const kpis = [
     {
       label: 'Avg. monthly income',
-      value: formatCurrency(avgIncome, currency),
+      value: formatCurrency(avgIncome, currency, locale),
       valueClass: 'text-emerald-600 dark:text-emerald-400',
       sub: incomeDelta,
       icon: <ArrowUpRight />,
@@ -101,7 +107,7 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
     },
     {
       label: 'Avg. monthly spending',
-      value: formatCurrency(avgExpenses, currency),
+      value: formatCurrency(avgExpenses, currency, locale),
       valueClass: 'text-red-600 dark:text-red-400',
       sub: expensesDelta,
       icon: <ArrowDownRight />,
@@ -109,7 +115,7 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
     },
     {
       label: 'Avg. monthly savings',
-      value: `${avgSavings >= 0 ? '+' : '−'}${formatCurrency(Math.abs(avgSavings), currency)}`,
+      value: `${avgSavings >= 0 ? '+' : '−'}${formatCurrency(Math.abs(avgSavings), currency, locale)}`,
       valueClass: avgSavings >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
       sub: savingsDelta,
       icon: <PiggyBank />,
@@ -117,7 +123,7 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
     },
     {
       label: 'Net worth change',
-      value: `${netWorthChange >= 0 ? '+' : '−'}${formatCurrency(Math.abs(netWorthChange), currency)}`,
+      value: `${netWorthChange >= 0 ? '+' : '−'}${formatCurrency(Math.abs(netWorthChange), currency, locale)}`,
       valueClass: netWorthChange >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
       sub: { text: `over the last ${range} months`, good: netWorthChange >= 0 },
       icon: <TrendingUp />,
@@ -128,6 +134,7 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
   const labels = series.map((m) => m.label)
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-[1340px] flex-col gap-4 p-4 sm:p-6">
       <PageHeader
         eyebrow="Analysis"
@@ -198,7 +205,7 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
         </p>
         <LineTrendChart
           labels={labels}
-          formatValue={(v) => formatCurrencyCompact(v, currency)}
+          formatValue={(v) => formatCurrencyCompact(v, currency, locale)}
           series={[
             { key: 'expenses', label: 'Expenses', color: NEGATIVE_COLOR, values: series.map((m) => m.expenses), area: true },
             { key: 'income', label: 'Income', color: POSITIVE_COLOR, values: series.map((m) => m.income), dashed: true },
@@ -213,7 +220,7 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
           <p className="mb-3 text-xs text-muted-foreground">Income minus expenses each month.</p>
           <LineTrendChart
             labels={labels}
-            formatValue={(v) => formatCurrencyCompact(v, currency)}
+            formatValue={(v) => formatCurrencyCompact(v, currency, locale)}
             series={[
               { key: 'savings', label: 'Savings', color: ACCENT_COLOR, values: series.map((m) => m.savings), area: true },
             ]}
@@ -225,7 +232,7 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
           <p className="mb-3 text-xs text-muted-foreground">Assets minus liabilities at each month-end.</p>
           <LineTrendChart
             labels={netWorth.length ? netWorth.map((p) => p.label) : labels}
-            formatValue={(v) => formatCurrencyCompact(v, currency)}
+            formatValue={(v) => formatCurrencyCompact(v, currency, locale)}
             series={[
               {
                 key: 'net-worth',
@@ -277,10 +284,10 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
                 <tr key={m.month} className="border-b last:border-0">
                   <td className="py-2.5 pr-4 text-left font-medium">{m.label}</td>
                   <td className="py-2.5 pr-4 text-right text-emerald-600 dark:text-emerald-400">
-                    {formatCurrency(m.income, currency)}
+                    {formatCurrency(m.income, currency, locale)}
                   </td>
                   <td className="py-2.5 pr-4 text-right text-red-600 dark:text-red-400">
-                    {formatCurrency(m.expenses, currency)}
+                    {formatCurrency(m.expenses, currency, locale)}
                   </td>
                   <td
                     className={cn(
@@ -290,10 +297,10 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
                         : 'text-red-600 dark:text-red-400'
                     )}
                   >
-                    {`${m.savings >= 0 ? '+' : '−'}${formatCurrency(Math.abs(m.savings), currency)}`}
+                    {`${m.savings >= 0 ? '+' : '−'}${formatCurrency(Math.abs(m.savings), currency, locale)}`}
                   </td>
                   <td className="py-2.5 text-right text-muted-foreground">
-                    {formatPercent(m.savingsRate)}
+                    {formatPercent(m.savingsRate, locale)}
                   </td>
                 </tr>
               ))}
@@ -302,5 +309,6 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
         </div>
       </div>
     </main>
+    </LocalizedClientBoundary>
   )
 }

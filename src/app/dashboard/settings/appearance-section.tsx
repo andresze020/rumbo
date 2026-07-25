@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
 const THEMES = [
   { value: 'system', label: 'System' },
@@ -12,6 +13,7 @@ const THEMES = [
 ] as const
 
 export function AppearanceSection() {
+  const ui = useUiTranslation()
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
@@ -23,8 +25,8 @@ export function AppearanceSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Appearance</CardTitle>
-        <CardDescription>Choose your preferred color theme.</CardDescription>
+        <CardTitle>{ui('Appearance')}</CardTitle>
+        <CardDescription>{ui('Choose your preferred color theme.')}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex gap-2">
@@ -40,7 +42,7 @@ export function AppearanceSection() {
                   : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
             >
-              {label}
+              {ui(label)}
             </button>
           ))}
         </div>

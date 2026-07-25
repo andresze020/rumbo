@@ -11,9 +11,13 @@ import { ArchiveToast } from '@/components/archive-toast'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Callout } from '@/components/callout'
+import { localeToBcp47 } from '@/lib/format'
+import type { Locale } from '@/lib/i18n/dictionaries'
+import { getLocale } from '@/lib/i18n/server'
+import { createUiTranslator } from '@/lib/i18n/ui'
 import { cn } from '@/lib/utils'
 
 type TagsPageProps = {
@@ -61,11 +65,11 @@ function tagsPath({
 }
 
 /** Short, locale-stable "last used" date (matches lib/format's en-CA base). */
-function formatLastUsed(date: string | null) {
+function formatLastUsed(date: string | null, locale: Locale) {
   if (!date) return null
   const parsed = new Date(`${date}T00:00:00`)
   if (Number.isNaN(parsed.getTime())) return null
-  return parsed.toLocaleDateString('en-CA', {
+  return parsed.toLocaleDateString(localeToBcp47(locale), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -74,6 +78,8 @@ function formatLastUsed(date: string | null) {
 
 export default async function TagsPage({ searchParams }: TagsPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
+  const ui = createUiTranslator(locale)
   const errorMessage = typeof params.error === 'string' ? params.error : null
   const showArchived = params.showArchived === 'true'
   const searchQuery = typeof params.q === 'string' ? params.q.trim() : ''
@@ -134,7 +140,7 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
     color: tag.color,
     isArchived: tag.isArchived,
     txnCount: tag.txnCount,
-    lastUsedLabel: formatLastUsed(tag.lastTxnDate),
+    lastUsedLabel: formatLastUsed(tag.lastTxnDate, locale),
     editHref: tagsPath({ showArchived, q: searchQuery, edit: tag.id }),
     transactionsHref: `/dashboard/transactions?tag_id=${tag.id}`,
   }))
@@ -150,10 +156,10 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
         eyebrow={household.name}
         title={
           <span className="flex items-center gap-1.5">
-            Tags
+            {ui('Tags')}
             <InfoTooltip
-              label="Tags"
-              text="Free-form labels you can attach to any transaction (e.g. vacation-2026, reimbursable). Unlike categories, a transaction can carry several, and tags never affect reports or budgets."
+              label={ui('Tags')}
+              text={ui('Free-form labels you can attach to any transaction (e.g. vacation-2026, reimbursable). Unlike categories, a transaction can carry several, and tags never affect reports or budgets.')}
             />
           </span>
         }
@@ -165,13 +171,13 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
               className={buttonVariants({ size: 'sm' })}
             >
               <Plus aria-hidden="true" />
-              New
+              {ui('New')}
             </Link>
             <Link
               href={tagsPath({ showArchived: !showArchived, q: searchQuery })}
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
-              {showArchived ? 'Hide archived' : 'Show archived'}
+              {ui(showArchived ? 'Hide archived' : 'Show archived')}
             </Link>
           </>
         }
@@ -181,20 +187,20 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
         <Link
           href="/dashboard/more"
           className={buttonVariants({ variant: 'outline', size: 'icon' })}
-          aria-label="Back to More"
+          aria-label={ui('Back to More')}
         >
           <ArrowLeft aria-hidden="true" />
         </Link>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[15px] font-bold leading-tight">Tags</h1>
-          <p className="truncate text-[11px] text-muted-foreground">Transaction labels</p>
+          <h1 className="truncate text-[15px] font-bold leading-tight">{ui('Tags')}</h1>
+          <p className="truncate text-[11px] text-muted-foreground">{ui('Transaction labels')}</p>
         </div>
         <Link
           href={tagsPath({ showArchived, q: searchQuery, mode: 'create' })}
           className={buttonVariants({ size: 'sm' })}
         >
           <Plus aria-hidden="true" />
-          New
+          {ui('New')}
         </Link>
       </div>
 
@@ -208,8 +214,8 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
 
       {/* ── Notifications ──────────────────────────────────────────────── */}
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
-      {params.created === '1' ? <Callout variant="success">Tag created.</Callout> : null}
-      {params.updated === '1' ? <Callout variant="success">Tag updated.</Callout> : null}
+      {params.created === '1' ? <Callout variant="success">{ui('Tag created.')}</Callout> : null}
+      {params.updated === '1' ? <Callout variant="success">{ui('Tag updated.')}</Callout> : null}
 
       {/* ── Summary cards ──────────────────────────────────────────────── */}
       <div className="hidden gap-4 md:grid sm:grid-cols-3">
@@ -275,13 +281,13 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
             <input
               name="q"
               defaultValue={searchQuery}
-              placeholder="Search tags..."
+              placeholder={ui('Search tags...')}
               className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
           <button
             type="submit"
-            aria-label="Search tags"
+            aria-label={ui('Search tags')}
             className={buttonVariants({ variant: 'outline', size: 'icon' })}
           >
             <Search aria-hidden="true" />
@@ -292,13 +298,13 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
           href={tagsPath({ showArchived: !showArchived, q: searchQuery })}
           className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'hidden sm:ml-auto md:inline-flex')}
         >
-          {showArchived ? 'Hide archived' : 'Show archived'}
+          {ui(showArchived ? 'Hide archived' : 'Show archived')}
         </Link>
       </div>
 
       {/* ── Tag list ───────────────────────────────────────────────────── */}
       {tagsError ? (
-        <Callout variant="error">Could not load tags. Try refreshing.</Callout>
+        <Callout variant="error">{ui('Could not load tags. Try refreshing.')}</Callout>
       ) : rows.length ? (
         <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
           {rows.map((tag) => (

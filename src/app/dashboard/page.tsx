@@ -24,7 +24,7 @@ import {
 import { MetricCard } from '@/components/metric-card'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { GettingStartedChecklist } from '@/components/getting-started-checklist'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { Callout } from '@/components/callout'
 import { FinancialHeroCard } from '@/components/financial-hero-card'
 import { InsightCard, type InsightTone } from '@/components/insight-card'
@@ -803,7 +803,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           {!hasMonthlyActivity ? (
             <Callout variant="info" className="border-dashed text-muted-foreground">
-              {t('dashboard.noActivity', { month: formatMonthLabel(selectedMonth) })}
+              {t('dashboard.noActivity', { month: formatMonthLabel(selectedMonth, locale) })}
             </Callout>
           ) : null}
 
@@ -861,7 +861,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div className={cn(cardClass, 'p-4 sm:p-5')}>
                   <h2 className="mb-3 text-sm font-bold">{t('dashboard.budgetTitle')}</h2>
                   <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                    {t('dashboard.noBudget', { month: formatMonthLabel(selectedMonth) })}{' '}
+                    {t('dashboard.noBudget', { month: formatMonthLabel(selectedMonth, locale) })}{' '}
                     <Link href={`/dashboard/budgets?month=${selectedMonth}`} className="underline underline-offset-2 hover:text-foreground">
                       {t('dashboard.createBudget')}
                     </Link>
@@ -879,7 +879,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <CategoryDonut data={donutData} currency={dashboardCurrency} total={monthlyExpenses} totalLabel={t('dashboard.budgetTotal')} month={selectedMonth} />
                     ) : (
                       <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                        {t('dashboard.expensesByCategoryEmpty', { month: formatMonthLabel(selectedMonth) })}
+                        {t('dashboard.expensesByCategoryEmpty', { month: formatMonthLabel(selectedMonth, locale) })}
                       </p>
                     )}
                   </div>

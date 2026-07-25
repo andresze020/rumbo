@@ -22,7 +22,8 @@ import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MonthNav } from '@/components/month-nav'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
@@ -391,6 +392,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   }
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 pb-24 sm:gap-6 sm:p-6">
       {/* Header */}
       <PageHeader
@@ -402,7 +404,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
             <InfoTooltip term="allocations" label="Budgets" />
           </span>
         }
-        description={`Planned vs actual for ${formatMonthLabel(selectedMonth)}.`}
+        description={`Planned vs actual for ${formatMonthLabel(selectedMonth, locale)}.`}
         actions={
           <>
             <MonthNav
@@ -426,7 +428,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[15px] font-bold leading-tight">Budgets</h1>
           <p className="truncate text-[11px] text-muted-foreground">
-            {formatMonthLabel(selectedMonth)}
+            {formatMonthLabel(selectedMonth, locale)}
           </p>
         </div>
         {renderAddLineButton('New')}
@@ -460,7 +462,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
 
       {!budgetError && !budget ? (
         <div className="rounded-2xl border border-dashed bg-card/50 p-6 text-center shadow-sm shadow-black/[0.03] md:p-8">
-          <p className="font-semibold">No budget for {formatMonthLabel(selectedMonth)}</p>
+          <p className="font-semibold">No budget for {formatMonthLabel(selectedMonth, locale)}</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
             A budget lets you set a monthly spending limit per category. Once
             set, the dashboard shows how close you are to each limit.
@@ -638,7 +640,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
             <div className="flex items-end justify-between gap-3">
               <SectionHeading
                 title="Budget lines"
-                description={`${formatMonthLabel(selectedMonth)} - ${overBudgetCount} over budget.`}
+                description={`${formatMonthLabel(selectedMonth, locale)} - ${overBudgetCount} over budget.`}
               />
               <div className="hidden shrink-0 items-center gap-2 md:flex">
                 {renderCopyPreviousForm()}
@@ -706,5 +708,6 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
         </>
       ) : null}
     </main>
+    </LocalizedClientBoundary>
   )
 }

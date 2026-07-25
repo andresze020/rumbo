@@ -101,7 +101,7 @@ export async function quickCreateCategory(
       reporting_type: reportingType,
       parent_category_id: parentId,
     })
-    .select('id, name, category_type, reporting_type, parent_category_id, icon, color')
+    .select('id, name, category_type, reporting_type, parent_category_id, icon, color, is_system')
     .single()
 
   if (error || !data) {

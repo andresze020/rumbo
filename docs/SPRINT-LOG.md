@@ -15,6 +15,21 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Full UI localization + persisted language preference (2026-07-25)
+- Goal: remove residual English text from every authenticated view and make the
+  selected language follow the user across browsers and devices.
+- Shipped: complete English, Spanish, and Canadian French coverage for static
+  and dynamic UI; localized dates and system-category names; AST coverage guard
+  (`npm run i18n:check`, 1,036 visible phrases × 2 translated locales);
+  `profiles.locale` persistence with `af_locale` restored during password and
+  OAuth login.
+- Migrations added: none (`profiles.locale` and own-profile update RLS already
+  existed).
+- Tables changed: `profiles` data only; no schema change.
+- Follow-ups / known gaps: manually confirm the cross-browser flow by selecting
+  a language, signing out, and signing into the same account in an incognito
+  window.
+
 ## BR-023 tags + BR-024 CSV presets/revert (2026-07-22, in review)
 - Goal: two backlog items — a flexible tagging layer, and CSV importer
   quality-of-life (reusable mappings + an undo for a whole import.)

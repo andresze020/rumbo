@@ -1,34 +1,29 @@
-'use client'
-
 import type { ReactNode } from 'react'
+import { getLocale } from '@/lib/i18n/server'
+import { createUiTranslator } from '@/lib/i18n/ui'
 import { cn } from '@/lib/utils'
-import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
-type PageHeaderProps = {
-  /** Small muted line above the title — e.g. the household name. */
+type ServerPageHeaderProps = {
   eyebrow?: ReactNode
   title: ReactNode
   description?: ReactNode
-  /** Right-aligned controls (buttons, month picker, etc.). */
   actions?: ReactNode
   className?: string
 }
 
-/**
- * Consistent page heading used across every dashboard module so titles,
- * subtitles and primary actions line up the same way everywhere.
- */
-export function PageHeader({
+/** Server-rendered page header so localized copy is correct on first paint. */
+export async function ServerPageHeader({
   eyebrow,
   title,
   description,
   actions,
   className,
-}: PageHeaderProps) {
-  const ui = useUiTranslation()
+}: ServerPageHeaderProps) {
+  const ui = createUiTranslator(await getLocale())
   const localizedTitle = typeof title === 'string' ? ui(title) : title
   const localizedDescription =
     typeof description === 'string' ? ui(description) : description
+
   return (
     <div
       className={cn(
@@ -49,7 +44,6 @@ export function PageHeader({
           <p className="text-sm text-muted-foreground">{localizedDescription}</p>
         ) : null}
       </div>
-
       {actions ? (
         <div className="flex flex-wrap items-end gap-2">{actions}</div>
       ) : null}

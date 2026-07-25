@@ -20,6 +20,7 @@ export type QuickAddCategory = {
   parent_category_id: string | null
   icon: string | null
   color: string | null
+  is_system?: boolean
 }
 
 export type QuickAddPayee = {
@@ -76,7 +77,7 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
         .order('name', { ascending: true }),
       supabase
         .from('categories')
-        .select('id, name, category_type, reporting_type, parent_category_id, icon, color')
+        .select('id, name, category_type, reporting_type, parent_category_id, icon, color, is_system')
         .eq('household_id', householdId)
         .eq('is_archived', false)
         .is('deleted_at', null)

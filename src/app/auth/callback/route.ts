@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { LOCALE_COOKIE, normalizeLocale } from '@/lib/i18n/server'
 import { createClient } from '@/lib/supabase/server'
 
 export async function GET(request: Request) {
@@ -28,13 +29,25 @@ export async function GET(request: Request) {
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('default_household_id')
+      .select('default_household_id, locale')
       .eq('id', user.id)
       .maybeSingle()
 
     if (!profile?.default_household_id) {
       return NextResponse.redirect(`${origin}/onboarding`)
     }
+
+    const response = NextResponse.redirect(`${origin}/dashboard`)
+    const locale = normalizeLocale(profile.locale)
+    if (locale) {
+      response.cookies.set(LOCALE_COOKIE, locale, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      })
+    }
+    return response
   }
 
   return NextResponse.redirect(`${origin}/dashboard`)

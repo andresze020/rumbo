@@ -25,7 +25,8 @@ import { BalanceAmount } from '@/components/balance-amount'
 import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
 import { ArchiveToast } from '@/components/archive-toast'
 import { EmptyState } from '@/components/empty-state'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
@@ -796,6 +797,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     accountEntriesError
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <PageHeader
         eyebrow={household.name}
@@ -972,5 +974,6 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
         )}
       </section>
     </main>
+    </LocalizedClientBoundary>
   )
 }
