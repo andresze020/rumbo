@@ -229,62 +229,8 @@ export type MerchantSlice = {
   value: number
   count: number
 }
-
-type TxRow = { id: string; merchant_name: string | null }
-type EntryRow = { transaction_id: string; amount_base_currency: number | string }
-
-/**
- * Top merchants by posted expense spend for a month, in base currency.
- * Expense outflows are stored as negative entry amounts, so we sum the
- * absolute value of negative `amount_base_currency` per merchant.
- */
-export async function getTopMerchants(
-  ctx: HouseholdContext,
-  month: string,
-  limit = 8
-): Promise<MerchantSlice[]> {
-  const start = monthStartDate(month)
-  const end = monthEndDate(month)
-  const { data: txRows } = await ctx.supabase
-    .from('transactions')
-    .select('id, merchant_name')
-    .eq('household_id', ctx.household.id)
-    .eq('transaction_type', 'expense')
-    .neq('status', 'voided')
-    .is('deleted_at', null)
-    .gte('transaction_date', start)
-    .lte('transaction_date', end)
-
-  const txs = (txRows ?? []) as TxRow[]
-  if (txs.length === 0) return []
-  const merchantByTx = new Map(txs.map((t) => [t.id, t.merchant_name?.trim() || 'Uncategorized']))
-
-  const { data: entryRows } = await ctx.supabase
-    .from('transaction_entries')
-    .select('transaction_id, amount_base_currency')
-    .eq('household_id', ctx.household.id)
-    .in(
-      'transaction_id',
-      txs.map((t) => t.id)
-    )
-
-  const totals = new Map<string, { value: number; count: number }>()
-  for (const entry of (entryRows ?? []) as EntryRow[]) {
-    const amount = Number(entry.amount_base_currency)
-    if (amount >= 0) continue
-    const merchant = merchantByTx.get(entry.transaction_id)
-    if (!merchant) continue
-    const current = totals.get(merchant) ?? { value: 0, count: 0 }
-    current.value += Math.abs(amount)
-    current.count += 1
-    totals.set(merchant, current)
-  }
-
-  return [...totals.entries()]
-    .map(([name, agg]) => ({ name, value: agg.value, count: agg.count }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, limit)
-}
+// The month-scoped merchant aggregation lives in the filter-aware
+// `getReportData` (lib/analysis/report-query.ts); this type is shared with it.
 
 // ── Budget details ───────────────────────────────────────────────────────────
 
