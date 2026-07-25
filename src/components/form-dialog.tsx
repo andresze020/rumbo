@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
 export function FormDialog({
   title,
@@ -24,6 +25,7 @@ export function FormDialog({
   wide?: boolean
 }) {
   const router = useRouter()
+  const ui = useUiTranslation()
   const [open, setOpen] = useState(true)
 
   function handleOpenChange(nextOpen: boolean) {
@@ -47,9 +49,9 @@ export function FormDialog({
       >
         <div aria-hidden="true" className="mx-auto -mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle>{ui(title)}</DialogTitle>
           {description ? (
-            <DialogDescription>{description}</DialogDescription>
+            <DialogDescription>{ui(description)}</DialogDescription>
           ) : null}
         </DialogHeader>
         {children}

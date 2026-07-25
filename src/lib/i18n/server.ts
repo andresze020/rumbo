@@ -8,8 +8,14 @@ export function isLocale(value: string): value is Locale {
   return (LOCALES as string[]).includes(value)
 }
 
+export function normalizeLocale(value: string | null | undefined): Locale | null {
+  if (!value) return null
+
+  const language = value.trim().toLowerCase().split(/[-_]/)[0]
+  return isLocale(language) ? language : null
+}
+
 export async function getLocale(): Promise<Locale> {
   const store = await cookies()
-  const value = store.get(LOCALE_COOKIE)?.value
-  return value && isLocale(value) ? value : DEFAULT_LOCALE
+  return normalizeLocale(store.get(LOCALE_COOKIE)?.value) ?? DEFAULT_LOCALE
 }

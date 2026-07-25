@@ -5,6 +5,7 @@ import { Autocomplete } from '@base-ui/react/autocomplete'
 import { Plus, Store } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
 export type PayeeOption = {
   id: string
@@ -56,6 +57,7 @@ export function PayeePicker({
   value,
   onValueChange,
 }: PayeePickerProps) {
+  const ui = useUiTranslation()
   const generatedId = useId()
   const id = inputId ?? `payee_${generatedId}`
 
@@ -107,7 +109,7 @@ export function PayeePicker({
           <Autocomplete.Input
             id={id}
             name="payee_name"
-            placeholder="Search or add a payee"
+            placeholder={ui('Search or add a payee')}
             render={<Input className="pl-10" />}
           />
         </div>
@@ -125,7 +127,7 @@ export function PayeePicker({
         >
           <Autocomplete.Popup className="max-h-(--available-height) w-(--anchor-width) min-w-[12rem] overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10">
             <Autocomplete.Empty className="px-2 py-2 text-sm text-muted-foreground">
-              No payees yet — type a name to create one.
+              {ui('No payees yet — type a name to create one.')}
             </Autocomplete.Empty>
 
             <Autocomplete.List>
@@ -147,7 +149,8 @@ export function PayeePicker({
                   >
                     <Plus className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
                     <span className="min-w-0 flex-1 truncate">
-                      Create “<span className="font-semibold">{item.name}</span>”
+                      {ui('Create “')}
+                      <span className="font-semibold">{item.name}</span>”
                     </span>
                   </Autocomplete.Item>
                 )
@@ -156,7 +159,7 @@ export function PayeePicker({
 
             {hiddenCount > 0 ? (
               <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                {hiddenCount} more — keep typing to narrow.
+                {hiddenCount} {ui('more — keep typing to narrow.')}
               </p>
             ) : null}
           </Autocomplete.Popup>

@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useLanguage } from '@/components/language-provider'
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
+  const { t } = useLanguage()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -17,9 +19,9 @@ export function ThemeToggle() {
   const isDark = mounted && resolvedTheme === 'dark'
   const label = mounted
     ? isDark
-      ? 'Switch to light mode'
-      : 'Switch to dark mode'
-    : 'Toggle color mode'
+      ? t('nav.switchToLightMode')
+      : t('nav.switchToDarkMode')
+    : t('nav.toggleColorMode')
 
   return (
     <Button

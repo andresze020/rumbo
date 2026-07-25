@@ -7,7 +7,8 @@ import {
   Sparkles,
   Layers,
 } from 'lucide-react'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { Callout } from '@/components/callout'
 import { EmptyState } from '@/components/empty-state'
 import { buttonVariants } from '@/components/ui/button'
@@ -352,6 +353,7 @@ export default async function DebtPlannerPage({ searchParams }: DebtPlannerPageP
   ]
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-[1340px] flex-col gap-4 p-4 sm:p-6">
       <PageHeader
         eyebrow="Planning"
@@ -602,5 +604,6 @@ export default async function DebtPlannerPage({ searchParams }: DebtPlannerPageP
         financial advice.
       </Callout>
     </main>
+    </LocalizedClientBoundary>
   )
 }

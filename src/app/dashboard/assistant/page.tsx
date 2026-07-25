@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { AssistantChat } from './assistant-chat'
 import { Callout } from '@/components/callout'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { createClient } from '@/lib/supabase/server'
 
 type AssistantPageProps = {
@@ -43,7 +43,7 @@ export default async function AssistantPage({ searchParams }: AssistantPageProps
 
   const { data: categoryRows } = await supabase
     .from('categories')
-    .select('id, name, category_type, reporting_type, parent_category_id, icon')
+    .select('id, name, category_type, reporting_type, parent_category_id, icon, is_system')
     .eq('household_id', household.id)
     .is('deleted_at', null)
     .eq('is_archived', false)

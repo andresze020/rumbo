@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
 type ArchiveConfirmButtonProps = {
   action: (formData: FormData) => void | Promise<void>
@@ -36,10 +37,14 @@ export function ArchiveConfirmButton({
   cancelLabel,
   confirmLabel,
 }: ArchiveConfirmButtonProps) {
+  const ui = useUiTranslation()
+  const translated = (value: ReactNode) =>
+    typeof value === 'string' ? ui(value) : value
+
   return (
     <AlertDialog>
       <AlertDialogTrigger render={<Button type="button" variant="secondary" size="sm" />}>
-        {triggerLabel}
+        {translated(triggerLabel)}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <form action={action}>
@@ -47,13 +52,13 @@ export function ArchiveConfirmButton({
             <input key={name} type="hidden" name={name} value={value} />
           ))}
           <AlertDialogHeader>
-            <AlertDialogTitle>{title}</AlertDialogTitle>
-            <AlertDialogDescription>{description}</AlertDialogDescription>
+            <AlertDialogTitle>{translated(title)}</AlertDialogTitle>
+            <AlertDialogDescription>{translated(description)}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
-            <SubmitButton type="submit" variant="secondary" size="sm" pendingText={pendingLabel}>
-              {confirmLabel}
+            <AlertDialogCancel>{translated(cancelLabel)}</AlertDialogCancel>
+            <SubmitButton type="submit" variant="secondary" size="sm" pendingText={ui(pendingLabel)}>
+              {translated(confirmLabel)}
             </SubmitButton>
           </AlertDialogFooter>
         </form>

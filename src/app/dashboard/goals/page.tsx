@@ -9,11 +9,14 @@ import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { MetricCard } from '@/components/metric-card'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { ArchiveToast } from '@/components/archive-toast'
 import { formatCurrency } from '@/lib/format'
+import { getLocale } from '@/lib/i18n/server'
+import { translate } from '@/lib/i18n/translate'
 import { setGoalStatusAction } from './actions'
 
 type GoalsPageProps = {
@@ -54,6 +57,7 @@ type Account = {
 
 export default async function GoalsPage({ searchParams }: GoalsPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
   const errorMessage = typeof params.error === 'string' ? params.error : null
   const isCreating = params.mode === 'create'
   const editId = typeof params.edit === 'string' ? params.edit : null
@@ -139,10 +143,12 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
       editHref: `/dashboard/goals?edit=${goal.id}`,
       contributeHref: `/dashboard/goals?contribute=${goal.id}`,
       withdrawHref: `/dashboard/goals?withdraw=${goal.id}`,
+      locale,
     }
   }
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <PageHeader
         eyebrow={household.name}
@@ -195,8 +201,11 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
         />
         <MetricCard
           label="Total saved"
-          value={formatCurrency(totalSaved, baseCurrency)}
-          description={`Of ${formatCurrency(totalTarget, baseCurrency)} target, ${baseCurrency} goals`}
+          value={formatCurrency(totalSaved, baseCurrency, locale)}
+          description={translate(locale, 'goals.totalDescription', {
+            target: formatCurrency(totalTarget, baseCurrency, locale),
+            currency: baseCurrency,
+          })}
           icon={<Target />}
           accent="bg-muted text-muted-foreground"
         />
@@ -318,5 +327,6 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
         </div>
       )}
     </main>
+    </LocalizedClientBoundary>
   )
 }

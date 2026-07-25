@@ -1,10 +1,13 @@
 import Link from 'next/link'
 import { ArrowDownRight, ArrowUpRight, Wallet, Waves } from 'lucide-react'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { MonthNav } from '@/components/month-nav'
 import { Callout } from '@/components/callout'
 import { CashFlowBars, LineTrendChart } from '@/components/analysis/charts'
 import { formatCurrency, formatCurrencyCompact, formatPercent } from '@/lib/format'
+import { getLocale } from '@/lib/i18n/server'
+import type { Locale } from '@/lib/i18n/dictionaries'
 import { cn } from '@/lib/utils'
 import {
   getHousehold,
@@ -33,13 +36,14 @@ const RANGES = [
 const POSITIVE_CLASS = 'text-emerald-600 dark:text-emerald-400'
 const NEGATIVE_CLASS = 'text-red-600 dark:text-red-400'
 
-function signedCurrency(value: number, currency: string): string {
+function signedCurrency(value: number, currency: string, locale: Locale): string {
   const sign = value >= 0 ? '+' : '−'
-  return `${sign}${formatCurrency(Math.abs(value), currency)}`
+  return `${sign}${formatCurrency(Math.abs(value), currency, locale)}`
 }
 
 export default async function CashFlowPage({ searchParams }: CashFlowPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
   const month = parseMonthParam(params.month)
   const range = params.range === '12' ? 12 : 6
   const rangeKey = String(range)
@@ -49,7 +53,7 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
 
   const months = lastNMonths(month, range)
   const [series, categoryLookup] = await Promise.all([
-    getMonthlySeries(ctx, months),
+    getMonthlySeries(ctx, months, locale),
     getCategoryLookup(ctx),
   ])
   const categories = await getExpenseCategories(ctx, month, categoryLookup)
@@ -87,28 +91,28 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
   const kpis = [
     {
       label: 'Money in (avg/mo)',
-      value: formatCurrency(avgIncome, currency),
+      value: formatCurrency(avgIncome, currency, locale),
       valueClass: POSITIVE_CLASS,
       icon: <ArrowUpRight />,
       accent: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
     },
     {
       label: 'Money out (avg/mo)',
-      value: formatCurrency(avgExpenses, currency),
+      value: formatCurrency(avgExpenses, currency, locale),
       valueClass: NEGATIVE_CLASS,
       icon: <ArrowDownRight />,
       accent: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
     },
     {
       label: 'Net (avg/mo)',
-      value: signedCurrency(avgNet, currency),
+      value: signedCurrency(avgNet, currency, locale),
       valueClass: avgNet >= 0 ? POSITIVE_CLASS : NEGATIVE_CLASS,
       icon: <Waves />,
       accent: 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400',
     },
     {
       label: 'Net this month',
-      value: signedCurrency(thisMonth.savings, currency),
+      value: signedCurrency(thisMonth.savings, currency, locale),
       valueClass: thisMonth.savings >= 0 ? POSITIVE_CLASS : NEGATIVE_CLASS,
       icon: <Wallet />,
       accent: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
@@ -118,6 +122,7 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
   const reversed = [...series].reverse()
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-[1340px] flex-col gap-4 p-4 sm:p-6">
       <PageHeader
         eyebrow="Analysis"
@@ -180,7 +185,7 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
 
       {!hasActivity ? (
         <Callout variant="info" className="border-dashed text-muted-foreground">
-          No posted income or expense activity in the last {range} months ending {longMonthLabel(month)}.
+          No posted income or expense activity in the last {range} months ending {longMonthLabel(month, locale)}.
         </Callout>
       ) : null}
 
@@ -192,7 +197,7 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
         </p>
         <CashFlowBars
           data={barData}
-          formatValue={(v) => formatCurrencyCompact(v, currency)}
+          formatValue={(v) => formatCurrencyCompact(v, currency, locale)}
           incomeColor={POSITIVE_COLOR}
           expenseColor={NEGATIVE_COLOR}
         />
@@ -207,7 +212,7 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
           </p>
           <LineTrendChart
             labels={series.map((m) => m.label)}
-            formatValue={(v) => formatCurrencyCompact(v, currency)}
+            formatValue={(v) => formatCurrencyCompact(v, currency, locale)}
             series={[
               {
                 key: 'cumulative',
@@ -221,7 +226,7 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
         </div>
 
         <div className={cn(CARD, 'p-4 sm:p-5')}>
-          <h2 className="mb-3 text-sm font-bold">Where it goes · {longMonthLabel(month)}</h2>
+          <h2 className="mb-3 text-sm font-bold">Where it goes · {longMonthLabel(month, locale)}</h2>
           {topCategories.length ? (
             <ul className="space-y-3">
               {topCategories.map((cat, i) => {
@@ -239,7 +244,7 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
                       />
                       <span className="min-w-0 flex-1 truncate text-muted-foreground">{cat.name}</span>
                       <span className="shrink-0 font-semibold tabular-nums">
-                        {formatCurrency(cat.value, currency)}
+                        {formatCurrency(cat.value, currency, locale)}
                       </span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -265,7 +270,7 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
             </ul>
           ) : (
             <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-              No category spending recorded for {longMonthLabel(month)}.
+              No category spending recorded for {longMonthLabel(month, locale)}.
             </p>
           )}
           <Link
@@ -294,12 +299,12 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
             <tbody>
               {reversed.map((m) => (
                 <tr key={m.month} className="border-b last:border-0">
-                  <td className="whitespace-nowrap py-2.5 pr-4 font-medium">{longMonthLabel(m.month)}</td>
+                  <td className="whitespace-nowrap py-2.5 pr-4 font-medium">{longMonthLabel(m.month, locale)}</td>
                   <td className={cn('py-2.5 pr-4 text-right tabular-nums', POSITIVE_CLASS)}>
-                    {formatCurrency(m.income, currency)}
+                    {formatCurrency(m.income, currency, locale)}
                   </td>
                   <td className="py-2.5 pr-4 text-right tabular-nums text-rose-600 dark:text-rose-400">
-                    {formatCurrency(m.expenses, currency)}
+                    {formatCurrency(m.expenses, currency, locale)}
                   </td>
                   <td
                     className={cn(
@@ -307,10 +312,10 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
                       m.savings >= 0 ? POSITIVE_CLASS : NEGATIVE_CLASS
                     )}
                   >
-                    {signedCurrency(m.savings, currency)}
+                    {signedCurrency(m.savings, currency, locale)}
                   </td>
                   <td className="py-2.5 text-right tabular-nums text-muted-foreground">
-                    {formatPercent(m.savingsRate)}
+                    {formatPercent(m.savingsRate, locale)}
                   </td>
                 </tr>
               ))}
@@ -319,5 +324,6 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
         </div>
       </div>
     </main>
+    </LocalizedClientBoundary>
   )
 }

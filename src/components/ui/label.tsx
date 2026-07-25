@@ -3,8 +3,10 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { useUiTranslation } from "@/lib/i18n/use-ui-translation"
 
-function Label({ className, ...props }: React.ComponentProps<"label">) {
+function Label({ className, children, ...props }: React.ComponentProps<"label">) {
+  const ui = useUiTranslation()
   return (
     <label
       data-slot="label"
@@ -13,7 +15,9 @@ function Label({ className, ...props }: React.ComponentProps<"label">) {
         className
       )}
       {...props}
-    />
+    >
+      {typeof children === "string" ? ui(children) : children}
+    </label>
   )
 }
 

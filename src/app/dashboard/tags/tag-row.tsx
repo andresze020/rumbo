@@ -7,6 +7,7 @@ import { SubmitButton } from '@/components/submit-button'
 import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
 import { TagChip } from '@/components/tag-chip'
 import { cn } from '@/lib/utils'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { archiveTagAction } from './actions'
 
 export type TagVM = {
@@ -27,6 +28,7 @@ export function TagRow({
   tag: TagVM
   showArchived: boolean
 }) {
+  const ui = useUiTranslation()
   const muted = tag.isArchived ? 'text-muted-foreground' : ''
 
   return (
@@ -41,13 +43,15 @@ export function TagRow({
           <TagChip name={tag.name} color={tag.color} className={muted} />
           {tag.isArchived ? (
             <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-              Archived
+              {ui('Archived')}
             </span>
           ) : null}
         </span>
         <span className="mt-1 block text-[11px] text-muted-foreground">
-          {tag.txnCount} {tag.txnCount === 1 ? 'transaction' : 'transactions'}
-          {tag.lastUsedLabel ? ` · last used ${tag.lastUsedLabel}` : ' · never used'}
+          {tag.txnCount} {ui(tag.txnCount === 1 ? 'transaction' : 'transactions')}
+          {tag.lastUsedLabel
+            ? ` ${ui(`· last used ${tag.lastUsedLabel}`)}`
+            : ` ${ui('· never used')}`}
         </span>
       </div>
 
@@ -56,8 +60,8 @@ export function TagRow({
           <Link
             href={tag.transactionsHref}
             className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}
-            aria-label={`View transactions tagged ${tag.name}`}
-            title="View transactions"
+            aria-label={ui(`View transactions tagged ${tag.name}`)}
+            title={ui('View transactions')}
           >
             <ArrowLeftRight className="size-3.5" aria-hidden="true" />
           </Link>
@@ -65,7 +69,7 @@ export function TagRow({
         <Link
           href={tag.editHref}
           className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}
-          aria-label={`Edit ${tag.name}`}
+          aria-label={ui(`Edit ${tag.name}`)}
         >
           <Pencil className="size-3.5" aria-hidden="true" />
         </Link>

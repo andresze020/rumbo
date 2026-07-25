@@ -4,7 +4,8 @@ import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { NetWorthHero } from '@/components/net-worth-hero'
 import { MonthNav } from '@/components/month-nav'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
@@ -336,6 +337,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
         : { label: 'High', className: 'text-rose-600 dark:text-rose-400' }
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -347,7 +349,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
             <InfoTooltip term="netWorth" label="Net worth" />
           </span>
         }
-        description={formatMonthLabel(selectedMonth)}
+        description={formatMonthLabel(selectedMonth, locale)}
         actions={
           <>
             <Link
@@ -388,7 +390,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
         deltaPct={netWorthDeltaPct}
         currency={household.base_currency}
         spark={sparkValues}
-        monthLabel={formatMonthLabel(selectedMonth)}
+        monthLabel={formatMonthLabel(selectedMonth, locale)}
         labels={{
           netWorth: 'Net worth',
           assets: 'Assets',
@@ -460,7 +462,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
                 className="grid gap-3 px-4 py-3 sm:grid-cols-[10rem_1fr_auto]"
               >
                 <div>
-                  <p className="text-sm font-medium">{formatMonthLabel(point.month)}</p>
+                  <p className="text-sm font-medium">{formatMonthLabel(point.month, locale)}</p>
                   <p className="text-xs text-muted-foreground">{point.monthEndDate}</p>
                 </div>
                 <div className="flex min-w-0 items-center">
@@ -503,5 +505,6 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
         </section>
       ) : null}
     </main>
+    </LocalizedClientBoundary>
   )
 }

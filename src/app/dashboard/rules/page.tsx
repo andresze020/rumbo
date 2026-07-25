@@ -7,7 +7,8 @@ import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Callout } from '@/components/callout'
 import { cn } from '@/lib/utils'
@@ -159,6 +160,7 @@ export default async function RulesPage({ searchParams }: RulesPageProps) {
   const cancelHref = rulesPath()
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
       {/* ── Header (desktop) ───────────────────────────────────────────── */}
       <PageHeader
@@ -296,5 +298,6 @@ export default async function RulesPage({ searchParams }: RulesPageProps) {
         category.
       </p>
     </main>
+    </LocalizedClientBoundary>
   )
 }

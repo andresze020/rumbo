@@ -3,6 +3,7 @@
 import { HelpCircle } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { GLOSSARY, type GlossaryTerm } from "@/lib/glossary"
+import { useUiTranslation } from "@/lib/i18n/use-ui-translation"
 import { cn } from "@/lib/utils"
 
 export function InfoTooltip({
@@ -19,6 +20,7 @@ export function InfoTooltip({
   label?: string
   className?: string
 }) {
+  const ui = useUiTranslation()
   const content = text ?? (term ? GLOSSARY[term] : undefined)
   if (!content) return null
 
@@ -30,12 +32,12 @@ export function InfoTooltip({
           "inline-flex shrink-0 items-center text-muted-foreground transition-colors hover:text-foreground",
           className
         )}
-        aria-label={label ?? "More information"}
+        aria-label={ui(label ?? "More information")}
         onClick={(e) => e.stopPropagation()}
       >
         <HelpCircle className="size-3.5" aria-hidden="true" />
       </TooltipTrigger>
-      <TooltipContent>{content}</TooltipContent>
+      <TooltipContent>{ui(content)}</TooltipContent>
     </Tooltip>
   )
 }

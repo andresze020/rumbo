@@ -6,6 +6,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
 import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
 import { cn } from '@/lib/utils'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { archivePayeeAction } from './actions'
 
 export type PayeeVM = {
@@ -26,6 +27,7 @@ export function PayeeRow({
   payee: PayeeVM
   showArchived: boolean
 }) {
+  const ui = useUiTranslation()
   const muted = payee.isArchived ? 'text-muted-foreground' : ''
 
   return (
@@ -47,13 +49,15 @@ export function PayeeRow({
           {payee.name}
           {payee.isArchived ? (
             <span className="ml-2 rounded-full bg-muted px-2 py-0.5 align-middle text-[10px] font-semibold text-muted-foreground">
-              Archived
+              {ui('Archived')}
             </span>
           ) : null}
         </span>
         <span className="mt-0.5 block text-[11px] text-muted-foreground">
-          {payee.txnCount} {payee.txnCount === 1 ? 'transaction' : 'transactions'}
-          {payee.lastUsedLabel ? ` · last used ${payee.lastUsedLabel}` : ' · never used'}
+          {payee.txnCount} {ui(payee.txnCount === 1 ? 'transaction' : 'transactions')}
+          {payee.lastUsedLabel
+            ? ` ${ui(`· last used ${payee.lastUsedLabel}`)}`
+            : ` ${ui('· never used')}`}
         </span>
       </div>
 
@@ -62,8 +66,8 @@ export function PayeeRow({
           <Link
             href={payee.transactionsHref}
             className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}
-            aria-label={`View transactions for ${payee.name}`}
-            title="View transactions"
+            aria-label={ui(`View transactions for ${payee.name}`)}
+            title={ui('View transactions')}
           >
             <ArrowLeftRight className="size-3.5" aria-hidden="true" />
           </Link>
@@ -71,7 +75,7 @@ export function PayeeRow({
         <Link
           href={payee.editHref}
           className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}
-          aria-label={`Rename ${payee.name}`}
+          aria-label={ui(`Rename ${payee.name}`)}
         >
           <Pencil className="size-3.5" aria-hidden="true" />
         </Link>
@@ -94,7 +98,7 @@ export function PayeeRow({
             <Link
               href={payee.mergeHref}
               className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}
-              aria-label={`Merge ${payee.name} into another payee`}
+              aria-label={ui(`Merge ${payee.name} into another payee`)}
             >
               <GitMerge className="size-3.5" aria-hidden="true" />
             </Link>

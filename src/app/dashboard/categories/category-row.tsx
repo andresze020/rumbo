@@ -9,6 +9,8 @@ import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
 import { formatLabel } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { archiveCategoryAction } from './actions'
+import { useLanguage } from '@/components/language-provider'
+import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
 
 type Category = {
   id: string
@@ -86,6 +88,12 @@ export function CategoryRow({
   dragHandle,
   level = 0,
 }: CategoryRowProps) {
+  const { locale, t } = useLanguage()
+  const displayName = localizeSystemCategoryName(
+    category.name,
+    category.is_system,
+    locale
+  )
   const [open, setOpen] = useState(false)
   const muted = category.is_archived ? 'text-muted-foreground' : ''
   const flags = categoryFlags(category)
@@ -114,7 +122,7 @@ export function CategoryRow({
           />
           <CategoryIcon category={category} compact />
           <span className={cn('min-w-0 flex-1 truncate text-[11.5px]', muted)}>
-            {category.name}
+            {displayName}
           </span>
           <ChevronDown
             className={cn(
@@ -136,11 +144,15 @@ export function CategoryRow({
               <CategoryIcon category={category} />
               <span className="min-w-0 flex-1">
                 <span className={cn('block truncate text-[13px] font-semibold', muted)}>
-                  {category.name}
+                  {displayName}
                 </span>
                 <span className="mt-0.5 block text-[10.5px] text-muted-foreground">
-                  {childCount}{' '}
-                  {childCount === 1 ? 'subcategory' : 'subcategories'}
+                  {t(
+                    childCount === 1
+                      ? 'categoriesUi.subcategoryOne'
+                      : 'categoriesUi.subcategoryOther',
+                    { count: childCount }
+                  )}
                 </span>
               </span>
               <ChevronDown
@@ -188,13 +200,17 @@ export function CategoryRow({
 
             <span className="min-w-0 flex-1">
               <span className={cn('block truncate text-sm font-semibold', muted)}>
-                {category.name}
+                {displayName}
               </span>
               <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground">
                 {level === 0 ? (
                   <span>
-                    {childCount}{' '}
-                    {childCount === 1 ? 'subcategory' : 'subcategories'}
+                    {t(
+                      childCount === 1
+                        ? 'categoriesUi.subcategoryOne'
+                        : 'categoriesUi.subcategoryOther',
+                      { count: childCount }
+                    )}
                   </span>
                 ) : null}
               </span>
@@ -206,7 +222,7 @@ export function CategoryRow({
           <Link
             href={editHref}
             className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}
-            aria-label={`Edit ${category.name}`}
+            aria-label={t('categoriesUi.editNamed', { name: displayName })}
           >
             <Pencil className="size-3.5" aria-hidden="true" />
           </Link>
@@ -215,7 +231,10 @@ export function CategoryRow({
             onClick={() => setOpen((v) => !v)}
             className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
             aria-expanded={open}
-            aria-label={`${open ? 'Hide' : 'Show'} ${category.name} details`}
+            aria-label={t(
+              open ? 'categoriesUi.hideDetails' : 'categoriesUi.showDetails',
+              { name: displayName }
+            )}
           >
             <ChevronDown
               className={cn(
@@ -265,8 +284,12 @@ export function CategoryRow({
               ) : null}
               {childCount > 0 ? (
                 <span>
-                  {childCount}{' '}
-                  {childCount === 1 ? 'subcategory' : 'subcategories'}
+                  {t(
+                    childCount === 1
+                      ? 'categoriesUi.subcategoryOne'
+                      : 'categoriesUi.subcategoryOther',
+                    { count: childCount }
+                  )}
                 </span>
               ) : null}
               {category.sort_order != null ? (

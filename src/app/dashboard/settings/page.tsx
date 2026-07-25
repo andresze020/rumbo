@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
 import { AppearanceSection } from './appearance-section'
@@ -20,6 +20,8 @@ import {
   updatePasswordAction,
   updateProfileAction,
 } from './settings-actions'
+import { getLocale } from '@/lib/i18n/server'
+import { createUiTranslator } from '@/lib/i18n/ui'
 
 
 type Props = {
@@ -28,6 +30,8 @@ type Props = {
 
 export default async function SettingsPage({ searchParams }: Props) {
   const sp = await searchParams
+  const locale = await getLocale()
+  const ui = createUiTranslator(locale)
   const saved = sp.saved
   const errorMsg = sp.error ? decodeURIComponent(sp.error) : null
 
@@ -59,17 +63,17 @@ export default async function SettingsPage({ searchParams }: Props) {
       />
 
       {errorMsg && <Callout variant="error">{errorMsg}</Callout>}
-      {saved === 'profile' && <Callout variant="success">Profile updated.</Callout>}
+      {saved === 'profile' && <Callout variant="success">{ui('Profile updated.')}</Callout>}
       {saved === 'password' && (
-        <Callout variant="success">Password updated successfully.</Callout>
+        <Callout variant="success">{ui('Password updated successfully.')}</Callout>
       )}
-      {saved === 'household' && <Callout variant="success">Household updated.</Callout>}
+      {saved === 'household' && <Callout variant="success">{ui('Household updated.')}</Callout>}
 
       {/* ── Profile ─────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>Profile</CardTitle>
-          <CardDescription>Your display name and email address.</CardDescription>
+          <CardTitle>{ui('Profile')}</CardTitle>
+          <CardDescription>{ui('Your display name and email address.')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form action={updateProfileAction} className="space-y-4">
@@ -89,7 +93,7 @@ export default async function SettingsPage({ searchParams }: Props) {
                 {user.email}
               </p>
               <p className="text-xs text-muted-foreground">
-                Contact support to change your email address.
+                {ui('Contact support to change your email address.')}
               </p>
             </div>
             <SubmitButton type="submit" size="sm" pendingText="Saving…">
@@ -102,8 +106,8 @@ export default async function SettingsPage({ searchParams }: Props) {
       {/* ── Password ────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>Password</CardTitle>
-          <CardDescription>Set a new password for your account.</CardDescription>
+          <CardTitle>{ui('Password')}</CardTitle>
+          <CardDescription>{ui('Set a new password for your account.')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form action={updatePasswordAction} className="space-y-4">
@@ -136,8 +140,8 @@ export default async function SettingsPage({ searchParams }: Props) {
       {/* ── Household ───────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>Household</CardTitle>
-          <CardDescription>Shared settings for your household.</CardDescription>
+          <CardTitle>{ui('Household')}</CardTitle>
+          <CardDescription>{ui('Shared settings for your household.')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form action={updateHouseholdAction} className="space-y-4">
@@ -156,7 +160,7 @@ export default async function SettingsPage({ searchParams }: Props) {
                 {household?.base_currency ?? '—'}
               </p>
               <p className="text-xs text-muted-foreground">
-                The base currency is set at household creation. Changing it would invalidate all stored balance calculations and requires a full data migration.
+                {ui('The base currency is set at household creation. Changing it would invalidate all stored balance calculations and requires a full data migration.')}
               </p>
             </div>
             <SubmitButton type="submit" size="sm" pendingText="Saving…">
@@ -175,15 +179,15 @@ export default async function SettingsPage({ searchParams }: Props) {
       {/* ── Danger zone ─────────────────────────────────────────────── */}
       <Card className="border-destructive/30">
         <CardHeader>
-          <CardTitle className="text-destructive">Danger zone</CardTitle>
-          <CardDescription>Irreversible actions for your account.</CardDescription>
+          <CardTitle className="text-destructive">{ui('Danger zone')}</CardTitle>
+          <CardDescription>{ui('Irreversible actions for your account.')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-sm font-medium">Sign out all devices</p>
+              <p className="text-sm font-medium">{ui('Sign out all devices')}</p>
               <p className="text-xs text-muted-foreground">
-                Immediately revokes all active sessions.
+                {ui('Immediately revokes all active sessions.')}
               </p>
             </div>
             <form action={signOutAllAction} className="shrink-0">

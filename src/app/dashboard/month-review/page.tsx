@@ -14,12 +14,14 @@ import {
   TrendingDown,
 } from 'lucide-react'
 import { closeMonthAction, reopenMonthAction } from './actions'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { MonthNav } from '@/components/month-nav'
 import { Callout } from '@/components/callout'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { SubmitButton } from '@/components/submit-button'
 import { formatCurrency, formatPercent } from '@/lib/format'
+import { getLocale } from '@/lib/i18n/server'
 import { computeHealthScore, healthGrade } from '@/lib/health/score'
 import { cn } from '@/lib/utils'
 import {
@@ -103,13 +105,14 @@ function RateDelta({ diff }: { diff: number | null }) {
 
 export default async function MonthReviewPage({ searchParams }: MonthReviewPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
   const month = parseMonthParam(params.month)
   const prevMonth = shiftMonth(month, -1)
   const ctx = await getHousehold()
   const currency = ctx.household.base_currency
 
   const [series, categoryLookup, budget] = await Promise.all([
-    getMonthlySeries(ctx, [prevMonth, month]),
+    getMonthlySeries(ctx, [prevMonth, month], locale),
     getCategoryLookup(ctx),
     getBudgetLines(ctx, month),
   ])
@@ -259,7 +262,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       key: 'cash-flow-positive',
       icon: <PiggyBank />,
       accent: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
-      title: `You saved ${formatCurrency(curr.savings, currency)}`,
+      title: `You saved ${formatCurrency(curr.savings, currency, locale)}`,
       description: 'Consider moving it to savings or paying down debt.',
       href: `/dashboard/accounts`,
     })
@@ -268,7 +271,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       key: 'cash-flow-negative',
       icon: <TrendingDown />,
       accent: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
-      title: `You spent ${formatCurrency(Math.abs(curr.savings), currency)} more than you earned`,
+      title: `You spent ${formatCurrency(Math.abs(curr.savings), currency, locale)} more than you earned`,
       description: 'Look for categories that ran over and adjust next month.',
       href: `/dashboard/budgets?month=${month}`,
     })
@@ -279,7 +282,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       icon: <Layers />,
       accent: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
       title: `${topExpense.name} was your top expense`,
-      description: `${formatCurrency(topExpense.value, currency)} across ${topExpense.count} transaction${topExpense.count === 1 ? '' : 's'}.`,
+      description: `${formatCurrency(topExpense.value, currency, locale)} across ${topExpense.count} transaction${topExpense.count === 1 ? '' : 's'}.`,
       href: `/dashboard/transactions?category_id=${topExpense.categoryId}&month=${month}&type=expense`,
     })
   }
@@ -288,7 +291,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
   const kpis = [
     {
       label: 'Income',
-      value: formatCurrency(curr.income, currency),
+      value: formatCurrency(curr.income, currency, locale),
       valueClass: 'text-emerald-600 dark:text-emerald-400',
       delta: <PctDelta current={curr.income} previous={prev.income} />,
       icon: <ArrowUpRight />,
@@ -296,7 +299,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
     },
     {
       label: 'Expenses',
-      value: formatCurrency(curr.expenses, currency),
+      value: formatCurrency(curr.expenses, currency, locale),
       valueClass: 'text-red-600 dark:text-red-400',
       delta: <PctDelta current={curr.expenses} previous={prev.expenses} higherIsBad />,
       icon: <ArrowDownRight />,
@@ -304,7 +307,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
     },
     {
       label: 'Savings',
-      value: `${curr.savings >= 0 ? '+' : '−'}${formatCurrency(Math.abs(curr.savings), currency)}`,
+      value: `${curr.savings >= 0 ? '+' : '−'}${formatCurrency(Math.abs(curr.savings), currency, locale)}`,
       valueClass: curr.savings >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
       delta: <PctDelta current={curr.savings} previous={prev.savings} />,
       icon: <PiggyBank />,
@@ -312,7 +315,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
     },
     {
       label: 'Savings rate',
-      value: formatPercent(curr.savingsRate),
+      value: formatPercent(curr.savingsRate, locale),
       valueClass: undefined as string | undefined,
       delta: <RateDelta diff={savingsRateDelta} />,
       icon: <Percent />,
@@ -321,11 +324,12 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
   ]
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-[1340px] flex-col gap-4 p-4 sm:p-6">
       <PageHeader
         eyebrow="Overview"
         title="Month in review"
-        description={`A guided summary of ${longMonthLabel(month)} before you close the books.`}
+        description={`A guided summary of ${longMonthLabel(month, locale)} before you close the books.`}
         actions={
           <MonthNav
             month={month}
@@ -360,7 +364,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">{score}/100</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {longMonthLabel(month)} · {hasActivity ? 'Activity recorded' : 'No activity yet'}
+              {longMonthLabel(month, locale)} · {hasActivity ? 'Activity recorded' : 'No activity yet'}
             </p>
           </div>
         </div>
@@ -419,7 +423,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
 
       {!hasActivity ? (
         <Callout variant="info" className="border-dashed text-muted-foreground">
-          No posted income or expense activity for {longMonthLabel(month)}.
+          No posted income or expense activity for {longMonthLabel(month, locale)}.
         </Callout>
       ) : null}
 
@@ -472,7 +476,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
                     </span>
                   </div>
                   <p className="mt-1 pl-4 tabular-nums text-muted-foreground">
-                    {formatCurrency(chip.actual, budgetCurrency)} / {formatCurrency(chip.planned, budgetCurrency)}
+                    {formatCurrency(chip.actual, budgetCurrency, locale)} / {formatCurrency(chip.planned, budgetCurrency, locale)}
                   </p>
                 </Link>
               ))}
@@ -482,7 +486,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
               href={`/dashboard/budgets?month=${month}`}
               className="block rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground transition-colors hover:bg-muted/40"
             >
-              No budget set for {longMonthLabel(month)}. Create one to track performance →
+              No budget set for {longMonthLabel(month, locale)}. Create one to track performance →
             </Link>
           )}
           <p className="mt-3 text-[11px] text-muted-foreground">Amounts in {budgetCurrency}.</p>
@@ -534,7 +538,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       <div className={cn(CARD, 'p-4 sm:p-5')}>
         <div className="mb-3 flex items-center gap-2">
           <Tags className="size-[15px] text-muted-foreground" aria-hidden="true" />
-          <h2 className="text-sm font-bold">Biggest changes vs. {longMonthLabel(prevMonth)}</h2>
+          <h2 className="text-sm font-bold">Biggest changes vs. {longMonthLabel(prevMonth, locale)}</h2>
         </div>
         {topChanges.length ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -562,17 +566,18 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
                   )}
                 >
                   {change.increased ? '+' : '−'}
-                  {formatCurrency(Math.abs(change.diff), currency)}
+                  {formatCurrency(Math.abs(change.diff), currency, locale)}
                 </p>
               </div>
             ))}
           </div>
         ) : (
           <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-            Not enough activity to compare with {longMonthLabel(prevMonth)}.
+            Not enough activity to compare with {longMonthLabel(prevMonth, locale)}.
           </p>
         )}
       </div>
     </main>
+    </LocalizedClientBoundary>
   )
 }

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/toast-provider'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
 type ArchiveToastProps = {
   /** Server action to call on "Undo" — the same action used to archive/restore. */
@@ -44,6 +45,7 @@ export function ArchiveToast({
   undoValue = 'false',
 }: ArchiveToastProps) {
   const { toast } = useToast()
+  const ui = useUiTranslation()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -66,13 +68,13 @@ export function ArchiveToast({
         if (entityId) setPendingUndo({ id: entityId, showArchived })
 
         toast({
-          message: archivedMessage,
+          message: ui(archivedMessage),
           action: entityId
-            ? { label: undoLabel, onClick: () => formRef.current?.requestSubmit() }
+            ? { label: ui(undoLabel), onClick: () => formRef.current?.requestSubmit() }
             : undefined,
         })
       } else {
-        toast({ message: restoredMessage })
+        toast({ message: ui(restoredMessage) })
       }
 
       const params = new URLSearchParams(searchParams.toString())

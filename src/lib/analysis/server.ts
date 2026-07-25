@@ -2,6 +2,8 @@ import 'server-only'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { formatMonthLabel } from '@/lib/format'
+import type { Locale } from '@/lib/i18n/dictionaries'
+import { localeToBcp47 } from '@/lib/format'
 
 /**
  * Shared server-side data helpers for the analysis & planning screens
@@ -91,17 +93,17 @@ export function monthEndDate(month: string): string {
   return new Date(Date.UTC(year, mon, 0)).toISOString().slice(0, 10)
 }
 
-const SHORT_FMT = new Intl.DateTimeFormat('en-CA', { month: 'short' })
-
 /** `2026-06` -> `Jun`. */
-export function shortMonthLabel(month: string): string {
+export function shortMonthLabel(month: string, locale: Locale = 'en'): string {
   const [year, mon] = month.split('-').map(Number)
-  return SHORT_FMT.format(new Date(year, mon - 1, 1))
+  return new Intl.DateTimeFormat(localeToBcp47(locale), { month: 'short' }).format(
+    new Date(year, mon - 1, 1)
+  )
 }
 
 /** `2026-06` -> `June 2026`. */
-export function longMonthLabel(month: string): string {
-  return formatMonthLabel(month)
+export function longMonthLabel(month: string, locale: Locale = 'en'): string {
+  return formatMonthLabel(month, locale)
 }
 
 // ── Monthly summary series ───────────────────────────────────────────────────
@@ -131,7 +133,8 @@ type MonthlyDashboardSummaryRow = {
  */
 export async function getMonthlySeries(
   ctx: HouseholdContext,
-  months: string[]
+  months: string[],
+  locale: Locale = 'en'
 ): Promise<MonthlyPoint[]> {
   const results = await Promise.all(
     months.map((m) =>
@@ -146,7 +149,7 @@ export async function getMonthlySeries(
     const row = ((res.data ?? [])[0] as MonthlyDashboardSummaryRow | undefined) ?? null
     return {
       month: months[i],
-      label: shortMonthLabel(months[i]),
+      label: shortMonthLabel(months[i], locale),
       income: Number(row?.monthly_income ?? 0),
       expenses: Number(row?.monthly_expenses ?? 0),
       savings: Number(row?.monthly_savings ?? 0),

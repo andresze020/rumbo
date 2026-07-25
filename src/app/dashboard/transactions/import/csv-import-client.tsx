@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/empty-state'
 import { PageHeader } from '@/components/page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
 import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
@@ -238,6 +239,7 @@ export function CsvImportClient({
   }
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <PageHeader
         eyebrow={householdName}
@@ -673,5 +675,6 @@ export function CsvImportClient({
         </Card>
       ) : null}
     </main>
+    </LocalizedClientBoundary>
   )
 }

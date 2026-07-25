@@ -5,13 +5,17 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { getLocale } from '@/lib/i18n/server'
+import { createUiTranslator } from '@/lib/i18n/ui'
 
 type PageLoadingProps = {
   title: string
   description: string
 }
 
-export function PageLoading({ title, description }: PageLoadingProps) {
+export async function PageLoading({ title, description }: PageLoadingProps) {
+  const ui = createUiTranslator(await getLocale())
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <div>
@@ -21,8 +25,8 @@ export function PageLoading({ title, description }: PageLoadingProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
+          <CardTitle>{ui(title)}</CardTitle>
+          <CardDescription>{ui(description)}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">

@@ -15,11 +15,13 @@ import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { Callout } from '@/components/callout'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
-import { translate } from '@/lib/i18n/translate'
+import { translate, type TranslationKey } from '@/lib/i18n/translate'
+import { createUiTranslator } from '@/lib/i18n/ui'
+import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { formatCurrency, formatLabel as formatValue, formatMonthLabel, localeToBcp47 } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -62,6 +64,7 @@ type Category = {
   category_type: string
   reporting_type: string
   parent_category_id: string | null
+  is_system: boolean
   is_archived: boolean
   icon: string | null
 }
@@ -122,6 +125,7 @@ type CategoryLookup = {
   parent_category_id: string | null
   icon?: string | null
   color?: string | null
+  is_system?: boolean
 }
 
 type TransactionFilters = {
@@ -201,16 +205,16 @@ function offsetMonth(month: string, months: number): string {
 const ALL_TIME_FROM = '2000-01-01'
 const ALL_TIME_TO = '2099-12-31'
 
-function formatDateRangeLabel(dateFrom: string, dateTo: string): string {
+function formatDateRangeLabel(dateFrom: string, dateTo: string, locale: Locale): string {
   const fromMonth = dateFrom.slice(0, 7)
   const toMonth = dateTo.slice(0, 7)
   if (fromMonth === toMonth) {
-    return formatMonthLabel(fromMonth)
+    return formatMonthLabel(fromMonth, locale)
   }
   // Format in UTC: the dates are calendar dates (YYYY-MM-DD), not instants, so
   // they must render the same regardless of the server/viewer timezone.
   // Without timeZone:'UTC', a behind-UTC runtime shows the previous day.
-  const fmt = new Intl.DateTimeFormat('en-CA', {
+  const fmt = new Intl.DateTimeFormat(localeToBcp47(locale), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -271,13 +275,18 @@ function groupRowsByDate(
 }
 
 function getCategoryPath(
-  category: { name: string; parent_category_id: string | null },
-  categoriesById: Map<string, { name: string }>
+  category: { name: string; parent_category_id: string | null; is_system?: boolean },
+  categoriesById: Map<string, { name: string; is_system?: boolean }>,
+  locale: Locale
 ) {
-  const parentName = category.parent_category_id
-    ? categoriesById.get(category.parent_category_id)?.name
+  const parent = category.parent_category_id
+    ? categoriesById.get(category.parent_category_id)
     : null
-  return parentName ? `${parentName} / ${category.name}` : category.name
+  const name = localizeSystemCategoryName(category.name, Boolean(category.is_system), locale)
+  const parentName = parent
+    ? localizeSystemCategoryName(parent.name, Boolean(parent.is_system), locale)
+    : null
+  return parentName ? `${parentName} / ${name}` : name
 }
 
 function transactionsPath(
@@ -323,8 +332,9 @@ export default async function TransactionsPage({
 }: TransactionsPageProps) {
   const params = await searchParams
   const locale = await getLocale()
-  const t = (key: 'transactionsList.today' | 'transactionsList.yesterday') =>
-    translate(locale, key)
+  const ui = createUiTranslator(locale)
+  const t = (key: TranslationKey, vars?: Record<string, string | number>) =>
+    translate(locale, key, vars)
   const errorMessage = typeof params.error === 'string' ? params.error : null
 
   const rawDateFrom = typeof params.date_from === 'string' ? params.date_from : ''
@@ -459,7 +469,7 @@ export default async function TransactionsPage({
   const { data: categories, error: categoriesError } = await supabase
     .from('categories')
     .select(
-      'id, name, category_type, reporting_type, parent_category_id, is_archived, icon'
+      'id, name, category_type, reporting_type, parent_category_id, is_system, is_archived, icon'
     )
     .eq('household_id', household.id)
     .is('deleted_at', null)
@@ -662,7 +672,7 @@ export default async function TransactionsPage({
     if (categoryIds.length) {
       const { data: categoryRows, error: categoryRowsError } = await supabase
         .from('categories')
-        .select('id, name, parent_category_id, icon, color')
+        .select('id, name, parent_category_id, icon, color, is_system')
         .eq('household_id', household.id)
       transactionDetailsError = transactionDetailsError || Boolean(categoryRowsError)
       categoryLookupRows = (categoryRows ?? []) as CategoryLookup[]
@@ -685,7 +695,7 @@ export default async function TransactionsPage({
   ])
   const categoryLookupRowsById = new Map(categoryLookupRows.map((c) => [c.id, c]))
   const categoryNamesById = new Map(
-    categoryLookupRows.map((c) => [c.id, getCategoryPath(c, categoryLookupRowsById)])
+    categoryLookupRows.map((c) => [c.id, getCategoryPath(c, categoryLookupRowsById, locale)])
   )
   const categoryIconsById = new Map(
     categoryLookupRows.map((c) => [c.id, c.icon ?? null])
@@ -832,7 +842,7 @@ export default async function TransactionsPage({
   const visibleCount = totalCount
   const pendingCount = totalPending
   const importedCount = totalImported
-  const dateRangeLabel = formatDateRangeLabel(resolvedDateFrom, resolvedDateTo)
+  const dateRangeLabel = formatDateRangeLabel(resolvedDateFrom, resolvedDateTo, locale)
 
   // BR-008 pagination: page links reuse the current filters and append ?page.
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
@@ -903,6 +913,7 @@ export default async function TransactionsPage({
     category_type: c.category_type,
     parent_category_id: c.parent_category_id,
     icon: c.icon,
+    is_system: c.is_system,
   }))
 
   const toReviewStatus = (value: string): ReviewStatus =>
@@ -939,7 +950,7 @@ export default async function TransactionsPage({
       currencyCode: row.amountEntry?.currency_code ?? null,
       amountFormatted:
         row.amountEntry && row.displayAmount !== undefined
-          ? formatCurrency(row.displayAmount, row.amountEntry.currency_code)
+          ? formatCurrency(row.displayAmount, row.amountEntry.currency_code, locale)
           : null,
       tags: tagsForTransaction(row.transaction.id),
       // Cross-currency transfers carry their cost (FX spread + fee) as an
@@ -951,7 +962,8 @@ export default async function TransactionsPage({
         Number(row.allocation.amount_base_currency ?? 0) > 0
           ? formatCurrency(
               Number(row.allocation.amount_base_currency),
-              household.base_currency
+              household.base_currency,
+              locale
             )
           : null,
       canEdit: row.canEdit,
@@ -991,13 +1003,13 @@ export default async function TransactionsPage({
         actions={
           <>
             <GlobalAddTransactionButton className={buttonVariants({ size: 'sm' })}>
-              Add transaction
+              {ui('Add transaction')}
             </GlobalAddTransactionButton>
             <Link
               href="/dashboard/transactions/import"
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
-              Import CSV
+              {ui('Import CSV')}
             </Link>
           </>
         }
@@ -1011,14 +1023,14 @@ export default async function TransactionsPage({
       {selectedPayeeId ? (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-primary/5 px-3 py-2 text-sm">
           <Store className="size-4 shrink-0 text-primary" aria-hidden="true" />
-          <span className="text-muted-foreground">Showing all transactions for</span>
-          <span className="font-semibold">{selectedPayeeName ?? 'this payee'}</span>
+          <span className="text-muted-foreground">{ui('Showing all transactions for')}</span>
+          <span className="font-semibold">{selectedPayeeName ?? ui('this payee')}</span>
           <Link
             href={clearPayeeHref}
             className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'ml-auto gap-1')}
           >
             <X className="size-3.5" aria-hidden="true" />
-            Clear
+            {ui('Clear')}
           </Link>
         </div>
       ) : null}
@@ -1110,26 +1122,35 @@ export default async function TransactionsPage({
       <section className="space-y-1.5">
         <div className="flex items-center justify-between px-1">
           <h2 className="flex flex-wrap items-center gap-x-1.5 text-sm font-medium text-muted-foreground">
-            <span>{visibleCount} transaction{visibleCount !== 1 ? 's' : ''}</span>
+            <span>
+              {t(
+                visibleCount === 1
+                  ? 'transactionsList.countOne'
+                  : 'transactionsList.countOther',
+                { count: visibleCount }
+              )}
+            </span>
             <span>·</span>
             <span>{dateRangeLabel}</span>
             {pendingCount > 0 ? (
               <>
                 <span>·</span>
-                <span className="text-amber-600 dark:text-amber-400">{pendingCount} pending</span>
+                <span className="text-amber-600 dark:text-amber-400">
+                  {t('transactionsList.pendingCount', { count: pendingCount })}
+                </span>
               </>
             ) : null}
             {importedCount > 0 ? (
               <>
                 <span>·</span>
-                <span>{importedCount} imported</span>
+                <span>{t('transactionsList.importedCount', { count: importedCount })}</span>
               </>
             ) : null}
           </h2>
           <GlobalAddTransactionButton
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
           >
-            Add transaction
+            {ui('Add transaction')}
           </GlobalAddTransactionButton>
         </div>
 
@@ -1138,21 +1159,21 @@ export default async function TransactionsPage({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-sm">
             {filteredExpenseBase > 0 ? (
               <span className="font-semibold text-red-600 dark:text-red-400">
-                Expenses {formatCurrency(filteredExpenseBase, household.base_currency)}
+                {ui('Expenses')} {formatCurrency(filteredExpenseBase, household.base_currency, locale)}
               </span>
             ) : null}
             {filteredIncomeBase > 0 ? (
               <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                Income {formatCurrency(filteredIncomeBase, household.base_currency)}
+                {ui('Income')} {formatCurrency(filteredIncomeBase, household.base_currency, locale)}
               </span>
             ) : null}
             {filteredIncomeBase > 0 && filteredExpenseBase > 0 ? (
               <span className="font-semibold text-foreground">
-                Net {formatCurrency(filteredNetBase, household.base_currency)}
+                {ui('Net')} {formatCurrency(filteredNetBase, household.base_currency, locale)}
               </span>
             ) : null}
             <span className="text-xs text-muted-foreground">
-              in {household.base_currency}
+              {ui('in')} {household.base_currency}
             </span>
           </div>
         ) : null}
@@ -1174,7 +1195,7 @@ export default async function TransactionsPage({
         </div>
 
         {transactionDetailsError ? (
-          <Callout variant="error">Could not load transaction details.</Callout>
+          <Callout variant="error">{ui('Could not load transaction details.')}</Callout>
         ) : serializedGroups.length ? (
           <TransactionList
             groups={serializedGroups}
@@ -1214,10 +1235,10 @@ export default async function TransactionsPage({
         {serializedGroups.length > 0 && totalPages > 1 ? (
           <nav
             className="flex flex-wrap items-center justify-between gap-2 px-1 pt-3"
-            aria-label="Transaction pages"
+            aria-label={ui('Transaction pages')}
           >
             <span className="text-sm text-muted-foreground">
-              Showing {pageStart}–{pageEnd} of {totalCount}
+              {ui('Showing')} {pageStart}–{pageEnd} {ui('of')} {totalCount}
             </span>
             <div className="flex items-center gap-2">
               {currentPage > 1 ? (
@@ -1226,7 +1247,7 @@ export default async function TransactionsPage({
                   className={buttonVariants({ variant: 'outline', size: 'sm' })}
                   rel="prev"
                 >
-                  Previous
+                  {ui('Previous')}
                 </Link>
               ) : (
                 <span
@@ -1236,11 +1257,11 @@ export default async function TransactionsPage({
                     'pointer-events-none opacity-50'
                   )}
                 >
-                  Previous
+                  {ui('Previous')}
                 </span>
               )}
               <span className="text-sm text-muted-foreground">
-                Page {currentPage} of {totalPages}
+                {ui('Page')} {currentPage} {ui('of')} {totalPages}
               </span>
               {currentPage < totalPages ? (
                 <Link
@@ -1248,7 +1269,7 @@ export default async function TransactionsPage({
                   className={buttonVariants({ variant: 'outline', size: 'sm' })}
                   rel="next"
                 >
-                  Next
+                  {ui('Next')}
                 </Link>
               ) : (
                 <span
@@ -1258,7 +1279,7 @@ export default async function TransactionsPage({
                     'pointer-events-none opacity-50'
                   )}
                 >
-                  Next
+                  {ui('Next')}
                 </span>
               )}
             </div>

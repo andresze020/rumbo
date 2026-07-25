@@ -13,7 +13,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
@@ -298,6 +299,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
   const hasLoadError = currenciesError || debtsError || accountsError || balancesError
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -624,5 +626,6 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
         </div>
       )}
     </main>
+    </LocalizedClientBoundary>
   )
 }

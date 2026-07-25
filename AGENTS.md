@@ -23,6 +23,14 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Full UI localization + persisted language preference** (2026-07-25,
+  `feat/full-i18n-coverage`). All authenticated views and shared UI now have
+  English, Spanish, and Canadian French coverage, including dynamic dialogs,
+  loading states, accessible labels, dates, and system-category names. The
+  language selection is stored in `profiles.locale`; `af_locale` is its
+  SSR/browser mirror and is restored on password or OAuth login. Coverage is
+  guarded by `npm run i18n:check` (1,036 visible phrases × 2 translated
+  locales). No migration was required because `profiles.locale` already exists.
 - **Tags — BR-023** and **CSV import presets + revert — BR-024** (2026-07-22,
   **in review**: PR #34 `feat/br-023-tags`, PR #35
   `feat/br-024-csv-presets-revert`; migrations not yet `db push`ed). BR-023

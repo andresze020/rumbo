@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowDownRight, ArrowUpRight, Download, ScrollText, Tag, Store, Waves } from 'lucide-react'
-import { PageHeader } from '@/components/page-header'
+import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
+import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { Callout } from '@/components/callout'
 import { CategoryDonut, type DonutSlice } from '@/components/category-donut'
 import { LineTrendChart } from '@/components/analysis/charts'
@@ -8,6 +9,9 @@ import { ReportFilters } from './report-filters'
 import { buttonVariants } from '@/components/ui/button'
 import type { MultiSelectOption } from '@/components/multi-select-chip'
 import { formatCurrency, formatCurrencyCompact, formatPercent } from '@/lib/format'
+import { localeToBcp47 } from '@/lib/format'
+import { getLocale } from '@/lib/i18n/server'
+import type { Locale } from '@/lib/i18n/dictionaries'
 import { cn } from '@/lib/utils'
 import {
   getHousehold,
@@ -55,12 +59,12 @@ function todayIso() {
 }
 
 /** UTC-formatted range label (calendar dates render the same in any timezone). */
-function rangeLabel(dateFrom: string, dateTo: string): string {
+function rangeLabel(dateFrom: string, dateTo: string, locale: Locale): string {
   if (dateFrom <= ALL_TIME_FROM && dateTo >= ALL_TIME_TO) return 'all time'
   const fromMonth = dateFrom.slice(0, 7)
   const toMonth = dateTo.slice(0, 7)
-  if (fromMonth === toMonth) return longMonthLabel(fromMonth)
-  const fmt = new Intl.DateTimeFormat('en-CA', {
+  if (fromMonth === toMonth) return longMonthLabel(fromMonth, locale)
+  const fmt = new Intl.DateTimeFormat(localeToBcp47(locale), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -73,10 +77,12 @@ function RankedList({
   rows,
   currency,
   emptyLabel,
+  locale,
 }: {
   rows: Array<{ name: string; value: number; count: number; href: string | null }>
   currency: string
   emptyLabel: string
+  locale: Locale
 }) {
   if (rows.length === 0) {
     return <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">{emptyLabel}</p>
@@ -91,7 +97,7 @@ function RankedList({
             <div className="mb-1.5 flex items-center gap-2 text-xs">
               <span className="size-2 shrink-0 rounded-sm" style={{ backgroundColor: color }} aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate text-muted-foreground">{row.name}</span>
-              <span className="shrink-0 font-semibold tabular-nums">{formatCurrency(row.value, currency)}</span>
+              <span className="shrink-0 font-semibold tabular-nums">{formatCurrency(row.value, currency, locale)}</span>
               <span className="w-12 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
                 {row.count} tx
               </span>
@@ -119,6 +125,7 @@ function RankedList({
 
 export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
   const view = params.view === 'merchant' ? 'merchant' : 'category'
   const selectedType =
     params.type === 'income' || params.type === 'expense' ? params.type : 'all'
@@ -269,7 +276,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const kpis = [
     {
       label: 'Total spent',
-      value: formatCurrency(report.expenses, currency),
+      value: formatCurrency(report.expenses, currency, locale),
       valueClass: 'text-red-600 dark:text-red-400',
       sub: null as string | null,
       icon: <ArrowDownRight />,
@@ -277,7 +284,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     },
     {
       label: 'Income',
-      value: formatCurrency(report.income, currency),
+      value: formatCurrency(report.income, currency, locale),
       valueClass: 'text-emerald-600 dark:text-emerald-400',
       sub: null,
       icon: <ArrowUpRight />,
@@ -285,11 +292,11 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     },
     {
       label: 'Net flow',
-      value: `${report.net >= 0 ? '+' : '−'}${formatCurrency(Math.abs(report.net), currency)}`,
+      value: `${report.net >= 0 ? '+' : '−'}${formatCurrency(Math.abs(report.net), currency, locale)}`,
       valueClass: report.net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
       sub:
         report.income > 0
-          ? `${formatPercent(report.net / report.income)} savings rate`
+          ? `${formatPercent(report.net / report.income, locale)} savings rate`
           : null,
       icon: <Waves />,
       accent: 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400',
@@ -305,11 +312,12 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   ]
 
   return (
+    <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-[1340px] flex-col gap-4 p-4 sm:p-6">
       <PageHeader
         eyebrow="Analysis"
         title="Reports"
-        description={`Spending and income breakdowns for ${rangeLabel(dateFrom, dateTo)}.`}
+        description={`Spending and income breakdowns for ${rangeLabel(dateFrom, dateTo, locale)}.`}
         actions={
           <Link
             href="/dashboard/export"
@@ -362,7 +370,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
       {!hasActivity ? (
         <Callout variant="info" className="border-dashed text-muted-foreground">
-          No posted income or expense activity for {rangeLabel(dateFrom, dateTo)} with these filters.
+          No posted income or expense activity for {rangeLabel(dateFrom, dateTo, locale)} with these filters.
         </Callout>
       ) : null}
 
@@ -372,7 +380,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         <p className="mb-3 text-xs text-muted-foreground">Posted income vs. expenses in {currency}.</p>
         <LineTrendChart
           labels={report.trend.map((m) => m.label)}
-          formatValue={(v) => formatCurrencyCompact(v, currency)}
+          formatValue={(v) => formatCurrencyCompact(v, currency, locale)}
           series={[
             { key: 'expenses', label: 'Expenses', color: NEGATIVE_COLOR, values: report.trend.map((m) => m.expenses), area: true },
             { key: 'income', label: 'Income', color: POSITIVE_COLOR, values: report.trend.map((m) => m.income), dashed: true },
@@ -411,7 +419,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
             <CategoryDonut data={donutData} currency={currency} total={donutTotal} totalLabel="Total" month={dateTo.slice(0, 7)} />
           ) : (
             <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-              No {view === 'merchant' ? 'merchant' : 'category'} {flowNoun} for {rangeLabel(dateFrom, dateTo)}.
+              No {view === 'merchant' ? 'merchant' : 'category'} {flowNoun} for {rangeLabel(dateFrom, dateTo, locale)}.
             </p>
           )}
         </div>
@@ -423,7 +431,8 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           <RankedList
             rows={rankedRows}
             currency={currency}
-            emptyLabel={`No ${view === 'merchant' ? 'merchant' : 'category'} ${flowNoun} for ${rangeLabel(dateFrom, dateTo)}.`}
+            emptyLabel={`No ${view === 'merchant' ? 'merchant' : 'category'} ${flowNoun} for ${rangeLabel(dateFrom, dateTo, locale)}.`}
+            locale={locale}
           />
         </div>
       </div>
@@ -450,5 +459,6 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         </Link>
       </div>
     </main>
+    </LocalizedClientBoundary>
   )
 }
