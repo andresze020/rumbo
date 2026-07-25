@@ -15,6 +15,8 @@ import { PageHeader } from '@/components/page-header'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Callout } from '@/components/callout'
 import { cn } from '@/lib/utils'
+import { formatIsoDate } from '@/lib/format'
+import { getLocale } from '@/lib/i18n/server'
 
 type TagsPageProps = {
   searchParams: Promise<{
@@ -60,20 +62,9 @@ function tagsPath({
   return `/dashboard/tags${qs ? `?${qs}` : ''}`
 }
 
-/** Short, locale-stable "last used" date (matches lib/format's en-CA base). */
-function formatLastUsed(date: string | null) {
-  if (!date) return null
-  const parsed = new Date(`${date}T00:00:00`)
-  if (Number.isNaN(parsed.getTime())) return null
-  return parsed.toLocaleDateString('en-CA', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
 export default async function TagsPage({ searchParams }: TagsPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
   const errorMessage = typeof params.error === 'string' ? params.error : null
   const showArchived = params.showArchived === 'true'
   const searchQuery = typeof params.q === 'string' ? params.q.trim() : ''
@@ -134,7 +125,7 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
     color: tag.color,
     isArchived: tag.isArchived,
     txnCount: tag.txnCount,
-    lastUsedLabel: formatLastUsed(tag.lastTxnDate),
+    lastUsedLabel: tag.lastTxnDate ? formatIsoDate(tag.lastTxnDate, locale) : null,
     editHref: tagsPath({ showArchived, q: searchQuery, edit: tag.id }),
     transactionsHref: `/dashboard/transactions?tag_id=${tag.id}`,
   }))

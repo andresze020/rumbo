@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
 import { StatusBadge } from '@/components/status-badge'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, formatIsoDate } from '@/lib/format'
+import type { Locale } from '@/lib/i18n/dictionaries'
 import { toggleRecurringActiveAction, deleteRecurringAction } from './actions'
 
 export type RecurringRowVM = {
@@ -31,17 +32,7 @@ export type RecurringRowVM = {
   postHref: string
 }
 
-function formatDate(iso: string | null) {
-  if (!iso) return 'N/A'
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(Date.UTC(y, m - 1, d)))
-}
-
-export function RecurringRow({ vm }: { vm: RecurringRowVM }) {
+export function RecurringRow({ vm, locale }: { vm: RecurringRowVM; locale: Locale }) {
   const [open, setOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -102,13 +93,13 @@ export function RecurringRow({ vm }: { vm: RecurringRowVM }) {
             {!vm.is_active ? <StatusBadge status="inactive" /> : null}
           </div>
           <p className="text-xs text-muted-foreground">
-            {vm.frequencyLabel} · next {formatDate(vm.next_run_date)}
+            {vm.frequencyLabel} · next {formatIsoDate(vm.next_run_date, locale)}
           </p>
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
           <p className="text-sm font-semibold tabular-nums">
-            {formatCurrency(vm.amount, vm.currency_code)}
+            {formatCurrency(vm.amount, vm.currency_code, locale)}
           </p>
           <ChevronDown
             className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
@@ -132,12 +123,12 @@ export function RecurringRow({ vm }: { vm: RecurringRowVM }) {
                 Category: <span className="text-foreground">{vm.categoryName}</span>
               </span>
               <span>
-                Starts: <span className="text-foreground">{formatDate(vm.start_date)}</span>
+                Starts: <span className="text-foreground">{formatIsoDate(vm.start_date, locale)}</span>
               </span>
               <span>
                 Ends:{' '}
                 <span className="text-foreground">
-                  {vm.end_date ? formatDate(vm.end_date) : 'No end'}
+                  {vm.end_date ? formatIsoDate(vm.end_date, locale) : 'No end'}
                 </span>
               </span>
             </div>

@@ -15,6 +15,23 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Closure + Tier-1 small improvements (2026-07-25, in progress)
+- Goal: restore trustworthy canonical state after PR #37 and close the small
+  Settings/localization/payee/recurring-health follow-ups without expanding the
+  product scope.
+- Shipped: state/docs reconciled with the merged hard backlog and operational
+  recurring cron; Settings email-change flow; aggregate recurring auto-post
+  health alert; locale-aware shared day/date-range formatters threaded through
+  residual leaf screens; multi-source payee bulk-merge UI and atomic RPC
+  migration; authenticated pagination + Reports-filter QA evidence in
+  `docs/alpha/pr-37-authenticated-qa.md`.
+- Migrations added: `20260725120000_payees_bulk_merge.sql` (pending manual
+  `npx supabase db push`).
+- Tables changed: none; adds `merge_payees_bulk(uuid, uuid[], uuid)`.
+- Follow-ups / known gaps: sanitized-fixture CSV rule QA, transaction-creating
+  transfer/cost QA, and installed-PWA shortcut/Share Target QA remain manual.
+  Merged-branch cleanup remains blocked on explicit destructive authorization.
+
 ## BR-023 tags + BR-024 CSV presets/revert (2026-07-22, in review)
 - Goal: two backlog items — a flexible tagging layer, and CSV importer
   quality-of-life (reusable mappings + an undo for a whole import.)

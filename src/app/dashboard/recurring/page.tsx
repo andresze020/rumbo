@@ -13,7 +13,8 @@ import { PageHeader } from '@/components/page-header'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { ArchiveToast } from '@/components/archive-toast'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, formatIsoDate } from '@/lib/format'
+import { getLocale } from '@/lib/i18n/server'
 import {
   addDaysIso,
   frequencyLabel,
@@ -90,6 +91,7 @@ function categoryPath(
 
 export default async function RecurringPage({ searchParams }: RecurringPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
   const errorMessage = typeof params.error === 'string' ? params.error : null
   const isCreating = params.mode === 'create'
   const editId = typeof params.edit === 'string' ? params.edit : null
@@ -198,6 +200,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
 
   const activeCount = active.length
   const dueCount = dueRows.length
+  const failedAutoPost = active.filter((r) => r.auto_post && r.last_error)
   const monthlyExpenseEstimate = active
     .filter((r) => r.transaction_type === 'expense' && r.currency_code === baseCurrency)
     .reduce((sum, r) => sum + estimateMonthly(Number(r.amount), r.frequency), 0)
@@ -245,13 +248,11 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
     else forecastGroups.push({ date: item.date, items: [item] })
   }
   function formatForecastDate(iso: string) {
-    const [y, m, d] = iso.split('-').map(Number)
-    return new Intl.DateTimeFormat('en-CA', {
+    return formatIsoDate(iso, locale, {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
-      timeZone: 'UTC',
-    }).format(new Date(Date.UTC(y, m - 1, d)))
+    })
   }
 
   // Form data (active accounts + categories only).
@@ -281,7 +282,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
     : null
 
   function formatMoney(value: number) {
-    return formatCurrency(value, baseCurrency)
+    return formatCurrency(value, baseCurrency, locale)
   }
 
   return (
@@ -325,6 +326,15 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
         undoField="activate"
         undoValue="true"
       />
+      {failedAutoPost.length ? (
+        <Callout variant="error">
+          Auto-post needs attention for {failedAutoPost.length} template
+          {failedAutoPost.length === 1 ? '' : 's'}:{' '}
+          {failedAutoPost.slice(0, 3).map((row) => row.name).join(', ')}
+          {failedAutoPost.length > 3 ? ` and ${failedAutoPost.length - 3} more` : ''}.
+          Open a flagged row to review the latest error.
+        </Callout>
+      ) : null}
 
       {/* Summary */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -426,7 +436,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
               />
               <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
                 {dueRows.map((vm) => (
-                  <RecurringRow key={vm.id} vm={vm} />
+                  <RecurringRow key={vm.id} vm={vm} locale={locale} />
                 ))}
               </div>
             </section>
@@ -437,7 +447,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
               <SectionHeading title="Upcoming" description="Scheduled for later." />
               <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
                 {upcomingRows.map((vm) => (
-                  <RecurringRow key={vm.id} vm={vm} />
+                  <RecurringRow key={vm.id} vm={vm} locale={locale} />
                 ))}
               </div>
             </section>
@@ -480,7 +490,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
                           }`}
                         >
                           {item.type === 'income' ? '+' : '−'}
-                          {formatCurrency(item.amount, item.currency)}
+                          {formatCurrency(item.amount, item.currency, locale)}
                         </span>
                       </div>
                     ))}
@@ -500,7 +510,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
               <SectionHeading title="Inactive" description="Paused templates." />
               <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
                 {inactiveRows.map((vm) => (
-                  <RecurringRow key={vm.id} vm={vm} />
+                  <RecurringRow key={vm.id} vm={vm} locale={locale} />
                 ))}
               </div>
             </section>

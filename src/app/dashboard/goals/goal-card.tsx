@@ -3,7 +3,8 @@ import { StatusBadge } from '@/components/status-badge'
 import { SubmitButton } from '@/components/submit-button'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { formatCurrency, formatPercent } from '@/lib/format'
+import { formatCurrency, formatIsoDate, formatPercent } from '@/lib/format'
+import type { Locale } from '@/lib/i18n/dictionaries'
 import { goalProgress, goalTypeLabel } from '@/lib/goals/shared'
 import { setGoalStatusAction } from './actions'
 
@@ -24,15 +25,7 @@ type GoalCardProps = {
   editHref: string
   contributeHref: string
   withdrawHref: string
-}
-
-function formatDate(iso: string) {
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(Date.UTC(y, m - 1, d)))
+  locale: Locale
 }
 
 export function GoalCard({
@@ -41,6 +34,7 @@ export function GoalCard({
   editHref,
   contributeHref,
   withdrawHref,
+  locale,
 }: GoalCardProps) {
   const targetAmount = Number(goal.target_amount)
   const currentAmount = Number(goal.current_amount)
@@ -63,13 +57,13 @@ export function GoalCard({
           </div>
           <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground">
             {goalTypeLabel(goal.goal_type)}
-            {goal.target_date ? ` · Target ${formatDate(goal.target_date)}` : ''}
+            {goal.target_date ? ` · Target ${formatIsoDate(goal.target_date, locale)}` : ''}
           </p>
         </div>
       </div>
 
       <p className="mt-3.5 font-mono text-2xl font-bold tabular-nums">
-        {formatCurrency(currentAmount, goal.currency_code)}
+        {formatCurrency(currentAmount, goal.currency_code, locale)}
       </p>
 
       <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-muted">
@@ -79,8 +73,8 @@ export function GoalCard({
         />
       </div>
       <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-        <span className="tabular-nums">{formatPercent(progress, 'en', { minimumFractionDigits: 0 })} of goal</span>
-        <span className="tabular-nums">Target {formatCurrency(targetAmount, goal.currency_code)}</span>
+        <span className="tabular-nums">{formatPercent(progress, locale, { minimumFractionDigits: 0 })} of goal</span>
+        <span className="tabular-nums">Target {formatCurrency(targetAmount, goal.currency_code, locale)}</span>
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-2 border-t pt-3.5">

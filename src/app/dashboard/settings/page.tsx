@@ -16,6 +16,7 @@ import { AppearanceSection } from './appearance-section'
 import { LanguageSection } from './language-section'
 import {
   signOutAllAction,
+  updateEmailAction,
   updateHouseholdAction,
   updatePasswordAction,
   updateProfileAction,
@@ -63,6 +64,12 @@ export default async function SettingsPage({ searchParams }: Props) {
       {saved === 'password' && (
         <Callout variant="success">Password updated successfully.</Callout>
       )}
+      {saved === 'email' && (
+        <Callout variant="success">
+          Email change requested. Confirm the messages sent by Supabase before
+          the new address becomes active.
+        </Callout>
+      )}
       {saved === 'household' && <Callout variant="success">Household updated.</Callout>}
 
       {/* ── Profile ─────────────────────────────────────────────────── */}
@@ -84,16 +91,37 @@ export default async function SettingsPage({ searchParams }: Props) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Email</Label>
+              <Label htmlFor="email">Email</Label>
               <p className="rounded-lg border border-input bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
                 {user.email}
               </p>
+              {(user as { new_email?: string }).new_email ? (
+                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                  Pending confirmation: {(user as { new_email?: string }).new_email}
+                </p>
+              ) : null}
               <p className="text-xs text-muted-foreground">
-                Contact support to change your email address.
+                Changing your email requires confirmation before it becomes active.
               </p>
             </div>
             <SubmitButton type="submit" size="sm" pendingText="Saving…">
               Save profile
+            </SubmitButton>
+          </form>
+          <form action={updateEmailAction} className="mt-6 space-y-4 border-t pt-6">
+            <div className="space-y-1.5">
+              <Label htmlFor="new_email">New email address</Label>
+              <Input
+                id="new_email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+            <SubmitButton type="submit" size="sm" variant="outline" pendingText="Sending…">
+              Change email
             </SubmitButton>
           </form>
         </CardContent>

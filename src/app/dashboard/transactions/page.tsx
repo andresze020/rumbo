@@ -21,7 +21,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
-import { formatCurrency, formatLabel as formatValue, formatMonthLabel, localeToBcp47 } from '@/lib/format'
+import { formatCurrency, formatIsoDateRange, formatLabel as formatValue, formatMonthLabel, localeToBcp47 } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 type TransactionsPageProps = {
@@ -201,22 +201,13 @@ function offsetMonth(month: string, months: number): string {
 const ALL_TIME_FROM = '2000-01-01'
 const ALL_TIME_TO = '2099-12-31'
 
-function formatDateRangeLabel(dateFrom: string, dateTo: string): string {
+function formatDateRangeLabel(dateFrom: string, dateTo: string, locale: Locale): string {
   const fromMonth = dateFrom.slice(0, 7)
   const toMonth = dateTo.slice(0, 7)
   if (fromMonth === toMonth) {
-    return formatMonthLabel(fromMonth)
+    return formatMonthLabel(fromMonth, locale)
   }
-  // Format in UTC: the dates are calendar dates (YYYY-MM-DD), not instants, so
-  // they must render the same regardless of the server/viewer timezone.
-  // Without timeZone:'UTC', a behind-UTC runtime shows the previous day.
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-  return `${fmt.format(new Date(`${dateFrom}T00:00:00Z`))} – ${fmt.format(new Date(`${dateTo}T00:00:00Z`))}`
+  return formatIsoDateRange(dateFrom, dateTo, locale)
 }
 
 function normalizeOption(value: string | undefined, allowedValues: string[]) {
@@ -832,7 +823,7 @@ export default async function TransactionsPage({
   const visibleCount = totalCount
   const pendingCount = totalPending
   const importedCount = totalImported
-  const dateRangeLabel = formatDateRangeLabel(resolvedDateFrom, resolvedDateTo)
+  const dateRangeLabel = formatDateRangeLabel(resolvedDateFrom, resolvedDateTo, locale)
 
   // BR-008 pagination: page links reuse the current filters and append ?page.
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))

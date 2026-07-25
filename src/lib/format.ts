@@ -146,6 +146,46 @@ export function formatMonthLabelShort(month: string, locale: Locale = 'en') {
   }).format(new Date(year, monthNumber - 1, 1))
 }
 
+/**
+ * Formats a stored calendar date (`YYYY-MM-DD`) in UTC so it never shifts to
+ * the previous day on servers or devices behind UTC.
+ */
+export function formatIsoDate(
+  iso: string | null,
+  locale: Locale = 'en',
+  options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }
+) {
+  if (!iso) return translate(locale, 'common.notAvailable')
+  const [year, month, day] = iso.split('-').map(Number)
+  if (!year || !month || !day) return translate(locale, 'common.notAvailable')
+
+  return new Intl.DateTimeFormat(localeToBcp47(locale), {
+    ...options,
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, day)))
+}
+
+export function formatIsoDateRange(
+  dateFrom: string,
+  dateTo: string,
+  locale: Locale = 'en'
+) {
+  const options: Intl.DateTimeFormatOptions = {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }
+  return `${formatIsoDate(dateFrom, locale, options)} – ${formatIsoDate(
+    dateTo,
+    locale,
+    options
+  )}`
+}
+
 export function formatCount(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`
 }

@@ -27,6 +27,8 @@ App Finanzas can be installed on Android (Chrome), iOS (Safari), and desktop (Ch
 | At least one 512×512 icon | `/public/icons/icon-512.png` |
 | Maskable icon (Android adaptive) | `/public/icons/icon-512-maskable.png` |
 | Manifest linked in HTML | `metadata.manifest` in `src/app/layout.tsx` |
+| App shortcuts | Quick add, Transactions and Recurring in `public/manifest.json` |
+| Share Target | Shared text/URL opens the expense quick-add flow prefilled |
 
 A service worker is **not required** for the install prompt on Android Chrome — only the manifest + icons + HTTPS are needed.
 
@@ -102,6 +104,21 @@ Note: iOS uses Safari's own install flow and does not show an automatic install 
 | Service worker / offline mode | Not implemented — financial data requires a live connection and offline caching adds significant complexity |
 | Push notifications | Not implemented (post-MVP) |
 | Background sync | Not implemented (post-MVP) |
+
+---
+
+## Installed-app verification
+
+The manifest implementation is complete, but BR-028 still requires a real
+installed-PWA QA pass. This cannot be proven from a browser tab alone.
+
+- Long-press/right-click the installed icon and open **Quick add**,
+  **Transactions**, and **Recurring**.
+- Share text and a URL from another app to **App Finanzas**.
+- Confirm the installed app opens the expense quick-add dialog and preserves
+  the shared title/text/URL without creating a transaction automatically.
+- Repeat on the target mobile platform after any manifest change; installed
+  manifests may be cached and can require reinstalling the PWA.
 
 ---
 

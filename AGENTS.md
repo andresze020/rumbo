@@ -23,9 +23,21 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
-- **Tags — BR-023** and **CSV import presets + revert — BR-024** (2026-07-22,
-  **in review**: PR #34 `feat/br-023-tags`, PR #35
-  `feat/br-024-csv-presets-revert`; migrations not yet `db push`ed). BR-023
+- **Hard-backlog integration — PR #37** (2026-07-25, merged to `main`).
+  BR-007 cross-currency transfers, BR-008 transaction pagination/server
+  filters, BR-010 categorization rules, BR-014 recurring auto-post, Reports
+  filters, and transfer-cost UX are integrated. Their production migrations,
+  the `pg_cron` extension, `run_recurring_autopost()` function, and daily
+  `recurring-autopost` job are operational. Authenticated real-data QA remains
+  a manual release gate; see `docs/pending-work.md`.
+- **Closure + small improvements sprint** (2026-07-25, in progress). Settings
+  includes profile, email change/confirmation state, password, household,
+  theme, language, and global sign-out. Recurring shows an aggregate auto-post
+  health alert. BR-025 now centralizes locale-aware daily date formatting in
+  `lib/format.ts`. Payees bulk merge is implemented with additive migration
+  `20260725120000_payees_bulk_merge.sql` (pending `db push`).
+- **Tags — BR-023** and **CSV import presets + revert — BR-024** are merged and
+  their migrations are applied. BR-023
   adds a free-form tagging layer orthogonal to categories (many-to-many):
   `tags` + `transaction_tags` junction, a `/dashboard/tags` CRUD page (Money
   nav group), a `TagMultiSelect` wired into the add + edit forms (tags are
@@ -196,12 +208,11 @@ The product is household-first. All financial data must belong to a household.
   New `exchange_rates` table plus `get_exchange_rate(...)` support same-currency
   `1`, latest-prior lookup, and inverse-pair fallback. See
   `docs/features/csv-import-fx.md`.
-- **Recurring transactions — manual posting MVP (Sprint A)** shipped earlier in
-  Sprint 12.x. `/dashboard/recurring` has Due/Upcoming/Inactive sections,
-  income/expense template CRUD, lifecycle (activate/deactivate/delete), and
-  one-click **Post**. **Auto-posting (Sprint B) and the dashboard widget +
-  recurring transfers (Sprint C) are still pending** — see
-  `docs/features/recurring-transactions.md`.
+- **Recurring transactions — Sprint A + Sprint B** are operational.
+  `/dashboard/recurring` has template CRUD, manual posting, the dashboard due
+  widget, opt-in auto-posting, per-template errors, run logging, and an
+  aggregate health alert. Only recurring transfers (UC-9) remain deferred;
+  see `docs/features/recurring-transactions.md`.
 - See `docs/alpha/sprint-12-alpha-plan.md` for the live Alpha plan,
   `docs/alpha-readiness-checklist.md` for the readiness gate, and
   `docs/pending-work.md` for a single index of every open feature, BR
@@ -227,10 +238,15 @@ The product is household-first. All financial data must belong to a household.
 - payees
 - import_batches
 - import_rows
+- tags
+- transaction_tags
+- csv_import_presets
+- categorization_rules
+- recurring_autopost_log
+- month_closures
 
-Pending (migrations written but **not yet `db push`ed**, in open PRs): `tags`
-+ `transaction_tags` (PR #34, `20260722120000`); `csv_import_presets` (PR #35,
-`20260722130000`, which also adds a `reverted` status to `import_batches`).
+Pending migration prepared locally: `20260725120000_payees_bulk_merge.sql`
+(adds the `merge_payees_bulk` function; no new table).
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 

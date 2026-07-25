@@ -15,6 +15,7 @@ import { Callout } from '@/components/callout'
 import { ArchiveToast } from '@/components/archive-toast'
 import { formatCurrency } from '@/lib/format'
 import { setGoalStatusAction } from './actions'
+import { getLocale } from '@/lib/i18n/server'
 
 type GoalsPageProps = {
   searchParams: Promise<{
@@ -54,6 +55,7 @@ type Account = {
 
 export default async function GoalsPage({ searchParams }: GoalsPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
   const errorMessage = typeof params.error === 'string' ? params.error : null
   const isCreating = params.mode === 'create'
   const editId = typeof params.edit === 'string' ? params.edit : null
@@ -139,6 +141,7 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
       editHref: `/dashboard/goals?edit=${goal.id}`,
       contributeHref: `/dashboard/goals?contribute=${goal.id}`,
       withdrawHref: `/dashboard/goals?withdraw=${goal.id}`,
+      locale,
     }
   }
 
@@ -195,8 +198,8 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
         />
         <MetricCard
           label="Total saved"
-          value={formatCurrency(totalSaved, baseCurrency)}
-          description={`Of ${formatCurrency(totalTarget, baseCurrency)} target, ${baseCurrency} goals`}
+          value={formatCurrency(totalSaved, baseCurrency, locale)}
+          description={`Of ${formatCurrency(totalTarget, baseCurrency, locale)} target, ${baseCurrency} goals`}
           icon={<Target />}
           accent="bg-muted text-muted-foreground"
         />

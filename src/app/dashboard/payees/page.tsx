@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeft, Plus, Search, Store } from 'lucide-react'
+import { ArrowLeft, GitMerge, Plus, Search, Store } from 'lucide-react'
 import { PayeeForm } from './payee-form'
 import { PayeeMergeForm } from './payee-merge-form'
 import { PayeeRow, type PayeeVM } from './payee-row'
@@ -15,6 +15,8 @@ import { PageHeader } from '@/components/page-header'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Callout } from '@/components/callout'
 import { cn } from '@/lib/utils'
+import { formatIsoDate } from '@/lib/format'
+import { getLocale } from '@/lib/i18n/server'
 
 type PayeesPageProps = {
   searchParams: Promise<{
@@ -50,7 +52,7 @@ function payeesPath({
 }: {
   showArchived?: boolean
   q?: string
-  mode?: 'create'
+  mode?: 'create' | 'bulk-merge'
   edit?: string
   merge?: string
 } = {}) {
@@ -65,28 +67,19 @@ function payeesPath({
 }
 
 /** Short, locale-stable "last used" date (matches lib/format's en-CA base). */
-function formatLastUsed(date: string | null) {
-  if (!date) return null
-  const parsed = new Date(`${date}T00:00:00`)
-  if (Number.isNaN(parsed.getTime())) return null
-  return parsed.toLocaleDateString('en-CA', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
 export default async function PayeesPage({ searchParams }: PayeesPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
   const errorMessage = typeof params.error === 'string' ? params.error : null
   const showArchived = params.showArchived === 'true'
   const searchQuery = typeof params.q === 'string' ? params.q.trim() : ''
   const normalizedSearch = searchQuery.toLowerCase()
   const isCreating = params.mode === 'create'
+  const isBulkMerging = params.mode === 'bulk-merge'
   const editPayeeId =
-    typeof params.edit === 'string' && !isCreating ? params.edit : null
+    typeof params.edit === 'string' && !isCreating && !isBulkMerging ? params.edit : null
   const mergePayeeId =
-    typeof params.merge === 'string' && !isCreating && !editPayeeId
+    typeof params.merge === 'string' && !isCreating && !isBulkMerging && !editPayeeId
       ? params.merge
       : null
 
@@ -140,7 +133,7 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
     name: p.name,
     isArchived: p.isArchived,
     txnCount: p.txnCount,
-    lastUsedLabel: formatLastUsed(p.lastTxnDate),
+    lastUsedLabel: p.lastTxnDate ? formatIsoDate(p.lastTxnDate, locale) : null,
     editHref: payeesPath({ showArchived, q: searchQuery, edit: p.id }),
     mergeHref: payeesPath({ showArchived, q: searchQuery, merge: p.id }),
     transactionsHref: `/dashboard/transactions?payee_id=${p.id}`,
@@ -181,6 +174,13 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
             >
               <Plus aria-hidden="true" />
               New
+            </Link>
+            <Link
+              href={payeesPath({ showArchived, q: searchQuery, mode: 'bulk-merge' })}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              <GitMerge aria-hidden="true" />
+              Merge duplicates
             </Link>
             <Link
               href={payeesPath({ showArchived: !showArchived, q: searchQuery })}
@@ -302,6 +302,30 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
         </FormDialog>
       ) : null}
 
+      {isBulkMerging ? (
+        <FormDialog
+          title="Merge duplicate payees"
+          description="Select several duplicates and combine them into one surviving payee."
+          cancelHref={cancelHref}
+        >
+          <PayeeMergeForm
+            sources={activePayees.map((p) => ({
+              id: p.id,
+              name: p.name,
+              txnCount: p.txnCount,
+            }))}
+            targets={activePayees.map((p) => ({
+              id: p.id,
+              name: p.name,
+              txnCount: p.txnCount,
+            }))}
+            showArchived={showArchived}
+            cancelHref={cancelHref}
+            bulk
+          />
+        </FormDialog>
+      ) : null}
+
       {/* ── Toolbar ────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <form action="/dashboard/payees" className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-sm">
@@ -325,8 +349,15 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
         </form>
 
         <Link
+          href={payeesPath({ showArchived, q: searchQuery, mode: 'bulk-merge' })}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'sm:ml-auto')}
+        >
+          <GitMerge aria-hidden="true" />
+          Merge duplicates
+        </Link>
+        <Link
           href={payeesPath({ showArchived: !showArchived, q: searchQuery })}
-          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'hidden sm:ml-auto md:inline-flex')}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'hidden md:inline-flex')}
         >
           {showArchived ? 'Hide archived' : 'Show archived'}
         </Link>

@@ -7,10 +7,17 @@
 > first, then update this index to match. Kept in sync by the
 > `app-finanzas-state-sync` skill at sprint close.
 >
-> **Last refreshed 2026-07-22.** Since the previous refresh: the Tier-1
-> easy-wins sprint and the transaction-form mobile redesign (PR #33) merged
-> to `main`, and BR-023 (tags) + BR-024 (CSV presets/revert) are now in
-> review as PR #34 / PR #35 (migrations pending `db push`).
+> **Last refreshed 2026-07-25.** PR #37 merged the hard backlog into `main`.
+> BR-007, BR-008, BR-010, BR-014, BR-023 and BR-024 are shipped; their
+> production migrations are applied. Recurring auto-post is operational with
+> `pg_cron`. The remaining closure gates are authenticated QA of PR #37 and
+> installed-PWA verification.
+
+Authenticated QA progress is recorded in
+[alpha/pr-37-authenticated-qa.md](./alpha/pr-37-authenticated-qa.md):
+pagination and combined Reports filters passed; CSV-rule application,
+transaction-creating transfer/cost cases, and installed-PWA behavior still need
+fixture/device execution.
 
 ---
 
@@ -19,10 +26,10 @@
 | Feature | Status | Blocked by | Doc |
 |---|---|---|---|
 | ~~Navbar redesign~~ ✅ | **Shipped — Opción D (collapsible sidebar).** `AppSidebar` (desktop, grouped, collapsible w/ localStorage) + `MobileNav`/`MobileBottomNav`/`/dashboard/more` (mobile) + bottom user-avatar block → settings. | — | [features/navbar-redesign.md](./features/navbar-redesign.md) |
-| User Settings page (`/dashboard/settings`) | Pending | Entry point exists (sidebar Settings group + bottom avatar block) | [features/user-settings.md](./features/user-settings.md) |
-| ~~Recurring — Sprint B (auto-posting)~~ 🟡 | **Built** (branch `feat/recurring-autopost-br014`, BR-014): `run_recurring_autopost()` SECURITY DEFINER job + `auto_post` toggle + failure log/badges. FX = last known ledger rate. Migration `20260723150000` pending `db push`; pg_cron enable + schedule is a documented manual step. | — | [features/recurring-transactions.md](./features/recurring-transactions.md) |
+| ~~User Settings page (`/dashboard/settings`)~~ ✅ | **Shipped.** Profile, email change + pending confirmation, password, household name/base-currency policy, theme, language and global sign-out. | — | [features/user-settings.md](./features/user-settings.md) |
+| ~~Recurring — Sprint B (auto-posting)~~ ✅ | **Operational.** `run_recurring_autopost()` + failure log/badges and aggregate health alert. Migration applied; `pg_cron` extension enabled; daily job scheduled and working. FX = last known ledger rate. | — | [features/recurring-transactions.md](./features/recurring-transactions.md) |
 | Recurring — Sprint C: recurring transfers (UC-9) | Pending — the "due soon" widget (UC-8) already shipped | Needs a `to_account_id` migration + transfer support in the form, manual post, and the auto-post job | [features/recurring-transactions.md](./features/recurring-transactions.md) |
-| Recurring transactions — inline create from the transaction form (UC-10) | 🟢 Inline-create **merged to `main`** (PR #17): frequency field posts the first + creates the template, `auto_post=false`. "repeats **automatically**" half still pending = Sprint B auto-posting | Auto-post half blocked by Sprint B (cron infra + FX-at-post) | [features/recurring-transactions.md](./features/recurring-transactions.md) |
+| Recurring transactions — inline create from the transaction form (UC-10) | 🟢 **Merged to `main`.** Frequency posts the first transaction and creates a template. The user can enable auto-post on that template; automation infrastructure is operational. | — | [features/recurring-transactions.md](./features/recurring-transactions.md) |
 
 ## Open bugs / friction (Alpha real usage)
 
@@ -35,27 +42,27 @@ Source of truth: [alpha/bug-friction-log.md](./alpha/bug-friction-log.md).
 > ✅ Merged to `main` (PR #17): **BF-024** (P1, date-filter Apply-reset) and
 > **BF-025** (P2, mobile nav Plan → Accounts).
 
-## BR backlog — not started (P1, near-term)
+## BR backlog — near-term
 
 Full detail, "why soon," and acceptance criteria live in
 [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md).
 
 | ID | Area | One-line |
 |---|---|---|
-| BR-007 | Transfers / debts / FX | Cross-currency transfers and debt payments |
-| BR-008 | Transactions | Pagination + server-side filters (list has no pagination today) |
-| BR-010 | Rules / automation | `categorization_rules` designed but not migrated |
+| ~~BR-007~~ ✅ | Transfers / debts / FX | Shipped in PR #37: cross-currency transfers, transfer cost visibility and optional same-currency fees. |
+| ~~BR-008~~ ✅ | Transactions | Shipped in PR #37: server-side search/filtering with pagination. |
+| ~~BR-010~~ ✅ | Rules / automation | Shipped in PR #37: `categorization_rules` migration, CRUD and application flow. |
 | BR-011 | Review workflow | ✅ Core already shipped (Sprint 4 + PR #17): `review_status` column, filter chips, bulk "Mark reviewed"/categorize, per-row control, dashboard "N to review" pill. Polished on branch `feat/br-011-review-queue-polish` (no migration): activated the "Review queue" nav entry (was locked "coming soon") → `/dashboard/transactions?review=unreviewed`, added bulk **Flag** / **Mark unreviewed**, and an "all caught up" empty state |
 
 ## BR backlog — not started (P2/P3)
 
 | ID | Area | One-line |
 |---|---|---|
-| BR-014 | Recurring | Auto-post scheduler + failure log (depends on BR-002 reliability) |
+| ~~BR-014~~ ✅ | Recurring | Operational auto-post scheduler, failure log and visible health state. |
 | BR-017 | Accounts | ✅ Built on branch `feat/br-017-balance-adjustment` (migration `20260716130000`): `create_balance_adjustment` RPC + "Adjust balance" action on the accounts edit dialog — posts a ledger-safe `adjustment` entry to reconcile the posted balance, no allocation (excluded from reports/budgets), history preserved |
 | BR-018 | Budgeting | ✅ Built on branch `feat/br-018-budget-rollover` (migration `20260716140000`): per-line `rollover_enabled` toggle + `get_budget_line_carryovers` RPC (accumulated planned−actual of prior rollover months). "Available = planned + carryover" folds into line remaining/progress and budget totals when enabled |
-| ~~BR-023~~ 🟡 | Tags | **In review (PR #34, `feat/br-023-tags`).** `tags` + `transaction_tags` junction, `/dashboard/tags` CRUD, `TagMultiSelect` in add/edit forms, tag chips on rows, `tag_id` filter. Migration `20260722120000` pending `db push`. |
-| ~~BR-024~~ 🟡 | CSV import | **In review (PR #35, `feat/br-024-csv-presets-revert`).** Saved column-mapping presets (`csv_import_presets`) + confirm-gated import revert (`revert_csv_import` soft-deletes a batch). Migration `20260722130000` pending `db push`. |
+| ~~BR-023~~ ✅ | Tags | Shipped and migration applied: tags CRUD, transaction assignment/chips and tag filtering. |
+| ~~BR-024~~ ✅ | CSV import | Shipped and migration applied: saved mapping presets and confirm-gated batch revert. |
 | ~~BR-029~~ ✅ | Transactions filters | **Merged to `main`** (PR #17) — broadened date presets + fixed the Apply-resets regression (BF-024) |
 
 ## Partially resolved (shipped, with a known gap)
@@ -63,9 +70,9 @@ Full detail, "why soon," and acceptance criteria live in
 | ID / Feature | What shipped | What's still missing | Doc |
 |---|---|---|---|
 | BR-021 | `/dashboard/month-review` recap + (branch `feat/br-021-health-score-close-month`, migration `20260716150000`) a **real** documented health score (`lib/health/score.ts`: savings rate 65% + budget adherence 35%, shared by dashboard + month-review, "Demo" labels removed) and a **light Close month** (`month_closures` marker + snapshot; reopenable; does NOT lock the ledger) | Close month is a soft marker only — no month-locking of transactions (deliberate, per product decision) | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-009 | ✅ **Fully resolved.** Slice 1 (payee picker, migration `20260716120000`) + Slice 2 (payees CRUD + search + filter, migration `20260717120000`). Slice 1: `create_manual_transaction`/`update_manual_transaction` take `p_payee_name` (+ `get_or_create_payee`) to write `payee_id`, merchant_name kept in sync; covers add/edit/inline/assistant forms. Slice 2: (a) `/dashboard/payees` management page — list with usage stats, create, rename → propagates to linked `merchant_name`, archive/restore, and **merge** duplicates via `merge_payees` RPC (reassign transactions, archive source); added `payees.is_archived` + `get_payees_with_stats` RPC + Money-group nav entry; (b) payee field is now a **searchable combobox** on Base UI Autocomplete (floating portal, no dialog clipping) across add/edit/inline; (c) transactions list takes a `payee_id` filter (all-time default + dismissible chip) reached from each payee's "View transactions" button; (d) field labeled **Payer** on income vs **Payee** on expense (`transactionForm.payer`, en/es/fr). | ✅ CSV import + recurring templates now carry a payee (Tier-1 residuals, migration `20260720130000`). Remaining: no **bulk** merge (one source at a time). | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-009 | ✅ **Fully resolved.** Payee picker, CRUD, search, filtering and merge are shipped. This sprint adds multi-source bulk merge through atomic `merge_payees_bulk`; the migration is prepared locally. | Run `npx supabase db push`, then QA selection, survivor labels and archived sources. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | BR-015 | Reusable `AlertDialog` now also adopted for account/category archive (previously fired with **zero** confirmation, not "no archive action" as this doc used to say — both actions already existed, just unguarded); toast+Undo added via the existing `ToastProvider` (PR #23, merged to `main`) | ✅ Void now has **Undo** (`unvoid_transaction` RPC, migration `20260720120000`); archive+undo generalized to goals and recurring templates (Tier-1). Nothing outstanding. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-025 | ~20 files' duplicated `formatCurrency`/`formatMonthLabel`/label-casing helpers consolidated into `lib/format.ts` imports (PR #22, merged to `main`) | `formatPercent` still duplicated with diverging digit options per file (needs case-by-case verification before centralizing); day-level date formatters have no shared helper yet; ✅ locale now threads through dashboard/plan/budgets/transactions via `localeToBcp47(locale)` and `formatPercent` is deduped (Tier-1). Remaining: deep leaf cards still default to `'en'`; day-level date formatters have no shared helper yet | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-025 | Shared currency/month/percent helpers plus locale threading. This sprint adds UTC-safe `formatIsoDate`/`formatIsoDateRange` and propagates locale through goals, recurring, tags, payees, Reports and transaction ranges. | Continue translating residual hard-coded UI copy separately; formatting no longer requires per-leaf `en-CA` helpers. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | BR-028 | PWA manifest `shortcuts` (Quick add / Transactions / Recurring) added; Quick add deep-links via a new `quick_add` URL param the transaction dialog provider recognizes (PR #21, merged to `main`) | ✅ Manifest `share_target` added (Tier-1) — a PWA share opens the expense quick-add prefilled. Remaining: shortcut/share behavior not yet verified in a real installed PWA. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 | Goals — linked-account progress | Manual `current_amount`, contribute/withdraw via atomic RPC | Could eventually derive progress from the linked account's real ledger balance instead of manual entry — deliberately deferred | [features/goals.md](./features/goals.md) (Open Decisions) |
 
@@ -73,7 +80,7 @@ Full detail, "why soon," and acceptance criteria live in
 
 | Doc | Question |
 |---|---|
-| [features/recurring-transactions.md](./features/recurring-transactions.md) | Exchange rate to use at auto-post time (last known rate vs. API vs. fixed); cron infra (`pg_cron` vs. Vercel Cron) |
+| [features/recurring-transactions.md](./features/recurring-transactions.md) | UC-9 recurring-transfer schema and posting design; auto-post FX (`last known`) and cron infrastructure (`pg_cron`) are resolved. |
 | [features/goals.md](./features/goals.md) | Whether a linked goal should derive progress from the account's real ledger balance instead of a manually-tracked `current_amount` |
 
 ## Deferred / parked (revisit only when triggered)

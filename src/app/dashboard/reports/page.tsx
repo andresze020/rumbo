@@ -7,7 +7,9 @@ import { LineTrendChart } from '@/components/analysis/charts'
 import { ReportFilters } from './report-filters'
 import { buttonVariants } from '@/components/ui/button'
 import type { MultiSelectOption } from '@/components/multi-select-chip'
-import { formatCurrency, formatCurrencyCompact, formatPercent } from '@/lib/format'
+import { formatCurrency, formatCurrencyCompact, formatIsoDateRange, formatPercent } from '@/lib/format'
+import type { Locale } from '@/lib/i18n/dictionaries'
+import { getLocale } from '@/lib/i18n/server'
 import { cn } from '@/lib/utils'
 import {
   getHousehold,
@@ -55,18 +57,12 @@ function todayIso() {
 }
 
 /** UTC-formatted range label (calendar dates render the same in any timezone). */
-function rangeLabel(dateFrom: string, dateTo: string): string {
+function rangeLabel(dateFrom: string, dateTo: string, locale: Locale): string {
   if (dateFrom <= ALL_TIME_FROM && dateTo >= ALL_TIME_TO) return 'all time'
   const fromMonth = dateFrom.slice(0, 7)
   const toMonth = dateTo.slice(0, 7)
   if (fromMonth === toMonth) return longMonthLabel(fromMonth)
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-  return `${fmt.format(new Date(`${dateFrom}T00:00:00Z`))} – ${fmt.format(new Date(`${dateTo}T00:00:00Z`))}`
+  return formatIsoDateRange(dateFrom, dateTo, locale)
 }
 
 function RankedList({
@@ -118,6 +114,7 @@ function RankedList({
 }
 
 export default async function ReportsPage({ searchParams }: ReportsPageProps) {
+  const locale = await getLocale()
   const params = await searchParams
   const view = params.view === 'merchant' ? 'merchant' : 'category'
   const selectedType =
@@ -309,7 +306,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       <PageHeader
         eyebrow="Analysis"
         title="Reports"
-        description={`Spending and income breakdowns for ${rangeLabel(dateFrom, dateTo)}.`}
+        description={`Spending and income breakdowns for ${rangeLabel(dateFrom, dateTo, locale)}.`}
         actions={
           <Link
             href="/dashboard/export"
@@ -362,7 +359,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
       {!hasActivity ? (
         <Callout variant="info" className="border-dashed text-muted-foreground">
-          No posted income or expense activity for {rangeLabel(dateFrom, dateTo)} with these filters.
+          No posted income or expense activity for {rangeLabel(dateFrom, dateTo, locale)} with these filters.
         </Callout>
       ) : null}
 
@@ -411,7 +408,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
             <CategoryDonut data={donutData} currency={currency} total={donutTotal} totalLabel="Total" month={dateTo.slice(0, 7)} />
           ) : (
             <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-              No {view === 'merchant' ? 'merchant' : 'category'} {flowNoun} for {rangeLabel(dateFrom, dateTo)}.
+              No {view === 'merchant' ? 'merchant' : 'category'} {flowNoun} for {rangeLabel(dateFrom, dateTo, locale)}.
             </p>
           )}
         </div>
@@ -423,7 +420,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           <RankedList
             rows={rankedRows}
             currency={currency}
-            emptyLabel={`No ${view === 'merchant' ? 'merchant' : 'category'} ${flowNoun} for ${rangeLabel(dateFrom, dateTo)}.`}
+            emptyLabel={`No ${view === 'merchant' ? 'merchant' : 'category'} ${flowNoun} for ${rangeLabel(dateFrom, dateTo, locale)}.`}
           />
         </div>
       </div>
