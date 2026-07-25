@@ -163,6 +163,13 @@ export function TransferEditForm({
       : null
   const costExceedsSent =
     costIsPositive && sentBaseValue != null && parsedCost > sentBaseValue + 0.01
+  // Soft advisory: the entered cost is far from what market rates suggest.
+  const costLooksOff =
+    costTouched &&
+    costIsPositive &&
+    !costExceedsSent &&
+    suggestedCost != null &&
+    Math.abs(parsedCost - suggestedCost) > Math.max(1, suggestedCost * 0.2)
 
   function conversionPreview() {
     if (!selectedFromAccount || !rateIsValid || !amountIsValid) return null
@@ -415,6 +422,11 @@ export function TransferEditForm({
             <p className="text-xs text-destructive">
               The cost can&rsquo;t be more than what you sent.
             </p>
+          ) : costLooksOff && suggestedCost != null ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              We estimated about {formatCurrency(suggestedCost, baseCurrency)} —
+              double-check this cost.
+            </p>
           ) : (
             <p className="text-xs text-muted-foreground">
               We estimate what this transfer cost you — bank fees plus the
@@ -432,7 +444,7 @@ export function TransferEditForm({
 
       {needsFromRate ? (
         <AdvancedFields
-          defaultOpen
+          defaultOpen={isCrossCurrencyTransfer}
           summary={
             rateIsValid
               ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${selectedFromAccount?.currency_code}`

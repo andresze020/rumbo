@@ -940,6 +940,18 @@ export default async function TransactionsPage({
           ? formatCurrency(row.displayAmount, row.amountEntry.currency_code)
           : null,
       tags: tagsForTransaction(row.transaction.id),
+      // Cross-currency transfers carry their cost (FX spread + fee) as an
+      // expense allocation — surface it on the row so it's visible, not just in
+      // reports.
+      transferCostFormatted:
+        row.isTransfer &&
+        row.allocation &&
+        Number(row.allocation.amount_base_currency ?? 0) > 0
+          ? formatCurrency(
+              Number(row.allocation.amount_base_currency),
+              household.base_currency
+            )
+          : null,
       canEdit: row.canEdit,
       canEditTransfer: row.canEditTransfer,
       canVoid: row.canVoid,
