@@ -23,7 +23,13 @@ import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
 import type { Locale } from '@/lib/i18n/dictionaries'
-import { formatCurrency, formatLabel as formatValue, formatMonthLabel, localeToBcp47 } from '@/lib/format'
+import {
+  formatCurrency,
+  formatIsoDateRange,
+  formatLabel as formatValue,
+  formatMonthLabel,
+  localeToBcp47,
+} from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 type TransactionsPageProps = {
@@ -211,16 +217,7 @@ function formatDateRangeLabel(dateFrom: string, dateTo: string, locale: Locale):
   if (fromMonth === toMonth) {
     return formatMonthLabel(fromMonth, locale)
   }
-  // Format in UTC: the dates are calendar dates (YYYY-MM-DD), not instants, so
-  // they must render the same regardless of the server/viewer timezone.
-  // Without timeZone:'UTC', a behind-UTC runtime shows the previous day.
-  const fmt = new Intl.DateTimeFormat(localeToBcp47(locale), {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-  return `${fmt.format(new Date(`${dateFrom}T00:00:00Z`))} – ${fmt.format(new Date(`${dateTo}T00:00:00Z`))}`
+  return formatIsoDateRange(dateFrom, dateTo, locale)
 }
 
 function normalizeOption(value: string | undefined, allowedValues: string[]) {

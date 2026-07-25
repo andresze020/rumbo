@@ -1,52 +1,70 @@
 # User Settings Page
 
 ## Status
-
 **Implemented.**
-No new database migration is required. Profile and language preferences use the
-existing `profiles` table; household settings use `households`; authentication
-changes use Supabase Auth.
+No database schema changes required. Profile and household writes use the
+existing `profiles` and `households` tables; password/email/session changes use
+Supabase Auth.
 
 ---
 
-## Context
+## Contexto
 
-`/dashboard/settings` is the central place for account preferences and household
-configuration. It is linked from the authenticated navigation.
-
----
-
-## Implemented sections
-
-| Section | Capability | Persistence |
-|---|---|---|
-| Profile | Edit display name and view the current email | `profiles.display_name` |
-| Password | Set a new account password | Supabase Auth |
-| Household | Edit the household name and view its immutable base currency | `households.name` |
-| Appearance | Choose system, light, or dark theme | Browser theme preference |
-| Language | Choose English, Spanish, or Canadian French | `profiles.locale`, mirrored in `af_locale` |
-| Security | Sign out all active sessions | Supabase Auth global sign-out |
-
-The base currency remains read-only because changing it would invalidate
-historical base-currency amounts and requires a dedicated data migration.
+`/dashboard/settings` is the central hub for account preferences and household
+settings. It is reachable from the desktop sidebar user block and the mobile
+navigation.
 
 ---
 
-## Language behavior
+## Funcionalidad
 
-The selected language is a user preference, not only a browser setting.
-`setLocaleAction` updates `profiles.locale` and the `af_locale` cookie. Password
-and OAuth login restore that cookie from the profile so a new browser, device,
-or incognito session uses the same language after authentication.
-
-Legacy values such as `en-CA` are normalized to the supported UI locale `en`.
+| Sección | Implementación |
+|---|---|
+| Perfil | Edita `profiles.display_name` and shows the active Auth email. |
+| Email | Calls `supabase.auth.updateUser({ email })`, shows confirmation instructions and the pending address while Supabase waits for confirmation. |
+| Contraseña | Calls `supabase.auth.updateUser({ password })` with length and confirmation validation. |
+| Household | Edits the household name. Base currency is read-only because changing it requires a ledger-wide data migration. |
+| Apariencia | System, light and dark theme through `next-themes`. |
+| Idioma | English, Spanish and Canadian French. `profiles.locale` is canonical and `af_locale` is its SSR/browser mirror. |
+| Sesiones | Global sign-out through `supabase.auth.signOut({ scope: 'global' })`. |
 
 ---
 
-## Deferred scope
+## Arquitectura
 
-- Email change with confirmation and pending-email state.
-- Account deletion and household-data cleanup.
+- Page and server-rendered account state:
+  `src/app/dashboard/settings/page.tsx`.
+- Auth/profile/household server actions:
+  `src/app/dashboard/settings/settings-actions.ts`.
+- Theme controls:
+  `src/app/dashboard/settings/appearance-section.tsx`.
+- Language controls:
+  `src/app/dashboard/settings/language-section.tsx`.
+- Password and OAuth login restore `af_locale` from `profiles.locale`, so the
+  preference follows the user into a new browser, device, or incognito session.
+- Historical locale values such as `en-CA` are normalized to the supported UI
+  locale `en`.
+- Auth errors are converted to generic user-facing messages; sensitive provider
+  details are not exposed.
 
-Both remain separate product changes and are not implied by the current global
-sign-out action.
+---
+
+## Alcance diferido
+
+Account deletion remains out of scope. It requires a separately reviewed
+soft-delete/anonymization policy and an administrative Auth deletion path; the
+current "Danger zone" only revokes all sessions.
+
+---
+
+## QA manual
+
+1. Change the display name and reload Settings/sidebar.
+2. Request an email change and confirm the pending-address message.
+3. Complete the Supabase confirmation flow and log in with the new email.
+4. Change the password, then verify the old password no longer works.
+5. Rename the household and verify dashboard headers update.
+6. Switch theme and language, reload, and confirm persistence.
+7. Sign out, open an incognito window, sign in to the same account, and confirm
+   that the selected language is restored.
+8. Use **Sign out all** and verify another active device/session is revoked.

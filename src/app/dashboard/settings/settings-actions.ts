@@ -59,6 +59,26 @@ export async function updatePasswordAction(formData: FormData) {
   redirect('/dashboard/settings?saved=password')
 }
 
+export async function updateEmailAction(formData: FormData) {
+  const email = String(formData.get('email') ?? '').trim().toLowerCase()
+
+  if (!email) redirectWithError('New email is required.')
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    redirectWithError('Enter a valid email address.')
+  }
+
+  const { supabase, user } = await getAuthContext()
+  if (email === user.email?.toLowerCase()) {
+    redirectWithError('Enter an email address different from your current one.')
+  }
+
+  const { error } = await supabase.auth.updateUser({ email })
+  if (error) redirectWithError('Could not start the email change. Please try again.')
+
+  revalidatePath('/dashboard/settings')
+  redirect('/dashboard/settings?saved=email')
+}
+
 export async function updateHouseholdAction(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim()
 

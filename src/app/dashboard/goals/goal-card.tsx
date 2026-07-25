@@ -3,7 +3,7 @@ import { StatusBadge } from '@/components/status-badge'
 import { SubmitButton } from '@/components/submit-button'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { formatCurrency, formatPercent, localeToBcp47 } from '@/lib/format'
+import { formatCurrency, formatIsoDate, formatPercent } from '@/lib/format'
 import { goalProgress } from '@/lib/goals/shared'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
@@ -27,15 +27,6 @@ type GoalCardProps = {
   contributeHref: string
   withdrawHref: string
   locale: Locale
-}
-
-function formatDate(iso: string, locale: Locale) {
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Intl.DateTimeFormat(localeToBcp47(locale), {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(Date.UTC(y, m - 1, d)))
 }
 
 export function GoalCard({
@@ -79,7 +70,7 @@ export function GoalCard({
             {typeLabel}
             {goal.target_date
               ? ` · ${translate(locale, 'goals.targetDate', {
-                  date: formatDate(goal.target_date, locale),
+                  date: formatIsoDate(goal.target_date, locale),
                 })}`
               : ''}
           </p>

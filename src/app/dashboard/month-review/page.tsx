@@ -20,7 +20,7 @@ import { MonthNav } from '@/components/month-nav'
 import { Callout } from '@/components/callout'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { SubmitButton } from '@/components/submit-button'
-import { formatCurrency, formatPercent } from '@/lib/format'
+import { formatCurrency, formatIsoDate, formatPercent } from '@/lib/format'
 import { getLocale } from '@/lib/i18n/server'
 import { computeHealthScore, healthGrade } from '@/lib/health/score'
 import { cn } from '@/lib/utils'
@@ -220,7 +220,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
     .maybeSingle()
   const isClosed = Boolean(closureRow)
   const closedAtLabel = closureRow?.closed_at
-    ? new Date(closureRow.closed_at).toLocaleDateString('en-CA', {
+    ? formatIsoDate(closureRow.closed_at.slice(0, 10), locale, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',

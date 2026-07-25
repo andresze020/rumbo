@@ -8,8 +8,7 @@ import { LineTrendChart } from '@/components/analysis/charts'
 import { ReportFilters } from './report-filters'
 import { buttonVariants } from '@/components/ui/button'
 import type { MultiSelectOption } from '@/components/multi-select-chip'
-import { formatCurrency, formatCurrencyCompact, formatPercent } from '@/lib/format'
-import { localeToBcp47 } from '@/lib/format'
+import { formatCurrency, formatCurrencyCompact, formatIsoDateRange, formatPercent } from '@/lib/format'
 import { getLocale } from '@/lib/i18n/server'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { cn } from '@/lib/utils'
@@ -64,13 +63,7 @@ function rangeLabel(dateFrom: string, dateTo: string, locale: Locale): string {
   const fromMonth = dateFrom.slice(0, 7)
   const toMonth = dateTo.slice(0, 7)
   if (fromMonth === toMonth) return longMonthLabel(fromMonth, locale)
-  const fmt = new Intl.DateTimeFormat(localeToBcp47(locale), {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-  return `${fmt.format(new Date(`${dateFrom}T00:00:00Z`))} – ${fmt.format(new Date(`${dateTo}T00:00:00Z`))}`
+  return formatIsoDateRange(dateFrom, dateTo, locale)
 }
 
 function RankedList({

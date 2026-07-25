@@ -188,27 +188,30 @@ export async function archivePayeeAction(formData: FormData) {
 }
 
 export async function mergePayeesAction(formData: FormData) {
-  const sourceId = String(formData.get('source_id') ?? '').trim()
+  const sourceIds = formData
+    .getAll('source_id')
+    .map((value) => String(value).trim())
+    .filter(Boolean)
   const targetId = String(formData.get('target_id') ?? '').trim()
   const showArchived = String(formData.get('show_archived') ?? '') === 'true'
 
-  if (!sourceId) {
-    redirectWithError('Select the payee to merge.')
+  if (!sourceIds.length) {
+    redirectWithError('Select at least one payee to merge.')
   }
 
   if (!targetId) {
     redirectWithError('Select the payee to merge into.')
   }
 
-  if (sourceId === targetId) {
-    redirectWithError('Choose two different payees to merge.')
+  if (sourceIds.includes(targetId)) {
+    redirectWithError('The surviving payee cannot also be selected as a duplicate.')
   }
 
   const { supabase, householdId } = await getAuthenticatedHousehold()
 
-  const { data: moved, error: mergeError } = await supabase.rpc('merge_payees', {
+  const { data: moved, error: mergeError } = await supabase.rpc('merge_payees_bulk', {
     p_household_id: householdId,
-    p_source_id: sourceId,
+    p_source_ids: [...new Set(sourceIds)],
     p_target_id: targetId,
   })
 

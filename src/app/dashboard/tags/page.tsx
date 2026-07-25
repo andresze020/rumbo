@@ -14,8 +14,7 @@ import { MetricCard } from '@/components/metric-card'
 import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Callout } from '@/components/callout'
-import { localeToBcp47 } from '@/lib/format'
-import type { Locale } from '@/lib/i18n/dictionaries'
+import { formatIsoDate } from '@/lib/format'
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { cn } from '@/lib/utils'
@@ -62,18 +61,6 @@ function tagsPath({
   if (edit) params.set('edit', edit)
   const qs = params.toString()
   return `/dashboard/tags${qs ? `?${qs}` : ''}`
-}
-
-/** Short, locale-stable "last used" date (matches lib/format's en-CA base). */
-function formatLastUsed(date: string | null, locale: Locale) {
-  if (!date) return null
-  const parsed = new Date(`${date}T00:00:00`)
-  if (Number.isNaN(parsed.getTime())) return null
-  return parsed.toLocaleDateString(localeToBcp47(locale), {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
 }
 
 export default async function TagsPage({ searchParams }: TagsPageProps) {
@@ -140,7 +127,7 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
     color: tag.color,
     isArchived: tag.isArchived,
     txnCount: tag.txnCount,
-    lastUsedLabel: formatLastUsed(tag.lastTxnDate, locale),
+    lastUsedLabel: tag.lastTxnDate ? formatIsoDate(tag.lastTxnDate, locale) : null,
     editHref: tagsPath({ showArchived, q: searchQuery, edit: tag.id }),
     transactionsHref: `/dashboard/transactions?tag_id=${tag.id}`,
   }))

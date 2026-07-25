@@ -16,6 +16,7 @@ import { AppearanceSection } from './appearance-section'
 import { LanguageSection } from './language-section'
 import {
   signOutAllAction,
+  updateEmailAction,
   updateHouseholdAction,
   updatePasswordAction,
   updateProfileAction,
@@ -67,13 +68,18 @@ export default async function SettingsPage({ searchParams }: Props) {
       {saved === 'password' && (
         <Callout variant="success">{ui('Password updated successfully.')}</Callout>
       )}
+      {saved === 'email' && (
+        <Callout variant="success">
+          {ui('Email change requested. Confirm the messages sent by Supabase before the new address becomes active.')}
+        </Callout>
+      )}
       {saved === 'household' && <Callout variant="success">{ui('Household updated.')}</Callout>}
 
       {/* ── Profile ─────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>{ui('Profile')}</CardTitle>
-          <CardDescription>{ui('Your display name and email address.')}</CardDescription>
+          <CardTitle>Profile</CardTitle>
+          <CardDescription>Your display name and email address.</CardDescription>
         </CardHeader>
         <CardContent>
           <form action={updateProfileAction} className="space-y-4">
@@ -88,16 +94,37 @@ export default async function SettingsPage({ searchParams }: Props) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Email</Label>
+              <Label htmlFor="email">Email</Label>
               <p className="rounded-lg border border-input bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
                 {user.email}
               </p>
+              {(user as { new_email?: string }).new_email ? (
+                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                  {ui('Pending confirmation:')} {(user as { new_email?: string }).new_email}
+                </p>
+              ) : null}
               <p className="text-xs text-muted-foreground">
-                {ui('Contact support to change your email address.')}
+                {ui('Changing your email requires confirmation before it becomes active.')}
               </p>
             </div>
             <SubmitButton type="submit" size="sm" pendingText="Saving…">
               Save profile
+            </SubmitButton>
+          </form>
+          <form action={updateEmailAction} className="mt-6 space-y-4 border-t pt-6">
+            <div className="space-y-1.5">
+              <Label htmlFor="new_email">New email address</Label>
+              <Input
+                id="new_email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+            <SubmitButton type="submit" size="sm" variant="outline" pendingText="Sending…">
+              Change email
             </SubmitButton>
           </form>
         </CardContent>
@@ -106,8 +133,8 @@ export default async function SettingsPage({ searchParams }: Props) {
       {/* ── Password ────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>{ui('Password')}</CardTitle>
-          <CardDescription>{ui('Set a new password for your account.')}</CardDescription>
+          <CardTitle>Password</CardTitle>
+          <CardDescription>Set a new password for your account.</CardDescription>
         </CardHeader>
         <CardContent>
           <form action={updatePasswordAction} className="space-y-4">
@@ -140,8 +167,8 @@ export default async function SettingsPage({ searchParams }: Props) {
       {/* ── Household ───────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>{ui('Household')}</CardTitle>
-          <CardDescription>{ui('Shared settings for your household.')}</CardDescription>
+          <CardTitle>Household</CardTitle>
+          <CardDescription>Shared settings for your household.</CardDescription>
         </CardHeader>
         <CardContent>
           <form action={updateHouseholdAction} className="space-y-4">
@@ -160,7 +187,7 @@ export default async function SettingsPage({ searchParams }: Props) {
                 {household?.base_currency ?? '—'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {ui('The base currency is set at household creation. Changing it would invalidate all stored balance calculations and requires a full data migration.')}
+                The base currency is set at household creation. Changing it would invalidate all stored balance calculations and requires a full data migration.
               </p>
             </div>
             <SubmitButton type="submit" size="sm" pendingText="Saving…">
@@ -179,15 +206,15 @@ export default async function SettingsPage({ searchParams }: Props) {
       {/* ── Danger zone ─────────────────────────────────────────────── */}
       <Card className="border-destructive/30">
         <CardHeader>
-          <CardTitle className="text-destructive">{ui('Danger zone')}</CardTitle>
-          <CardDescription>{ui('Irreversible actions for your account.')}</CardDescription>
+          <CardTitle className="text-destructive">Danger zone</CardTitle>
+          <CardDescription>Irreversible actions for your account.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-sm font-medium">{ui('Sign out all devices')}</p>
+              <p className="text-sm font-medium">Sign out all devices</p>
               <p className="text-xs text-muted-foreground">
-                {ui('Immediately revokes all active sessions.')}
+                Immediately revokes all active sessions.
               </p>
             </div>
             <form action={signOutAllAction} className="shrink-0">

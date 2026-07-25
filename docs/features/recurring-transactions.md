@@ -1,8 +1,10 @@
 # Recurring Transactions
 
 ## Status
-**Sprint A + Sprint B shipped.** Auto-posting is built (2026-07-23, branch
-`feat/recurring-autopost-br014`); migration pending `db push` + pg_cron enable.
+**Implemented and operational.** Sprint A + Sprint B are merged to `main`.
+Migration `20260723150000_br_014_recurring_autopost.sql` is applied, the
+`pg_cron` extension is enabled, `run_recurring_autopost()` works, and the
+daily `recurring-autopost` job is scheduled.
 
 - ✅ **Sprint A — Manual posting MVP** (UC-1, UC-2, UC-3, UC-5, UC-6, UC-7):
   `/dashboard/recurring` list with Due/Upcoming/Inactive sections, create/edit
@@ -15,7 +17,9 @@
   `last_error`/`consecutive_failures`; the list shows **Auto** / **Auto-post
   failed** badges + the error. Scheduling is a documented **manual** pg_cron step
   (Open Decision #3 = last known rate, #7 = pg_cron — both resolved). Migration
-  `20260723150000_br_014_recurring_autopost.sql`.
+  `20260723150000_br_014_recurring_autopost.sql`. The page also shows one
+  aggregate alert when any active auto-post template has `last_error`, so
+  failures do not require opening every row.
 - 🟡 **Sprint C** — UC-8 (**Dashboard "Upcoming payments" widget**) already
   shipped on `/dashboard`. **UC-9 (recurring transfers) is the only remaining
   piece** and is deliberately deferred (see below).
@@ -37,11 +41,9 @@ Needs, as one focused sprint (touches financial posting — must be DB-tested):
   the normal create-transaction form now has a **Repeat** frequency field; a
   single submit posts the first transaction and creates the template
   (`auto_post = false`). **Shipped, merged to `main`** via PR #17 (income +
-  expense; transfers excluded). The "repeats **automatically**" half is still
-  **pending** — it needs
-  the Sprint B auto-post scheduler (UC-4 / **BR-014**), blocked on the cron + FX
-  -at-post decisions (Open Decisions #3 and #7). Until then, subsequent
-  occurrences are posted manually from `/dashboard/recurring` (UC-3).
+  expense; transfers excluded). Inline creation intentionally creates the
+  template with `auto_post=false`; the user can enable auto-post while editing
+  it. The scheduler and FX-at-post policy are operational.
 
 > **Note:** the table did **not** actually exist in this project's database —
 > it was only in the initial schema design doc and was never applied. Migration
