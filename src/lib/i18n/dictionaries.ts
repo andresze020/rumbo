@@ -236,6 +236,9 @@ export const en = {
     transferCostTooLarge: "The cost can't be more than what you sent.",
     transferCostLooksOff:
       'We estimated about {amount} — double-check this cost.',
+    transferFee: 'Fee (optional)',
+    transferFeeHelp:
+      'Bank or wire fee charged for this transfer. Recorded as a separate expense on the source account.',
     createTransaction: 'Create transaction',
     createTransfer: 'Create transfer',
     creatingTransaction: 'Creating transaction',
@@ -635,6 +638,9 @@ export const es: DeepStringify<typeof en> = {
     transferCostTooLarge: 'El costo no puede ser mayor que lo que enviaste.',
     transferCostLooksOff:
       'Estimamos alrededor de {amount} — revisa este costo.',
+    transferFee: 'Comisión (opcional)',
+    transferFeeHelp:
+      'Comisión bancaria o de giro cobrada por esta transferencia. Se registra como un gasto aparte en la cuenta de origen.',
     createTransaction: 'Crear transacción',
     createTransfer: 'Crear transferencia',
     creatingTransaction: 'Creando transacción',
@@ -1034,6 +1040,9 @@ export const fr: DeepStringify<typeof en> = {
     transferCostTooLarge: 'Le coût ne peut pas dépasser ce que vous avez envoyé.',
     transferCostLooksOff:
       'Nous estimons environ {amount} — vérifiez ce coût.',
+    transferFee: 'Frais (optionnel)',
+    transferFeeHelp:
+      'Frais bancaires ou de virement facturés pour ce virement. Enregistrés comme une dépense distincte sur le compte source.',
     createTransaction: 'Créer la transaction',
     createTransfer: 'Créer le virement',
     creatingTransaction: 'Création de la transaction',

@@ -397,7 +397,7 @@ export function TransactionForm({
       Boolean(toAccountId) &&
       (!isCrossCurrencyTransfer || toAmountValid) &&
       (!needsFromRate || rateIsValid) &&
-      (!isCrossCurrencyTransfer || !costIsPositive || Boolean(effectiveCostCategoryId)) &&
+      (!isTransfer || !costIsPositive || Boolean(effectiveCostCategoryId)) &&
       (!isCrossCurrencyTransfer || !costExceedsSent)
     : compatibleCategories.length > 0 &&
       Boolean(categoryId) &&
@@ -1871,6 +1871,61 @@ export function TransactionForm({
           <input
             type="hidden"
             name="cost_category_id"
+            value={costIsPositive ? effectiveCostCategoryId : ''}
+          />
+        </div>
+      ) : null}
+
+      {/* ── Same-currency: optional explicit fee (a real cash charge) ──── */}
+      {isTransfer && !isCrossCurrencyTransfer && selectedFromAccount && selectedToAccount ? (
+        <div className="rounded-2xl border bg-muted/30 p-3">
+          <div className="flex items-center justify-between">
+            <Label
+              htmlFor="fee_amount"
+              className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
+            >
+              {t('transactionForm.transferFee')}
+            </Label>
+            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
+              {selectedFromAccount.currency_code}
+            </span>
+          </div>
+          <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
+            <Input
+              id="fee_amount"
+              name="fee_amount"
+              inputMode="decimal"
+              value={costValue}
+              onChange={(e) => {
+                setCostInput(e.target.value)
+                setCostTouched(true)
+              }}
+              placeholder="0.00"
+              className="sm:flex-1"
+            />
+            <select
+              aria-label={t('transactionForm.transferCostCategory')}
+              value={effectiveCostCategoryId}
+              onChange={(e) => setCostCategoryId(e.target.value)}
+              className={cn(nativeSelectCls, 'sm:flex-1')}
+              disabled={!costIsPositive}
+            >
+              <option value="" disabled>
+                {t('transactionForm.transferCostCategory')}
+              </option>
+              {expenseCategoryOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {t('transactionForm.transferFeeHelp')}
+          </p>
+          <input
+            type="hidden"
+            name="fee_category_id"
             value={costIsPositive ? effectiveCostCategoryId : ''}
           />
         </div>

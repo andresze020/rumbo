@@ -409,6 +409,33 @@ export async function createTransferTransactionAction(formData: FormData) {
     )
   }
 
+  // Same-currency transfers can carry an explicit fee (wire/bank charge). It's a
+  // real cash outflow, so it's recorded as its own visible expense on the from
+  // account. (Cross-currency fees are already captured by the transfer cost.)
+  const feeAmount = parsePositiveNumber(formData.get('fee_amount'))
+  const feeCategoryId = String(formData.get('fee_category_id') ?? '').trim() || null
+  if (feeAmount && feeCategoryId) {
+    const { error: feeError } = await supabase.rpc('create_manual_transaction', {
+      p_household_id: profile.default_household_id,
+      p_transaction_type: 'expense',
+      p_transaction_date: transactionDate,
+      p_account_id: fromAccountId,
+      p_category_id: feeCategoryId,
+      p_amount: feeAmount,
+      p_description: 'Transfer fee',
+      p_merchant_name: null,
+      p_notes: null,
+      p_status: status,
+      p_exchange_rate_to_base: validExchangeRate,
+      p_payee_name: null,
+    })
+    if (feeError) {
+      redirectWithError(
+        'Transfer created, but its fee could not be recorded. Add it as an expense.'
+      )
+    }
+  }
+
   revalidatePath('/dashboard/transactions')
   revalidatePath('/dashboard/accounts')
   revalidatePath('/dashboard')
