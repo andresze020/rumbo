@@ -296,6 +296,11 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
 ## Git rules
 
+- Canonical checkout: `C:\Users\Andres\Documents\Projects\app-finanzas`.
+  Codex and Claude Code must use this same checkout by default. Do not create
+  additional Git worktrees unless the user explicitly requests an isolated
+  worktree. Use regular branches in this checkout and return it to `main` after
+  closing and publishing the work.
 - Work on a branch, not directly on main.
 - Use small, logically separable commits.
 - Before making code changes, explain the plan.
