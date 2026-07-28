@@ -217,6 +217,13 @@ The product is household-first. All financial data must belong to a household.
   `docs/alpha-readiness-checklist.md` for the readiness gate, and
   `docs/pending-work.md` for a single index of every open feature, BR
   backlog item, and cross-feature Open Decision.
+- Benchmarks: `docs/benchmark-review-monarch-ynab-copilot.md` (web/product
+  competitors, source of BR-001…BR-029) and
+  `docs/benchmark-review-mobile-money-managers.md` (mobile capture
+  competitors, source of BR-030…BR-041, added 2026-07-27). The mobile doc is
+  the self-sufficient record of a screen-recording review — it lists what we
+  already ship (§5.1) so those patterns are not re-proposed, and what the
+  recording never showed (§9).
 
 ## Real Supabase tables (public schema)
 
