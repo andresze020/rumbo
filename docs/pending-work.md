@@ -7,7 +7,11 @@
 > first, then update this index to match. Kept in sync by the
 > `app-finanzas-state-sync` skill at sprint close.
 >
-> **Last refreshed 2026-07-25.** PR #37 merged the hard backlog into `main`.
+> **Last refreshed 2026-07-27** — added the BR-030…BR-041 mobile-capture-parity
+> block from [benchmark-review-mobile-money-managers.md](./benchmark-review-mobile-money-managers.md).
+> Documentation only; no code or migrations changed.
+>
+> **2026-07-25.** PR #37 merged the hard backlog into `main`.
 > BR-007, BR-008, BR-010, BR-014, BR-023 and BR-024 are shipped; their
 > production migrations are applied. Recurring auto-post is operational with
 > `pg_cron`. Full English, Spanish, and Canadian French UI coverage is
@@ -56,6 +60,34 @@ Full detail, "why soon," and acceptance criteria live in
 | ~~BR-010~~ ✅ | Rules / automation | Shipped in PR #37: `categorization_rules` migration, CRUD and application flow. |
 | BR-011 | Review workflow | ✅ Core already shipped (Sprint 4 + PR #17): `review_status` column, filter chips, bulk "Mark reviewed"/categorize, per-row control, dashboard "N to review" pill. Polished on branch `feat/br-011-review-queue-polish` (no migration): activated the "Review queue" nav entry (was locked "coming soon") → `/dashboard/transactions?review=unreviewed`, added bulk **Flag** / **Mark unreviewed**, and an "all caught up" empty state |
 
+## BR backlog — mobile capture parity (BR-030…BR-041, not started)
+
+Added 2026-07-27 from the mobile-app benchmark. Full rows (priority, first
+slice, DB impact, verification) live in
+[alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md);
+the observation record is
+[benchmark-review-mobile-money-managers.md](./benchmark-review-mobile-money-managers.md).
+All twelve were verified absent from the codebase on 2026-07-27 — that doc's
+§5.1 lists what we already ship, so nothing here is a duplicate.
+
+| ID | Priority | Area | One-line |
+|---|---:|---|---|
+| BR-030 | P1 | Accounts / credit cards | Statement cycle (statement day, payment day, billing account) → Balance Payable vs Outstanding, then a `Pay` settlement action |
+| BR-031 | P1 | Multi-currency entry | Bidirectional dual-currency amount field with explicit rate re-fetch |
+| BR-032 | P2 | UX speed / settings | User-configurable transaction-form fields (which optional fields render) |
+| BR-033 | P2 | UX speed | Relative date chips (today / yesterday / two days ago) |
+| BR-034 | P2 | Transactions | Duplicate ("Copy") an existing transaction — preferred over a bookmark/template entity |
+| BR-035 | P2 | Transactions / cards | Installment purchases (fixed count + total, *n of N*) |
+| BR-036 | P3 | Periods / budgets | Configurable month start day (payday-aligned period) — high blast radius |
+| BR-037 | P3 | Reports | Calendar month view of per-day income/expense/net |
+| BR-038 | P3 | Settings / display | Default landing scope + period, compact list, hide balance adjustments |
+| BR-039 | P3 | Accounts / reporting | Per-account "transfer as expense" opt-in |
+| BR-040 | P3 | Modelling | Refunds/rebates as a negative amount in the same category — decision first |
+| BR-041 | P3 | Export | `.xlsx` export alongside CSV |
+
+> Attachments/receipts stayed **BR-D01 (deferred)** on purpose — see the
+> Deferred table below; the benchmark only added a reference implementation.
+
 ## BR backlog — not started (P2/P3)
 
 | ID | Area | One-line |
@@ -89,7 +121,7 @@ Full detail, "why soon," and acceptance criteria live in
 
 | ID | Area | Revisit when |
 |---|---|---|
-| BR-D01 | Attachments / receipts | Real usage proves receipt capture is needed, or OCR becomes a priority |
+| BR-D01 | Attachments / receipts | Real usage proves receipt capture is needed, or OCR becomes a priority. Reference implementation recorded in the mobile benchmark (3 photo slots on entry + thumbnail on detail); still deferred, no BR-ID assigned |
 | BR-D02 | Investment performance | Core household cash/debt/budget flows are stable |
 | BR-D03 | Bill split / reimbursements | Multi-member household usage creates real split/reimbursement needs |
 | BR-D04 | Advisor / external access | Household invite/member management is shipped and used |
