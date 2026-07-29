@@ -350,9 +350,24 @@ const FILTER_PARAM_KEYS = [
   'page',
 ] as const
 
-/** The explicit URL that represents this user's preferred landing view. */
-function preferredScopeHref(preferences: UiPreferences) {
+/**
+ * The explicit URL that represents this user's preferred landing view.
+ *
+ * Non-filter params ride along: a server action that redirects back here with
+ * `?created=1` (or `voided`, `undo_id`, `edit`…) must still show its toast or
+ * dialog after the landing preferences are applied.
+ */
+function preferredScopeHref(
+  preferences: UiPreferences,
+  currentParams: Record<string, string | string[] | undefined>
+) {
   const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(currentParams)) {
+    if (value === undefined) continue
+    for (const entry of Array.isArray(value) ? value : [value]) {
+      params.append(key, entry)
+    }
+  }
   const { defaultPeriod, defaultAccountId } = preferences.transactions
 
   if (defaultPeriod === 'last_30_days') {
@@ -391,7 +406,7 @@ export default async function TransactionsPage({
   const hasAnyFilterParam = FILTER_PARAM_KEYS.some((key) => params[key] !== undefined)
 
   if (!hasAnyFilterParam && !hasDefaultTransactionScope(preferences)) {
-    redirect(preferredScopeHref(preferences))
+    redirect(preferredScopeHref(preferences, params))
   }
 
   const rawDateFrom = typeof params.date_from === 'string' ? params.date_from : ''
