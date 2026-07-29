@@ -52,6 +52,12 @@ type TransactionType = 'income' | 'expense' | 'transfer'
 /** Which selector surface is open (mobile sheet or desktop popover). */
 type PickerField = null | 'account' | 'from' | 'to' | 'category' | 'payee'
 
+/**
+ * Where the fill-fast chain goes next. `description` is not a picker — it ends
+ * the chain by taking focus, since there is nothing left to choose from a list.
+ */
+type AdvanceTarget = PickerField | 'description'
+
 export type TransactionFormAccount = {
   id: string
   name: string
@@ -107,12 +113,7 @@ type TransactionFormProps = {
   returnTo?: string
 }
 
-const LAST_ACCOUNT_KEY = 'af_last_account_id'
 const CATEGORY_USAGE_KEY = 'af_category_usage'
-
-function lastCategoryKey(transactionType: TransactionType) {
-  return `af_last_category_id_${transactionType}`
-}
 
 // Only the account name is shown: the currency already appears above the amount,
 // and users typically name accounts after their bank, so the institution and
@@ -278,29 +279,14 @@ export function TransactionForm({
   const [fxNote, setFxNote] = useState('')
   const [fxError, setFxError] = useState('')
 
-  // Apply remembered account/category defaults from previous submissions, once,
-  // only when the caller hasn't supplied explicit defaults of their own.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const frame = window.requestAnimationFrame(() => {
-      if (!defaultAccountId) {
-        const lastAccountId = window.localStorage.getItem(LAST_ACCOUNT_KEY)
-        if (lastAccountId && accounts.some((a) => a.id === lastAccountId)) {
-          setAccountId((current) => current || lastAccountId)
-        }
-      }
-      if (!defaultCategoryId) {
-        const lastCategoryId = window.localStorage.getItem(lastCategoryKey(transactionType))
-        if (lastCategoryId && categories.some((c) => c.id === lastCategoryId)) {
-          setCategoryId((current) => current || lastCategoryId)
-        }
-      }
-    })
-
-    return () => window.cancelAnimationFrame(frame)
-    // Only run on initial mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // The form deliberately does NOT restore the last account or category it was
+  // submitted with. Silently pre-filling both meant a blank new transaction
+  // arrived already pointing at an account and a category the user had not
+  // chosen — easy to save by accident, and wrong more often than right. Account
+  // and category are only pre-filled from real context the caller passes in
+  // (`defaultAccountId` / `defaultCategoryId`): a copy, an add-next, or the
+  // transactions list narrowed to one account. Recent categories are still
+  // *offered* as one-tap chips, which suggests without deciding.
 
   const selectedAccount = availableAccounts.find((a) => a.id === accountId)
   const isMultiCurrency = Boolean(
@@ -493,11 +479,13 @@ export function TransactionForm({
     }
   }
 
-  function rememberDefaults() {
-    if (typeof window === 'undefined' || isTransfer) return
-    if (accountId) window.localStorage.setItem(LAST_ACCOUNT_KEY, accountId)
-    if (!categoryId) return
-    window.localStorage.setItem(lastCategoryKey(transactionType), categoryId)
+  /**
+   * Counts category use so the "Frequently used" chips can rank. Only the
+   * counter is kept — the last account and last category are deliberately not
+   * remembered, because restoring them pre-filled a blank form (see above).
+   */
+  function rememberCategoryUsage() {
+    if (typeof window === 'undefined' || isTransfer || !categoryId) return
     try {
       const raw = window.localStorage.getItem(CATEGORY_USAGE_KEY)
       const usage: Record<string, number> = raw ? JSON.parse(raw) : {}
@@ -702,7 +690,7 @@ export function TransactionForm({
   // of dropping the user back on the form. The handlers only ever set it for
   // the *next required and still empty* field, so the chain stops as soon as
   // the mandatory path is covered and never hijacks a one-field correction.
-  const advanceToRef = useRef<PickerField>(null)
+  const advanceToRef = useRef<AdvanceTarget>(null)
 
   const openPicker = (field: PickerField) => {
     resetPickerState()
@@ -713,6 +701,21 @@ export function TransactionForm({
   const closePicker = () => {
     const next = advanceToRef.current
     advanceToRef.current = null
+
+    // Description is the end of the chain: it's a plain text field, so it gets
+    // focus rather than a picker. On mobile that means expanding its row, which
+    // focuses the input on its own.
+    if (next === 'description') {
+      setSheetField(null)
+      setExpandedField(isMobile ? 'description' : null)
+      if (!isMobile) {
+        window.requestAnimationFrame(() =>
+          document.getElementById('description')?.focus()
+        )
+      }
+      return
+    }
+
     if (next) {
       openPicker(next)
       return
@@ -741,6 +744,18 @@ export function TransactionForm({
   const selectToAccount = (id: string) => {
     setToAccountId(id)
     if (id === fromAccountId) setFromAccountId('')
+  }
+
+  const selectCategory = (id: string) => {
+    setCategoryId(id)
+    if (showField('payee') && !payeeName) advanceToRef.current = 'payee'
+  }
+
+  // Description is always rendered (it isn't one of BR-032's optional fields),
+  // so the chain can always end there.
+  const selectPayee = (name: string) => {
+    setPayeeName(name)
+    if (!description) advanceToRef.current = 'description'
   }
 
   // Open the category picker drilled straight into the currently selected
@@ -926,7 +941,7 @@ export function TransactionForm({
     }
     const created = result.category as TransactionFormCategory
     setCreatedCategories((prev) => [...prev, created])
-    setCategoryId(created.id)
+    selectCategory(created.id)
     closePicker()
   }
 
@@ -1189,7 +1204,7 @@ export function TransactionForm({
                         key={c.id}
                         type="button"
                         onClick={() => {
-                          setCategoryId(c.id)
+                          selectCategory(c.id)
                           closePicker()
                         }}
                         className={cn(
@@ -1230,7 +1245,7 @@ export function TransactionForm({
                             setCategorySearch('')
                             setSubcategorySearch('')
                           } else {
-                            setCategoryId(parent.id)
+                            selectCategory(parent.id)
                             closePicker()
                           }
                         }}
@@ -1278,7 +1293,7 @@ export function TransactionForm({
                     key={category.id}
                     type="button"
                     onClick={() => {
-                      setCategoryId(category.id)
+                      selectCategory(category.id)
                       closePicker()
                     }}
                     className={cn(
@@ -1323,7 +1338,7 @@ export function TransactionForm({
                 key={p.id}
                 type="button"
                 onClick={() => {
-                  setPayeeName(p.name)
+                  selectPayee(p.name)
                   closePicker()
                 }}
                 className={cn(
@@ -1637,7 +1652,7 @@ export function TransactionForm({
   }
 
   return (
-    <form action={submitAction} onSubmit={rememberDefaults} className="space-y-3">
+    <form action={submitAction} onSubmit={rememberCategoryUsage} className="space-y-3">
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
 
       <SelectorSheet open={sheetField !== null} onClose={closePicker} title={sheetTitle}>
@@ -1775,13 +1790,10 @@ export function TransactionForm({
             onOpen: syncCategoryDrillToSelection,
           })}
 
-          {/* Description & Payee: kept essential (visible on mobile too) and
-              full-width so they're comfortable to type into. */}
-          <div className="space-y-1.5 col-span-2">
-            <Label htmlFor="description">{t('transactionForm.description')}</Label>
-            <Input id="description" name="description" defaultValue={defaultDescription} />
-          </div>
-
+          {/* Payee & Description: kept essential (visible on mobile too) and
+              full-width so they're comfortable to type into. Payee sits above
+              description to match the entry order the pickers chain through:
+              amount → account → category → payee → description. */}
           {showField('payee') ? (
             <div className="col-span-2">
               <PayeePicker
@@ -1795,6 +1807,11 @@ export function TransactionForm({
               />
             </div>
           ) : null}
+
+          <div className="space-y-1.5 col-span-2">
+            <Label htmlFor="description">{t('transactionForm.description')}</Label>
+            <Input id="description" name="description" defaultValue={defaultDescription} />
+          </div>
 
           {/* UC-10: turn a normal entry into a recurring one. Kept essential so
               the recurring feature is discoverable. Transfers are not supported

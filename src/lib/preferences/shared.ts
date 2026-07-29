@@ -22,8 +22,8 @@ export type UiPreferences = {
   formFields: Record<TransactionFormField, boolean>
   transactions: {
     defaultPeriod: TransactionPeriod
-    /** Account the list opens filtered to, or null for every account. */
-    defaultAccountId: string | null
+    /** Accounts the list opens filtered to. Empty means every account. */
+    defaultAccountIds: string[]
     compactList: boolean
     /** BR-017 balance adjustments are shown by default. */
     showBalanceAdjustments: boolean
@@ -40,7 +40,7 @@ export const DEFAULT_UI_PREFERENCES: UiPreferences = {
   },
   transactions: {
     defaultPeriod: 'current_month',
-    defaultAccountId: null,
+    defaultAccountIds: [],
     compactList: false,
     showBalanceAdjustments: true,
   },
@@ -65,8 +65,12 @@ export function parseUiPreferences(raw: unknown): UiPreferences {
   const formFields = asRecord(root.formFields)
   const transactions = asRecord(root.transactions)
 
-  const defaultAccountId = transactions.defaultAccountId
   const period = transactions.defaultPeriod
+  // Tolerate the single-id shape this preference shipped with before it became
+  // a list, so an already-saved value is not silently dropped.
+  const rawAccountIds = Array.isArray(transactions.defaultAccountIds)
+    ? transactions.defaultAccountIds
+    : [transactions.defaultAccountId]
 
   return {
     formFields: Object.fromEntries(
@@ -79,10 +83,13 @@ export function parseUiPreferences(raw: unknown): UiPreferences {
       defaultPeriod: isTransactionPeriod(period)
         ? period
         : DEFAULT_UI_PREFERENCES.transactions.defaultPeriod,
-      defaultAccountId:
-        typeof defaultAccountId === 'string' && defaultAccountId
-          ? defaultAccountId
-          : null,
+      defaultAccountIds: [
+        ...new Set(
+          rawAccountIds.filter(
+            (id): id is string => typeof id === 'string' && id.length > 0
+          )
+        ),
+      ],
       compactList: asBoolean(
         transactions.compactList,
         DEFAULT_UI_PREFERENCES.transactions.compactList
@@ -103,6 +110,6 @@ export function hasDefaultTransactionScope(preferences: UiPreferences) {
   return (
     preferences.transactions.defaultPeriod ===
       DEFAULT_UI_PREFERENCES.transactions.defaultPeriod &&
-    preferences.transactions.defaultAccountId === null
+    preferences.transactions.defaultAccountIds.length === 0
   )
 }

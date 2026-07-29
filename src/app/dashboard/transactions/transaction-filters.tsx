@@ -51,6 +51,8 @@ type TransactionFiltersProps = {
   payeeOptions: MultiSelectOption[]
   selectedPayeeIds: string[]
   presetOptions: PresetOption[]
+  /** URL that drops every filter — see CLEAR_FILTERS_HREF on the page. */
+  clearHref: string
 }
 
 /**
@@ -113,6 +115,7 @@ export function TransactionFilters({
   payeeOptions,
   selectedPayeeIds,
   presetOptions,
+  clearHref,
 }: TransactionFiltersProps) {
   const ui = useUiTranslation()
   const [moreOpen, setMoreOpen] = useState(false)
@@ -526,7 +529,7 @@ export function TransactionFilters({
         <div className="flex shrink-0 items-center gap-2 border-t bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:ml-auto sm:border-0 sm:p-0">
           {hasActiveFilters ? (
             <Link
-              href="/dashboard/transactions"
+              href={clearHref}
               className={cn(
                 buttonVariants({ variant: 'ghost', size: 'sm' }),
                 'h-11 flex-1 rounded-xl sm:h-8 sm:flex-none sm:rounded-lg'

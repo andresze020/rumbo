@@ -118,7 +118,14 @@ export async function updateHouseholdAction(formData: FormData) {
  * parser tolerates anything missing.
  */
 export async function updateUiPreferencesAction(formData: FormData) {
-  const accountId = String(formData.get('default_account_id') ?? '').trim()
+  const accountIds = [
+    ...new Set(
+      formData
+        .getAll('default_account_id')
+        .map((value) => String(value).trim())
+        .filter(Boolean)
+    ),
+  ]
   const period = String(formData.get('default_period') ?? '')
 
   const preferences: UiPreferences = {
@@ -129,7 +136,7 @@ export async function updateUiPreferencesAction(formData: FormData) {
       defaultPeriod: isTransactionPeriod(period)
         ? period
         : DEFAULT_UI_PREFERENCES.transactions.defaultPeriod,
-      defaultAccountId: accountId || null,
+      defaultAccountIds: accountIds,
       compactList: formData.get('compact_list') !== null,
       showBalanceAdjustments: formData.get('show_balance_adjustments') !== null,
     },
@@ -138,18 +145,19 @@ export async function updateUiPreferencesAction(formData: FormData) {
   const { supabase, user, householdId } = await getAuthContext()
 
   // A stale default account (archived or from another household) would filter
-  // the list down to nothing, so verify it still belongs here before saving.
-  if (preferences.transactions.defaultAccountId) {
-    const { data: account } = await supabase
+  // the list down to nothing, so verify every one still belongs here.
+  if (accountIds.length > 0) {
+    const { data: accounts } = await supabase
       .from('accounts')
       .select('id')
-      .eq('id', preferences.transactions.defaultAccountId)
       .eq('household_id', householdId)
       .is('deleted_at', null)
       .eq('is_archived', false)
-      .maybeSingle()
+      .in('id', accountIds)
 
-    if (!account) redirectWithError('Select an active account from this household.')
+    if ((accounts ?? []).length !== accountIds.length) {
+      redirectWithError('Select active accounts from this household.')
+    }
   }
 
   const { error } = await supabase

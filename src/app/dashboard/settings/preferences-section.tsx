@@ -132,23 +132,36 @@ export function PreferencesSection({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="default_account_id">Default account</Label>
-              <select
-                id="default_account_id"
-                name="default_account_id"
-                defaultValue={preferences.transactions.defaultAccountId ?? ''}
-                className={nativeSelectCls}
-              >
-                <option value="">All accounts</option>
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </select>
+              <Label>Default accounts</Label>
+              <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border p-1">
+                {accounts.length === 0 ? (
+                  <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                    No active accounts yet.
+                  </p>
+                ) : (
+                  accounts.map((account) => (
+                    <Label
+                      key={account.id}
+                      className="cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 font-normal hover:bg-accent"
+                    >
+                      <input
+                        type="checkbox"
+                        name="default_account_id"
+                        value={account.id}
+                        defaultChecked={preferences.transactions.defaultAccountIds.includes(
+                          account.id
+                        )}
+                        className="size-4 shrink-0 accent-primary"
+                      />
+                      <span className="min-w-0 truncate">{account.name}</span>
+                    </Label>
+                  ))
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
-                Applied when you open the transaction list without filters. A link that
-                carries its own filters always wins.
+                Applied when you open the transaction list without filters. Leave all
+                unchecked for every account. A link that carries its own filters always
+                wins.
               </p>
             </div>
 

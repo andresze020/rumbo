@@ -348,6 +348,16 @@ function transactionsPath(
 }
 
 /**
+ * "Clear filters" has to mean *no* filters — every account, every date.
+ *
+ * A bare `/dashboard/transactions` will not do: that is exactly the URL the
+ * BR-038 landing preferences claim, so clearing would bounce straight back to
+ * the user's default period and account. Spelling out the widest possible range
+ * both keeps the redirect out of the way and says what it means.
+ */
+const CLEAR_FILTERS_HREF = `/dashboard/transactions?date_from=${ALL_TIME_FROM}&date_to=${ALL_TIME_TO}`
+
+/**
  * BR-038 — every search param that means "the user (or a link) chose a view".
  * If any of these is present the URL is authoritative and the landing
  * preferences stay out of the way.
@@ -385,7 +395,7 @@ function preferredScopeHref(
       params.append(key, entry)
     }
   }
-  const { defaultPeriod, defaultAccountId } = preferences.transactions
+  const { defaultPeriod, defaultAccountIds } = preferences.transactions
 
   if (defaultPeriod === 'last_30_days') {
     const today = todayIsoDate()
@@ -398,7 +408,7 @@ function preferredScopeHref(
     params.set('month', currentMonth())
   }
 
-  if (defaultAccountId) params.set('account_id', defaultAccountId)
+  for (const id of defaultAccountIds) params.append('account_id', id)
 
   return `/dashboard/transactions?${params.toString()}`
 }
@@ -1156,7 +1166,17 @@ export default async function TransactionsPage({
         compactOnMobile
         actions={
           <>
-            <GlobalAddTransactionButton className={buttonVariants({ size: 'sm' })}>
+            {/* The form starts empty by default. The one exception is context
+                the user has already given us: when the list is narrowed to a
+                single account, a new transaction almost certainly belongs to
+                it. Two or more filtered accounts is not a hint, so nothing is
+                pre-filled. */}
+            <GlobalAddTransactionButton
+              className={buttonVariants({ size: 'sm' })}
+              defaultAccountId={
+                selectedAccountIds.length === 1 ? selectedAccountIds[0] : undefined
+              }
+            >
               {ui('Add transaction')}
             </GlobalAddTransactionButton>
             <Link
@@ -1211,6 +1231,7 @@ export default async function TransactionsPage({
           payeeOptions={payeeFilterOptions}
           selectedPayeeIds={selectedPayeeIds}
           presetOptions={presetOptions}
+          clearHref={CLEAR_FILTERS_HREF}
         />
       </div>
 
@@ -1305,15 +1326,8 @@ export default async function TransactionsPage({
               </>
             ) : null}
           </h2>
-          {/* Redundant with the bottom nav's + button on phones. */}
-          <GlobalAddTransactionButton
-            className={cn(
-              buttonVariants({ variant: 'outline', size: 'sm' }),
-              'hidden sm:inline-flex'
-            )}
-          >
-            {ui('Add transaction')}
-          </GlobalAddTransactionButton>
+          {/* No add button here: the page header already has one on desktop,
+              and the bottom nav's + covers phones. */}
         </div>
 
         {/* ── Filtered totals (base currency) ─────────────────────────── */}
@@ -1392,7 +1406,7 @@ export default async function TransactionsPage({
             }
             actionHref={
               hasActiveFilters
-                ? '/dashboard/transactions'
+                ? CLEAR_FILTERS_HREF
                 : transactionsPath(filters, { mode: 'create' })
             }
             actionLabel={hasActiveFilters ? 'Clear filters' : 'Add transaction'}
