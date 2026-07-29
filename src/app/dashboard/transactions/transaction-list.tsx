@@ -55,6 +55,8 @@ export type TransactionCopyPayload = {
   type: 'income' | 'expense' | 'transfer'
   /** Absolute amount in the source account's currency, e.g. "42.50". */
   amount: string
+  /** Transfers only: the amount that arrived, in the destination's currency. */
+  toAmount?: string
   accountId?: string
   fromAccountId?: string
   toAccountId?: string
@@ -481,9 +483,15 @@ function DisplayRow({
             <span className="block truncate font-medium leading-snug">{row.title}</span>
             <span className="block truncate text-xs text-muted-foreground">
               {row.accountName}
-              {' · '}
-              {row.categoryIcon ? `${row.categoryIcon} ` : ''}
-              {row.categoryName}
+              {/* A transfer's "category" is the literal word Transfer, which the
+                  ⇄ icon and the "from → to" route already say. */}
+              {row.isTransfer ? null : (
+                <>
+                  {' · '}
+                  {row.categoryIcon ? `${row.categoryIcon} ` : ''}
+                  {row.categoryName}
+                </>
+              )}
             </span>
           </span>
         </button>

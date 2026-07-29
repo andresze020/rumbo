@@ -386,6 +386,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
                 defaultStatus={addNextDefaults?.status}
                 defaultDescription={copyDefaults?.description ?? sharedDescription}
                 defaultAmount={copyDefaults?.amount}
+                defaultToAmount={copyDefaults?.toAmount}
                 defaultCategoryId={copyDefaults?.categoryId}
                 defaultMerchantName={copyDefaults?.payeeName}
                 defaultNotes={copyDefaults?.notes}

@@ -415,7 +415,11 @@ export const en = {
     currencyChangeTitle: 'Change this account’s currency?',
     currencyChangeConfirm: 'Change currency',
     currencyChangeDescription:
-      'New entries on this account will be recorded in {to} instead of {from}. Transactions already recorded keep the exchange rate they were saved with, so past amounts and your net worth do not change — but the account’s balance will mix both currencies until you correct the older entries.',
+      'This account will be recorded in {to} instead of {from}. It has no transactions yet, so nothing is re-converted and no balance is affected.',
+    currencyEditableHelp:
+      'Still changeable because this account has no transactions yet.',
+    currencyLockedHelp:
+      'Fixed: this account already has transactions. Changing it would leave the balance adding up two different currencies, and re-converting the history would rewrite amounts that were saved at the exchange rate of their own date. To switch currency, create a new account and transfer the balance across.',
     institution: 'Institution',
     lastFour: 'Last four',
     notes: 'Notes',
@@ -863,7 +867,11 @@ export const es: DeepStringify<typeof en> = {
     currencyChangeTitle: '¿Cambiar la moneda de esta cuenta?',
     currencyChangeConfirm: 'Cambiar moneda',
     currencyChangeDescription:
-      'Los movimientos nuevos de esta cuenta se registrarán en {to} en lugar de {from}. Las transacciones ya registradas conservan el tipo de cambio con el que se guardaron, así que los importes pasados y tu patrimonio neto no cambian, pero el saldo de la cuenta mezclará ambas monedas hasta que corrijas los movimientos anteriores.',
+      'Esta cuenta pasará a registrarse en {to} en lugar de {from}. Todavía no tiene transacciones, así que no se reconvierte nada ni se afecta ningún saldo.',
+    currencyEditableHelp:
+      'Todavía se puede cambiar porque esta cuenta no tiene transacciones.',
+    currencyLockedHelp:
+      'Fija: esta cuenta ya tiene transacciones. Cambiarla dejaría el saldo sumando dos monedas distintas, y reconvertir el historial reescribiría importes que se guardaron con el tipo de cambio de su propia fecha. Para pasar a otra moneda, creá una cuenta nueva y transferí el saldo.',
     institution: 'Institución',
     lastFour: 'Últimos cuatro',
     notes: 'Notas',
@@ -1311,7 +1319,11 @@ export const fr: DeepStringify<typeof en> = {
     currencyChangeTitle: 'Changer la devise de ce compte ?',
     currencyChangeConfirm: 'Changer la devise',
     currencyChangeDescription:
-      'Les nouvelles écritures de ce compte seront enregistrées en {to} au lieu de {from}. Les transactions déjà enregistrées conservent le taux de change avec lequel elles ont été sauvegardées : les montants passés et votre valeur nette ne changent pas, mais le solde du compte mélangera les deux devises tant que vous n’aurez pas corrigé les écritures antérieures.',
+      'Ce compte sera enregistré en {to} au lieu de {from}. Il n’a encore aucune transaction : rien n’est reconverti et aucun solde n’est touché.',
+    currencyEditableHelp:
+      'Encore modifiable, car ce compte n’a aucune transaction.',
+    currencyLockedHelp:
+      'Figée : ce compte a déjà des transactions. La changer laisserait le solde additionner deux devises différentes, et reconvertir l’historique réécrirait des montants enregistrés au taux de change de leur propre date. Pour changer de devise, créez un nouveau compte et transférez le solde.',
     institution: 'Institution',
     lastFour: 'Quatre derniers',
     notes: 'Notes',

@@ -28,6 +28,8 @@ type AmountInputProps = {
   value?: string
   /** Called with the sanitized raw numeric string on every change (controlled mode). */
   onValueChange?: (raw: string) => void
+  /** Fired when the user presses Enter — for "next field" chaining, never submit. */
+  onCommit?: () => void
   placeholder?: string
   required?: boolean
   /** Calculator toggle inside the field; the keypad applies results live to the amount. On by default for all money fields. */
@@ -57,6 +59,7 @@ export function AmountInput({
   defaultValue = '',
   value,
   onValueChange,
+  onCommit,
   placeholder = '0.00',
   required,
   withCalculator = true,
@@ -163,6 +166,19 @@ export function AmountInput({
           placeholder={placeholder}
           value={formatAmountForDisplay(raw)}
           onChange={(e) => handleTyped(e.target.value)}
+          // Enter means "done with the amount" — the form is never submitted
+          // from here, so callers can use it to jump to the next field instead.
+          onKeyDown={
+            onCommit
+              ? (event) => {
+                  if (event.key !== 'Enter') return
+                  event.preventDefault()
+                  event.currentTarget.blur()
+                  onCommit()
+                }
+              : undefined
+          }
+          enterKeyHint={onCommit ? 'next' : undefined}
           className={cn(
             isLarge
               ? 'h-14 rounded-xl pl-9 text-2xl font-semibold tracking-tight'

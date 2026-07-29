@@ -1036,6 +1036,10 @@ export default async function TransactionsPage({
       return {
         type: 'transfer',
         amount: Math.abs(Number(from.amount_account_currency)).toFixed(2),
+        // Cross-currency transfers ask for both legs; the destination amount is
+        // its own entry, so a copy has to carry it too or the form reopens with
+        // "Amount received" empty.
+        toAmount: Math.abs(Number(to.amount_account_currency)).toFixed(2),
         fromAccountId: from.account_id,
         toAccountId: to.account_id,
         description: row.transaction.description ?? '',

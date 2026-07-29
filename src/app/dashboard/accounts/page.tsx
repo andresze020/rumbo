@@ -346,6 +346,7 @@ function CreateAccountForm({
 function EditAccountForm({
   row,
   activeCurrencies,
+  canChangeCurrency,
   showArchived,
   hasOpeningBalance,
   openingBalanceHref,
@@ -354,6 +355,8 @@ function EditAccountForm({
 }: {
   row: AccountRow
   activeCurrencies: Currency[]
+  /** BR-046: false once the account has any ledger entry. */
+  canChangeCurrency: boolean
   showArchived: boolean
   hasOpeningBalance: boolean
   openingBalanceHref: string
@@ -446,23 +449,42 @@ function EditAccountForm({
           />
         </div>
 
-        {/* BR-046: currency is editable, but a change is confirm-gated by
-            CurrencyChangeGuard because it only affects how *future* entries are
-            recorded — history keeps its stored rates. */}
+        {/* BR-046: the currency is correctable only while the account is still
+            empty — see updateAccountAction for why a change is refused once
+            entries exist. */}
         <div className="space-y-2">
           <Label htmlFor={`currency_code_${account.id}`}>{translate(locale, 'accounts.currency')}</Label>
-          <select
-            id={`currency_code_${account.id}`}
-            name="currency_code"
-            defaultValue={account.currency_code}
-            className={selectClassName}
-          >
-            {activeCurrencies.map((currency) => (
-              <option key={currency.code} value={currency.code}>
-                {currency.code} - {currency.name}
-              </option>
-            ))}
-          </select>
+          {canChangeCurrency ? (
+            <>
+              <select
+                id={`currency_code_${account.id}`}
+                name="currency_code"
+                defaultValue={account.currency_code}
+                className={selectClassName}
+              >
+                {activeCurrencies.map((currency) => (
+                  <option key={currency.code} value={currency.code}>
+                    {currency.code} - {currency.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {translate(locale, 'accounts.currencyEditableHelp')}
+              </p>
+            </>
+          ) : (
+            <>
+              <p
+                id={`currency_code_${account.id}`}
+                className="rounded-lg border border-input bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+              >
+                {account.currency_code}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {translate(locale, 'accounts.currencyLockedHelp')}
+              </p>
+            </>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -805,6 +827,20 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const selectedEditRow = displayRows.find(
     (row) => row.metadata.id === editAccountId
   )
+
+  // BR-046: an empty account's currency is still correctable. Counted only for
+  // the account actually being edited, and across *every* entry — voided ones
+  // included, since an undo would bring back an amount in the old currency.
+  let canChangeCurrency = false
+  if (selectedEditRow) {
+    const { count, error: entryCountError } = await supabase
+      .from('transaction_entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('household_id', household.id)
+      .eq('account_id', selectedEditRow.metadata.id)
+
+    canChangeCurrency = !entryCountError && !count
+  }
   const selectedOpeningBalanceRow = displayRows.find(
     (row) =>
       row.metadata.id === openingBalanceAccountId &&
@@ -927,6 +963,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
           <EditAccountForm
             row={selectedEditRow}
             activeCurrencies={activeCurrencies}
+            canChangeCurrency={canChangeCurrency}
             showArchived={showArchived}
             hasOpeningBalance={selectedEditRow.hasOpeningBalance}
             openingBalanceHref={accountsPath({ showArchived, openingBalance: selectedEditRow.metadata.id })}

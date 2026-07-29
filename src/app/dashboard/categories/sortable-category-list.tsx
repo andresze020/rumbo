@@ -137,11 +137,15 @@ export function SortableCategoryList({
   const [state, setState] = useState(groups)
   const [error, setError] = useState<string | null>(null)
 
-  // Adopt a fresh server list when its set/order changes, without an effect
-  // (avoids the set-state-in-effect lint and never clobbers optimistic drags).
-  const serverSignature = groups
-    .flatMap((g) => g.categories.map((c) => c.id))
-    .join('|')
+  // Adopt a fresh server list when it changes, without an effect (avoids the
+  // set-state-in-effect lint and never clobbers optimistic drags).
+  //
+  // The signature has to cover the whole rendered shape, not just the id order:
+  // this component renders the rows from its own copy, so a re-parent, rename
+  // or restyle that leaves the id sequence intact would otherwise keep showing
+  // stale data until a hard refresh. Category lists are small, so stringifying
+  // them per render is cheaper than getting the comparison subtly wrong.
+  const serverSignature = JSON.stringify(groups)
   const [syncedSignature, setSyncedSignature] = useState(serverSignature)
   if (serverSignature !== syncedSignature) {
     setState(groups)

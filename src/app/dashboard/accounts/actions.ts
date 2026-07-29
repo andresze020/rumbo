@@ -217,13 +217,36 @@ export async function updateAccountAction(formData: FormData) {
     redirectWithError('Account was not found for this household.')
   }
 
-  // BR-046: the currency is only re-validated when it actually changes. Existing
-  // entries keep the `exchange_rate_to_base` they were stored with, so this
-  // never rewrites history — it only sets the currency of future entries. The
-  // confirmation the user sees lives in `CurrencyChangeGuard`.
+  // BR-046: an account's currency can only be corrected while the account is
+  // still empty.
+  //
+  // Once entries exist, there is no good answer: leaving them alone makes the
+  // balance sum two currencies under one label, and re-converting them would
+  // rewrite amounts that were deliberately stored at the rate of their own
+  // transaction date (BR-002/BR-003's historical-FX policy). So the change is
+  // refused, and the UI explains it instead of offering a confirm dialog. The
+  // check counts *every* entry, including those on voided transactions — a
+  // void can be undone (BR-015), which would resurrect an amount in the old
+  // currency.
   const currencyChanged = Boolean(currencyCode) && currencyCode !== account.currency_code
 
   if (currencyChanged) {
+    const { count: entryCount, error: entryCountError } = await supabase
+      .from('transaction_entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('household_id', householdId)
+      .eq('account_id', accountId)
+
+    if (entryCountError) {
+      redirectWithError('Could not check this account for transactions.')
+    }
+
+    if (entryCount) {
+      redirectWithError(
+        'This account already has transactions, so its currency can no longer be changed. Create a new account in the other currency and transfer the balance.'
+      )
+    }
+
     const { data: currency, error: currencyError } = await supabase
       .from('currencies')
       .select('code')

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import Link from 'next/link'
-import { Search, SlidersHorizontal } from 'lucide-react'
+import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { buttonVariants } from '@/components/ui/button'
 import { MultiSelectChip } from '@/components/multi-select-chip'
@@ -65,6 +65,12 @@ const chipSelectClassName =
 const chipLabelClassName =
   'flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-background px-2.5'
 
+const STATUS_LABELS: Record<string, string> = {
+  posted: 'Posted',
+  pending: 'Pending',
+  voided: 'Voided',
+}
+
 export function TransactionFilters({
   searchText,
   selectedType,
@@ -99,6 +105,64 @@ export function TransactionFilters({
     selectedCategoryIds.length +
     selectedTagIds.length +
     (selectedStatus !== 'all' ? 1 : 0)
+
+  /**
+   * The current filter state as a URL, minus one value. Powers the mobile
+   * summary chips: on phones the secondary bar is collapsed, so without these
+   * you can see *that* something is filtered (the badge count) but not what —
+   * and you have to open the panel to undo it.
+   */
+  function hrefWithout(param: 'account_id' | 'category_id' | 'tag_id' | 'status', value?: string) {
+    const params = new URLSearchParams()
+    if (selectedType !== 'all') params.set('type', selectedType)
+    if (selectedReview !== 'all') params.set('review', selectedReview)
+    if (searchText) params.set('search', searchText)
+    if (payeeId) params.set('payee_id', payeeId)
+    params.set('date_from', resolvedDateFrom)
+    params.set('date_to', resolvedDateTo)
+
+    const keep = (name: 'account_id' | 'category_id' | 'tag_id', ids: string[]) => {
+      for (const id of ids) {
+        if (param === name && id === value) continue
+        params.append(name, id)
+      }
+    }
+    keep('account_id', selectedAccountIds)
+    keep('category_id', selectedCategoryIds)
+    keep('tag_id', selectedTagIds)
+    if (selectedStatus !== 'all' && param !== 'status') {
+      params.set('status', selectedStatus)
+    }
+
+    return `/dashboard/transactions?${params.toString()}`
+  }
+
+  const activeChips: { key: string; label: string; href: string }[] = [
+    ...selectedAccountIds.map((id) => ({
+      key: `account-${id}`,
+      label: accountOptions.find((o) => o.id === id)?.label ?? ui('Account'),
+      href: hrefWithout('account_id', id),
+    })),
+    ...selectedCategoryIds.map((id) => ({
+      key: `category-${id}`,
+      label: categoryOptions.find((o) => o.id === id)?.label ?? ui('Category'),
+      href: hrefWithout('category_id', id),
+    })),
+    ...selectedTagIds.map((id) => ({
+      key: `tag-${id}`,
+      label: tagOptions.find((o) => o.id === id)?.label ?? ui('Tags'),
+      href: hrefWithout('tag_id', id),
+    })),
+    ...(selectedStatus !== 'all'
+      ? [
+          {
+            key: 'status',
+            label: ui(STATUS_LABELS[selectedStatus] ?? selectedStatus),
+            href: hrefWithout('status'),
+          },
+        ]
+      : []),
+  ]
 
   return (
     <form method="get" action="/dashboard/transactions" className="space-y-2.5">
@@ -167,6 +231,27 @@ export function TransactionFilters({
           ) : null}
         </button>
       </div>
+
+      {/* ── Active filters, always visible on mobile ───────────────────── */}
+      {/* Desktop already shows the selections inside the secondary bar, which
+          is never collapsed there — so this is phones only. Each chip is a
+          link that drops just that filter, so undoing one never means opening
+          the panel. */}
+      {activeChips.length > 0 ? (
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 sm:hidden">
+          {activeChips.map((chip) => (
+            <Link
+              key={chip.key}
+              href={chip.href}
+              className="flex h-7 shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary"
+            >
+              <span className="max-w-[140px] truncate">{chip.label}</span>
+              <X className="size-3 shrink-0" aria-hidden="true" />
+              <span className="sr-only">{ui('Remove filter')}</span>
+            </Link>
+          ))}
+        </div>
+      ) : null}
 
       {/* ── Secondary bar: account/category/status + date range ─────────── */}
       <div className={cn('flex-col gap-2.5 sm:flex', moreOpen ? 'flex' : 'hidden')}>

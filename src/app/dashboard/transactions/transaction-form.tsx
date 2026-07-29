@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Popover } from '@base-ui/react/popover'
 import {
   ArrowDownRight,
@@ -49,6 +49,9 @@ import { cn } from '@/lib/utils'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
 
+/** Which selector surface is open (mobile sheet or desktop popover). */
+type PickerField = null | 'account' | 'from' | 'to' | 'category' | 'payee'
+
 export type TransactionFormAccount = {
   id: string
   name: string
@@ -90,6 +93,7 @@ type TransactionFormProps = {
   defaultDescription?: string
   defaultMerchantName?: string
   /** BR-034: remaining fields a "Copy" seeds. */
+  defaultToAmount?: string
   defaultNotes?: string
   defaultTagIds?: string[]
   defaultFromAccountId?: string
@@ -168,6 +172,7 @@ export function TransactionForm({
   defaultCategoryId,
   defaultDescription,
   defaultMerchantName,
+  defaultToAmount,
   defaultNotes,
   defaultTagIds,
   defaultFromAccountId,
@@ -191,7 +196,7 @@ export function TransactionForm({
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
   const [amountInput, setAmountInput] = useState(defaultAmount ?? '')
   // BR-007: destination amount for a cross-currency transfer (to-account currency).
-  const [toAmountInput, setToAmountInput] = useState('')
+  const [toAmountInput, setToAmountInput] = useState(defaultToAmount ?? '')
   // Unified transfer cost (FX spread + fee), in base currency, + its category.
   const [costInput, setCostInput] = useState('')
   const [costTouched, setCostTouched] = useState(false)
@@ -229,9 +234,7 @@ export function TransactionForm({
   // Which selector the mobile full-screen sheet is showing (null = closed).
   // Distinct from `expandedField` (the inline accordion used by the remaining
   // mobile rows and, on desktop, by the Popover combobox).
-  const [sheetField, setSheetField] = useState<
-    null | 'account' | 'from' | 'to' | 'category' | 'payee'
-  >(null)
+  const [sheetField, setSheetField] = useState<PickerField>(null)
   // Category picker: search text + which parent we've drilled into (null = show
   // the parent list; a parent id = show only that parent's subcategories).
   const [categorySearch, setCategorySearch] = useState('')
@@ -693,9 +696,51 @@ export function TransactionForm({
   // (expandedField) or the mobile full-screen sheet (sheetField). Only one is
   // ever open, so clearing both is safe and lets the shared picker bodies close
   // themselves without knowing which surface hosts them.
+  //
+  // Fill-fast chaining: a selection handler may leave a target in
+  // `advanceToRef`, and closing then re-opens straight into that field instead
+  // of dropping the user back on the form. The handlers only ever set it for
+  // the *next required and still empty* field, so the chain stops as soon as
+  // the mandatory path is covered and never hijacks a one-field correction.
+  const advanceToRef = useRef<PickerField>(null)
+
+  const openPicker = (field: PickerField) => {
+    resetPickerState()
+    setExpandedField(isMobile ? null : field)
+    setSheetField(isMobile ? field : null)
+  }
+
   const closePicker = () => {
+    const next = advanceToRef.current
+    advanceToRef.current = null
+    if (next) {
+      openPicker(next)
+      return
+    }
     setExpandedField(null)
     setSheetField(null)
+  }
+
+  // Shared selection handlers, used by both the mobile sheet and the desktop
+  // combobox so the two surfaces can't drift apart.
+  const selectAccount = (id: string) => {
+    setAccountId(id)
+    setUserRate('')
+    setFxNote('')
+    setFxError('')
+    if (!categoryId) advanceToRef.current = 'category'
+  }
+
+  const selectFromAccount = (id: string) => {
+    setFromAccountId(id)
+    const clearsDestination = id === toAccountId
+    if (clearsDestination) setToAccountId('')
+    if (!toAccountId || clearsDestination) advanceToRef.current = 'to'
+  }
+
+  const selectToAccount = (id: string) => {
+    setToAccountId(id)
+    if (id === fromAccountId) setFromAccountId('')
   }
 
   // Open the category picker drilled straight into the currently selected
@@ -1584,30 +1629,11 @@ export function TransactionForm({
   } else if (sheetField === 'payee') {
     sheetBody = payeePickerBody()
   } else if (sheetField === 'account') {
-    sheetBody = accountPickerBody(accountId, (id) => {
-      setAccountId(id)
-      setUserRate('')
-      setFxNote('')
-      setFxError('')
-    })
+    sheetBody = accountPickerBody(accountId, selectAccount)
   } else if (sheetField === 'from') {
-    sheetBody = accountPickerBody(
-      fromAccountId,
-      (id) => {
-        setFromAccountId(id)
-        if (id === toAccountId) setToAccountId('')
-      },
-      toAccountId
-    )
+    sheetBody = accountPickerBody(fromAccountId, selectFromAccount, toAccountId)
   } else if (sheetField === 'to') {
-    sheetBody = accountPickerBody(
-      toAccountId,
-      (id) => {
-        setToAccountId(id)
-        if (id === fromAccountId) setFromAccountId('')
-      },
-      fromAccountId
-    )
+    sheetBody = accountPickerBody(toAccountId, selectToAccount, fromAccountId)
   }
 
   return (
@@ -1658,6 +1684,15 @@ export function TransactionForm({
             // Changing what you sent re-enables the transfer-cost estimate.
             if (isTransfer) setCostTouched(false)
           }}
+          // Enter on the amount starts the fill-fast chain at the first field
+          // still missing, so a whole entry can be typed without hunting.
+          onCommit={() => {
+            if (isTransfer) {
+              if (!fromAccountId) openPicker('from')
+              else if (!toAccountId) openPicker('to')
+            } else if (!accountId) openPicker('account')
+            else if (!categoryId) openPicker('category')
+          }}
           size="lg"
           withCalculator
           required
@@ -1678,14 +1713,7 @@ export function TransactionForm({
             placeholder: t('transactionForm.selectSource'),
             hiddenName: 'from_account_id',
             hiddenValue: fromAccountId,
-            body: accountPickerBody(
-              fromAccountId,
-              (id) => {
-                setFromAccountId(id)
-                if (id === toAccountId) setToAccountId('')
-              },
-              toAccountId
-            ),
+            body: accountPickerBody(fromAccountId, selectFromAccount, toAccountId),
           })}
 
           {desktopCombo({
@@ -1696,14 +1724,7 @@ export function TransactionForm({
             placeholder: t('transactionForm.selectDestination'),
             hiddenName: 'to_account_id',
             hiddenValue: toAccountId,
-            body: accountPickerBody(
-              toAccountId,
-              (id) => {
-                setToAccountId(id)
-                if (id === fromAccountId) setFromAccountId('')
-              },
-              fromAccountId
-            ),
+            body: accountPickerBody(toAccountId, selectToAccount, fromAccountId),
           })}
 
           <div className="space-y-1.5">
@@ -1734,12 +1755,7 @@ export function TransactionForm({
             placeholder: t('transactionForm.selectAccount'),
             hiddenName: 'account_id',
             hiddenValue: accountId,
-            body: accountPickerBody(accountId, (id) => {
-              setAccountId(id)
-              setUserRate('')
-              setFxNote('')
-              setFxError('')
-            }),
+            body: accountPickerBody(accountId, selectAccount),
           })}
 
           <div className="space-y-1.5">
