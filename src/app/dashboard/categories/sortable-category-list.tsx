@@ -21,6 +21,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
+import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
 import { moveCategoryAction } from './actions'
 import { CategoryRow } from './category-row'
@@ -87,14 +88,25 @@ function buildHierarchy(categories: CategoryVM[]): Hierarchy {
  * flat SortableContext is what lets a drag cross levels; the previous
  * one-context-per-level layout could only ever reorder siblings.
  */
-type FlatCategory = { category: CategoryVM; depth: number; childCount: number }
+type FlatCategory = {
+  category: CategoryVM
+  depth: number
+  childCount: number
+  /** Last child of its parent — ends the tree rail so the branch visibly stops. */
+  isLastChild: boolean
+}
 
 function flattenHierarchy({ roots, childrenByParentId }: Hierarchy): FlatCategory[] {
   return roots.flatMap((root) => {
     const children = childrenByParentId.get(root.id) ?? []
     return [
-      { category: root, depth: 0, childCount: children.length },
-      ...children.map((child) => ({ category: child, depth: 1, childCount: 0 })),
+      { category: root, depth: 0, childCount: children.length, isLastChild: false },
+      ...children.map((child, index) => ({
+        category: child,
+        depth: 1,
+        childCount: 0,
+        isLastChild: index === children.length - 1,
+      })),
     ]
   })
 }
@@ -165,12 +177,14 @@ function SortableCategoryRow({
   childCount,
   showArchived,
   level = 0,
+  isLastChild = false,
 }: {
   category: CategoryVM
   parentName: string | null
   childCount: number
   showArchived: boolean
   level?: number
+  isLastChild?: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: category.id })
@@ -188,6 +202,7 @@ function SortableCategoryRow({
         editHref={category.editHref}
         showArchived={showArchived}
         level={level}
+        isLastChild={isLastChild}
         dragHandle={<DragHandle name={category.name} {...attributes} {...listeners} />}
       />
     </div>
@@ -198,6 +213,7 @@ export function SortableCategoryList({
   groups,
   showArchived,
 }: SortableCategoryListProps) {
+  const { t } = useLanguage()
   const [state, setState] = useState(groups)
   const [error, setError] = useState<string | null>(null)
   // Live drag position, so the row previews the depth it would land at.
@@ -289,6 +305,15 @@ export function SortableCategoryList({
     <div className="space-y-3 md:space-y-6">
       {error ? <Callout variant="error">{error}</Callout> : null}
 
+      {/* BR-048 is invisible until you try it, so say it once. Desktop only:
+          dragging is the fast path there, while the outdent button on each
+          subcategory row is what phones actually use. */}
+      {sortable ? (
+        <p className="hidden px-1 text-xs text-muted-foreground md:block">
+          {t('categoriesUi.dragHint')}
+        </p>
+      ) : null}
+
       {state.map((group) => {
         const hierarchy = buildHierarchy(group.categories)
         const { unparented } = hierarchy
@@ -332,7 +357,7 @@ export function SortableCategoryList({
                 <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
                   <div className="divide-y">
                     {items.map((item) => {
-                      const { category, depth, childCount } = item
+                      const { category, depth, childCount, isLastChild } = item
                       const parentName = category.parent_category_id
                         ? parentNameById.get(category.parent_category_id) ?? null
                         : null
@@ -352,6 +377,7 @@ export function SortableCategoryList({
                           childCount={childCount}
                           showArchived={showArchived}
                           level={level}
+                          isLastChild={isLastChild}
                         />
                       ) : (
                         <CategoryRow
@@ -362,6 +388,7 @@ export function SortableCategoryList({
                           editHref={category.editHref}
                           showArchived={showArchived}
                           level={level}
+                          isLastChild={isLastChild}
                         />
                       )
                     })}

@@ -308,6 +308,8 @@ export const en = {
       '“{name}” stops being a subcategory and moves to the top level. Its transactions, budgets and reports keep pointing at it — only its place in the list changes.',
     promoteConfirm: 'Move to main level',
     promoted: 'Category moved to the main level.',
+    dragHint:
+      'Drag a row to reorder it. Drag it right to nest it under the category above, or left to pull it back out.',
   },
   comingSoon: {
     back: 'Back to dashboard',
@@ -760,6 +762,8 @@ export const es: DeepStringify<typeof en> = {
       '«{name}» deja de ser subcategoría y pasa al nivel principal. Sus transacciones, presupuestos e informes siguen apuntando a ella: solo cambia su lugar en la lista.',
     promoteConfirm: 'Pasar a nivel principal',
     promoted: 'La categoría pasó al nivel principal.',
+    dragHint:
+      'Arrastra una fila para reordenarla. Arrástrala a la derecha para anidarla en la categoría de arriba, o a la izquierda para sacarla.',
   },
   comingSoon: {
     back: 'Volver al panel',
@@ -1212,6 +1216,8 @@ export const fr: DeepStringify<typeof en> = {
       '« {name} » cesse d’être une sous-catégorie et passe au niveau principal. Ses transactions, budgets et rapports continuent de pointer vers elle : seule sa place dans la liste change.',
     promoteConfirm: 'Passer au niveau principal',
     promoted: 'La catégorie est passée au niveau principal.',
+    dragHint:
+      'Faites glisser une ligne pour la réordonner. Vers la droite pour l’imbriquer dans la catégorie du dessus, vers la gauche pour la faire ressortir.',
   },
   comingSoon: {
     back: 'Retour au tableau de bord',

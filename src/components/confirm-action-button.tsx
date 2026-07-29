@@ -26,6 +26,10 @@ type ConfirmActionButtonProps = {
   confirmLabel: ReactNode
   /** Trigger styling. Defaults to `secondary` — the archive actions' look. */
   triggerVariant?: 'secondary' | 'outline' | 'destructive'
+  /** `icon-sm` for an icon-only trigger; pass the icon as `triggerLabel`. */
+  triggerSize?: 'sm' | 'icon-sm'
+  /** Native tooltip, needed when the trigger is icon-only. */
+  triggerTitle?: string
 }
 
 /**
@@ -44,6 +48,8 @@ export function ConfirmActionButton({
   cancelLabel,
   confirmLabel,
   triggerVariant = 'secondary',
+  triggerSize = 'sm',
+  triggerTitle,
 }: ConfirmActionButtonProps) {
   const ui = useUiTranslation()
   const translated = (value: ReactNode) =>
@@ -51,7 +57,17 @@ export function ConfirmActionButton({
 
   return (
     <AlertDialog>
-      <AlertDialogTrigger render={<Button type="button" variant={triggerVariant} size="sm" />}>
+      <AlertDialogTrigger
+        render={
+          <Button
+            type="button"
+            variant={triggerVariant}
+            size={triggerSize}
+            title={triggerTitle ? ui(triggerTitle) : undefined}
+            aria-label={triggerTitle ? ui(triggerTitle) : undefined}
+          />
+        }
+      >
         {translated(triggerLabel)}
       </AlertDialogTrigger>
       <AlertDialogContent>
