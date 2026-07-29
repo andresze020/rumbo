@@ -21,8 +21,9 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
+import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
-import { reorderCategoriesAction } from './actions'
+import { moveCategoryAction } from './actions'
 import { CategoryRow } from './category-row'
 
 export type CategoryVM = {
@@ -82,6 +83,81 @@ function buildHierarchy(categories: CategoryVM[]): Hierarchy {
   return { roots, childrenByParentId, unparented }
 }
 
+/**
+ * BR-048 — the tree as one ordered list, each row carrying its depth. A single
+ * flat SortableContext is what lets a drag cross levels; the previous
+ * one-context-per-level layout could only ever reorder siblings.
+ */
+type FlatCategory = {
+  category: CategoryVM
+  depth: number
+  childCount: number
+  /** Last child of its parent — ends the tree rail so the branch visibly stops. */
+  isLastChild: boolean
+}
+
+function flattenHierarchy({ roots, childrenByParentId }: Hierarchy): FlatCategory[] {
+  return roots.flatMap((root) => {
+    const children = childrenByParentId.get(root.id) ?? []
+    return [
+      { category: root, depth: 0, childCount: children.length, isLastChild: false },
+      ...children.map((child, index) => ({
+        category: child,
+        depth: 1,
+        childCount: 0,
+        isLastChild: index === children.length - 1,
+      })),
+    ]
+  })
+}
+
+/** One indent step, in pixels — also the horizontal drag distance to nest. */
+const INDENT_WIDTH = 28
+
+/**
+ * Where a drag would drop, given how far right it was dragged.
+ *
+ * The hierarchy is only two levels deep (`validateParentCategory` forbids a
+ * child from being a parent), so the projection is a clamp between 0 and 1
+ * rather than a general tree walk:
+ *   - a category that has children can never be dragged below depth 0;
+ *   - depth 1 is only offered when something sits above to be a parent of;
+ *   - the parent is the nearest preceding root.
+ */
+function projectDrop(
+  items: FlatCategory[],
+  activeId: string,
+  overId: string,
+  offsetLeft: number
+): { depth: number; parentId: string | null } | null {
+  const activeIndex = items.findIndex((item) => item.category.id === activeId)
+  const overIndex = items.findIndex((item) => item.category.id === overId)
+  if (activeIndex === -1 || overIndex === -1) return null
+
+  const moved = arrayMove(items, activeIndex, overIndex)
+  const newIndex = moved.findIndex((item) => item.category.id === activeId)
+  const active = moved[newIndex]
+  const previous = moved[newIndex - 1]
+
+  // A parent keeps its children, so it has to stay at the root level.
+  if (active.childCount > 0) return { depth: 0, parentId: null }
+
+  const maxDepth = previous ? 1 : 0
+  const dragDepth = Math.round(offsetLeft / INDENT_WIDTH)
+  const depth = Math.min(Math.max(active.depth + dragDepth, 0), maxDepth)
+
+  if (depth === 0) return { depth: 0, parentId: null }
+
+  // Nearest preceding root becomes the parent.
+  for (let index = newIndex - 1; index >= 0; index--) {
+    const candidate = moved[index]
+    if (candidate.depth === 0) {
+      return { depth: 1, parentId: candidate.category.id }
+    }
+  }
+  return { depth: 0, parentId: null }
+}
+
 function DragHandle({ name, ...handleProps }: { name: string } & Record<string, unknown>) {
   return (
     <button
@@ -101,12 +177,14 @@ function SortableCategoryRow({
   childCount,
   showArchived,
   level = 0,
+  isLastChild = false,
 }: {
   category: CategoryVM
   parentName: string | null
   childCount: number
   showArchived: boolean
   level?: number
+  isLastChild?: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: category.id })
@@ -124,6 +202,7 @@ function SortableCategoryRow({
         editHref={category.editHref}
         showArchived={showArchived}
         level={level}
+        isLastChild={isLastChild}
         dragHandle={<DragHandle name={category.name} {...attributes} {...listeners} />}
       />
     </div>
@@ -134,14 +213,22 @@ export function SortableCategoryList({
   groups,
   showArchived,
 }: SortableCategoryListProps) {
+  const { t } = useLanguage()
   const [state, setState] = useState(groups)
   const [error, setError] = useState<string | null>(null)
+  // Live drag position, so the row previews the depth it would land at.
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOffsetLeft, setDragOffsetLeft] = useState(0)
 
-  // Adopt a fresh server list when its set/order changes, without an effect
-  // (avoids the set-state-in-effect lint and never clobbers optimistic drags).
-  const serverSignature = groups
-    .flatMap((g) => g.categories.map((c) => c.id))
-    .join('|')
+  // Adopt a fresh server list when it changes, without an effect (avoids the
+  // set-state-in-effect lint and never clobbers optimistic drags).
+  //
+  // The signature has to cover the whole rendered shape, not just the id order:
+  // this component renders the rows from its own copy, so a re-parent, rename
+  // or restyle that leaves the id sequence intact would otherwise keep showing
+  // stale data until a hard refresh. Category lists are small, so stringifying
+  // them per render is cheaper than getting the comparison subtly wrong.
+  const serverSignature = JSON.stringify(groups)
   const [syncedSignature, setSyncedSignature] = useState(serverSignature)
   if (serverSignature !== syncedSignature) {
     setState(groups)
@@ -156,52 +243,85 @@ export function SortableCategoryList({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
-  function persistSiblingOrder(
+  /**
+   * BR-048 — commits a drag that may have changed nesting, order, or both.
+   *
+   * The optimistic update is applied first so the row lands where it was
+   * dropped, then the server has the last word: on rejection the local copy is
+   * restored and the reason is shown, so an illegal drop springs back instead
+   * of appearing to have worked.
+   */
+  function persistMove(
     groupValue: string,
-    subsetIds: string[],
     activeId: string,
-    overId: string
+    overId: string,
+    offsetLeft: number
   ) {
     const group = state.find((g) => g.value === groupValue)
     if (!group) return
 
-    const subset = subsetIds
-      .map((id) => group.categories.find((c) => c.id === id))
-      .filter((c): c is CategoryVM => Boolean(c))
-    const oldIndex = subset.findIndex((c) => c.id === activeId)
-    const newIndex = subset.findIndex((c) => c.id === overId)
-    if (oldIndex === -1 || newIndex === -1) return
+    const items = flattenHierarchy(buildHierarchy(group.categories))
+    const drop = projectDrop(items, activeId, overId, offsetLeft)
+    if (!drop) return
 
-    const reordered = arrayMove(subset, oldIndex, newIndex)
-    const positions = group.categories
-      .map((c, index) => ({ c, index }))
-      .filter(({ c }) => subsetIds.includes(c.id))
-      .map(({ index }) => index)
+    const activeIndex = items.findIndex((item) => item.category.id === activeId)
+    const overIndex = items.findIndex((item) => item.category.id === overId)
+    const moved = arrayMove(items, activeIndex, overIndex).map((item) =>
+      item.category.id === activeId
+        ? {
+            ...item,
+            depth: drop.depth,
+            category: { ...item.category, parent_category_id: drop.parentId },
+          }
+        : item
+    )
 
-    const nextCategories = [...group.categories]
-    positions.forEach((position, i) => {
-      nextCategories[position] = reordered[i]
-    })
-
+    const previous = state
+    const nextCategories = moved.map((item) => item.category)
     setState((prev) =>
-      prev.map((g) =>
-        g.value === groupValue ? { ...g, categories: nextCategories } : g
-      )
+      prev.map((g) => (g.value === groupValue ? { ...g, categories: nextCategories } : g))
     )
-    void reorderCategoriesAction(reordered.map((c) => c.id)).then((result) =>
-      setError(result?.error ?? null)
-    )
+    setError(null)
+
+    // Everything sharing the destination parent, in its new order — the action
+    // renumbers exactly this set.
+    const orderedSiblingIds = nextCategories
+      .filter((category) => (category.parent_category_id ?? null) === drop.parentId)
+      .map((category) => category.id)
+
+    void moveCategoryAction({
+      categoryId: activeId,
+      parentCategoryId: drop.parentId,
+      orderedSiblingIds,
+    }).then((result) => {
+      if (result?.error) {
+        setState(previous)
+        setError(result.error)
+      }
+    })
   }
 
   return (
     <div className="space-y-3 md:space-y-6">
       {error ? <Callout variant="error">{error}</Callout> : null}
 
+      {/* BR-048 is invisible until you try it, so say it once. Desktop only:
+          dragging is the fast path there, while the outdent button on each
+          subcategory row is what phones actually use. */}
+      {sortable ? (
+        <p className="hidden px-1 text-xs text-muted-foreground md:block">
+          {t('categoriesUi.dragHint')}
+        </p>
+      ) : null}
+
       {state.map((group) => {
-        const { roots, childrenByParentId, unparented } = buildHierarchy(
-          group.categories
+        const hierarchy = buildHierarchy(group.categories)
+        const { unparented } = hierarchy
+        const items = flattenHierarchy(hierarchy)
+        const itemIds = items.map((item) => item.category.id)
+        const parentNameById = new Map(
+          hierarchy.roots.map((root) => [root.id, root.name])
         )
-        const rootIds = roots.map((r) => r.id)
 
         return (
           <section key={group.value} className="space-y-2 md:space-y-3">
@@ -214,100 +334,65 @@ export function SortableCategoryList({
                 <span>Category</span>
                 <span className="sr-only">Actions</span>
               </div>
+              {/* BR-048: one context over the whole flattened tree, so a drag
+                  can change nesting and not just sibling order. */}
               <DndContext
-                id={`categories-${group.value}-roots`}
+                id={`categories-${group.value}`}
                 sensors={sensors}
                 collisionDetection={closestCenter}
-                onDragEnd={({ active, over }) => {
-                  if (!sortable || !over || active.id === over.id) return
-                  persistSiblingOrder(
-                    group.value,
-                    rootIds,
-                    String(active.id),
-                    String(over.id)
-                  )
+                onDragStart={({ active }) => setDraggingId(String(active.id))}
+                onDragMove={({ delta }) => setDragOffsetLeft(delta.x)}
+                onDragCancel={() => {
+                  setDraggingId(null)
+                  setDragOffsetLeft(0)
+                }}
+                onDragEnd={({ active, over, delta }) => {
+                  const offset = delta.x
+                  setDraggingId(null)
+                  setDragOffsetLeft(0)
+                  if (!sortable || !over) return
+                  persistMove(group.value, String(active.id), String(over.id), offset)
                 }}
               >
-                <SortableContext
-                  items={rootIds}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {roots.map((category) => {
-                    const children = childrenByParentId.get(category.id) ?? []
-                    const childIds = children.map((c) => c.id)
+                <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+                  <div className="divide-y">
+                    {items.map((item) => {
+                      const { category, depth, childCount, isLastChild } = item
+                      const parentName = category.parent_category_id
+                        ? parentNameById.get(category.parent_category_id) ?? null
+                        : null
+                      // While dragging, show the depth the drop would produce
+                      // so the indent previews the outcome.
+                      const projected =
+                        draggingId === category.id
+                          ? projectDrop(items, draggingId, draggingId, dragOffsetLeft)
+                          : null
+                      const level = projected?.depth ?? depth
 
-                    return (
-                      <div
-                        key={category.id}
-                        className="mb-2 divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03] last:mb-0 md:mb-0 md:rounded-none md:border-0 md:shadow-none"
-                      >
-                        {sortable ? (
-                          <SortableCategoryRow
-                            category={category}
-                            parentName={null}
-                            childCount={children.length}
-                            showArchived={showArchived}
-                          />
-                        ) : (
-                          <CategoryRow
-                            category={category}
-                            parentName={null}
-                            childCount={children.length}
-                            editHref={category.editHref}
-                            showArchived={showArchived}
-                            level={0}
-                          />
-                        )}
-
-                        {children.length ? (
-                          <div className="divide-y bg-muted/20 md:bg-muted/[0.08]">
-                            <DndContext
-                              id={`categories-${group.value}-${category.id}-children`}
-                              sensors={sensors}
-                              collisionDetection={closestCenter}
-                              onDragEnd={({ active, over }) => {
-                                if (!sortable || !over || active.id === over.id) return
-                                persistSiblingOrder(
-                                  group.value,
-                                  childIds,
-                                  String(active.id),
-                                  String(over.id)
-                                )
-                              }}
-                            >
-                              <SortableContext
-                                items={childIds}
-                                strategy={verticalListSortingStrategy}
-                              >
-                                {children.map((child) =>
-                                  sortable ? (
-                                    <SortableCategoryRow
-                                      key={child.id}
-                                      category={child}
-                                      parentName={category.name}
-                                      childCount={0}
-                                      showArchived={showArchived}
-                                      level={1}
-                                    />
-                                  ) : (
-                                    <CategoryRow
-                                      key={child.id}
-                                      category={child}
-                                      parentName={category.name}
-                                      childCount={0}
-                                      editHref={child.editHref}
-                                      showArchived={showArchived}
-                                      level={1}
-                                    />
-                                  )
-                                )}
-                              </SortableContext>
-                            </DndContext>
-                          </div>
-                        ) : null}
-                      </div>
-                    )
-                  })}
+                      return sortable ? (
+                        <SortableCategoryRow
+                          key={category.id}
+                          category={category}
+                          parentName={parentName}
+                          childCount={childCount}
+                          showArchived={showArchived}
+                          level={level}
+                          isLastChild={isLastChild}
+                        />
+                      ) : (
+                        <CategoryRow
+                          key={category.id}
+                          category={category}
+                          parentName={parentName}
+                          childCount={childCount}
+                          editHref={category.editHref}
+                          showArchived={showArchived}
+                          level={level}
+                          isLastChild={isLastChild}
+                        />
+                      )
+                    })}
+                  </div>
                 </SortableContext>
               </DndContext>
 

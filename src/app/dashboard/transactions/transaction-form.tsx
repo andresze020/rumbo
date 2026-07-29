@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Popover } from '@base-ui/react/popover'
 import {
   ArrowDownRight,
@@ -25,6 +25,7 @@ import {
   createTransferTransactionAction,
 } from './actions'
 import { PayeePicker, type PayeeOption } from './payee-picker'
+import { RelativeDateChips } from './relative-date-chips'
 import { SelectorSheet } from './selector-sheet'
 import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
@@ -43,9 +44,19 @@ import { useLanguage } from '@/components/language-provider'
 import { RECURRING_FREQUENCIES } from '@/lib/recurring/shared'
 import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
+import type { TransactionFormField } from '@/lib/preferences/shared'
 import { cn } from '@/lib/utils'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
+
+/** Which selector surface is open (mobile sheet or desktop popover). */
+type PickerField = null | 'account' | 'from' | 'to' | 'category' | 'payee'
+
+/**
+ * Where the fill-fast chain goes next. `description` is not a picker — it ends
+ * the chain by taking focus, since there is nothing left to choose from a list.
+ */
+type AdvanceTarget = PickerField | 'description'
 
 export type TransactionFormAccount = {
   id: string
@@ -87,15 +98,22 @@ type TransactionFormProps = {
   defaultCategoryId?: string
   defaultDescription?: string
   defaultMerchantName?: string
+  /** BR-034: remaining fields a "Copy" seeds. */
+  defaultToAmount?: string
+  defaultNotes?: string
+  defaultTagIds?: string[]
+  defaultFromAccountId?: string
+  defaultToAccountId?: string
+  /**
+   * BR-032: which optional fields to render. Omitted means all of them, which
+   * is both the default preference and the right answer for callers that have
+   * no user preference in hand (e.g. the AI assistant's draft review).
+   */
+  visibleFields?: Partial<Record<TransactionFormField, boolean>>
   returnTo?: string
 }
 
-const LAST_ACCOUNT_KEY = 'af_last_account_id'
 const CATEGORY_USAGE_KEY = 'af_category_usage'
-
-function lastCategoryKey(transactionType: TransactionType) {
-  return `af_last_category_id_${transactionType}`
-}
 
 // Only the account name is shown: the currency already appears above the amount,
 // and users typically name accounts after their bank, so the institution and
@@ -155,21 +173,31 @@ export function TransactionForm({
   defaultCategoryId,
   defaultDescription,
   defaultMerchantName,
+  defaultToAmount,
+  defaultNotes,
+  defaultTagIds,
+  defaultFromAccountId,
+  defaultToAccountId,
+  visibleFields,
   returnTo,
 }: TransactionFormProps) {
   const { t, locale } = useLanguage()
   const ui = useUiTranslation()
+  // BR-032: a field is shown unless the user has explicitly turned it off.
+  // A hidden field is not rendered at all, so it submits nothing and the server
+  // action falls back to its own default (e.g. status → posted).
+  const showField = (field: TransactionFormField) => visibleFields?.[field] !== false
   const categoryName = (category: TransactionFormCategory) =>
     localizeSystemCategoryName(category.name, Boolean(category.is_system), locale)
   const [transactionType, setTransactionType] = useState<TransactionType>(defaultType ?? 'expense')
   const [transactionDate, setTransactionDate] = useState(defaultDate)
   const [accountId, setAccountId] = useState(defaultAccountId ?? '')
-  const [fromAccountId, setFromAccountId] = useState('')
-  const [toAccountId, setToAccountId] = useState('')
+  const [fromAccountId, setFromAccountId] = useState(defaultFromAccountId ?? '')
+  const [toAccountId, setToAccountId] = useState(defaultToAccountId ?? '')
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
   const [amountInput, setAmountInput] = useState(defaultAmount ?? '')
   // BR-007: destination amount for a cross-currency transfer (to-account currency).
-  const [toAmountInput, setToAmountInput] = useState('')
+  const [toAmountInput, setToAmountInput] = useState(defaultToAmount ?? '')
   // Unified transfer cost (FX spread + fee), in base currency, + its category.
   const [costInput, setCostInput] = useState('')
   const [costTouched, setCostTouched] = useState(false)
@@ -187,7 +215,7 @@ export function TransactionForm({
   // uncontrolled (defaultValue), so this state only matters on mobile.
   const [description, setDescription] = useState(defaultDescription ?? '')
   const [payeeName, setPayeeName] = useState(defaultMerchantName ?? '')
-  const [notes, setNotes] = useState('')
+  const [notes, setNotes] = useState(defaultNotes ?? '')
   // Which mobile row is expanded for editing (accordion; null = all collapsed).
   const [expandedField, setExpandedField] = useState<string | null>(null)
   const isMobile = useIsMobile()
@@ -207,9 +235,7 @@ export function TransactionForm({
   // Which selector the mobile full-screen sheet is showing (null = closed).
   // Distinct from `expandedField` (the inline accordion used by the remaining
   // mobile rows and, on desktop, by the Popover combobox).
-  const [sheetField, setSheetField] = useState<
-    null | 'account' | 'from' | 'to' | 'category' | 'payee'
-  >(null)
+  const [sheetField, setSheetField] = useState<PickerField>(null)
   // Category picker: search text + which parent we've drilled into (null = show
   // the parent list; a parent id = show only that parent's subcategories).
   const [categorySearch, setCategorySearch] = useState('')
@@ -253,29 +279,14 @@ export function TransactionForm({
   const [fxNote, setFxNote] = useState('')
   const [fxError, setFxError] = useState('')
 
-  // Apply remembered account/category defaults from previous submissions, once,
-  // only when the caller hasn't supplied explicit defaults of their own.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const frame = window.requestAnimationFrame(() => {
-      if (!defaultAccountId) {
-        const lastAccountId = window.localStorage.getItem(LAST_ACCOUNT_KEY)
-        if (lastAccountId && accounts.some((a) => a.id === lastAccountId)) {
-          setAccountId((current) => current || lastAccountId)
-        }
-      }
-      if (!defaultCategoryId) {
-        const lastCategoryId = window.localStorage.getItem(lastCategoryKey(transactionType))
-        if (lastCategoryId && categories.some((c) => c.id === lastCategoryId)) {
-          setCategoryId((current) => current || lastCategoryId)
-        }
-      }
-    })
-
-    return () => window.cancelAnimationFrame(frame)
-    // Only run on initial mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // The form deliberately does NOT restore the last account or category it was
+  // submitted with. Silently pre-filling both meant a blank new transaction
+  // arrived already pointing at an account and a category the user had not
+  // chosen — easy to save by accident, and wrong more often than right. Account
+  // and category are only pre-filled from real context the caller passes in
+  // (`defaultAccountId` / `defaultCategoryId`): a copy, an add-next, or the
+  // transactions list narrowed to one account. Recent categories are still
+  // *offered* as one-tap chips, which suggests without deciding.
 
   const selectedAccount = availableAccounts.find((a) => a.id === accountId)
   const isMultiCurrency = Boolean(
@@ -468,11 +479,13 @@ export function TransactionForm({
     }
   }
 
-  function rememberDefaults() {
-    if (typeof window === 'undefined' || isTransfer) return
-    if (accountId) window.localStorage.setItem(LAST_ACCOUNT_KEY, accountId)
-    if (!categoryId) return
-    window.localStorage.setItem(lastCategoryKey(transactionType), categoryId)
+  /**
+   * Counts category use so the "Frequently used" chips can rank. Only the
+   * counter is kept — the last account and last category are deliberately not
+   * remembered, because restoring them pre-filled a blank form (see above).
+   */
+  function rememberCategoryUsage() {
+    if (typeof window === 'undefined' || isTransfer || !categoryId) return
     try {
       const raw = window.localStorage.getItem(CATEGORY_USAGE_KEY)
       const usage: Record<string, number> = raw ? JSON.parse(raw) : {}
@@ -517,6 +530,23 @@ export function TransactionForm({
     },
   ]
 
+  // Picking a date invalidates any rate fetched for the previous one.
+  function changeTransactionDate(next: string) {
+    setTransactionDate(next)
+    if (isMultiCurrency) {
+      setUserRate('')
+      setFxNote('')
+      setFxError('')
+    }
+  }
+
+  // BR-033: relative-date chips. Rendered above the date control on desktop and
+  // above the date *row* on mobile — the mobile row auto-opens the native
+  // calendar when it expands, which would cover chips placed inside the panel.
+  const dateChips = (
+    <RelativeDateChips value={transactionDate} onSelect={changeTransactionDate} />
+  )
+
   // Shared date field — placed inside each essentials grid below so it pairs
   // with the account selector on the same row.
   const dateField = (
@@ -525,21 +555,16 @@ export function TransactionForm({
       name="transaction_date"
       label={t('transactionForm.date')}
       value={transactionDate}
-      onChange={(e) => {
-        setTransactionDate(e.target.value)
-        if (isMultiCurrency) {
-          setUserRate('')
-          setFxNote('')
-          setFxError('')
-        }
-      }}
+      onChange={(e) => changeTransactionDate(e.target.value)}
       required
     />
   )
 
   // Shared status segmented control, paired with another compact field in the
-  // essentials grid.
-  const statusField = (
+  // essentials grid. When the user has hidden it (BR-032) the value still has
+  // to reach the server action, which requires a status — so the control is
+  // replaced by a hidden input carrying the default rather than dropped.
+  const statusField = showField('status') ? (
     <SegmentedField
       label={t('transactionForm.status')}
       name="status"
@@ -551,6 +576,8 @@ export function TransactionForm({
         { value: 'pending', label: t('transactionForm.statusPending') },
       ]}
     />
+  ) : (
+    <input type="hidden" name="status" value={status} />
   )
 
   // Exchange-rate block, shared by the transfer and single-account paths. Stays
@@ -657,9 +684,78 @@ export function TransactionForm({
   // (expandedField) or the mobile full-screen sheet (sheetField). Only one is
   // ever open, so clearing both is safe and lets the shared picker bodies close
   // themselves without knowing which surface hosts them.
+  //
+  // Fill-fast chaining: a selection handler may leave a target in
+  // `advanceToRef`, and closing then re-opens straight into that field instead
+  // of dropping the user back on the form. The handlers only ever set it for
+  // the *next required and still empty* field, so the chain stops as soon as
+  // the mandatory path is covered and never hijacks a one-field correction.
+  const advanceToRef = useRef<AdvanceTarget>(null)
+
+  const openPicker = (field: PickerField) => {
+    resetPickerState()
+    setExpandedField(isMobile ? null : field)
+    setSheetField(isMobile ? field : null)
+  }
+
   const closePicker = () => {
+    const next = advanceToRef.current
+    advanceToRef.current = null
+
+    // Description is the end of the chain: it's a plain text field, so it gets
+    // focus rather than a picker. On mobile that means expanding its row, which
+    // focuses the input on its own.
+    if (next === 'description') {
+      setSheetField(null)
+      setExpandedField(isMobile ? 'description' : null)
+      if (!isMobile) {
+        window.requestAnimationFrame(() =>
+          document.getElementById('description')?.focus()
+        )
+      }
+      return
+    }
+
+    if (next) {
+      openPicker(next)
+      return
+    }
     setExpandedField(null)
     setSheetField(null)
+  }
+
+  // Shared selection handlers, used by both the mobile sheet and the desktop
+  // combobox so the two surfaces can't drift apart.
+  const selectAccount = (id: string) => {
+    setAccountId(id)
+    setUserRate('')
+    setFxNote('')
+    setFxError('')
+    if (!categoryId) advanceToRef.current = 'category'
+  }
+
+  const selectFromAccount = (id: string) => {
+    setFromAccountId(id)
+    const clearsDestination = id === toAccountId
+    if (clearsDestination) setToAccountId('')
+    if (!toAccountId || clearsDestination) advanceToRef.current = 'to'
+  }
+
+  const selectToAccount = (id: string) => {
+    setToAccountId(id)
+    if (id === fromAccountId) setFromAccountId('')
+  }
+
+  const selectCategory = (id: string) => {
+    setCategoryId(id)
+    if (showField('payee') && !payeeName) advanceToRef.current = 'payee'
+  }
+
+  // Description is always rendered (it isn't one of BR-032's optional fields),
+  // so the chain can always end there.
+  const selectPayee = (name: string) => {
+    setPayeeName(name)
+    if (!description) advanceToRef.current = 'description'
   }
 
   // Open the category picker drilled straight into the currently selected
@@ -845,7 +941,7 @@ export function TransactionForm({
     }
     const created = result.category as TransactionFormCategory
     setCreatedCategories((prev) => [...prev, created])
-    setCategoryId(created.id)
+    selectCategory(created.id)
     closePicker()
   }
 
@@ -1108,7 +1204,7 @@ export function TransactionForm({
                         key={c.id}
                         type="button"
                         onClick={() => {
-                          setCategoryId(c.id)
+                          selectCategory(c.id)
                           closePicker()
                         }}
                         className={cn(
@@ -1149,7 +1245,7 @@ export function TransactionForm({
                             setCategorySearch('')
                             setSubcategorySearch('')
                           } else {
-                            setCategoryId(parent.id)
+                            selectCategory(parent.id)
                             closePicker()
                           }
                         }}
@@ -1197,7 +1293,7 @@ export function TransactionForm({
                     key={category.id}
                     type="button"
                     onClick={() => {
-                      setCategoryId(category.id)
+                      selectCategory(category.id)
                       closePicker()
                     }}
                     className={cn(
@@ -1242,7 +1338,7 @@ export function TransactionForm({
                 key={p.id}
                 type="button"
                 onClick={() => {
-                  setPayeeName(p.name)
+                  selectPayee(p.name)
                   closePicker()
                 }}
                 className={cn(
@@ -1374,9 +1470,13 @@ export function TransactionForm({
         <>
           <input type="hidden" name="account_id" value={accountId} />
           <input type="hidden" name="category_id" value={categoryId} />
-          <input type="hidden" name="payee_name" value={payeeName} />
+          {showField('payee') ? (
+            <input type="hidden" name="payee_name" value={payeeName} />
+          ) : null}
         </>
       )}
+
+      <div className="px-1 pb-2 pt-2">{dateChips}</div>
 
       {editRow({
         id: 'date',
@@ -1421,36 +1521,47 @@ export function TransactionForm({
             placeholder: t('transactionForm.selectCategory'),
             onOpen: syncCategoryDrillToSelection,
           })}
-          {pickerRow({
-            id: 'payee',
-            icon: <Store className="size-4.5" />,
-            label: t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee'),
-            value: payeeName,
-            placeholder: '—',
-          })}
-          {editRow({
-            id: 'repeat',
-            icon: <Repeat className="size-4.5" />,
-            label: t('transactionForm.repeat'),
-            value: repeatValue,
-            placeholder: t('transactionForm.repeatNever'),
-            children: (
-              <>
-                <input type="hidden" name="frequency" value={recurringFrequency} />
-                {optionList(
-                  [
-                    { value: '', label: t('transactionForm.repeatNever') },
-                    ...RECURRING_FREQUENCIES.map((f) => ({ value: f.value, label: ui(f.label) })),
-                  ],
-                  recurringFrequency,
-                  (value) => {
-                    setRecurringFrequency(value)
-                    setExpandedField(null)
-                  }
-                )}
-              </>
-            ),
-          })}
+          {showField('payee')
+            ? pickerRow({
+                id: 'payee',
+                icon: <Store className="size-4.5" />,
+                label: t(
+                  transactionType === 'income'
+                    ? 'transactionForm.payer'
+                    : 'transactionForm.payee'
+                ),
+                value: payeeName,
+                placeholder: '—',
+              })
+            : null}
+          {showField('repeat')
+            ? editRow({
+                id: 'repeat',
+                icon: <Repeat className="size-4.5" />,
+                label: t('transactionForm.repeat'),
+                value: repeatValue,
+                placeholder: t('transactionForm.repeatNever'),
+                children: (
+                  <>
+                    <input type="hidden" name="frequency" value={recurringFrequency} />
+                    {optionList(
+                      [
+                        { value: '', label: t('transactionForm.repeatNever') },
+                        ...RECURRING_FREQUENCIES.map((f) => ({
+                          value: f.value,
+                          label: ui(f.label),
+                        })),
+                      ],
+                      recurringFrequency,
+                      (value) => {
+                        setRecurringFrequency(value)
+                        setExpandedField(null)
+                      }
+                    )}
+                  </>
+                ),
+              })
+            : null}
         </>
       )}
 
@@ -1472,33 +1583,37 @@ export function TransactionForm({
           </div>
         ),
       })}
-      {editRow({
-        id: 'note',
-        icon: <StickyNote className="size-4.5" />,
-        label: t('transactionForm.notes'),
-        value: notes,
-        placeholder: '—',
-        children: (
-          <div className="space-y-1.5">
-            <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-            <Textarea
-              id="notes"
-              name="notes"
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-        ),
-      })}
-      {editRow({
-        id: 'status',
-        icon: <ListChecks className="size-4.5" />,
-        label: t('transactionForm.status'),
-        value: statusValue,
-        placeholder: '',
-        children: statusField,
-      })}
+      {showField('notes')
+        ? editRow({
+            id: 'note',
+            icon: <StickyNote className="size-4.5" />,
+            label: t('transactionForm.notes'),
+            value: notes,
+            placeholder: '—',
+            children: (
+              <div className="space-y-1.5">
+                <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
+                <Textarea
+                  id="notes"
+                  name="notes"
+                  rows={3}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
+            ),
+          })
+        : null}
+      {showField('status')
+        ? editRow({
+            id: 'status',
+            icon: <ListChecks className="size-4.5" />,
+            label: t('transactionForm.status'),
+            value: statusValue,
+            placeholder: '',
+            children: statusField,
+          })
+        : statusField}
 
       {isTransfer && availableAccounts.length < 2 ? (
         <p className="border-t px-1 py-3 text-sm text-muted-foreground">
@@ -1529,34 +1644,15 @@ export function TransactionForm({
   } else if (sheetField === 'payee') {
     sheetBody = payeePickerBody()
   } else if (sheetField === 'account') {
-    sheetBody = accountPickerBody(accountId, (id) => {
-      setAccountId(id)
-      setUserRate('')
-      setFxNote('')
-      setFxError('')
-    })
+    sheetBody = accountPickerBody(accountId, selectAccount)
   } else if (sheetField === 'from') {
-    sheetBody = accountPickerBody(
-      fromAccountId,
-      (id) => {
-        setFromAccountId(id)
-        if (id === toAccountId) setToAccountId('')
-      },
-      toAccountId
-    )
+    sheetBody = accountPickerBody(fromAccountId, selectFromAccount, toAccountId)
   } else if (sheetField === 'to') {
-    sheetBody = accountPickerBody(
-      toAccountId,
-      (id) => {
-        setToAccountId(id)
-        if (id === fromAccountId) setFromAccountId('')
-      },
-      fromAccountId
-    )
+    sheetBody = accountPickerBody(toAccountId, selectToAccount, fromAccountId)
   }
 
   return (
-    <form action={submitAction} onSubmit={rememberDefaults} className="space-y-3">
+    <form action={submitAction} onSubmit={rememberCategoryUsage} className="space-y-3">
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
 
       <SelectorSheet open={sheetField !== null} onClose={closePicker} title={sheetTitle}>
@@ -1603,6 +1699,15 @@ export function TransactionForm({
             // Changing what you sent re-enables the transfer-cost estimate.
             if (isTransfer) setCostTouched(false)
           }}
+          // Enter on the amount starts the fill-fast chain at the first field
+          // still missing, so a whole entry can be typed without hunting.
+          onCommit={() => {
+            if (isTransfer) {
+              if (!fromAccountId) openPicker('from')
+              else if (!toAccountId) openPicker('to')
+            } else if (!accountId) openPicker('account')
+            else if (!categoryId) openPicker('category')
+          }}
           size="lg"
           withCalculator
           required
@@ -1623,14 +1728,7 @@ export function TransactionForm({
             placeholder: t('transactionForm.selectSource'),
             hiddenName: 'from_account_id',
             hiddenValue: fromAccountId,
-            body: accountPickerBody(
-              fromAccountId,
-              (id) => {
-                setFromAccountId(id)
-                if (id === toAccountId) setToAccountId('')
-              },
-              toAccountId
-            ),
+            body: accountPickerBody(fromAccountId, selectFromAccount, toAccountId),
           })}
 
           {desktopCombo({
@@ -1641,17 +1739,13 @@ export function TransactionForm({
             placeholder: t('transactionForm.selectDestination'),
             hiddenName: 'to_account_id',
             hiddenValue: toAccountId,
-            body: accountPickerBody(
-              toAccountId,
-              (id) => {
-                setToAccountId(id)
-                if (id === fromAccountId) setFromAccountId('')
-              },
-              fromAccountId
-            ),
+            body: accountPickerBody(toAccountId, selectToAccount, fromAccountId),
           })}
 
-          {dateField}
+          <div className="space-y-1.5">
+            {dateField}
+            {dateChips}
+          </div>
           {statusField}
 
           {/* Description: kept essential (visible on mobile too). */}
@@ -1676,15 +1770,13 @@ export function TransactionForm({
             placeholder: t('transactionForm.selectAccount'),
             hiddenName: 'account_id',
             hiddenValue: accountId,
-            body: accountPickerBody(accountId, (id) => {
-              setAccountId(id)
-              setUserRate('')
-              setFxNote('')
-              setFxError('')
-            }),
+            body: accountPickerBody(accountId, selectAccount),
           })}
 
-          {dateField}
+          <div className="space-y-1.5">
+            {dateField}
+            {dateChips}
+          </div>
 
           {desktopCombo({
             id: 'category',
@@ -1698,45 +1790,51 @@ export function TransactionForm({
             onOpen: syncCategoryDrillToSelection,
           })}
 
-          {/* Description & Payee: kept essential (visible on mobile too) and
-              full-width so they're comfortable to type into. */}
+          {/* Payee & Description: kept essential (visible on mobile too) and
+              full-width so they're comfortable to type into. Payee sits above
+              description to match the entry order the pickers chain through:
+              amount → account → category → payee → description. */}
+          {showField('payee') ? (
+            <div className="col-span-2">
+              <PayeePicker
+                payees={payees}
+                defaultValue={defaultMerchantName}
+                // "Payer" for income (who paid you), "Payee" for an expense (whom you
+                // paid) — same underlying payees table, context-appropriate wording.
+                label={t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')}
+                helpText={t('transactionForm.payeeHelp')}
+                inputId="payee_name"
+              />
+            </div>
+          ) : null}
+
           <div className="space-y-1.5 col-span-2">
             <Label htmlFor="description">{t('transactionForm.description')}</Label>
             <Input id="description" name="description" defaultValue={defaultDescription} />
           </div>
 
-          <div className="col-span-2">
-            <PayeePicker
-              payees={payees}
-              defaultValue={defaultMerchantName}
-              // "Payer" for income (who paid you), "Payee" for an expense (whom you
-              // paid) — same underlying payees table, context-appropriate wording.
-              label={t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')}
-              helpText={t('transactionForm.payeeHelp')}
-              inputId="payee_name"
-            />
-          </div>
-
           {/* UC-10: turn a normal entry into a recurring one. Kept essential so
               the recurring feature is discoverable. Transfers are not supported
               as recurring templates yet, so this is income/expense only. */}
-          <div className="space-y-1.5">
-            <SelectField
-              id="frequency"
-              name="frequency"
-              label={t('transactionForm.repeat')}
-              leading={<Repeat className="size-4.5" />}
-              value={recurringFrequency}
-              onChange={(e) => setRecurringFrequency(e.target.value)}
-            >
-              <option value="">{t('transactionForm.repeatNever')}</option>
-              {RECURRING_FREQUENCIES.map((frequency) => (
-                <option key={frequency.value} value={frequency.value}>
-                  {ui(frequency.label)}
-                </option>
-              ))}
-            </SelectField>
-          </div>
+          {showField('repeat') ? (
+            <div className="space-y-1.5">
+              <SelectField
+                id="frequency"
+                name="frequency"
+                label={t('transactionForm.repeat')}
+                leading={<Repeat className="size-4.5" />}
+                value={recurringFrequency}
+                onChange={(e) => setRecurringFrequency(e.target.value)}
+              >
+                <option value="">{t('transactionForm.repeatNever')}</option>
+                {RECURRING_FREQUENCIES.map((frequency) => (
+                  <option key={frequency.value} value={frequency.value}>
+                    {ui(frequency.label)}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+          ) : null}
 
           {statusField}
 
@@ -1761,10 +1859,12 @@ export function TransactionForm({
           />
         </button>
 
-        <div className={cn('space-y-1.5 sm:block', showMoreDetails ? 'block' : 'hidden')}>
-          <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-          <Textarea id="notes" name="notes" rows={2} />
-        </div>
+        {showField('notes') ? (
+          <div className={cn('space-y-1.5 sm:block', showMoreDetails ? 'block' : 'hidden')}>
+            <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
+            <Textarea id="notes" name="notes" rows={2} defaultValue={defaultNotes} />
+          </div>
+        ) : null}
       </div>
       </>
       )}
@@ -1773,9 +1873,10 @@ export function TransactionForm({
       {/* Rendered outside the mobile/desktop branch so the selection survives a
           breakpoint change. Shown even with no tags yet — the picker can create
           the first one inline. */}
-      {!isTransfer ? (
+      {!isTransfer && showField('tags') ? (
         <TagMultiSelect
           tags={tags}
+          defaultValue={defaultTagIds}
           label={t('transactionForm.tags')}
           helpText={t('transactionForm.tagsHelp')}
           manageLabel={t('transactionForm.tagsManage')}

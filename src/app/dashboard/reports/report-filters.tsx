@@ -7,7 +7,8 @@ import { buttonVariants } from '@/components/ui/button'
 import { MultiSelectChip, type MultiSelectOption } from '@/components/multi-select-chip'
 import { cn } from '@/lib/utils'
 
-type PresetLink = { label: string; href: string; isActive: boolean }
+/** A date range the user can stage in the form; applied only on submit. */
+type PresetOption = { label: string; dateFrom: string; dateTo: string }
 
 type ReportFiltersProps = {
   view: string
@@ -21,7 +22,7 @@ type ReportFiltersProps = {
   accountOptions: MultiSelectOption[]
   categoryOptions: MultiSelectOption[]
   tagOptions: MultiSelectOption[]
-  presetLinks: PresetLink[]
+  presetOptions: PresetOption[]
 }
 
 const TYPE_OPTIONS = [
@@ -45,10 +46,15 @@ export function ReportFilters({
   accountOptions,
   categoryOptions,
   tagOptions,
-  presetLinks,
+  presetOptions,
 }: ReportFiltersProps) {
   const typeRef = useRef<HTMLInputElement>(null)
   const [moreOpen, setMoreOpen] = useState(false)
+  // Only one option list at a time — their panels overlap otherwise.
+  const [openChip, setOpenChip] = useState<null | 'account' | 'category' | 'tag'>(null)
+  // Staged range: a preset writes here and only reaches the server on Apply.
+  const [dateFrom, setDateFrom] = useState(resolvedDateFrom)
+  const [dateTo, setDateTo] = useState(resolvedDateTo)
 
   function selectType(form: HTMLFormElement | null, value: string) {
     if (!form) return
@@ -124,12 +130,16 @@ export function ReportFilters({
             name="account_id"
             options={accountOptions}
             selectedIds={selectedAccountIds}
+            open={openChip === 'account'}
+            onOpenChange={(next) => setOpenChip(next ? 'account' : null)}
           />
           <MultiSelectChip
             label="Category"
             name="category_id"
             options={categoryOptions}
             selectedIds={selectedCategoryIds}
+            open={openChip === 'category'}
+            onOpenChange={(next) => setOpenChip(next ? 'category' : null)}
           />
           {tagOptions.length > 0 || selectedTagIds.length > 0 ? (
             <MultiSelectChip
@@ -137,32 +147,43 @@ export function ReportFilters({
               name="tag_id"
               options={tagOptions}
               selectedIds={selectedTagIds}
+              open={openChip === 'tag'}
+              onOpenChange={(next) => setOpenChip(next ? 'tag' : null)}
             />
           ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          {presetLinks.map((link) => (
-            <Link
-              key={link.label}
-              href={link.href}
-              aria-current={link.isActive ? 'true' : undefined}
-              className={buttonVariants({
-                variant: link.isActive ? 'default' : 'outline',
-                size: 'sm',
-              })}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {presetOptions.map((preset) => {
+            const isActive = dateFrom === preset.dateFrom && dateTo === preset.dateTo
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => {
+                  setDateFrom(preset.dateFrom)
+                  setDateTo(preset.dateTo)
+                }}
+                aria-pressed={isActive}
+                className={buttonVariants({
+                  variant: isActive ? 'default' : 'outline',
+                  size: 'sm',
+                })}
+              >
+                {preset.label}
+              </button>
+            )
+          })}
 
+          {/* Controlled, so a preset click shows up here immediately and the
+              pair always submits exactly what the user sees. */}
           <label className={chipLabelClassName}>
             <span className="text-xs font-medium text-muted-foreground">From</span>
             <input
-              key={resolvedDateFrom}
               type="date"
               name="date_from"
-              defaultValue={resolvedDateFrom}
+              value={dateFrom}
+              onChange={(event) => setDateFrom(event.target.value)}
               className="bg-transparent text-sm text-foreground outline-none"
               aria-label="From date"
             />
@@ -171,10 +192,10 @@ export function ReportFilters({
           <label className={chipLabelClassName}>
             <span className="text-xs font-medium text-muted-foreground">To</span>
             <input
-              key={resolvedDateTo}
               type="date"
               name="date_to"
-              defaultValue={resolvedDateTo}
+              value={dateTo}
+              onChange={(event) => setDateTo(event.target.value)}
               className="bg-transparent text-sm text-foreground outline-none"
               aria-label="To date"
             />

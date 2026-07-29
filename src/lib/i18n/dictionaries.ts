@@ -203,6 +203,9 @@ export const en = {
     typeIncome: 'Income',
     typeTransfer: 'Transfer',
     date: 'Date',
+    dateToday: 'Today',
+    dateYesterday: 'Yesterday',
+    dateTwoDaysAgo: '2 days ago',
     fromAccount: 'From account',
     toAccount: 'To account',
     selectSource: 'Select source',
@@ -298,6 +301,15 @@ export const en = {
     editNamed: 'Edit {name}',
     showDetails: 'Show {name} details',
     hideDetails: 'Hide {name} details',
+    promoteAction: 'Move to main level',
+    promotePending: 'Moving…',
+    promoteTitle: 'Make this a main category?',
+    promoteDescription:
+      '“{name}” stops being a subcategory and moves to the top level. Its transactions, budgets and reports keep pointing at it — only its place in the list changes.',
+    promoteConfirm: 'Move to main level',
+    promoted: 'Category moved to the main level.',
+    dragHint:
+      'Drag a row to reorder it. Drag it right to nest it under the category above, or left to pull it back out.',
   },
   comingSoon: {
     back: 'Back to dashboard',
@@ -402,6 +414,14 @@ export const en = {
     name: 'Name',
     type: 'Type',
     currency: 'Currency',
+    currencyChangeTitle: 'Change this account’s currency?',
+    currencyChangeConfirm: 'Change currency',
+    currencyChangeDescription:
+      'This account will be recorded in {to} instead of {from}. It has no transactions yet, so nothing is re-converted and no balance is affected.',
+    currencyEditableHelp:
+      'Still changeable because this account has no transactions yet.',
+    currencyLockedHelp:
+      'Fixed: this account already has transactions. Changing it would leave the balance adding up two different currencies, and re-converting the history would rewrite amounts that were saved at the exchange rate of their own date. To switch currency, create a new account and transfer the balance across.',
     institution: 'Institution',
     lastFour: 'Last four',
     notes: 'Notes',
@@ -637,6 +657,9 @@ export const es: DeepStringify<typeof en> = {
     typeIncome: 'Ingreso',
     typeTransfer: 'Transferencia',
     date: 'Fecha',
+    dateToday: 'Hoy',
+    dateYesterday: 'Ayer',
+    dateTwoDaysAgo: 'Anteayer',
     fromAccount: 'Cuenta de origen',
     toAccount: 'Cuenta de destino',
     selectSource: 'Selecciona el origen',
@@ -732,6 +755,15 @@ export const es: DeepStringify<typeof en> = {
     editNamed: 'Editar {name}',
     showDetails: 'Mostrar detalles de {name}',
     hideDetails: 'Ocultar detalles de {name}',
+    promoteAction: 'Pasar a nivel principal',
+    promotePending: 'Moviendo…',
+    promoteTitle: '¿Convertirla en categoría principal?',
+    promoteDescription:
+      '«{name}» deja de ser subcategoría y pasa al nivel principal. Sus transacciones, presupuestos e informes siguen apuntando a ella: solo cambia su lugar en la lista.',
+    promoteConfirm: 'Pasar a nivel principal',
+    promoted: 'La categoría pasó al nivel principal.',
+    dragHint:
+      'Arrastra una fila para reordenarla. Arrástrala a la derecha para anidarla en la categoría de arriba, o a la izquierda para sacarla.',
   },
   comingSoon: {
     back: 'Volver al panel',
@@ -836,6 +868,14 @@ export const es: DeepStringify<typeof en> = {
     name: 'Nombre',
     type: 'Tipo',
     currency: 'Moneda',
+    currencyChangeTitle: '¿Cambiar la moneda de esta cuenta?',
+    currencyChangeConfirm: 'Cambiar moneda',
+    currencyChangeDescription:
+      'Esta cuenta pasará a registrarse en {to} en lugar de {from}. Todavía no tiene transacciones, así que no se reconvierte nada ni se afecta ningún saldo.',
+    currencyEditableHelp:
+      'Todavía se puede cambiar porque esta cuenta no tiene transacciones.',
+    currencyLockedHelp:
+      'Fija: esta cuenta ya tiene transacciones. Cambiarla dejaría el saldo sumando dos monedas distintas, y reconvertir el historial reescribiría importes que se guardaron con el tipo de cambio de su propia fecha. Para pasar a otra moneda, creá una cuenta nueva y transferí el saldo.',
     institution: 'Institución',
     lastFour: 'Últimos cuatro',
     notes: 'Notas',
@@ -1071,6 +1111,9 @@ export const fr: DeepStringify<typeof en> = {
     typeIncome: 'Revenu',
     typeTransfer: 'Virement',
     date: 'Date',
+    dateToday: 'Aujourd’hui',
+    dateYesterday: 'Hier',
+    dateTwoDaysAgo: 'Avant-hier',
     fromAccount: 'Compte d’origine',
     toAccount: 'Compte de destination',
     selectSource: 'Sélectionnez l’origine',
@@ -1166,6 +1209,15 @@ export const fr: DeepStringify<typeof en> = {
     editNamed: 'Modifier {name}',
     showDetails: 'Afficher les détails de {name}',
     hideDetails: 'Masquer les détails de {name}',
+    promoteAction: 'Passer au niveau principal',
+    promotePending: 'Déplacement…',
+    promoteTitle: 'En faire une catégorie principale ?',
+    promoteDescription:
+      '« {name} » cesse d’être une sous-catégorie et passe au niveau principal. Ses transactions, budgets et rapports continuent de pointer vers elle : seule sa place dans la liste change.',
+    promoteConfirm: 'Passer au niveau principal',
+    promoted: 'La catégorie est passée au niveau principal.',
+    dragHint:
+      'Faites glisser une ligne pour la réordonner. Vers la droite pour l’imbriquer dans la catégorie du dessus, vers la gauche pour la faire ressortir.',
   },
   comingSoon: {
     back: 'Retour au tableau de bord',
@@ -1270,6 +1322,14 @@ export const fr: DeepStringify<typeof en> = {
     name: 'Nom',
     type: 'Type',
     currency: 'Devise',
+    currencyChangeTitle: 'Changer la devise de ce compte ?',
+    currencyChangeConfirm: 'Changer la devise',
+    currencyChangeDescription:
+      'Ce compte sera enregistré en {to} au lieu de {from}. Il n’a encore aucune transaction : rien n’est reconverti et aucun solde n’est touché.',
+    currencyEditableHelp:
+      'Encore modifiable, car ce compte n’a aucune transaction.',
+    currencyLockedHelp:
+      'Figée : ce compte a déjà des transactions. La changer laisserait le solde additionner deux devises différentes, et reconvertir l’historique réécrirait des montants enregistrés au taux de change de leur propre date. Pour changer de devise, créez un nouveau compte et transférez le solde.',
     institution: 'Institution',
     lastFour: 'Quatre derniers',
     notes: 'Notes',

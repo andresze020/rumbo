@@ -166,6 +166,7 @@ export async function updateAccountAction(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim()
   const accountType = String(formData.get('account_type') ?? '').trim()
   const accountClass = String(formData.get('account_class') ?? '').trim()
+  const currencyCode = String(formData.get('currency_code') ?? '').trim().toUpperCase()
   const institutionName = String(formData.get('institution_name') ?? '').trim()
   const lastFour = String(formData.get('last_four') ?? '').trim()
   const color = String(formData.get('color') ?? '').trim()
@@ -206,7 +207,7 @@ export async function updateAccountAction(formData: FormData) {
 
   const { data: account, error: accountError } = await supabase
     .from('accounts')
-    .select('id')
+    .select('id, currency_code')
     .eq('id', accountId)
     .eq('household_id', householdId)
     .is('deleted_at', null)
@@ -216,12 +217,55 @@ export async function updateAccountAction(formData: FormData) {
     redirectWithError('Account was not found for this household.')
   }
 
+  // BR-046: an account's currency can only be corrected while the account is
+  // still empty.
+  //
+  // Once entries exist, there is no good answer: leaving them alone makes the
+  // balance sum two currencies under one label, and re-converting them would
+  // rewrite amounts that were deliberately stored at the rate of their own
+  // transaction date (BR-002/BR-003's historical-FX policy). So the change is
+  // refused, and the UI explains it instead of offering a confirm dialog. The
+  // check counts *every* entry, including those on voided transactions — a
+  // void can be undone (BR-015), which would resurrect an amount in the old
+  // currency.
+  const currencyChanged = Boolean(currencyCode) && currencyCode !== account.currency_code
+
+  if (currencyChanged) {
+    const { count: entryCount, error: entryCountError } = await supabase
+      .from('transaction_entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('household_id', householdId)
+      .eq('account_id', accountId)
+
+    if (entryCountError) {
+      redirectWithError('Could not check this account for transactions.')
+    }
+
+    if (entryCount) {
+      redirectWithError(
+        'This account already has transactions, so its currency can no longer be changed. Create a new account in the other currency and transfer the balance.'
+      )
+    }
+
+    const { data: currency, error: currencyError } = await supabase
+      .from('currencies')
+      .select('code')
+      .eq('code', currencyCode)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (currencyError || !currency) {
+      redirectWithError('Select a valid active currency.')
+    }
+  }
+
   const { error: updateError } = await supabase
     .from('accounts')
     .update({
       name,
       account_type: accountType,
       account_class: accountClass,
+      ...(currencyChanged ? { currency_code: currencyCode } : {}),
       institution_name: institutionName || null,
       last_four: lastFour || null,
       color: color || null,

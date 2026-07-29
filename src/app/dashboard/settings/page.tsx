@@ -14,6 +14,8 @@ import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
 import { AppearanceSection } from './appearance-section'
 import { LanguageSection } from './language-section'
+import { PreferencesSection } from './preferences-section'
+import { getUiPreferences } from '@/lib/preferences/server'
 import {
   signOutAllAction,
   updateEmailAction,
@@ -56,6 +58,18 @@ export default async function SettingsPage({ searchParams }: Props) {
     .eq('id', profile.default_household_id)
     .maybeSingle()
 
+  // BR-032 + BR-038: the preferences card needs the household's active accounts
+  // for the "default account" picker.
+  const preferences = await getUiPreferences()
+  const { data: accountRows } = await supabase
+    .from('accounts')
+    .select('id, name')
+    .eq('household_id', profile.default_household_id)
+    .is('deleted_at', null)
+    .eq('is_archived', false)
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('name', { ascending: true })
+
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6">
       <PageHeader
@@ -74,6 +88,7 @@ export default async function SettingsPage({ searchParams }: Props) {
         </Callout>
       )}
       {saved === 'household' && <Callout variant="success">{ui('Household updated.')}</Callout>}
+      {saved === 'preferences' && <Callout variant="success">{ui('Preferences saved.')}</Callout>}
 
       {/* ── Profile ─────────────────────────────────────────────────── */}
       <Card>
@@ -196,6 +211,12 @@ export default async function SettingsPage({ searchParams }: Props) {
           </form>
         </CardContent>
       </Card>
+
+      {/* ── Preferences (BR-032 + BR-038) ───────────────────────────── */}
+      <PreferencesSection
+        preferences={preferences}
+        accounts={(accountRows ?? []) as { id: string; name: string }[]}
+      />
 
       {/* ── Appearance ──────────────────────────────────────────────── */}
       <AppearanceSection />

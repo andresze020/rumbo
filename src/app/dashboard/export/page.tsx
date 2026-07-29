@@ -46,8 +46,8 @@ export default async function ExportPage() {
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <PageHeader
         eyebrow={household.name}
-        title="Export CSV"
-        description="Download household data as UTF-8 CSV files."
+        title="Export data"
+        description="Download household data as an Excel workbook or a UTF-8 CSV file."
       />
 
       <ExportDownloadClient />

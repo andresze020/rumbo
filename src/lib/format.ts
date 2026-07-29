@@ -169,6 +169,30 @@ export function formatIsoDate(
   }).format(new Date(Date.UTC(year, month - 1, day)))
 }
 
+/**
+ * Today's calendar date (`YYYY-MM-DD`) in the **viewer's** timezone.
+ *
+ * Most of the app derives "today" from `new Date().toISOString().slice(0, 10)`,
+ * which is UTC — fine for server-rendered defaults (the server has no way to
+ * know the user's timezone), but wrong for a control that literally says
+ * "Today": a user in America/Montreal at 20:00 would get tomorrow's date. Use
+ * this in client components where the label makes a promise about the user's
+ * own day (BR-033 relative-date chips).
+ */
+export function todayIsoDateLocal(now: Date = new Date()) {
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+/** Shifts a `YYYY-MM-DD` date by whole days, staying on the calendar grid. */
+export function shiftIsoDate(iso: string, days: number) {
+  const [year, month, day] = iso.split('-').map(Number)
+  const shifted = new Date(Date.UTC(year, month - 1, day + days))
+  return shifted.toISOString().slice(0, 10)
+}
+
 export function formatIsoDateRange(
   dateFrom: string,
   dateTo: string,

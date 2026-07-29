@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ArrowLeftRight, GitMerge, Pencil, Store } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
-import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
+import { ConfirmActionButton } from '@/components/confirm-action-button'
 import { cn } from '@/lib/utils'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { archivePayeeAction } from './actions'
@@ -102,7 +102,7 @@ export function PayeeRow({
             >
               <GitMerge className="size-3.5" aria-hidden="true" />
             </Link>
-            <ArchiveConfirmButton
+            <ConfirmActionButton
               action={archivePayeeAction}
               hiddenFields={{
                 payee_id: payee.id,

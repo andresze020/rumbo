@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ArrowLeftRight, Pencil } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
-import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
+import { ConfirmActionButton } from '@/components/confirm-action-button'
 import { TagChip } from '@/components/tag-chip'
 import { cn } from '@/lib/utils'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
@@ -88,7 +88,7 @@ export function TagRow({
             </SubmitButton>
           </form>
         ) : (
-          <ArchiveConfirmButton
+          <ConfirmActionButton
             action={archiveTagAction}
             hiddenFields={{
               tag_id: tag.id,

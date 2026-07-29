@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ArrowRight, Pencil } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
-import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
+import { ConfirmActionButton } from '@/components/confirm-action-button'
 import { cn } from '@/lib/utils'
 import { toggleRuleAction, deleteRuleAction } from './actions'
 import type { RuleMatchField, RuleOperator } from '@/lib/rules/match'
@@ -94,7 +94,7 @@ export function RuleRow({ rule }: { rule: RuleVM }) {
           </SubmitButton>
         </form>
 
-        <ArchiveConfirmButton
+        <ConfirmActionButton
           action={deleteRuleAction}
           hiddenFields={{ rule_id: rule.id }}
           triggerLabel="Delete"

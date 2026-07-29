@@ -23,6 +23,65 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Mobile-capture parity sprint** (2026-07-28, branch
+  `sprint/mobile-capture-parity`, **not yet merged**). Seven benchmark items
+  from `docs/benchmark-review-mobile-money-managers.md`:
+  - **BR-033** relative-date chips (today / yesterday / two days ago) above the
+    transaction form's date control, on both the desktop grid and the mobile
+    row list. New `todayIsoDateLocal` in `lib/format.ts` — the viewer's
+    calendar day, not UTC — is also what the transaction dialog seeds its
+    default date with, so the "Today" chip and the prefilled date agree.
+  - **BR-034** `Copy` on a transaction row opens the create form pre-filled and
+    dated today. Transfers copy both legs; a split copies everything except the
+    category; voided rows stay copyable and always copy as posted; opening
+    balances, debt payments and archived-account rows are not copyable.
+  - **BR-041** `.xlsx` export beside CSV on `/dashboard/export`. Each export
+    builds one column/row table serialized either way. The writer
+    (`lib/exports/xlsx.ts`) is hand-rolled over `node:zlib` rather than a
+    dependency; a strict decimal pattern promotes Postgres's numeric-as-string
+    values to real numeric cells, and `last_four` opts out via `type: 'text'`.
+  - **BR-042** week-by-week rollup rows on `/dashboard/reports`, shown only
+    when the range is one calendar month. Weeks are ISO (Monday-start) clipped
+    to the month, so they partition it exactly and always sum to the month
+    totals. Months-within-year is deliberately deferred.
+  - **BR-032 + BR-046 + BR-047 + BR-038**: per-user UI preferences
+    (`profiles.ui_preferences` jsonb, migration `20260728120000`, **pending
+    `db push`**) drive which optional add-form fields render (BR-032) and how
+    `/dashboard/transactions` opens and renders (BR-038: default period,
+    default account, compact rows, show/hide balance adjustments). Account
+    currency is now editable and a change is confirm-gated (BR-046) — it
+    previously could only be set at creation. A subcategory can be promoted to
+    the main level via `promoteCategoryAction` (BR-047).
+  - `ArchiveConfirmButton` was renamed to `ConfirmActionButton`
+    (`components/confirm-action-button.tsx`) with an optional `triggerVariant`;
+    it was always a generic confirm-before-submit button.
+  - **Mobile transactions screen** was reworked in the same sprint after QA:
+    the filter toolbar is a single wrapping strip of pills (search collapses to
+    an icon, type becomes a dropdown, active filters are removable chips), the
+    secondary filters open as a **bottom sheet** (one DOM node styled two ways,
+    kept inside the `<form>` so the controls still submit), the card chrome and
+    the duplicate header actions are dropped on phones, and `MultiSelectChip`
+    takes a controlled `open` so only one option list shows at a time (also
+    applied to `/dashboard/reports`).
+  - **BR-048 drag-and-drop category nesting** (raised and built in this sprint's
+    QA). `sortable-category-list.tsx` renders one `DndContext` per type group
+    over a flattened `{category, depth, childCount}` list; `projectDrop` reads
+    the drag's horizontal offset for the landing depth, clamped to the two
+    levels the schema allows. New `moveCategoryAction` writes
+    `parent_category_id` + the destination siblings' `sort_order` together and
+    re-checks every `validateParentCategory` rule, returning a message (not a
+    redirect) so a rejected drop springs back. `reorderCategoriesAction` was
+    removed as superseded.
+  - **Transaction filters take multiple values.** Migration
+    `20260729120000_multi_value_transaction_filters.sql` (**pending `db push`**)
+    swaps `search_household_transactions`' `p_type`/`p_status`/`p_payee_id` for
+    `p_types`/`p_statuses`/`p_payee_ids` arrays — **the old signature is DROPped
+    first**, since `create or replace` cannot change a parameter's name or type
+    and would leave an ambiguous overload. Type is a multi-toggle segmented
+    control, status and payee are multi-selects, and date presets stage the
+    From/To fields instead of navigating (they used to apply on click, so
+    dismissing the sheet left an unconfirmed range applied). Same preset fix on
+    `/dashboard/reports`.
 - **Full UI localization + persisted language preference** (2026-07-25).
   All authenticated views and shared UI have English, Spanish, and Canadian
   French coverage, including dynamic dialogs, loading states, accessible
@@ -226,10 +285,12 @@ The product is household-first. All financial data must belong to a household.
 - Benchmarks: `docs/benchmark-review-monarch-ynab-copilot.md` (web/product
   competitors, source of BR-001…BR-029) and
   `docs/benchmark-review-mobile-money-managers.md` (mobile capture
-  competitors, source of BR-030…BR-041, added 2026-07-27). The mobile doc is
-  the self-sufficient record of a screen-recording review — it lists what we
-  already ship (§5.1) so those patterns are not re-proposed, and what the
-  recording never showed (§9).
+  competitors, source of BR-030…BR-047: BR-030…041 added 2026-07-27, BR-042…047
+  added 2026-07-28 after a screen recording of App B confirmed BR-030's
+  credit-card cycle live and surfaced six further gaps). The mobile doc is
+  the self-sufficient record of two screen-recording reviews — it lists what
+  we already ship (§5.1) so those patterns are not re-proposed, and what
+  neither recording showed (§9).
 
 ## Real Supabase tables (public schema)
 
@@ -258,8 +319,15 @@ The product is household-first. All financial data must belong to a household.
 - recurring_autopost_log
 - month_closures
 
-Pending migration prepared locally: `20260725120000_payees_bulk_merge.sql`
-(adds the `merge_payees_bulk` function; no new table).
+Pending migrations prepared locally:
+- `20260725120000_payees_bulk_merge.sql` (adds the `merge_payees_bulk`
+  function; no new table).
+- `20260728120000_br_032_038_ui_preferences.sql` (adds
+  `profiles.ui_preferences` jsonb + an object-shape check constraint; no new
+  table, no new policy — `profiles_update_own` already covers it).
+- `20260729120000_multi_value_transaction_filters.sql` (drops and recreates
+  `search_household_transactions` with array type/status/payee params; no
+  schema change).
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 

@@ -25,7 +25,7 @@ import { PageHeader } from '@/components/page-header'
 import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
-import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
+import { ConfirmActionButton } from '@/components/confirm-action-button'
 import { parseCsv, guessCsvMapping } from '@/lib/imports/csv-parser'
 import { buildValidatedRows } from '@/lib/imports/csv-validation'
 import type { CategorizationRule } from '@/lib/rules/match'
@@ -653,7 +653,7 @@ export function CsvImportClient({
                       {batch.revertedCount !== null ? ` · ${batch.revertedCount}` : ''}
                     </Badge>
                   ) : batch.importedCount > 0 ? (
-                    <ArchiveConfirmButton
+                    <ConfirmActionButton
                       action={revertCsvImportAction}
                       hiddenFields={{ batch_id: batch.id }}
                       triggerLabel="Revert"

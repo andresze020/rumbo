@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   Check,
   ChevronDown,
+  Copy,
   Flag,
   Pencil,
   RotateCcw,
@@ -28,6 +29,7 @@ import { TagChip } from '@/components/tag-chip'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { StatusBadge } from '@/components/status-badge'
+import { useTransactionDialog } from '@/components/transaction-dialog-provider'
 import { cn } from '@/lib/utils'
 import { useLanguage } from '@/components/language-provider'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
@@ -43,6 +45,27 @@ export type TransactionListCategory = {
   parent_category_id: string | null
   icon?: string | null
   is_system?: boolean
+}
+
+/**
+ * BR-034 — a snapshot of an existing transaction, enough to open the create
+ * form pre-filled with it. Deliberately has no date: a copy defaults to today.
+ */
+export type TransactionCopyPayload = {
+  type: 'income' | 'expense' | 'transfer'
+  /** Absolute amount in the source account's currency, e.g. "42.50". */
+  amount: string
+  /** Transfers only: the amount that arrived, in the destination's currency. */
+  toAmount?: string
+  accountId?: string
+  fromAccountId?: string
+  toAccountId?: string
+  /** Empty when the source is a split — the user picks a category instead. */
+  categoryId?: string
+  description?: string
+  payeeName?: string
+  notes?: string
+  tagIds: string[]
 }
 
 export type TransactionListRow = {
@@ -78,6 +101,8 @@ export type TransactionListRow = {
   categoryId: string | null
   amountRaw: string | null
   description: string | null
+  /** BR-034: null when the row can't be recreated by the create form. */
+  copy: TransactionCopyPayload | null
 }
 
 export type TransactionListGroup = {
@@ -91,6 +116,8 @@ type TransactionListProps = {
   categories: TransactionListCategory[]
   payeeSuggestions: string[]
   returnTo: string
+  /** BR-038: tighter rows, so more transactions fit on screen. */
+  compact?: boolean
 }
 
 const reviewStyles: Record<ReviewStatus, { label: string; className: string }> = {
@@ -160,6 +187,7 @@ export function TransactionList({
   categories,
   payeeSuggestions,
   returnTo,
+  compact = false,
 }: TransactionListProps) {
   const { t, locale } = useLanguage()
   const ui = useUiTranslation()
@@ -353,6 +381,7 @@ export function TransactionList({
                     row={row}
                     selected={selected.has(row.id)}
                     expanded={expandedId === row.id}
+                    compact={compact}
                     returnTo={returnTo}
                     onToggle={() => toggleRow(row.id)}
                     onToggleExpand={() =>
@@ -401,6 +430,7 @@ function DisplayRow({
   row,
   selected,
   expanded,
+  compact,
   returnTo,
   onToggle,
   onToggleExpand,
@@ -409,16 +439,19 @@ function DisplayRow({
   row: TransactionListRow
   selected: boolean
   expanded: boolean
+  compact: boolean
   returnTo: string
   onToggle: () => void
   onToggleExpand: () => void
   onEdit: () => void
 }) {
   const ui = useUiTranslation()
+  const { openDialog } = useTransactionDialog()
   return (
     <div
       className={cn(
-        'p-3 transition-colors sm:p-4',
+        'transition-colors',
+        compact ? 'px-3 py-2 sm:px-4' : 'p-3 sm:p-4',
         row.isVoided
           ? 'bg-muted/30 text-muted-foreground'
           : selected
@@ -450,9 +483,15 @@ function DisplayRow({
             <span className="block truncate font-medium leading-snug">{row.title}</span>
             <span className="block truncate text-xs text-muted-foreground">
               {row.accountName}
-              {' · '}
-              {row.categoryIcon ? `${row.categoryIcon} ` : ''}
-              {row.categoryName}
+              {/* A transfer's "category" is the literal word Transfer, which the
+                  ⇄ icon and the "from → to" route already say. */}
+              {row.isTransfer ? null : (
+                <>
+                  {' · '}
+                  {row.categoryIcon ? `${row.categoryIcon} ` : ''}
+                  {row.categoryName}
+                </>
+              )}
             </span>
           </span>
         </button>
@@ -460,7 +499,8 @@ function DisplayRow({
         {row.amountFormatted ? (
           <p
             className={cn(
-              'shrink-0 text-base font-semibold tabular-nums leading-snug',
+              'shrink-0 font-semibold tabular-nums leading-snug',
+              compact ? 'text-sm' : 'text-base',
               getAmountColorClass(row.transactionType)
             )}
           >
@@ -471,16 +511,20 @@ function DisplayRow({
         <ChevronDown
           aria-hidden="true"
           className={cn(
-            'size-4 shrink-0 text-muted-foreground transition-transform sm:hidden',
+            'size-4 shrink-0 text-muted-foreground transition-transform',
+            compact ? '' : 'sm:hidden',
             expanded && 'rotate-180'
           )}
         />
       </div>
 
       {/* ── Details: collapsed on mobile, always shown on desktop ─────── */}
+      {/* Compact mode keeps the details behind the row toggle on every
+          breakpoint — that collapse is where the vertical space comes from. */}
       <div
         className={cn(
-          'space-y-2 pl-7 pt-2 sm:block',
+          'space-y-2 pl-7 pt-2',
+          compact ? '' : 'sm:block',
           expanded ? 'block' : 'hidden'
         )}
       >
@@ -535,6 +579,18 @@ function DisplayRow({
             >
               {ui('Edit')}
             </Link>
+          ) : null}
+          {/* BR-034: opens the create form pre-filled from this row, dated
+              today. Nothing is written until the user saves. */}
+          {row.copy ? (
+            <button
+              type="button"
+              onClick={() => openDialog({ copy: row.copy ?? undefined })}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
+            >
+              <Copy className="size-3.5" aria-hidden="true" />
+              {ui('Copy')}
+            </button>
           ) : null}
           {row.canVoid ? <VoidTransactionForm transactionId={row.id} /> : null}
         </div>

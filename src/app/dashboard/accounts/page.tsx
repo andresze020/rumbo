@@ -6,6 +6,7 @@ import {
   createAccountAction,
   updateAccountAction,
 } from './actions'
+import { CurrencyChangeGuard } from './currency-change-guard'
 import { OpeningBalanceForm } from './opening-balance-form'
 import { BalanceAdjustmentForm } from './balance-adjustment-form'
 import {
@@ -22,7 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { BalanceAmount } from '@/components/balance-amount'
-import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
+import { ConfirmActionButton } from '@/components/confirm-action-button'
 import { ArchiveToast } from '@/components/archive-toast'
 import { EmptyState } from '@/components/empty-state'
 import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
@@ -344,6 +345,8 @@ function CreateAccountForm({
 
 function EditAccountForm({
   row,
+  activeCurrencies,
+  canChangeCurrency,
   showArchived,
   hasOpeningBalance,
   openingBalanceHref,
@@ -351,6 +354,9 @@ function EditAccountForm({
   locale,
 }: {
   row: AccountRow
+  activeCurrencies: Currency[]
+  /** BR-046: false once the account has any ledger entry. */
+  canChangeCurrency: boolean
   showArchived: boolean
   hasOpeningBalance: boolean
   openingBalanceHref: string
@@ -363,7 +369,15 @@ function EditAccountForm({
 
   return (
     <>
-    <form action={updateAccountAction} className="space-y-4">
+    <CurrencyChangeGuard
+      action={updateAccountAction}
+      currentCurrency={account.currency_code}
+      title={translate(locale, 'accounts.currencyChangeTitle')}
+      description={translate(locale, 'accounts.currencyChangeDescription')}
+      cancelLabel={translate(locale, 'common.cancel')}
+      confirmLabel={translate(locale, 'accounts.currencyChangeConfirm')}
+      className="space-y-4"
+    >
       <input type="hidden" name="account_id" value={account.id} />
       <input
         type="hidden"
@@ -433,6 +447,44 @@ function EditAccountForm({
             pattern="[0-9]{1,4}"
             defaultValue={account.last_four ?? ''}
           />
+        </div>
+
+        {/* BR-046: the currency is correctable only while the account is still
+            empty — see updateAccountAction for why a change is refused once
+            entries exist. */}
+        <div className="space-y-2">
+          <Label htmlFor={`currency_code_${account.id}`}>{translate(locale, 'accounts.currency')}</Label>
+          {canChangeCurrency ? (
+            <>
+              <select
+                id={`currency_code_${account.id}`}
+                name="currency_code"
+                defaultValue={account.currency_code}
+                className={selectClassName}
+              >
+                {activeCurrencies.map((currency) => (
+                  <option key={currency.code} value={currency.code}>
+                    {currency.code} - {currency.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {translate(locale, 'accounts.currencyEditableHelp')}
+              </p>
+            </>
+          ) : (
+            <>
+              <p
+                id={`currency_code_${account.id}`}
+                className="rounded-lg border border-input bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+              >
+                {account.currency_code}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {translate(locale, 'accounts.currencyLockedHelp')}
+              </p>
+            </>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -508,7 +560,7 @@ function EditAccountForm({
           {translate(locale, 'common.cancel')}
         </Link>
       </div>
-    </form>
+    </CurrencyChangeGuard>
     <div className="mt-4 flex flex-wrap gap-2 border-t pt-4">
       {!account.is_archived && !hasOpeningBalance ? (
         <Link href={openingBalanceHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
@@ -535,7 +587,7 @@ function EditAccountForm({
           </SubmitButton>
         </form>
       ) : (
-        <ArchiveConfirmButton
+        <ConfirmActionButton
           action={archiveAccountAction}
           hiddenFields={{
             account_id: account.id,
@@ -775,6 +827,20 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const selectedEditRow = displayRows.find(
     (row) => row.metadata.id === editAccountId
   )
+
+  // BR-046: an empty account's currency is still correctable. Counted only for
+  // the account actually being edited, and across *every* entry — voided ones
+  // included, since an undo would bring back an amount in the old currency.
+  let canChangeCurrency = false
+  if (selectedEditRow) {
+    const { count, error: entryCountError } = await supabase
+      .from('transaction_entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('household_id', household.id)
+      .eq('account_id', selectedEditRow.metadata.id)
+
+    canChangeCurrency = !entryCountError && !count
+  }
   const selectedOpeningBalanceRow = displayRows.find(
     (row) =>
       row.metadata.id === openingBalanceAccountId &&
@@ -896,6 +962,8 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
         >
           <EditAccountForm
             row={selectedEditRow}
+            activeCurrencies={activeCurrencies}
+            canChangeCurrency={canChangeCurrency}
             showArchived={showArchived}
             hasOpeningBalance={selectedEditRow.hasOpeningBalance}
             openingBalanceHref={accountsPath({ showArchived, openingBalance: selectedEditRow.metadata.id })}

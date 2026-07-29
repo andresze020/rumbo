@@ -6,6 +6,7 @@ import { TransferEditForm } from './transfer-edit-form'
 import { TransactionFilters } from './transaction-filters'
 import {
   TransactionList,
+  type TransactionCopyPayload,
   type TransactionListCategory,
   type TransactionListGroup,
   type ReviewStatus,
@@ -18,6 +19,11 @@ import { GlobalAddTransactionButton } from '@/components/global-add-transaction-
 import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { Callout } from '@/components/callout'
 import { createClient } from '@/lib/supabase/server'
+import { getUiPreferences } from '@/lib/preferences/server'
+import {
+  hasDefaultTransactionScope,
+  type UiPreferences,
+} from '@/lib/preferences/shared'
 import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import { createUiTranslator } from '@/lib/i18n/ui'
@@ -141,10 +147,10 @@ type TransactionFilters = {
   dateFrom: string
   dateTo: string
   search: string
-  status: string
+  statuses: string[]
   review: string
-  type: string
-  payeeId: string
+  types: string[]
+  payeeIds: string[]
   tagIds: string[]
 }
 
@@ -224,6 +230,31 @@ function normalizeOption(value: string | undefined, allowedValues: string[]) {
   return value && allowedValues.includes(value) ? value : 'all'
 }
 
+/** Repeated query params → a trimmed, de-duplicated id list. */
+function toIdList(raw: string | string[] | undefined): string[] {
+  const values = Array.isArray(raw) ? raw : raw ? [raw] : []
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+}
+
+/** Same, but keeping only values the column actually allows. */
+function normalizeOptions(
+  raw: string | string[] | undefined,
+  allowedValues: readonly string[]
+): string[] {
+  return toIdList(raw).filter((value) => allowedValues.includes(value))
+}
+
+const TRANSACTION_TYPE_VALUES = [
+  'income',
+  'expense',
+  'transfer',
+  'opening_balance',
+  'debt_payment',
+  'adjustment',
+] as const
+
+const STATUS_VALUES = ['posted', 'pending', 'voided'] as const
+
 type TransactionGroup = {
   date: string
   label: string
@@ -295,20 +326,20 @@ function transactionsPath(
   if (filters.dateFrom && filters.dateTo) {
     params.set('date_from', filters.dateFrom)
     params.set('date_to', filters.dateTo)
-  } else if (!filters.payeeId && filters.tagIds.length === 0) {
+  } else if (filters.payeeIds.length === 0 && filters.tagIds.length === 0) {
     // A payee/tag filter with no explicit range is an all-time view of that
     // payee/tag — don't pin it to the current month, or navigating back to this
     // URL would hide its transactions from other months.
     params.set('month', filters.month || currentMonth())
   }
 
-  if (filters.type !== 'all') params.set('type', filters.type)
-  if (filters.status !== 'all') params.set('status', filters.status)
+  for (const value of filters.types) params.append('type', value)
+  for (const value of filters.statuses) params.append('status', value)
   if (filters.review !== 'all') params.set('review', filters.review)
   for (const id of filters.accountIds) params.append('account_id', id)
   for (const id of filters.categoryIds) params.append('category_id', id)
   if (filters.search) params.set('search', filters.search)
-  if (filters.payeeId) params.set('payee_id', filters.payeeId)
+  for (const id of filters.payeeIds) params.append('payee_id', id)
   for (const id of filters.tagIds) params.append('tag_id', id)
   if (panel?.mode) params.set('mode', panel.mode)
   if (panel?.edit) params.set('edit', panel.edit)
@@ -316,12 +347,70 @@ function transactionsPath(
   return `/dashboard/transactions?${params.toString()}`
 }
 
-function presetPath(
-  filters: TransactionFilters,
-  dateFrom: string,
-  dateTo: string
+/**
+ * "Clear filters" has to mean *no* filters — every account, every date.
+ *
+ * A bare `/dashboard/transactions` will not do: that is exactly the URL the
+ * BR-038 landing preferences claim, so clearing would bounce straight back to
+ * the user's default period and account. Spelling out the widest possible range
+ * both keeps the redirect out of the way and says what it means.
+ */
+const CLEAR_FILTERS_HREF = `/dashboard/transactions?date_from=${ALL_TIME_FROM}&date_to=${ALL_TIME_TO}`
+
+/**
+ * BR-038 — every search param that means "the user (or a link) chose a view".
+ * If any of these is present the URL is authoritative and the landing
+ * preferences stay out of the way.
+ */
+const FILTER_PARAM_KEYS = [
+  'month',
+  'date_from',
+  'date_to',
+  'account_id',
+  'category_id',
+  'tag_id',
+  'payee_id',
+  'type',
+  'status',
+  'review',
+  'search',
+  'page',
+] as const
+
+/**
+ * The explicit URL that represents this user's preferred landing view.
+ *
+ * Non-filter params ride along: a server action that redirects back here with
+ * `?created=1` (or `voided`, `undo_id`, `edit`…) must still show its toast or
+ * dialog after the landing preferences are applied.
+ */
+function preferredScopeHref(
+  preferences: UiPreferences,
+  currentParams: Record<string, string | string[] | undefined>
 ) {
-  return transactionsPath({ ...filters, dateFrom, dateTo, month: '' })
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(currentParams)) {
+    if (value === undefined) continue
+    for (const entry of Array.isArray(value) ? value : [value]) {
+      params.append(key, entry)
+    }
+  }
+  const { defaultPeriod, defaultAccountIds } = preferences.transactions
+
+  if (defaultPeriod === 'last_30_days') {
+    const today = todayIsoDate()
+    params.set('date_from', offsetDate(today, -29))
+    params.set('date_to', today)
+  } else if (defaultPeriod === 'all_time') {
+    params.set('date_from', ALL_TIME_FROM)
+    params.set('date_to', ALL_TIME_TO)
+  } else {
+    params.set('month', currentMonth())
+  }
+
+  for (const id of defaultAccountIds) params.append('account_id', id)
+
+  return `/dashboard/transactions?${params.toString()}`
 }
 
 export default async function TransactionsPage({
@@ -333,6 +422,19 @@ export default async function TransactionsPage({
   const t = (key: TranslationKey, vars?: Record<string, string | number>) =>
     translate(locale, key, vars)
   const errorMessage = typeof params.error === 'string' ? params.error : null
+
+  // ── BR-038: display preferences ───────────────────────────────────────────
+  // The landing scope/period only apply to a *bare* URL — the moment any filter
+  // param is present, the URL wins (a shared link, a "view transactions" button,
+  // or the user clearing a filter must never be silently overridden). When they
+  // do apply, we redirect once to the explicit URL so every later navigation
+  // carries real params and this branch is not re-entered.
+  const preferences = await getUiPreferences()
+  const hasAnyFilterParam = FILTER_PARAM_KEYS.some((key) => params[key] !== undefined)
+
+  if (!hasAnyFilterParam && !hasDefaultTransactionScope(preferences)) {
+    redirect(preferredScopeHref(preferences, params))
+  }
 
   const rawDateFrom = typeof params.date_from === 'string' ? params.date_from : ''
   const rawDateTo = typeof params.date_to === 'string' ? params.date_to : ''
@@ -355,52 +457,26 @@ export default async function TransactionsPage({
     resolvedDateTo = monthLastDay(resolvedMonth)
   }
 
-  const selectedType = normalizeOption(params.type, [
-    'income',
-    'expense',
-    'transfer',
-    'opening_balance',
-    'debt_payment',
-    'adjustment',
-  ])
-  const selectedStatus = normalizeOption(params.status, [
-    'posted',
-    'pending',
-    'voided',
-  ])
+  // Type, status and payee are multi-value like account/category/tag: an empty
+  // list means "all", so "no filter" and "every option ticked" stay the same
+  // query. Unknown values are dropped rather than passed through to the RPC.
+  const selectedTypes = normalizeOptions(params.type, TRANSACTION_TYPE_VALUES)
+  const selectedStatuses = normalizeOptions(params.status, STATUS_VALUES)
   const selectedReview = normalizeOption(params.review, [
     'unreviewed',
     'reviewed',
     'flagged',
   ])
-  const rawAccountIds = params.account_id
-  const selectedAccountIds: string[] = Array.isArray(rawAccountIds)
-    ? rawAccountIds
-    : rawAccountIds
-    ? [rawAccountIds]
-    : []
-  const rawCategoryIds = params.category_id
-  const selectedCategoryIds: string[] = Array.isArray(rawCategoryIds)
-    ? rawCategoryIds
-    : rawCategoryIds
-    ? [rawCategoryIds]
-    : []
+  const selectedAccountIds = toIdList(params.account_id)
+  const selectedCategoryIds = toIdList(params.category_id)
   const searchText = typeof params.search === 'string' ? params.search.trim() : ''
-  const selectedPayeeId =
-    typeof params.payee_id === 'string' && params.payee_id.trim()
-      ? params.payee_id.trim()
-      : ''
-  const rawTagIds = params.tag_id
-  const selectedTagIds: string[] = (
-    Array.isArray(rawTagIds) ? rawTagIds : rawTagIds ? [rawTagIds] : []
-  )
-    .map((id) => id.trim())
-    .filter(Boolean)
+  const selectedPayeeIds = toIdList(params.payee_id)
+  const selectedTagIds = toIdList(params.tag_id)
 
   // A payee/tag filter defaults to an all-time view; only constrain by date when
   // the user has explicitly picked a month or a custom range.
   const applyDateWindow =
-    (!selectedPayeeId && selectedTagIds.length === 0) ||
+    (selectedPayeeIds.length === 0 && selectedTagIds.length === 0) ||
     hasCustomDateRange ||
     params.month !== undefined
 
@@ -411,23 +487,23 @@ export default async function TransactionsPage({
     dateFrom: hasCustomDateRange ? resolvedDateFrom : '',
     dateTo: hasCustomDateRange ? resolvedDateTo : '',
     search: searchText,
-    status: selectedStatus,
+    statuses: selectedStatuses,
     review: selectedReview,
-    type: selectedType,
-    payeeId: selectedPayeeId,
+    types: selectedTypes,
+    payeeIds: selectedPayeeIds,
     tagIds: selectedTagIds,
   }
 
   const hasActiveFilters =
     hasCustomDateRange ||
     params.month !== undefined ||
-    selectedType !== 'all' ||
-    selectedStatus !== 'all' ||
+    selectedTypes.length > 0 ||
+    selectedStatuses.length > 0 ||
     selectedReview !== 'all' ||
     selectedAccountIds.length > 0 ||
     selectedCategoryIds.length > 0 ||
     searchText.length > 0 ||
-    selectedPayeeId.length > 0 ||
+    selectedPayeeIds.length > 0 ||
     selectedTagIds.length > 0
 
   const editTransactionId =
@@ -482,10 +558,18 @@ export default async function TransactionsPage({
     .eq('household_id', household.id)
     .order('name', { ascending: true })
   const payeeOptions = (payeeRows ?? []) as { id: string; name: string }[]
-  const selectedPayeeName = selectedPayeeId
-    ? payeeOptions.find((p) => p.id === selectedPayeeId)?.name ?? null
-    : null
-  const clearPayeeHref = transactionsPath({ ...filters, payeeId: '' })
+  // The focus banner only makes sense for a single payee — it's what the
+  // Payees page's "View transactions" button produces. With several picked,
+  // the filter chips carry the story instead.
+  const selectedPayeeName =
+    selectedPayeeIds.length === 1
+      ? payeeOptions.find((p) => p.id === selectedPayeeIds[0])?.name ?? null
+      : null
+  const clearPayeeHref = transactionsPath({ ...filters, payeeIds: [] })
+  const payeeFilterOptions = payeeOptions.map((payee) => ({
+    id: payee.id,
+    label: payee.name,
+  }))
 
   // BR-023: household tags for the edit picker + list chips. Load all (incl.
   // archived) so a transaction tagged with a since-archived tag still renders
@@ -567,11 +651,11 @@ export default async function TransactionsPage({
       p_household_id: household.id,
       p_date_from: applyDateWindow ? resolvedDateFrom : null,
       p_date_to: applyDateWindow ? resolvedDateTo : null,
-      p_type: selectedType !== 'all' ? selectedType : null,
-      p_status: selectedStatus !== 'all' ? selectedStatus : null,
+      p_types: selectedTypes.length ? selectedTypes : null,
+      p_statuses: selectedStatuses.length ? selectedStatuses : null,
       p_review: selectedReview !== 'all' ? selectedReview : null,
       p_search: searchText || null,
-      p_payee_id: selectedPayeeId || null,
+      p_payee_ids: selectedPayeeIds.length ? selectedPayeeIds : null,
       p_account_ids: selectedAccountIds.length ? selectedAccountIds : null,
       p_category_ids: effectiveCategoryIds.size
         ? Array.from(effectiveCategoryIds)
@@ -686,6 +770,16 @@ export default async function TransactionsPage({
   const allocationsByTransactionId = new Map(
     transactionAllocations.map((a) => [a.transaction_id, a])
   )
+  // BR-034: a transaction with more than one allocation (a split) can't be
+  // represented by the single-category create form, so a copy of one leaves the
+  // category blank rather than silently picking one of the splits.
+  const allocationCountByTransactionId = new Map<string, number>()
+  for (const allocation of transactionAllocations) {
+    allocationCountByTransactionId.set(
+      allocation.transaction_id,
+      (allocationCountByTransactionId.get(allocation.transaction_id) ?? 0) + 1
+    )
+  }
   const accountNamesById = new Map([
     ...allAccounts.map((a) => [a.id, a.name] as const),
     ...accountLookupRows.map((a) => [a.id, a.name] as const),
@@ -803,7 +897,18 @@ export default async function TransactionsPage({
     }
   }
 
-  const transactionRows = transactions.map(buildTransactionRow)
+  // BR-038: hiding balance adjustments is visibility only — the rows are still
+  // fetched, still counted in the header totals, and still part of every
+  // balance. They are simply not listed. (Filtering after the page query means
+  // a page can render fewer than PAGE_SIZE rows; that is the honest trade for
+  // not touching the search RPC's signature.)
+  const transactionRows = transactions
+    .filter(
+      (transaction) =>
+        preferences.transactions.showBalanceAdjustments ||
+        transaction.transaction_type !== 'adjustment'
+    )
+    .map(buildTransactionRow)
 
   // Totals for the WHOLE filtered set (every page), converted to the household
   // base currency by the RPC. Transfers, debt payments, opening balances and
@@ -864,10 +969,14 @@ export default async function TransactionsPage({
     { label: 'Year to date', from: `${thisYear}-01-01`, to: todayStr },
     { label: 'All time', from: ALL_TIME_FROM, to: ALL_TIME_TO },
   ]
-  const presetLinks = rawPresets.map((p) => ({
+  // Presets carry their raw range, not a link: clicking one has to stage the
+  // range in the form and wait for "Apply filters" like every other control.
+  // A navigating preset applied itself immediately, so dismissing the sheet
+  // left a range the user never confirmed.
+  const presetOptions = rawPresets.map((p) => ({
     label: p.label,
-    href: presetPath(filters, p.from, p.to),
-    isActive: resolvedDateFrom === p.from && resolvedDateTo === p.to,
+    dateFrom: p.from,
+    dateTo: p.to,
   }))
 
   const accountOptions = allAccounts.map((a) => {
@@ -915,6 +1024,60 @@ export default async function TransactionsPage({
 
   const toReviewStatus = (value: string): ReviewStatus =>
     value === 'reviewed' || value === 'flagged' ? value : 'unreviewed'
+
+  const activeAccountIds = new Set(activeAccounts.map((account) => account.id))
+
+  /**
+   * BR-034 — everything the create form needs to open pre-filled from an
+   * existing row. Returns null for rows the form can't recreate: opening
+   * balances, debt payments, and anything whose account is archived (the
+   * picker only offers active accounts). Voided rows *are* copyable — the copy
+   * is a brand-new posted transaction, which is exactly how you re-enter a
+   * corrected version of something you voided. The date is deliberately absent:
+   * the form defaults it to today.
+   */
+  function buildCopyPayload(row: TransactionRow): TransactionCopyPayload | null {
+    if (row.isOpeningBalance || row.isDebtPayment) return null
+
+    if (row.isTransfer) {
+      const from = row.transferOutEntry
+      const to = row.transferInEntry
+      if (!from || !to) return null
+      if (!activeAccountIds.has(from.account_id) || !activeAccountIds.has(to.account_id)) {
+        return null
+      }
+      return {
+        type: 'transfer',
+        amount: Math.abs(Number(from.amount_account_currency)).toFixed(2),
+        // Cross-currency transfers ask for both legs; the destination amount is
+        // its own entry, so a copy has to carry it too or the form reopens with
+        // "Amount received" empty.
+        toAmount: Math.abs(Number(to.amount_account_currency)).toFixed(2),
+        fromAccountId: from.account_id,
+        toAccountId: to.account_id,
+        description: row.transaction.description ?? '',
+        notes: row.transaction.notes ?? '',
+        tagIds: [],
+      }
+    }
+
+    const type = row.transaction.transaction_type
+    if (type !== 'income' && type !== 'expense') return null
+    if (!row.entry || !activeAccountIds.has(row.entry.account_id)) return null
+
+    const isSplit = (allocationCountByTransactionId.get(row.transaction.id) ?? 0) > 1
+
+    return {
+      type,
+      amount: Math.abs(Number(row.entry.amount_account_currency)).toFixed(2),
+      accountId: row.entry.account_id,
+      categoryId: isSplit ? '' : row.allocation?.category_id ?? '',
+      description: row.transaction.description ?? '',
+      payeeName: row.transaction.merchant_name ?? '',
+      notes: row.transaction.notes ?? '',
+      tagIds: tagIdsByTransaction.get(row.transaction.id) ?? [],
+    }
+  }
 
   const serializedGroups: TransactionListGroup[] = transactionGroups.map((group) => ({
     date: group.date,
@@ -975,6 +1138,7 @@ export default async function TransactionsPage({
           ? Math.abs(Number(row.entry.amount_account_currency)).toFixed(2)
           : null,
       description: row.transaction.description,
+      copy: buildCopyPayload(row),
     })),
   }))
 
@@ -997,9 +1161,22 @@ export default async function TransactionsPage({
         eyebrow={household.name}
         title="Transactions"
         description="Review and manage household transactions."
+        // Phones reach both actions from the bottom nav (the + button and the
+        // Money group's Import CSV), so the header stays title-only there.
+        compactOnMobile
         actions={
           <>
-            <GlobalAddTransactionButton className={buttonVariants({ size: 'sm' })}>
+            {/* The form starts empty by default. The one exception is context
+                the user has already given us: when the list is narrowed to a
+                single account, a new transaction almost certainly belongs to
+                it. Two or more filtered accounts is not a hint, so nothing is
+                pre-filled. */}
+            <GlobalAddTransactionButton
+              className={buttonVariants({ size: 'sm' })}
+              defaultAccountId={
+                selectedAccountIds.length === 1 ? selectedAccountIds[0] : undefined
+              }
+            >
               {ui('Add transaction')}
             </GlobalAddTransactionButton>
             <Link
@@ -1017,7 +1194,7 @@ export default async function TransactionsPage({
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
 
       {/* ── Payee focus chip ───────────────────────────────────────────── */}
-      {selectedPayeeId ? (
+      {selectedPayeeName ? (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-primary/5 px-3 py-2 text-sm">
           <Store className="size-4 shrink-0 text-primary" aria-hidden="true" />
           <span className="text-muted-foreground">{ui('Showing all transactions for')}</span>
@@ -1033,11 +1210,14 @@ export default async function TransactionsPage({
       ) : null}
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
+      {/* No card chrome on phones: the control strip reads as part of the
+          screen, the way a native list header does, instead of a boxed panel
+          eating a border and 12px of padding on every side. */}
+      <div className="sm:rounded-xl sm:border sm:bg-card sm:p-3 sm:shadow-sm sm:shadow-black/[0.03]">
         <TransactionFilters
           searchText={searchText}
-          selectedType={selectedType}
-          selectedStatus={selectedStatus}
+          selectedTypes={selectedTypes}
+          selectedStatuses={selectedStatuses}
           selectedReview={selectedReview}
           selectedAccountIds={selectedAccountIds}
           selectedCategoryIds={selectedCategoryIds}
@@ -1048,8 +1228,10 @@ export default async function TransactionsPage({
           categoryOptions={categoryOpts}
           tagOptions={tagFilterOptions}
           selectedTagIds={selectedTagIds}
-          presetLinks={presetLinks}
-          payeeId={selectedPayeeId}
+          payeeOptions={payeeFilterOptions}
+          selectedPayeeIds={selectedPayeeIds}
+          presetOptions={presetOptions}
+          clearHref={CLEAR_FILTERS_HREF}
         />
       </div>
 
@@ -1144,16 +1326,14 @@ export default async function TransactionsPage({
               </>
             ) : null}
           </h2>
-          <GlobalAddTransactionButton
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            {ui('Add transaction')}
-          </GlobalAddTransactionButton>
+          {/* No add button here: the page header already has one on desktop,
+              and the bottom nav's + covers phones. */}
         </div>
 
         {/* ── Filtered totals (base currency) ─────────────────────────── */}
+        {/* One scrolling line on phones instead of a wrapping block. */}
         {hasFilteredTotals ? (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-sm">
+          <div className="-mx-1 flex items-center gap-x-3 gap-y-1 overflow-x-auto whitespace-nowrap px-1 text-sm sm:mx-0 sm:flex-wrap sm:whitespace-normal">
             {filteredExpenseBase > 0 ? (
               <span className="font-semibold text-red-600 dark:text-red-400">
                 {ui('Expenses')} {formatCurrency(filteredExpenseBase, household.base_currency, locale)}
@@ -1176,15 +1356,19 @@ export default async function TransactionsPage({
         ) : null}
 
         {/* ── Review-status filter chips ──────────────────────────────── */}
-        <div className="flex flex-wrap gap-1.5 px-1 pb-1">
+        {/* Scrolls as one line on phones rather than wrapping onto two. */}
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap">
           {reviewChips.map((chip) => (
             <Link
               key={chip.value}
               href={chip.href}
-              className={buttonVariants({
-                variant: chip.isActive ? 'secondary' : 'outline',
-                size: 'sm',
-              })}
+              className={cn(
+                buttonVariants({
+                  variant: chip.isActive ? 'secondary' : 'outline',
+                  size: 'sm',
+                }),
+                'shrink-0'
+              )}
             >
               {chip.label}
             </Link>
@@ -1199,6 +1383,7 @@ export default async function TransactionsPage({
             categories={inlineCategories}
             payeeSuggestions={payeeSuggestions}
             returnTo={returnTo}
+            compact={preferences.transactions.compactList}
           />
         ) : selectedReview === 'unreviewed' ? (
           <EmptyState
@@ -1221,7 +1406,7 @@ export default async function TransactionsPage({
             }
             actionHref={
               hasActiveFilters
-                ? '/dashboard/transactions'
+                ? CLEAR_FILTERS_HREF
                 : transactionsPath(filters, { mode: 'create' })
             }
             actionLabel={hasActiveFilters ? 'Clear filters' : 'Add transaction'}

@@ -2,13 +2,13 @@
 
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ChevronDown, Pencil, Tag } from 'lucide-react'
+import { ArrowLeftFromLine, ChevronDown, Pencil, Tag } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
-import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
+import { ConfirmActionButton } from '@/components/confirm-action-button'
 import { formatLabel } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { archiveCategoryAction } from './actions'
+import { archiveCategoryAction, promoteCategoryAction } from './actions'
 import { useLanguage } from '@/components/language-provider'
 import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
 
@@ -37,6 +37,8 @@ type CategoryRowProps = {
   showArchived: boolean
   dragHandle?: ReactNode
   level?: number
+  /** Ends the tree rail at this row, so a branch visibly stops. */
+  isLastChild?: boolean
 }
 
 function categoryFlags(category: Category) {
@@ -87,6 +89,7 @@ export function CategoryRow({
   showArchived,
   dragHandle,
   level = 0,
+  isLastChild = false,
 }: CategoryRowProps) {
   const { locale, t } = useLanguage()
   const displayName = localizeSystemCategoryName(
@@ -103,35 +106,101 @@ export function CategoryRow({
     ...flags,
   ].filter((flag): flag is string => Boolean(flag))
 
+  const isChild = level > 0
+
+  /**
+   * The tree rail. Drawn per row rather than around the child group, because
+   * the list is flat (BR-048 needs one sortable context over every row) — so
+   * each child paints a full-height line at the same x, and consecutive
+   * children join into one continuous rail. The last child stops its line at
+   * the elbow so the branch visibly ends.
+   */
+  const rail = (
+    <>
+      <span
+        className={cn(
+          'absolute left-0 top-0 w-px bg-border',
+          isLastChild ? 'h-1/2' : 'h-full'
+        )}
+        aria-hidden="true"
+      />
+      <span
+        className="absolute left-0 top-1/2 h-px w-3.5 bg-border"
+        aria-hidden="true"
+      />
+    </>
+  )
+
+  /**
+   * BR-047 + BR-048 — the one-click way out of a parent, on every subcategory
+   * row rather than hidden inside its details panel. Dragging left does the
+   * same thing, but only once you know dragging works at all.
+   */
+  const outdentButton = isChild ? (
+    <ConfirmActionButton
+      action={promoteCategoryAction}
+      triggerVariant="outline"
+      triggerSize="icon-sm"
+      triggerTitle={t('categoriesUi.promoteAction')}
+      hiddenFields={{
+        category_id: category.id,
+        show_archived: showArchived ? 'true' : 'false',
+      }}
+      triggerLabel={<ArrowLeftFromLine className="size-3.5" aria-hidden="true" />}
+      pendingLabel={t('categoriesUi.promotePending')}
+      title={t('categoriesUi.promoteTitle')}
+      description={t('categoriesUi.promoteDescription', { name: displayName })}
+      cancelLabel={t('common.cancel')}
+      confirmLabel={t('categoriesUi.promoteConfirm')}
+    />
+  ) : null
+
   return (
-    <div className={cn(category.is_archived && 'bg-muted/20')}>
-      {level > 0 ? (
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="relative flex w-full items-center gap-2 bg-muted/25 px-4 py-2.5 pl-12 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
-          aria-expanded={open}
-        >
-          <span
-            className="absolute left-6 top-0 h-full w-px bg-border"
-            aria-hidden="true"
-          />
-          <span
-            className="absolute left-6 top-1/2 h-px w-3 bg-border"
-            aria-hidden="true"
-          />
-          <CategoryIcon category={category} compact />
-          <span className={cn('min-w-0 flex-1 truncate text-[11.5px]', muted)}>
-            {displayName}
+    <div
+      className={cn(
+        category.is_archived && 'bg-muted/20',
+        // Subcategories sit on a recessed band with a left accent, so a glance
+        // separates "a category" from "inside a category".
+        isChild && 'border-l-2 border-l-border/70 bg-muted/30 dark:bg-muted/15'
+      )}
+    >
+      {/* ── Mobile ──────────────────────────────────────────────────────── */}
+      {isChild ? (
+        <div className="relative flex items-center gap-1 pl-9 pr-2 md:hidden">
+          <span className="absolute bottom-0 left-4 top-0" aria-hidden="true">
+            <span className="relative block h-full">{rail}</span>
           </span>
-          <ChevronDown
-            className={cn(
-              'size-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
-              open && 'rotate-180'
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="flex min-w-0 flex-1 items-center gap-2 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-expanded={open}
+          >
+            <CategoryIcon category={category} compact />
+            <span className={cn('min-w-0 flex-1 truncate text-xs', muted)}>
+              {displayName}
+            </span>
+          </button>
+          {outdentButton}
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+            aria-expanded={open}
+            aria-label={t(
+              open ? 'categoriesUi.hideDetails' : 'categoriesUi.showDetails',
+              { name: displayName }
             )}
-            aria-hidden="true"
-          />
-        </button>
+          >
+            <ChevronDown
+              className={cn(
+                'size-3.5 text-muted-foreground transition-transform duration-200',
+                open && 'rotate-180'
+              )}
+              aria-hidden="true"
+            />
+          </button>
+        </div>
       ) : (
         <div className="p-3 md:hidden">
           <button
@@ -140,20 +209,22 @@ export function CategoryRow({
             className="w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-expanded={open}
           >
-            <div className="mb-2 flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5">
               <CategoryIcon category={category} />
               <span className="min-w-0 flex-1">
-                <span className={cn('block truncate text-[13px] font-semibold', muted)}>
+                <span className={cn('block truncate text-sm font-semibold', muted)}>
                   {displayName}
                 </span>
-                <span className="mt-0.5 block text-[10.5px] text-muted-foreground">
-                  {t(
-                    childCount === 1
-                      ? 'categoriesUi.subcategoryOne'
-                      : 'categoriesUi.subcategoryOther',
-                    { count: childCount }
-                  )}
-                </span>
+                {childCount > 0 ? (
+                  <span className="mt-0.5 block text-[10.5px] text-muted-foreground">
+                    {t(
+                      childCount === 1
+                        ? 'categoriesUi.subcategoryOne'
+                        : 'categoriesUi.subcategoryOther',
+                      { count: childCount }
+                    )}
+                  </span>
+                ) : null}
               </span>
               <ChevronDown
                 className={cn(
@@ -167,10 +238,12 @@ export function CategoryRow({
         </div>
       )}
 
+      {/* ── Desktop ─────────────────────────────────────────────────────── */}
       <div
         className={cn(
-          'hidden gap-3 px-4 py-3 transition-colors hover:bg-muted/30 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center',
-          level > 0 && 'md:bg-muted/10'
+          'hidden gap-3 px-4 transition-colors hover:bg-muted/30 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center',
+          // A shorter row reinforces that a subcategory is subordinate.
+          isChild ? 'py-2' : 'py-3'
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
@@ -179,46 +252,40 @@ export function CategoryRow({
             type="button"
             onClick={() => setOpen((v) => !v)}
             className={cn(
-              'relative flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              level > 0 && 'pl-8'
+              'relative flex min-w-0 flex-1 items-center rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              isChild ? 'gap-2.5 pl-7' : 'gap-3'
             )}
             aria-expanded={open}
           >
-            {level > 0 ? (
-              <>
-                <span
-                  className="absolute left-2 top-1/2 h-px w-4 bg-border"
-                  aria-hidden="true"
-                />
-                <span
-                  className="absolute bottom-1/2 left-2 h-7 w-px bg-border"
-                  aria-hidden="true"
-                />
-              </>
-            ) : null}
-            <CategoryIcon category={category} compact={level > 0} />
+            {isChild ? rail : null}
+            <CategoryIcon category={category} compact={isChild} />
 
             <span className="min-w-0 flex-1">
-              <span className={cn('block truncate text-sm font-semibold', muted)}>
+              <span
+                className={cn(
+                  'block truncate',
+                  isChild ? 'text-[13px] font-normal' : 'text-sm font-semibold',
+                  muted
+                )}
+              >
                 {displayName}
               </span>
-              <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground">
-                {level === 0 ? (
-                  <span>
-                    {t(
-                      childCount === 1
-                        ? 'categoriesUi.subcategoryOne'
-                        : 'categoriesUi.subcategoryOther',
-                      { count: childCount }
-                    )}
-                  </span>
-                ) : null}
-              </span>
+              {!isChild && childCount > 0 ? (
+                <span className="mt-0.5 block text-[10.5px] text-muted-foreground">
+                  {t(
+                    childCount === 1
+                      ? 'categoriesUi.subcategoryOne'
+                      : 'categoriesUi.subcategoryOther',
+                    { count: childCount }
+                  )}
+                </span>
+              ) : null}
             </span>
           </button>
         </div>
 
         <div className="flex items-center justify-end gap-1">
+          {outdentButton}
           <Link
             href={editHref}
             className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}
@@ -306,6 +373,8 @@ export function CategoryRow({
               >
                 Edit
               </Link>
+              {/* BR-047's promote action is not repeated here — it now sits on
+                  the row itself, where it's visible without expanding. */}
               {category.is_archived ? (
                 <form action={archiveCategoryAction}>
                   <input type="hidden" name="category_id" value={category.id} />
@@ -320,7 +389,7 @@ export function CategoryRow({
                   </SubmitButton>
                 </form>
               ) : (
-                <ArchiveConfirmButton
+                <ConfirmActionButton
                   action={archiveCategoryAction}
                   hiddenFields={{
                     category_id: category.id,

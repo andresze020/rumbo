@@ -1,11 +1,25 @@
 import { type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { buildCsv, todayDateStamp, type CsvColumn } from '@/lib/exports/csv'
+import { buildCsv, todayDateStamp } from '@/lib/exports/csv'
+import { buildXlsx, type XlsxColumn } from '@/lib/exports/xlsx'
 
 const EXPORT_TYPES = ['transactions', 'accounts', 'categories'] as const
+const EXPORT_FORMATS = ['csv', 'xlsx'] as const
 const PAGE_SIZE = 1000
 
 type ExportType = (typeof EXPORT_TYPES)[number]
+type ExportFormat = (typeof EXPORT_FORMATS)[number]
+
+/**
+ * BR-041 — each export builds one column/row table, then gets serialized as
+ * CSV or `.xlsx`. Keeping a single table definition per export is what makes
+ * the two formats agree; the format only decides how cells are written.
+ */
+type ExportTable<T> = {
+  sheetName: string
+  columns: XlsxColumn<T>[]
+  rows: T[]
+}
 
 type Household = {
   id: string
@@ -153,6 +167,11 @@ function isExportType(value: string | null): value is ExportType {
   return EXPORT_TYPES.includes(value as ExportType)
 }
 
+/** Absent or unrecognized falls back to CSV, the format this route shipped with. */
+function resolveFormat(value: string | null): ExportFormat {
+  return EXPORT_FORMATS.includes(value as ExportFormat) ? (value as ExportFormat) : 'csv'
+}
+
 function errorResponse(message: string, status = 400) {
   return Response.json({ error: message }, { status })
 }
@@ -162,6 +181,16 @@ function csvResponse(csv: string, filename: string) {
     headers: {
       'Content-Disposition': `attachment; filename="${filename}"`,
       'Content-Type': 'text/csv; charset=utf-8',
+    },
+  })
+}
+
+function xlsxResponse(workbook: Buffer, filename: string) {
+  return new Response(new Uint8Array(workbook), {
+    headers: {
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     },
   })
 }
@@ -216,7 +245,7 @@ async function getAuthenticatedHousehold() {
   }
 }
 
-async function buildTransactionsCsv({
+async function buildTransactionsTable({
   household,
   supabase,
 }: {
@@ -331,7 +360,7 @@ async function buildTransactionsCsv({
       })
     )
   })
-  const columns: CsvColumn<TransactionExportRow>[] = [
+  const columns: XlsxColumn<TransactionExportRow>[] = [
     { header: 'transaction_id', value: (row) => row.transaction.id },
     {
       header: 'transaction_date',
@@ -407,10 +436,10 @@ async function buildTransactionsCsv({
     { header: 'import_row_id', value: (row) => row.transaction.import_row_id },
   ]
 
-  return buildCsv(columns, rows)
+  return { sheetName: 'Transactions', columns, rows }
 }
 
-async function buildAccountsCsv({
+async function buildAccountsTable({
   household,
   supabase,
 }: {
@@ -451,7 +480,7 @@ async function buildAccountsCsv({
     account,
     balance: balancesByAccountId.get(account.id) ?? null,
   }))
-  const columns: CsvColumn<AccountExportRow>[] = [
+  const columns: XlsxColumn<AccountExportRow>[] = [
     { header: 'account_id', value: (row) => row.account.id },
     { header: 'name', value: (row) => row.account.name },
     { header: 'account_type', value: (row) => row.account.account_type },
@@ -461,7 +490,8 @@ async function buildAccountsCsv({
       header: 'institution_name',
       value: (row) => row.account.institution_name,
     },
-    { header: 'last_four', value: (row) => row.account.last_four },
+    // A card suffix is an identifier, not a quantity — "0042" must survive.
+    { header: 'last_four', value: (row) => row.account.last_four, type: 'text' },
     {
       header: 'opening_balance_date',
       value: (row) => row.account.opening_balance_date,
@@ -500,10 +530,10 @@ async function buildAccountsCsv({
     { header: 'updated_at', value: (row) => row.account.updated_at },
   ]
 
-  return buildCsv(columns, rows)
+  return { sheetName: 'Accounts', columns, rows }
 }
 
-async function buildCategoriesCsv({
+async function buildCategoriesTable({
   household,
   supabase,
 }: {
@@ -532,7 +562,7 @@ async function buildCategoriesCsv({
       ? categoriesById.get(category.parent_category_id)?.name ?? null
       : null,
   }))
-  const columns: CsvColumn<CategoryExportRow>[] = [
+  const columns: XlsxColumn<CategoryExportRow>[] = [
     { header: 'category_id', value: (row) => row.category.id },
     { header: 'name', value: (row) => row.category.name },
     { header: 'category_type', value: (row) => row.category.category_type },
@@ -559,11 +589,12 @@ async function buildCategoriesCsv({
     { header: 'updated_at', value: (row) => row.category.updated_at },
   ]
 
-  return buildCsv(columns, rows)
+  return { sheetName: 'Categories', columns, rows }
 }
 
 export async function GET(request: NextRequest) {
   const exportType = request.nextUrl.searchParams.get('type')
+  const format = resolveFormat(request.nextUrl.searchParams.get('format'))
 
   if (!isExportType(exportType)) {
     return errorResponse('Select a valid export type.')
@@ -576,17 +607,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const csv =
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const table: ExportTable<any> =
       exportType === 'transactions'
-        ? await buildTransactionsCsv({ household, supabase })
+        ? await buildTransactionsTable({ household, supabase })
         : exportType === 'accounts'
-          ? await buildAccountsCsv({ household, supabase })
-          : await buildCategoriesCsv({ household, supabase })
+          ? await buildAccountsTable({ household, supabase })
+          : await buildCategoriesTable({ household, supabase })
 
-    return csvResponse(
-      csv,
-      `app-finanzas-${exportType}-${todayDateStamp()}.csv`
-    )
+    const filename = `app-finanzas-${exportType}-${todayDateStamp()}.${format}`
+
+    return format === 'xlsx'
+      ? xlsxResponse(buildXlsx(table), filename)
+      : csvResponse(buildCsv(table.columns, table.rows), filename)
   } catch {
     return errorResponse('Export failed. Please try again.', 500)
   }

@@ -429,36 +429,147 @@ export async function updateCategoryAction(formData: FormData) {
   redirect(redirectPath)
 }
 
-export async function reorderCategoriesAction(orderedIds: string[]) {
-  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
-    return { error: 'No categories to reorder.' }
-  }
+/**
+ * BR-047 — promote a subcategory back to a top-level category.
+ *
+ * Only `parent_category_id` is cleared: the category keeps its id, so every
+ * `transaction_allocations` / `budget_lines` row pointing at it still resolves,
+ * and its type/reporting type are untouched. `sort_order` is reset because the
+ * old value was an index among its former siblings, which means nothing in the
+ * root list — it re-sorts by name until dragged.
+ */
+export async function promoteCategoryAction(formData: FormData) {
+  const categoryId = String(formData.get('category_id') ?? '').trim()
+  const showArchived = String(formData.get('show_archived') ?? '') === 'true'
 
-  if (orderedIds.some((id) => typeof id !== 'string' || !id)) {
-    return { error: 'Invalid category list.' }
+  if (!categoryId) {
+    redirectWithError('Category is required.')
   }
 
   const { supabase, userId, householdId } = await getAuthenticatedHousehold()
 
-  const { data: ownedCategories, error: ownedError } = await supabase
+  const { data: category, error: categoryError } = await supabase
     .from('categories')
-    .select('id')
+    .select('id, parent_category_id')
+    .eq('id', categoryId)
     .eq('household_id', householdId)
     .is('deleted_at', null)
-    .in('id', orderedIds)
+    .maybeSingle()
 
-  if (ownedError) {
-    return { error: 'Could not verify categories.' }
+  if (categoryError || !category) {
+    redirectWithError('Category was not found for this household.')
   }
 
-  const ownedIds = new Set((ownedCategories ?? []).map((category) => category.id))
+  if (!category.parent_category_id) {
+    redirectWithError('This category is already a main category.')
+  }
 
-  if (ownedIds.size !== orderedIds.length) {
+  const { error: updateError } = await supabase
+    .from('categories')
+    .update({
+      parent_category_id: null,
+      sort_order: null,
+      updated_by: userId,
+    })
+    .eq('id', categoryId)
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+
+  if (updateError) {
+    redirectWithError('Could not move the category to the main level.')
+  }
+
+  revalidateCategorySurfaces()
+
+  const redirectParams = new URLSearchParams()
+  if (showArchived) redirectParams.set('showArchived', 'true')
+  redirectParams.set('promoted', '1')
+  redirect(`/dashboard/categories?${redirectParams.toString()}`)
+}
+
+/**
+ * BR-048 — commits a drag that changed a category's nesting, its position, or
+ * both, in one call.
+ *
+ * The rules are the same ones `validateParentCategory` enforces on the edit
+ * form; they are re-checked here because a drag never goes through that form,
+ * and a client can post anything. Returns a message instead of redirecting so
+ * the list can snap the row back and explain why — mid-drag is the wrong
+ * moment to throw the user onto a different URL.
+ *
+ * Either the whole move lands or none of it does: the parent change is written
+ * first and, if the sibling ordering then fails, it is rolled back by hand
+ * (server actions have no transaction around them).
+ */
+export async function moveCategoryAction({
+  categoryId,
+  parentCategoryId,
+  orderedSiblingIds,
+}: {
+  categoryId: string
+  parentCategoryId: string | null
+  /** Every sibling under the destination parent, in their new order. */
+  orderedSiblingIds: string[]
+}): Promise<{ error?: string; success?: boolean }> {
+  if (!categoryId) return { error: 'Category is required.' }
+  if (parentCategoryId === categoryId) {
+    return { error: 'A category cannot be its own parent.' }
+  }
+
+  const { supabase, userId, householdId } = await getAuthenticatedHousehold()
+
+  const { data: householdCategories, error: hierarchyError } = await supabase
+    .from('categories')
+    .select('id, parent_category_id, category_type, reporting_type, is_archived')
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+
+  if (hierarchyError) return { error: 'Could not validate the category hierarchy.' }
+
+  const rows = (householdCategories ?? []) as CategoryHierarchyRow[]
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  const category = byId.get(categoryId)
+  if (!category) return { error: 'Category was not found for this household.' }
+
+  const previousParentId = category.parent_category_id
+
+  if (parentCategoryId) {
+    const parent = byId.get(parentCategoryId)
+    if (!parent) return { error: 'Parent category was not found for this household.' }
+    if (parent.is_archived) return { error: 'Parent category must be active.' }
+    if (parent.parent_category_id) {
+      return { error: 'A child category cannot be used as a parent.' }
+    }
+    if (parent.category_type !== category.category_type) {
+      return { error: 'Parent category must use the same category type.' }
+    }
+    if (parent.reporting_type !== category.reporting_type) {
+      return { error: 'Parent category must use the same reporting type.' }
+    }
+    if (rows.some((row) => row.parent_category_id === categoryId)) {
+      return { error: 'A category with child categories cannot become a child.' }
+    }
+  }
+
+  // Every id being reordered must belong to this household, or a crafted
+  // payload could renumber someone else's categories.
+  if (orderedSiblingIds.some((id) => !byId.has(id))) {
     return { error: 'Some categories do not belong to this household.' }
   }
 
+  if (previousParentId !== parentCategoryId) {
+    const { error: parentError } = await supabase
+      .from('categories')
+      .update({ parent_category_id: parentCategoryId, updated_by: userId })
+      .eq('id', categoryId)
+      .eq('household_id', householdId)
+      .is('deleted_at', null)
+
+    if (parentError) return { error: 'Could not move the category.' }
+  }
+
   const results = await Promise.all(
-    orderedIds.map((id, index) =>
+    orderedSiblingIds.map((id, index) =>
       supabase
         .from('categories')
         .update({ sort_order: index, updated_by: userId })
@@ -469,6 +580,14 @@ export async function reorderCategoriesAction(orderedIds: string[]) {
   )
 
   if (results.some((result) => result.error)) {
+    if (previousParentId !== parentCategoryId) {
+      await supabase
+        .from('categories')
+        .update({ parent_category_id: previousParentId, updated_by: userId })
+        .eq('id', categoryId)
+        .eq('household_id', householdId)
+        .is('deleted_at', null)
+    }
     return { error: 'Could not save the new category order.' }
   }
 
