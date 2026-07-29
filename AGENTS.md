@@ -226,10 +226,12 @@ The product is household-first. All financial data must belong to a household.
 - Benchmarks: `docs/benchmark-review-monarch-ynab-copilot.md` (web/product
   competitors, source of BR-001…BR-029) and
   `docs/benchmark-review-mobile-money-managers.md` (mobile capture
-  competitors, source of BR-030…BR-041, added 2026-07-27). The mobile doc is
-  the self-sufficient record of a screen-recording review — it lists what we
-  already ship (§5.1) so those patterns are not re-proposed, and what the
-  recording never showed (§9).
+  competitors, source of BR-030…BR-047: BR-030…041 added 2026-07-27, BR-042…047
+  added 2026-07-28 after a screen recording of App B confirmed BR-030's
+  credit-card cycle live and surfaced six further gaps). The mobile doc is
+  the self-sufficient record of two screen-recording reviews — it lists what
+  we already ship (§5.1) so those patterns are not re-proposed, and what
+  neither recording showed (§9).
 
 ## Real Supabase tables (public schema)
 

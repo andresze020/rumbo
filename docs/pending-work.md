@@ -7,9 +7,13 @@
 > first, then update this index to match. Kept in sync by the
 > `app-finanzas-state-sync` skill at sprint close.
 >
-> **Last refreshed 2026-07-27** — added the BR-030…BR-041 mobile-capture-parity
-> block from [benchmark-review-mobile-money-managers.md](./benchmark-review-mobile-money-managers.md).
+> **Last refreshed 2026-07-28** — added BR-042…BR-047 from a screen recording
+> of App B, which also upgraded BR-030 (credit-card cycle) from
+> documentation-derived to confirmed-live. See
+> [benchmark-review-mobile-money-managers.md](./benchmark-review-mobile-money-managers.md).
 > Documentation only; no code or migrations changed.
+>
+> **2026-07-27.** Added the original BR-030…BR-041 mobile-capture-parity block.
 >
 > **2026-07-25.** PR #37 merged the hard backlog into `main`.
 > BR-007, BR-008, BR-010, BR-014, BR-023 and BR-024 are shipped; their
@@ -60,19 +64,21 @@ Full detail, "why soon," and acceptance criteria live in
 | ~~BR-010~~ ✅ | Rules / automation | Shipped in PR #37: `categorization_rules` migration, CRUD and application flow. |
 | BR-011 | Review workflow | ✅ Core already shipped (Sprint 4 + PR #17): `review_status` column, filter chips, bulk "Mark reviewed"/categorize, per-row control, dashboard "N to review" pill. Polished on branch `feat/br-011-review-queue-polish` (no migration): activated the "Review queue" nav entry (was locked "coming soon") → `/dashboard/transactions?review=unreviewed`, added bulk **Flag** / **Mark unreviewed**, and an "all caught up" empty state |
 
-## BR backlog — mobile capture parity (BR-030…BR-041, not started)
+## BR backlog — mobile capture parity (BR-030…BR-047, not started)
 
-Added 2026-07-27 from the mobile-app benchmark. Full rows (priority, first
-slice, DB impact, verification) live in
+Added 2026-07-27 (BR-030…041) and 2026-07-28 (BR-042…047) from the mobile-app
+benchmark. Full rows (priority, first slice, DB impact, verification) live in
 [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md);
 the observation record is
 [benchmark-review-mobile-money-managers.md](./benchmark-review-mobile-money-managers.md).
-All twelve were verified absent from the codebase on 2026-07-27 — that doc's
-§5.1 lists what we already ship, so nothing here is a duplicate.
+Every row was verified absent from the codebase — that doc's §5.1 lists what
+we already ship, so nothing here is a duplicate. BR-030's credit-card cycle
+and BR-042…047 come from a 2026-07-28 screen recording of App B itself (the
+2026-07-27 pass only had App B's help-centre documentation to go on).
 
 | ID | Priority | Area | One-line |
 |---|---:|---|---|
-| BR-030 | P1 | Accounts / credit cards | Statement cycle (statement day, payment day, billing account) → Balance Payable vs Outstanding, then a `Pay` settlement action |
+| BR-030 | P1 | Accounts / credit cards | Statement cycle (statement day, payment day, billing account) → Balance Payable vs Outstanding, then a `Pay` settlement action — **now confirmed live** |
 | BR-031 | P1 | Multi-currency entry | Bidirectional dual-currency amount field with explicit rate re-fetch |
 | BR-032 | P2 | UX speed / settings | User-configurable transaction-form fields (which optional fields render) |
 | BR-033 | P2 | UX speed | Relative date chips (today / yesterday / two days ago) |
@@ -84,6 +90,12 @@ All twelve were verified absent from the codebase on 2026-07-27 — that doc's
 | BR-039 | P3 | Accounts / reporting | Per-account "transfer as expense" opt-in |
 | BR-040 | P3 | Modelling | Refunds/rebates as a negative amount in the same category — decision first |
 | BR-041 | P3 | Export | `.xlsx` export alongside CSV |
+| BR-042 | P2 | Reports / transactions | Sub-period rollup rows (weeks inside a month, months inside a year) |
+| BR-043 | P2 | Budgeting | Budget vs-last-month comparison + cash/card expense split, extends BR-018 |
+| BR-044 | P2 | New feature | Standalone dated Notes, separate from the transaction Comment field |
+| BR-045 | P3 | Transactions / schema | Optional time-of-day on transactions — schema change, scope narrowly |
+| BR-046 | P3 | Accounts / safety UX | Confirmation warning when changing an account's currency |
+| BR-047 | P3 | Categories | Promote a subcategory to a top-level category |
 
 > Attachments/receipts stayed **BR-D01 (deferred)** on purpose — see the
 > Deferred table below; the benchmark only added a reference implementation.
