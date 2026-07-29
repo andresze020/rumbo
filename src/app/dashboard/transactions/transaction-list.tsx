@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   Check,
   ChevronDown,
+  Copy,
   Flag,
   Pencil,
   RotateCcw,
@@ -28,6 +29,7 @@ import { TagChip } from '@/components/tag-chip'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { StatusBadge } from '@/components/status-badge'
+import { useTransactionDialog } from '@/components/transaction-dialog-provider'
 import { cn } from '@/lib/utils'
 import { useLanguage } from '@/components/language-provider'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
@@ -43,6 +45,25 @@ export type TransactionListCategory = {
   parent_category_id: string | null
   icon?: string | null
   is_system?: boolean
+}
+
+/**
+ * BR-034 — a snapshot of an existing transaction, enough to open the create
+ * form pre-filled with it. Deliberately has no date: a copy defaults to today.
+ */
+export type TransactionCopyPayload = {
+  type: 'income' | 'expense' | 'transfer'
+  /** Absolute amount in the source account's currency, e.g. "42.50". */
+  amount: string
+  accountId?: string
+  fromAccountId?: string
+  toAccountId?: string
+  /** Empty when the source is a split — the user picks a category instead. */
+  categoryId?: string
+  description?: string
+  payeeName?: string
+  notes?: string
+  tagIds: string[]
 }
 
 export type TransactionListRow = {
@@ -78,6 +99,8 @@ export type TransactionListRow = {
   categoryId: string | null
   amountRaw: string | null
   description: string | null
+  /** BR-034: null when the row can't be recreated by the create form. */
+  copy: TransactionCopyPayload | null
 }
 
 export type TransactionListGroup = {
@@ -415,6 +438,7 @@ function DisplayRow({
   onEdit: () => void
 }) {
   const ui = useUiTranslation()
+  const { openDialog } = useTransactionDialog()
   return (
     <div
       className={cn(
@@ -535,6 +559,18 @@ function DisplayRow({
             >
               {ui('Edit')}
             </Link>
+          ) : null}
+          {/* BR-034: opens the create form pre-filled from this row, dated
+              today. Nothing is written until the user saves. */}
+          {row.copy ? (
+            <button
+              type="button"
+              onClick={() => openDialog({ copy: row.copy ?? undefined })}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
+            >
+              <Copy className="size-3.5" aria-hidden="true" />
+              {ui('Copy')}
+            </button>
           ) : null}
           {row.canVoid ? <VoidTransactionForm transactionId={row.id} /> : null}
         </div>

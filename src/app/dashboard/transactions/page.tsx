@@ -6,6 +6,7 @@ import { TransferEditForm } from './transfer-edit-form'
 import { TransactionFilters } from './transaction-filters'
 import {
   TransactionList,
+  type TransactionCopyPayload,
   type TransactionListCategory,
   type TransactionListGroup,
   type ReviewStatus,
@@ -686,6 +687,16 @@ export default async function TransactionsPage({
   const allocationsByTransactionId = new Map(
     transactionAllocations.map((a) => [a.transaction_id, a])
   )
+  // BR-034: a transaction with more than one allocation (a split) can't be
+  // represented by the single-category create form, so a copy of one leaves the
+  // category blank rather than silently picking one of the splits.
+  const allocationCountByTransactionId = new Map<string, number>()
+  for (const allocation of transactionAllocations) {
+    allocationCountByTransactionId.set(
+      allocation.transaction_id,
+      (allocationCountByTransactionId.get(allocation.transaction_id) ?? 0) + 1
+    )
+  }
   const accountNamesById = new Map([
     ...allAccounts.map((a) => [a.id, a.name] as const),
     ...accountLookupRows.map((a) => [a.id, a.name] as const),
@@ -916,6 +927,56 @@ export default async function TransactionsPage({
   const toReviewStatus = (value: string): ReviewStatus =>
     value === 'reviewed' || value === 'flagged' ? value : 'unreviewed'
 
+  const activeAccountIds = new Set(activeAccounts.map((account) => account.id))
+
+  /**
+   * BR-034 — everything the create form needs to open pre-filled from an
+   * existing row. Returns null for rows the form can't recreate: opening
+   * balances, debt payments, and anything whose account is archived (the
+   * picker only offers active accounts). Voided rows *are* copyable — the copy
+   * is a brand-new posted transaction, which is exactly how you re-enter a
+   * corrected version of something you voided. The date is deliberately absent:
+   * the form defaults it to today.
+   */
+  function buildCopyPayload(row: TransactionRow): TransactionCopyPayload | null {
+    if (row.isOpeningBalance || row.isDebtPayment) return null
+
+    if (row.isTransfer) {
+      const from = row.transferOutEntry
+      const to = row.transferInEntry
+      if (!from || !to) return null
+      if (!activeAccountIds.has(from.account_id) || !activeAccountIds.has(to.account_id)) {
+        return null
+      }
+      return {
+        type: 'transfer',
+        amount: Math.abs(Number(from.amount_account_currency)).toFixed(2),
+        fromAccountId: from.account_id,
+        toAccountId: to.account_id,
+        description: row.transaction.description ?? '',
+        notes: row.transaction.notes ?? '',
+        tagIds: [],
+      }
+    }
+
+    const type = row.transaction.transaction_type
+    if (type !== 'income' && type !== 'expense') return null
+    if (!row.entry || !activeAccountIds.has(row.entry.account_id)) return null
+
+    const isSplit = (allocationCountByTransactionId.get(row.transaction.id) ?? 0) > 1
+
+    return {
+      type,
+      amount: Math.abs(Number(row.entry.amount_account_currency)).toFixed(2),
+      accountId: row.entry.account_id,
+      categoryId: isSplit ? '' : row.allocation?.category_id ?? '',
+      description: row.transaction.description ?? '',
+      payeeName: row.transaction.merchant_name ?? '',
+      notes: row.transaction.notes ?? '',
+      tagIds: tagIdsByTransaction.get(row.transaction.id) ?? [],
+    }
+  }
+
   const serializedGroups: TransactionListGroup[] = transactionGroups.map((group) => ({
     date: group.date,
     label: group.label,
@@ -975,6 +1036,7 @@ export default async function TransactionsPage({
           ? Math.abs(Number(row.entry.amount_account_currency)).toFixed(2)
           : null,
       description: row.transaction.description,
+      copy: buildCopyPayload(row),
     })),
   }))
 

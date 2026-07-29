@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { TransactionForm } from '@/app/dashboard/transactions/transaction-form'
+import type { TransactionCopyPayload } from '@/app/dashboard/transactions/transaction-list'
 import {
   getQuickAddFormData,
   type QuickAddFormData,
@@ -39,6 +40,8 @@ type OpenDialogOptions = {
   type?: OpenDialogType
   /** BR-028: prefill the description (e.g. text received from a PWA share). */
   description?: string
+  /** BR-034: prefill the whole form from an existing transaction. */
+  copy?: TransactionCopyPayload
 }
 
 type TransactionDialogContextValue = {
@@ -152,6 +155,8 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   // BR-028: description prefilled from a PWA share (persists across the
   // getQuickAddFormData load + URL cleanup that follow the share redirect).
   const [sharedDescription, setSharedDescription] = useState<string | undefined>()
+  // BR-034: the source transaction a "Copy" is seeded from.
+  const [copyDefaults, setCopyDefaults] = useState<TransactionCopyPayload | undefined>()
 
   const nextDate = searchParams.get('next_date')
   const nextType = searchParams.get('next_type')
@@ -281,6 +286,10 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
     setTriggerAccountId(options?.accountId)
     setTriggerType(options?.type)
     setSharedDescription(options?.description)
+    setCopyDefaults(options?.copy)
+    // A copy re-seeds every field, so force a fresh form even when the dialog
+    // was already mounted from a previous open.
+    setFormKey((key) => key + 1)
     setOpen(true)
     if (!loading) {
       setLoading(true)
@@ -300,6 +309,17 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
     }
   }
 
+  function clearPrefills() {
+    setAddNextDefaults(null)
+    setSharedDescription(undefined)
+    setCopyDefaults(undefined)
+  }
+
+  function closeDialog() {
+    setOpen(false)
+    clearPrefills()
+  }
+
   return (
     <TransactionDialogContext.Provider value={{ openDialog }}>
       {children}
@@ -308,10 +328,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
         open={open}
         onOpenChange={(value) => {
           setOpen(value)
-          if (!value) {
-            setAddNextDefaults(null)
-            setSharedDescription(undefined)
-          }
+          if (!value) clearPrefills()
         }}
       >
         <DialogContent
@@ -359,13 +376,24 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
                 payees={formData.payees}
                 tags={formData.tags}
                 currencies={formData.currencies}
+                // A copy is always dated today (BR-034) — everything else about
+                // it comes from the source transaction.
                 defaultDate={addNextDefaults?.date ?? todayIsoDate()}
-                defaultAccountId={addNextDefaults?.accountId ?? triggerAccountId}
-                defaultType={addNextDefaults?.type ?? triggerType}
+                defaultAccountId={
+                  copyDefaults?.accountId ?? addNextDefaults?.accountId ?? triggerAccountId
+                }
+                defaultType={copyDefaults?.type ?? addNextDefaults?.type ?? triggerType}
                 defaultStatus={addNextDefaults?.status}
-                defaultDescription={sharedDescription}
+                defaultDescription={copyDefaults?.description ?? sharedDescription}
+                defaultAmount={copyDefaults?.amount}
+                defaultCategoryId={copyDefaults?.categoryId}
+                defaultMerchantName={copyDefaults?.payeeName}
+                defaultNotes={copyDefaults?.notes}
+                defaultTagIds={copyDefaults?.tagIds}
+                defaultFromAccountId={copyDefaults?.fromAccountId}
+                defaultToAccountId={copyDefaults?.toAccountId}
                 returnTo={pathname}
-                onCancel={() => { setOpen(false); setAddNextDefaults(null); setSharedDescription(undefined) }}
+                onCancel={closeDialog}
               />
             )
           ) : null}

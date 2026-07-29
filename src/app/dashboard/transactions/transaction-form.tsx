@@ -88,6 +88,11 @@ type TransactionFormProps = {
   defaultCategoryId?: string
   defaultDescription?: string
   defaultMerchantName?: string
+  /** BR-034: remaining fields a "Copy" seeds. */
+  defaultNotes?: string
+  defaultTagIds?: string[]
+  defaultFromAccountId?: string
+  defaultToAccountId?: string
   returnTo?: string
 }
 
@@ -156,6 +161,10 @@ export function TransactionForm({
   defaultCategoryId,
   defaultDescription,
   defaultMerchantName,
+  defaultNotes,
+  defaultTagIds,
+  defaultFromAccountId,
+  defaultToAccountId,
   returnTo,
 }: TransactionFormProps) {
   const { t, locale } = useLanguage()
@@ -165,8 +174,8 @@ export function TransactionForm({
   const [transactionType, setTransactionType] = useState<TransactionType>(defaultType ?? 'expense')
   const [transactionDate, setTransactionDate] = useState(defaultDate)
   const [accountId, setAccountId] = useState(defaultAccountId ?? '')
-  const [fromAccountId, setFromAccountId] = useState('')
-  const [toAccountId, setToAccountId] = useState('')
+  const [fromAccountId, setFromAccountId] = useState(defaultFromAccountId ?? '')
+  const [toAccountId, setToAccountId] = useState(defaultToAccountId ?? '')
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
   const [amountInput, setAmountInput] = useState(defaultAmount ?? '')
   // BR-007: destination amount for a cross-currency transfer (to-account currency).
@@ -188,7 +197,7 @@ export function TransactionForm({
   // uncontrolled (defaultValue), so this state only matters on mobile.
   const [description, setDescription] = useState(defaultDescription ?? '')
   const [payeeName, setPayeeName] = useState(defaultMerchantName ?? '')
-  const [notes, setNotes] = useState('')
+  const [notes, setNotes] = useState(defaultNotes ?? '')
   // Which mobile row is expanded for editing (accordion; null = all collapsed).
   const [expandedField, setExpandedField] = useState<string | null>(null)
   const isMobile = useIsMobile()
@@ -1782,7 +1791,7 @@ export function TransactionForm({
 
         <div className={cn('space-y-1.5 sm:block', showMoreDetails ? 'block' : 'hidden')}>
           <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-          <Textarea id="notes" name="notes" rows={2} />
+          <Textarea id="notes" name="notes" rows={2} defaultValue={defaultNotes} />
         </div>
       </div>
       </>
@@ -1795,6 +1804,7 @@ export function TransactionForm({
       {!isTransfer ? (
         <TagMultiSelect
           tags={tags}
+          defaultValue={defaultTagIds}
           label={t('transactionForm.tags')}
           helpText={t('transactionForm.tagsHelp')}
           manageLabel={t('transactionForm.tagsManage')}
