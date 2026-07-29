@@ -55,6 +55,18 @@ The product is household-first. All financial data must belong to a household.
   - `ArchiveConfirmButton` was renamed to `ConfirmActionButton`
     (`components/confirm-action-button.tsx`) with an optional `triggerVariant`;
     it was always a generic confirm-before-submit button.
+  - **Mobile transactions screen** was reworked in the same sprint after QA:
+    the filter toolbar is a single wrapping strip of pills (search collapses to
+    an icon, type becomes a dropdown, active filters are removable chips), the
+    secondary filters open as a **bottom sheet** (one DOM node styled two ways,
+    kept inside the `<form>` so the controls still submit), the card chrome and
+    the duplicate header actions are dropped on phones, and `MultiSelectChip`
+    takes a controlled `open` so only one option list shows at a time (also
+    applied to `/dashboard/reports`).
+  - **BR-048** (drag-and-drop category nesting) was raised during this sprint's
+    QA and documented in `docs/alpha/benchmark-follow-up-issues.md`; **not
+    built**. It needs the dnd-kit *tree* pattern (one `DndContext` over a
+    flattened list), not the current per-level sibling lists.
 - **Full UI localization + persisted language preference** (2026-07-25).
   All authenticated views and shared UI have English, Spanish, and Canadian
   French coverage, including dynamic dialogs, loading states, accessible

@@ -115,6 +115,19 @@
 | BR-046 | P3 | Accounts / safety UX | Changing an existing account's currency has no confirmation or explanation of the consequence, even though our own historical-FX correctness (BR-002/BR-003) means past entries keep their originally-stored rate regardless. | Cheapest possible safety addition — a confirm dialog, zero logic change. App B's warning is explicit: *"Changing the currency will affect the entry made before... Are you sure you want to change the currency for this account?"* `[8:20]`. | Add a confirmation dialog on account-currency change explaining that historical entries keep their original stored rate (accurately describing our *better* behaviour, not copying App B's cruder one). | N | Dialog appears only on an actual currency change, not on other account edits; cancelling leaves the currency untouched; confirming does not alter any historical `exchange_rate_to_base` on existing entries (that would be a regression, not a feature). |
 | BR-047 | P3 | Categories | A subcategory cannot be promoted back to a top-level category, and there is no bulk re-parent action; `parent_category_id` can only be set at creation/edit of a single category. | Small, self-contained category-management gap. App B's `Modify Subcategory → → Main Category` walks into a picker with a confirm dialog (*"This subcategory will be changed to main category. Do you wish to continue?"*) `[4:14–4:52]`. | Add a "Move to main category" action on a subcategory that clears `parent_category_id`, with a confirmation dialog. Bulk re-parenting (moving several subcategories at once) is a later slice, not part of the first cut. | ~ | Promoting a subcategory does not orphan any transaction/allocation referencing it; archived subcategories are excluded from the picker; existing reports/budgets keyed on the category still resolve correctly after the move. |
 
+## Follow-ups raised during this sprint's QA (BR-048…)
+
+> Source: authenticated QA of `sprint/mobile-capture-parity` on 2026-07-28/29,
+> not a benchmark app. Same table shape as above.
+
+| ID | Priority | Area | Issue | Why soon | First implementation slice | DB | Verify |
+|---|---:|---|---|---|---|:--:|---|
+| BR-048 | P3 | Categories | Re-parenting a category is a form field. BR-047 added a one-way "Move to main level" action, but putting a category *under* another, or moving it between parents, still means opening the edit form and changing a dropdown. Drag-and-drop already exists for reordering siblings — it just cannot change nesting. | The category tree is the one screen where the structure *is* the content, and the manipulation already looks draggable: `sortable-category-list.tsx` renders grip handles that reorder siblings, so a user who drags a row onto another reasonably expects it to nest. Cheap to reach for, surprising when it does nothing. | **Restructure the DnD before adding behaviour.** Today each type group renders one `DndContext` per level over a flat sibling list, which cannot express "dropped onto a parent". Slice 1 is the dnd-kit *tree* pattern: one `DndContext` per type over a **flattened** list of `{ id, depth }`, with the drop depth derived from the drag's horizontal offset (drag right = becomes a child of the row above, drag left = pops out to the main level). Then one server action writing `parent_category_id` **and** `sort_order` together, reusing the rules `validateParentCategory` already enforces (a child cannot become a parent, category type and reporting type must match the new parent, no cycles) and rejecting the whole drop rather than half-applying it. Bulk multi-select drag is **not** in this slice. | N | An illegal drop (onto a child, across category types, onto itself) is refused and the row springs back rather than half-applying; a promoted or re-nested category keeps its id, so allocations, budget lines and reports still resolve; `sort_order` stays contiguous among the new siblings; the list reflects the new tree without a hard refresh (see the stale-copy bug fixed in this sprint); archived categories are excluded while `showArchived` is on, which is also when dragging is disabled today; keyboard drag still works via `sortableKeyboardCoordinates`; touch drag does not fight the page scroll on a 320 px screen. |
+
+**Explicitly kept alongside it:** horizontal-offset dragging is imprecise on
+phones, so BR-047's "Move to main level" button and the edit form's parent
+dropdown both stay. Drag-and-drop is the fast path, not the only path.
+
 ### Status — 2026-07-28
 
 Shipped on `sprint/mobile-capture-parity` (not yet merged): **BR-032, BR-033,
@@ -122,7 +135,8 @@ BR-034, BR-038, BR-041, BR-042, BR-046, BR-047**. Still open from this table:
 BR-030 (card statement cycle), BR-031 (bidirectional amount input), BR-035
 (installments), BR-036 (month start day), BR-037 (calendar view), BR-039
 (transfer-as-expense), BR-040 (negative-amount refunds), BR-043 (budget
-vs-last-month), BR-044 (standalone notes), BR-045 (time-of-day).
+vs-last-month), BR-044 (standalone notes), BR-045 (time-of-day). Raised during
+this sprint's QA and still open: BR-048 (drag-and-drop category nesting).
 
 Two notes for whoever picks this up next:
 - BR-046 was documented as "add a confirmation to an existing currency change".
