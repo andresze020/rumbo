@@ -1148,6 +1148,9 @@ export default async function TransactionsPage({
         eyebrow={household.name}
         title="Transactions"
         description="Review and manage household transactions."
+        // Phones reach both actions from the bottom nav (the + button and the
+        // Money group's Import CSV), so the header stays title-only there.
+        compactOnMobile
         actions={
           <>
             <GlobalAddTransactionButton className={buttonVariants({ size: 'sm' })}>
@@ -1184,7 +1187,10 @@ export default async function TransactionsPage({
       ) : null}
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
+      {/* No card chrome on phones: the control strip reads as part of the
+          screen, the way a native list header does, instead of a boxed panel
+          eating a border and 12px of padding on every side. */}
+      <div className="sm:rounded-xl sm:border sm:bg-card sm:p-3 sm:shadow-sm sm:shadow-black/[0.03]">
         <TransactionFilters
           searchText={searchText}
           selectedType={selectedType}
@@ -1295,16 +1301,21 @@ export default async function TransactionsPage({
               </>
             ) : null}
           </h2>
+          {/* Redundant with the bottom nav's + button on phones. */}
           <GlobalAddTransactionButton
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            className={cn(
+              buttonVariants({ variant: 'outline', size: 'sm' }),
+              'hidden sm:inline-flex'
+            )}
           >
             {ui('Add transaction')}
           </GlobalAddTransactionButton>
         </div>
 
         {/* ── Filtered totals (base currency) ─────────────────────────── */}
+        {/* One scrolling line on phones instead of a wrapping block. */}
         {hasFilteredTotals ? (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-sm">
+          <div className="-mx-1 flex items-center gap-x-3 gap-y-1 overflow-x-auto whitespace-nowrap px-1 text-sm sm:mx-0 sm:flex-wrap sm:whitespace-normal">
             {filteredExpenseBase > 0 ? (
               <span className="font-semibold text-red-600 dark:text-red-400">
                 {ui('Expenses')} {formatCurrency(filteredExpenseBase, household.base_currency, locale)}
@@ -1327,15 +1338,19 @@ export default async function TransactionsPage({
         ) : null}
 
         {/* ── Review-status filter chips ──────────────────────────────── */}
-        <div className="flex flex-wrap gap-1.5 px-1 pb-1">
+        {/* Scrolls as one line on phones rather than wrapping onto two. */}
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap">
           {reviewChips.map((chip) => (
             <Link
               key={chip.value}
               href={chip.href}
-              className={buttonVariants({
-                variant: chip.isActive ? 'secondary' : 'outline',
-                size: 'sm',
-              })}
+              className={cn(
+                buttonVariants({
+                  variant: chip.isActive ? 'secondary' : 'outline',
+                  size: 'sm',
+                }),
+                'shrink-0'
+              )}
             >
               {chip.label}
             </Link>

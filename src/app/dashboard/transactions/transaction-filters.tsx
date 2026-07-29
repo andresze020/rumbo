@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import Link from 'next/link'
-import { Search, SlidersHorizontal, X } from 'lucide-react'
+import { ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { buttonVariants } from '@/components/ui/button'
 import { MultiSelectChip } from '@/components/multi-select-chip'
@@ -65,6 +65,12 @@ const chipSelectClassName =
 const chipLabelClassName =
   'flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-background px-2.5'
 
+/** Mobile control-strip pill: one compact, tappable, horizontally scrolling unit. */
+const pillCls =
+  'flex h-8 shrink-0 items-center gap-1.5 rounded-full border bg-background px-3 text-xs font-medium text-foreground'
+
+const activePillCls = 'border-primary/40 bg-primary/10 text-primary'
+
 const STATUS_LABELS: Record<string, string> = {
   posted: 'Posted',
   pending: 'Pending',
@@ -91,6 +97,9 @@ export function TransactionFilters({
   const ui = useUiTranslation()
   const typeRef = useRef<HTMLInputElement>(null)
   const [moreOpen, setMoreOpen] = useState(false)
+  // Phones start with search collapsed behind its pill; it opens with a query
+  // already typed so an active search is never invisible.
+  const [searchOpen, setSearchOpen] = useState(false)
 
   function selectType(form: HTMLFormElement | null, value: string) {
     if (!form) return
@@ -172,10 +181,80 @@ export function TransactionFilters({
       ) : null}
       {payeeId ? <input type="hidden" name="payee_id" value={payeeId} /> : null}
 
-      {/* ── Primary bar: type toggle · search · mobile filters toggle ──── */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Type segmented control */}
-        <div className="flex shrink-0 rounded-lg border bg-background p-0.5">
+      {/* ── Mobile: one scrollable line of pills ────────────────────────
+          Phones get a native-style control strip instead of the desktop
+          toolbar: search collapses to an icon, the type toggle becomes a
+          dropdown, and the active filters sit inline. Three stacked rows
+          become one, so the list starts near the top of the screen. */}
+      <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-0.5 sm:hidden">
+        <button
+          type="button"
+          onClick={() => setSearchOpen((v) => !v)}
+          aria-expanded={searchOpen}
+          aria-label={ui('Search transactions')}
+          className={cn(pillCls, searchText && activePillCls)}
+        >
+          <Search className="size-3.5 shrink-0" aria-hidden="true" />
+          {searchText ? <span className="max-w-[90px] truncate">{searchText}</span> : null}
+        </button>
+
+        <label
+          className={cn(pillCls, selectedType !== 'all' && activePillCls)}
+          // The chevron sits inside the pill, so the whole thing reads as one
+          // control rather than a bare native select.
+        >
+          <select
+            value={selectedType}
+            onChange={(e) => selectType(e.currentTarget.form, e.target.value)}
+            aria-label={ui('Filter by type')}
+            className="cursor-pointer appearance-none bg-transparent pr-1 text-xs font-medium outline-none"
+          >
+            {TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value} className="text-foreground">
+                {ui(option.label)}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="size-3 shrink-0 opacity-60" aria-hidden="true" />
+        </label>
+
+        <button
+          type="button"
+          onClick={() => setMoreOpen((v) => !v)}
+          aria-expanded={moreOpen}
+          className={cn(pillCls, moreFiltersCount > 0 && activePillCls)}
+        >
+          <SlidersHorizontal className="size-3.5 shrink-0" aria-hidden="true" />
+          {ui('Filters')}
+          {moreFiltersCount > 0 ? (
+            <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+              {moreFiltersCount}
+            </span>
+          ) : null}
+        </button>
+
+        {/* Each chip drops just its own filter, so undoing one never means
+            opening the panel. */}
+        {activeChips.map((chip) => (
+          <Link key={chip.key} href={chip.href} className={cn(pillCls, activePillCls)}>
+            <span className="max-w-[130px] truncate">{chip.label}</span>
+            <X className="size-3 shrink-0" aria-hidden="true" />
+            <span className="sr-only">{ui('Remove filter')}</span>
+          </Link>
+        ))}
+      </div>
+
+      {/* ── Type toggle (desktop) + search ──────────────────────────────
+          One search input for both breakpoints — duplicating it would submit
+          two `search` values. On phones it stays hidden until the pill above
+          expands it. */}
+      <div
+        className={cn(
+          'flex-wrap items-center gap-2',
+          searchOpen ? 'flex' : 'hidden sm:flex'
+        )}
+      >
+        <div className="hidden shrink-0 rounded-lg border bg-background p-0.5 sm:flex">
           {TYPE_OPTIONS.map((option) => {
             const isActive = selectedType === option.value
             return (
@@ -197,7 +276,6 @@ export function TransactionFilters({
           })}
         </div>
 
-        {/* Search */}
         <div className="relative min-w-[140px] flex-1">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
@@ -209,49 +287,10 @@ export function TransactionFilters({
             placeholder="Search transactions…"
             className="pl-9"
             aria-label="Search transactions"
+            autoFocus={searchOpen}
           />
         </div>
-
-        {/* Mobile-only toggle for the secondary filter row */}
-        <button
-          type="button"
-          onClick={() => setMoreOpen((v) => !v)}
-          aria-expanded={moreOpen}
-          className={cn(
-            buttonVariants({ variant: moreFiltersCount > 0 ? 'secondary' : 'outline', size: 'sm' }),
-            'gap-1.5 sm:hidden'
-          )}
-        >
-          <SlidersHorizontal className="size-4" aria-hidden="true" />
-          {ui('Filters')}
-          {moreFiltersCount > 0 ? (
-            <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-              {moreFiltersCount}
-            </span>
-          ) : null}
-        </button>
       </div>
-
-      {/* ── Active filters, always visible on mobile ───────────────────── */}
-      {/* Desktop already shows the selections inside the secondary bar, which
-          is never collapsed there — so this is phones only. Each chip is a
-          link that drops just that filter, so undoing one never means opening
-          the panel. */}
-      {activeChips.length > 0 ? (
-        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 sm:hidden">
-          {activeChips.map((chip) => (
-            <Link
-              key={chip.key}
-              href={chip.href}
-              className="flex h-7 shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary"
-            >
-              <span className="max-w-[140px] truncate">{chip.label}</span>
-              <X className="size-3 shrink-0" aria-hidden="true" />
-              <span className="sr-only">{ui('Remove filter')}</span>
-            </Link>
-          ))}
-        </div>
-      ) : null}
 
       {/* ── Secondary bar: account/category/status + date range ─────────── */}
       <div className={cn('flex-col gap-2.5 sm:flex', moreOpen ? 'flex' : 'hidden')}>
