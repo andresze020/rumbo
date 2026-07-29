@@ -5,10 +5,10 @@ import Link from 'next/link'
 import { ChevronDown, Pencil, Tag } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
-import { ArchiveConfirmButton } from '@/components/archive-confirm-button'
+import { ConfirmActionButton } from '@/components/confirm-action-button'
 import { formatLabel } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { archiveCategoryAction } from './actions'
+import { archiveCategoryAction, promoteCategoryAction } from './actions'
 import { useLanguage } from '@/components/language-provider'
 import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
 
@@ -306,6 +306,27 @@ export function CategoryRow({
               >
                 Edit
               </Link>
+              {/* BR-047: a subcategory can be lifted back to the main level.
+                  The category keeps its id, so history and budgets still
+                  resolve — only its parent link is cleared. */}
+              {category.parent_category_id ? (
+                <ConfirmActionButton
+                  action={promoteCategoryAction}
+                  triggerVariant="outline"
+                  hiddenFields={{
+                    category_id: category.id,
+                    show_archived: showArchived ? 'true' : 'false',
+                  }}
+                  triggerLabel={t('categoriesUi.promoteAction')}
+                  pendingLabel={t('categoriesUi.promotePending')}
+                  title={t('categoriesUi.promoteTitle')}
+                  description={t('categoriesUi.promoteDescription', {
+                    name: displayName,
+                  })}
+                  cancelLabel={t('common.cancel')}
+                  confirmLabel={t('categoriesUi.promoteConfirm')}
+                />
+              ) : null}
               {category.is_archived ? (
                 <form action={archiveCategoryAction}>
                   <input type="hidden" name="category_id" value={category.id} />
@@ -320,7 +341,7 @@ export function CategoryRow({
                   </SubmitButton>
                 </form>
               ) : (
-                <ArchiveConfirmButton
+                <ConfirmActionButton
                   action={archiveCategoryAction}
                   hiddenFields={{
                     category_id: category.id,

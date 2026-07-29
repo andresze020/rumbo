@@ -23,6 +23,7 @@ import { InfoTooltip } from '@/components/info-tooltip'
 import { Callout } from '@/components/callout'
 import { formatLabel } from '@/lib/format'
 import { getLocale } from '@/lib/i18n/server'
+import { translate } from '@/lib/i18n/translate'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { cn } from '@/lib/utils'
 import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
@@ -33,6 +34,7 @@ type CategoriesPageProps = {
     updated?: string
     archived?: string
     unarchived?: string
+    promoted?: string
     showArchived?: string
     categoryType?: string
     q?: string
@@ -346,6 +348,9 @@ export default async function CategoriesPage({
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
       {params.created === '1' ? <Callout variant="success">{ui('Category created.')}</Callout> : null}
       {params.updated === '1' ? <Callout variant="success">{ui('Category updated.')}</Callout> : null}
+      {params.promoted === '1' ? (
+        <Callout variant="success">{translate(locale, 'categoriesUi.promoted')}</Callout>
+      ) : null}
 
       {/* ── Summary cards ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-2 md:hidden">

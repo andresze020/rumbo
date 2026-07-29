@@ -25,6 +25,7 @@ import {
   createTransferTransactionAction,
 } from './actions'
 import { PayeePicker, type PayeeOption } from './payee-picker'
+import { RelativeDateChips } from './relative-date-chips'
 import { SelectorSheet } from './selector-sheet'
 import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
@@ -517,6 +518,23 @@ export function TransactionForm({
     },
   ]
 
+  // Picking a date invalidates any rate fetched for the previous one.
+  function changeTransactionDate(next: string) {
+    setTransactionDate(next)
+    if (isMultiCurrency) {
+      setUserRate('')
+      setFxNote('')
+      setFxError('')
+    }
+  }
+
+  // BR-033: relative-date chips. Rendered above the date control on desktop and
+  // above the date *row* on mobile — the mobile row auto-opens the native
+  // calendar when it expands, which would cover chips placed inside the panel.
+  const dateChips = (
+    <RelativeDateChips value={transactionDate} onSelect={changeTransactionDate} />
+  )
+
   // Shared date field — placed inside each essentials grid below so it pairs
   // with the account selector on the same row.
   const dateField = (
@@ -525,14 +543,7 @@ export function TransactionForm({
       name="transaction_date"
       label={t('transactionForm.date')}
       value={transactionDate}
-      onChange={(e) => {
-        setTransactionDate(e.target.value)
-        if (isMultiCurrency) {
-          setUserRate('')
-          setFxNote('')
-          setFxError('')
-        }
-      }}
+      onChange={(e) => changeTransactionDate(e.target.value)}
       required
     />
   )
@@ -1378,6 +1389,8 @@ export function TransactionForm({
         </>
       )}
 
+      <div className="px-1 pb-2 pt-2">{dateChips}</div>
+
       {editRow({
         id: 'date',
         icon: <CalendarDays className="size-4.5" />,
@@ -1651,7 +1664,10 @@ export function TransactionForm({
             ),
           })}
 
-          {dateField}
+          <div className="space-y-1.5">
+            {dateField}
+            {dateChips}
+          </div>
           {statusField}
 
           {/* Description: kept essential (visible on mobile too). */}
@@ -1684,7 +1700,10 @@ export function TransactionForm({
             }),
           })}
 
-          {dateField}
+          <div className="space-y-1.5">
+            {dateField}
+            {dateChips}
+          </div>
 
           {desktopCombo({
             id: 'category',

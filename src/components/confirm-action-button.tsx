@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
-type ArchiveConfirmButtonProps = {
+type ConfirmActionButtonProps = {
   action: (formData: FormData) => void | Promise<void>
   hiddenFields: Record<string, string>
   triggerLabel: ReactNode
@@ -24,10 +24,17 @@ type ArchiveConfirmButtonProps = {
   description: ReactNode
   cancelLabel: ReactNode
   confirmLabel: ReactNode
+  /** Trigger styling. Defaults to `secondary` — the archive actions' look. */
+  triggerVariant?: 'secondary' | 'outline' | 'destructive'
 }
 
-/** Confirm-before-archive button. Restoring stays a plain form submit — only the destructive direction gets a confirm step. */
-export function ArchiveConfirmButton({
+/**
+ * Shared confirm-before-submit button: a trigger that opens an AlertDialog and a
+ * form that only posts once the user confirms. Its original home is archive
+ * (restoring stays a plain submit — only the destructive direction is gated),
+ * and it is reused for other one-way actions such as BR-047's promote-subcategory.
+ */
+export function ConfirmActionButton({
   action,
   hiddenFields,
   triggerLabel,
@@ -36,14 +43,15 @@ export function ArchiveConfirmButton({
   description,
   cancelLabel,
   confirmLabel,
-}: ArchiveConfirmButtonProps) {
+  triggerVariant = 'secondary',
+}: ConfirmActionButtonProps) {
   const ui = useUiTranslation()
   const translated = (value: ReactNode) =>
     typeof value === 'string' ? ui(value) : value
 
   return (
     <AlertDialog>
-      <AlertDialogTrigger render={<Button type="button" variant="secondary" size="sm" />}>
+      <AlertDialogTrigger render={<Button type="button" variant={triggerVariant} size="sm" />}>
         {translated(triggerLabel)}
       </AlertDialogTrigger>
       <AlertDialogContent>

@@ -166,6 +166,7 @@ export async function updateAccountAction(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim()
   const accountType = String(formData.get('account_type') ?? '').trim()
   const accountClass = String(formData.get('account_class') ?? '').trim()
+  const currencyCode = String(formData.get('currency_code') ?? '').trim().toUpperCase()
   const institutionName = String(formData.get('institution_name') ?? '').trim()
   const lastFour = String(formData.get('last_four') ?? '').trim()
   const color = String(formData.get('color') ?? '').trim()
@@ -206,7 +207,7 @@ export async function updateAccountAction(formData: FormData) {
 
   const { data: account, error: accountError } = await supabase
     .from('accounts')
-    .select('id')
+    .select('id, currency_code')
     .eq('id', accountId)
     .eq('household_id', householdId)
     .is('deleted_at', null)
@@ -216,12 +217,32 @@ export async function updateAccountAction(formData: FormData) {
     redirectWithError('Account was not found for this household.')
   }
 
+  // BR-046: the currency is only re-validated when it actually changes. Existing
+  // entries keep the `exchange_rate_to_base` they were stored with, so this
+  // never rewrites history — it only sets the currency of future entries. The
+  // confirmation the user sees lives in `CurrencyChangeGuard`.
+  const currencyChanged = Boolean(currencyCode) && currencyCode !== account.currency_code
+
+  if (currencyChanged) {
+    const { data: currency, error: currencyError } = await supabase
+      .from('currencies')
+      .select('code')
+      .eq('code', currencyCode)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (currencyError || !currency) {
+      redirectWithError('Select a valid active currency.')
+    }
+  }
+
   const { error: updateError } = await supabase
     .from('accounts')
     .update({
       name,
       account_type: accountType,
       account_class: accountClass,
+      ...(currencyChanged ? { currency_code: currencyCode } : {}),
       institution_name: institutionName || null,
       last_four: lastFour || null,
       color: color || null,

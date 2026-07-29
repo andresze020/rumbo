@@ -22,6 +22,7 @@ import {
   type QuickAddFormData,
 } from '@/app/dashboard/quick-add-actions'
 import { useLanguage } from '@/components/language-provider'
+import { todayIsoDateLocal } from '@/lib/format'
 
 type TransactionType = 'income' | 'expense'
 type OpenDialogType = 'income' | 'expense' | 'transfer'
@@ -46,8 +47,10 @@ type TransactionDialogContextValue = {
 
 const TransactionDialogContext = createContext<TransactionDialogContextValue | null>(null)
 
+// The viewer's calendar day, not UTC — this seeds the form's date field, which
+// BR-033's "Today" chip must agree with. See `todayIsoDateLocal`.
 function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10)
+  return todayIsoDateLocal()
 }
 
 /**

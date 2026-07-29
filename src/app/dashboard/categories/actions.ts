@@ -476,6 +476,64 @@ export async function reorderCategoriesAction(orderedIds: string[]) {
   return { success: true }
 }
 
+/**
+ * BR-047 — promote a subcategory back to a top-level category.
+ *
+ * Only `parent_category_id` is cleared: the category keeps its id, so every
+ * `transaction_allocations` / `budget_lines` row pointing at it still resolves,
+ * and its type/reporting type are untouched. `sort_order` is reset because the
+ * old value was an index among its former siblings, which means nothing in the
+ * root list — it re-sorts by name until dragged.
+ */
+export async function promoteCategoryAction(formData: FormData) {
+  const categoryId = String(formData.get('category_id') ?? '').trim()
+  const showArchived = String(formData.get('show_archived') ?? '') === 'true'
+
+  if (!categoryId) {
+    redirectWithError('Category is required.')
+  }
+
+  const { supabase, userId, householdId } = await getAuthenticatedHousehold()
+
+  const { data: category, error: categoryError } = await supabase
+    .from('categories')
+    .select('id, parent_category_id')
+    .eq('id', categoryId)
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (categoryError || !category) {
+    redirectWithError('Category was not found for this household.')
+  }
+
+  if (!category.parent_category_id) {
+    redirectWithError('This category is already a main category.')
+  }
+
+  const { error: updateError } = await supabase
+    .from('categories')
+    .update({
+      parent_category_id: null,
+      sort_order: null,
+      updated_by: userId,
+    })
+    .eq('id', categoryId)
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+
+  if (updateError) {
+    redirectWithError('Could not move the category to the main level.')
+  }
+
+  revalidateCategorySurfaces()
+
+  const redirectParams = new URLSearchParams()
+  if (showArchived) redirectParams.set('showArchived', 'true')
+  redirectParams.set('promoted', '1')
+  redirect(`/dashboard/categories?${redirectParams.toString()}`)
+}
+
 export async function archiveCategoryAction(formData: FormData) {
   // Also reused by the onboarding wizard — see createCategoryAction.
   const fromOnboarding = String(formData.get('return_to') ?? '') === 'onboarding'
