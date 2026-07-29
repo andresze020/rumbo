@@ -100,6 +100,8 @@ export function TransactionFilters({
   // Phones start with search collapsed behind its pill; it opens with a query
   // already typed so an active search is never invisible.
   const [searchOpen, setSearchOpen] = useState(false)
+  // Only one option list at a time — their panels overlap otherwise.
+  const [openChip, setOpenChip] = useState<null | 'account' | 'category' | 'tag'>(null)
 
   function selectType(form: HTMLFormElement | null, value: string) {
     if (!form) return
@@ -186,7 +188,9 @@ export function TransactionFilters({
           toolbar: search collapses to an icon, the type toggle becomes a
           dropdown, and the active filters sit inline. Three stacked rows
           become one, so the list starts near the top of the screen. */}
-      <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-0.5 sm:hidden">
+      {/* Wraps rather than scrolls sideways: an off-screen filter is a filter
+          you forget you set. With one or two active it stays a single line. */}
+      <div className="flex flex-wrap items-center gap-1.5 sm:hidden">
         <button
           type="button"
           onClick={() => setSearchOpen((v) => !v)}
@@ -292,14 +296,48 @@ export function TransactionFilters({
         </div>
       </div>
 
-      {/* ── Secondary bar: account/category/status + date range ─────────── */}
-      <div className={cn('flex-col gap-2.5 sm:flex', moreOpen ? 'flex' : 'hidden')}>
+      {/* ── Backdrop for the mobile filter sheet ───────────────────────── */}
+      {moreOpen ? (
+        <div
+          aria-hidden="true"
+          onClick={() => setMoreOpen(false)}
+          className="fixed inset-0 z-40 bg-black/40 duration-200 animate-in fade-in-0 sm:hidden"
+        />
+      ) : null}
+
+      {/* ── Secondary controls: inline on desktop, bottom sheet on phones ─
+          One DOM node, styled two ways, rather than two copies: these are real
+          form controls, and a second copy would submit a second value for every
+          filter. Kept inside the <form> (no portal) for the same reason. */}
+      <div
+        className={cn(
+          'flex-col gap-2.5',
+          moreOpen
+            ? 'fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-2xl border-t bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] duration-200 animate-in slide-in-from-bottom-4'
+            : 'hidden',
+          'sm:static sm:z-auto sm:flex sm:max-h-none sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:animate-none'
+        )}
+      >
+        <header className="flex items-center justify-between sm:hidden">
+          <h2 className="font-heading text-base font-medium">{ui('Filters')}</h2>
+          <button
+            type="button"
+            onClick={() => setMoreOpen(false)}
+            aria-label={ui('Close')}
+            className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+          >
+            <X className="size-5" aria-hidden="true" />
+          </button>
+        </header>
+
         <div className="flex flex-wrap items-center gap-2">
           <MultiSelectChip
             label={ui('Account')}
             name="account_id"
             options={accountOptions}
             selectedIds={selectedAccountIds}
+            open={openChip === 'account'}
+            onOpenChange={(next) => setOpenChip(next ? 'account' : null)}
           />
 
           <MultiSelectChip
@@ -307,6 +345,8 @@ export function TransactionFilters({
             name="category_id"
             options={categoryOptions}
             selectedIds={selectedCategoryIds}
+            open={openChip === 'category'}
+            onOpenChange={(next) => setOpenChip(next ? 'category' : null)}
           />
 
           {tagOptions.length > 0 || selectedTagIds.length > 0 ? (
@@ -315,6 +355,8 @@ export function TransactionFilters({
               name="tag_id"
               options={tagOptions}
               selectedIds={selectedTagIds}
+              open={openChip === 'tag'}
+              onOpenChange={(next) => setOpenChip(next ? 'tag' : null)}
             />
           ) : null}
 

@@ -16,12 +16,23 @@ export function MultiSelectChip({
   name,
   options,
   selectedIds,
+  open,
+  onOpenChange,
 }: {
   label: string
   name: string
   options: MultiSelectOption[]
   selectedIds: string[]
+  /**
+   * Controlled open state. Pass it (with `onOpenChange`) when several chips
+   * share a row: their panels are absolutely positioned, so two open at once
+   * overlap each other and the content underneath. Omit both to let the native
+   * `<details>` manage itself.
+   */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
+  const isControlled = open !== undefined && onOpenChange !== undefined
   const [checked, setChecked] = useState<Set<string>>(() => new Set(selectedIds))
 
   function toggle(id: string, isChecked: boolean) {
@@ -41,8 +52,20 @@ export function MultiSelectChip({
         : `${checked.size} selected`
 
   return (
-    <details className="relative shrink-0">
-      <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg border bg-background px-2.5 [&::-webkit-details-marker]:hidden">
+    <details className="relative shrink-0" open={isControlled ? open : undefined}>
+      <summary
+        // With a controlled `open`, the browser's own toggle would fight the
+        // prop — take over the click and report the intent instead.
+        onClick={
+          isControlled
+            ? (event) => {
+                event.preventDefault()
+                onOpenChange(!open)
+              }
+            : undefined
+        }
+        className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg border bg-background px-2.5 [&::-webkit-details-marker]:hidden"
+      >
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         <span className="max-w-[120px] truncate text-sm font-medium text-foreground">
           {summary}

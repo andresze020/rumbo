@@ -49,6 +49,8 @@ export function ReportFilters({
 }: ReportFiltersProps) {
   const typeRef = useRef<HTMLInputElement>(null)
   const [moreOpen, setMoreOpen] = useState(false)
+  // Only one option list at a time — their panels overlap otherwise.
+  const [openChip, setOpenChip] = useState<null | 'account' | 'category' | 'tag'>(null)
 
   function selectType(form: HTMLFormElement | null, value: string) {
     if (!form) return
@@ -124,12 +126,16 @@ export function ReportFilters({
             name="account_id"
             options={accountOptions}
             selectedIds={selectedAccountIds}
+            open={openChip === 'account'}
+            onOpenChange={(next) => setOpenChip(next ? 'account' : null)}
           />
           <MultiSelectChip
             label="Category"
             name="category_id"
             options={categoryOptions}
             selectedIds={selectedCategoryIds}
+            open={openChip === 'category'}
+            onOpenChange={(next) => setOpenChip(next ? 'category' : null)}
           />
           {tagOptions.length > 0 || selectedTagIds.length > 0 ? (
             <MultiSelectChip
@@ -137,6 +143,8 @@ export function ReportFilters({
               name="tag_id"
               options={tagOptions}
               selectedIds={selectedTagIds}
+              open={openChip === 'tag'}
+              onOpenChange={(next) => setOpenChip(next ? 'tag' : null)}
             />
           ) : null}
         </div>
