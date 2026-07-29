@@ -392,6 +392,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
                 defaultTagIds={copyDefaults?.tagIds}
                 defaultFromAccountId={copyDefaults?.fromAccountId}
                 defaultToAccountId={copyDefaults?.toAccountId}
+                visibleFields={formData.formFields}
                 returnTo={pathname}
                 onCancel={closeDialog}
               />

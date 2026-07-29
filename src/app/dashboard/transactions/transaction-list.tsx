@@ -114,6 +114,8 @@ type TransactionListProps = {
   categories: TransactionListCategory[]
   payeeSuggestions: string[]
   returnTo: string
+  /** BR-038: tighter rows, so more transactions fit on screen. */
+  compact?: boolean
 }
 
 const reviewStyles: Record<ReviewStatus, { label: string; className: string }> = {
@@ -183,6 +185,7 @@ export function TransactionList({
   categories,
   payeeSuggestions,
   returnTo,
+  compact = false,
 }: TransactionListProps) {
   const { t, locale } = useLanguage()
   const ui = useUiTranslation()
@@ -376,6 +379,7 @@ export function TransactionList({
                     row={row}
                     selected={selected.has(row.id)}
                     expanded={expandedId === row.id}
+                    compact={compact}
                     returnTo={returnTo}
                     onToggle={() => toggleRow(row.id)}
                     onToggleExpand={() =>
@@ -424,6 +428,7 @@ function DisplayRow({
   row,
   selected,
   expanded,
+  compact,
   returnTo,
   onToggle,
   onToggleExpand,
@@ -432,6 +437,7 @@ function DisplayRow({
   row: TransactionListRow
   selected: boolean
   expanded: boolean
+  compact: boolean
   returnTo: string
   onToggle: () => void
   onToggleExpand: () => void
@@ -442,7 +448,8 @@ function DisplayRow({
   return (
     <div
       className={cn(
-        'p-3 transition-colors sm:p-4',
+        'transition-colors',
+        compact ? 'px-3 py-2 sm:px-4' : 'p-3 sm:p-4',
         row.isVoided
           ? 'bg-muted/30 text-muted-foreground'
           : selected
@@ -484,7 +491,8 @@ function DisplayRow({
         {row.amountFormatted ? (
           <p
             className={cn(
-              'shrink-0 text-base font-semibold tabular-nums leading-snug',
+              'shrink-0 font-semibold tabular-nums leading-snug',
+              compact ? 'text-sm' : 'text-base',
               getAmountColorClass(row.transactionType)
             )}
           >
@@ -495,16 +503,20 @@ function DisplayRow({
         <ChevronDown
           aria-hidden="true"
           className={cn(
-            'size-4 shrink-0 text-muted-foreground transition-transform sm:hidden',
+            'size-4 shrink-0 text-muted-foreground transition-transform',
+            compact ? '' : 'sm:hidden',
             expanded && 'rotate-180'
           )}
         />
       </div>
 
       {/* ── Details: collapsed on mobile, always shown on desktop ─────── */}
+      {/* Compact mode keeps the details behind the row toggle on every
+          breakpoint — that collapse is where the vertical space comes from. */}
       <div
         className={cn(
-          'space-y-2 pl-7 pt-2 sm:block',
+          'space-y-2 pl-7 pt-2',
+          compact ? '' : 'sm:block',
           expanded ? 'block' : 'hidden'
         )}
       >

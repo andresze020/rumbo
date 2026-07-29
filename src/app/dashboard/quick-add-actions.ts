@@ -1,6 +1,8 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getUiPreferences } from '@/lib/preferences/server'
+import type { UiPreferences } from '@/lib/preferences/shared'
 
 export type QuickAddAccount = {
   id: string
@@ -41,6 +43,8 @@ export type QuickAddFormData = {
   payees: QuickAddPayee[]
   tags: QuickAddTag[]
   currencies: string[]
+  /** BR-032: which optional form fields this user wants rendered. */
+  formFields: UiPreferences['formFields']
 }
 
 export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
@@ -109,6 +113,7 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
       payees: (payeesResult.data ?? []) as QuickAddPayee[],
       tags: (tagsResult.data ?? []) as QuickAddTag[],
       currencies: (currenciesResult.data ?? []).map((c) => c.code as string),
+      formFields: (await getUiPreferences()).formFields,
     }
   } catch {
     return null

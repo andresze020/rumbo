@@ -19,6 +19,11 @@ import { GlobalAddTransactionButton } from '@/components/global-add-transaction-
 import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { Callout } from '@/components/callout'
 import { createClient } from '@/lib/supabase/server'
+import { getUiPreferences } from '@/lib/preferences/server'
+import {
+  hasDefaultTransactionScope,
+  type UiPreferences,
+} from '@/lib/preferences/shared'
 import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import { createUiTranslator } from '@/lib/i18n/ui'
@@ -325,6 +330,47 @@ function presetPath(
   return transactionsPath({ ...filters, dateFrom, dateTo, month: '' })
 }
 
+/**
+ * BR-038 — every search param that means "the user (or a link) chose a view".
+ * If any of these is present the URL is authoritative and the landing
+ * preferences stay out of the way.
+ */
+const FILTER_PARAM_KEYS = [
+  'month',
+  'date_from',
+  'date_to',
+  'account_id',
+  'category_id',
+  'tag_id',
+  'payee_id',
+  'type',
+  'status',
+  'review',
+  'search',
+  'page',
+] as const
+
+/** The explicit URL that represents this user's preferred landing view. */
+function preferredScopeHref(preferences: UiPreferences) {
+  const params = new URLSearchParams()
+  const { defaultPeriod, defaultAccountId } = preferences.transactions
+
+  if (defaultPeriod === 'last_30_days') {
+    const today = todayIsoDate()
+    params.set('date_from', offsetDate(today, -29))
+    params.set('date_to', today)
+  } else if (defaultPeriod === 'all_time') {
+    params.set('date_from', ALL_TIME_FROM)
+    params.set('date_to', ALL_TIME_TO)
+  } else {
+    params.set('month', currentMonth())
+  }
+
+  if (defaultAccountId) params.set('account_id', defaultAccountId)
+
+  return `/dashboard/transactions?${params.toString()}`
+}
+
 export default async function TransactionsPage({
   searchParams,
 }: TransactionsPageProps) {
@@ -334,6 +380,19 @@ export default async function TransactionsPage({
   const t = (key: TranslationKey, vars?: Record<string, string | number>) =>
     translate(locale, key, vars)
   const errorMessage = typeof params.error === 'string' ? params.error : null
+
+  // ── BR-038: display preferences ───────────────────────────────────────────
+  // The landing scope/period only apply to a *bare* URL — the moment any filter
+  // param is present, the URL wins (a shared link, a "view transactions" button,
+  // or the user clearing a filter must never be silently overridden). When they
+  // do apply, we redirect once to the explicit URL so every later navigation
+  // carries real params and this branch is not re-entered.
+  const preferences = await getUiPreferences()
+  const hasAnyFilterParam = FILTER_PARAM_KEYS.some((key) => params[key] !== undefined)
+
+  if (!hasAnyFilterParam && !hasDefaultTransactionScope(preferences)) {
+    redirect(preferredScopeHref(preferences))
+  }
 
   const rawDateFrom = typeof params.date_from === 'string' ? params.date_from : ''
   const rawDateTo = typeof params.date_to === 'string' ? params.date_to : ''
@@ -814,7 +873,18 @@ export default async function TransactionsPage({
     }
   }
 
-  const transactionRows = transactions.map(buildTransactionRow)
+  // BR-038: hiding balance adjustments is visibility only — the rows are still
+  // fetched, still counted in the header totals, and still part of every
+  // balance. They are simply not listed. (Filtering after the page query means
+  // a page can render fewer than PAGE_SIZE rows; that is the honest trade for
+  // not touching the search RPC's signature.)
+  const transactionRows = transactions
+    .filter(
+      (transaction) =>
+        preferences.transactions.showBalanceAdjustments ||
+        transaction.transaction_type !== 'adjustment'
+    )
+    .map(buildTransactionRow)
 
   // Totals for the WHOLE filtered set (every page), converted to the household
   // base currency by the RPC. Transfers, debt payments, opening balances and
@@ -1261,6 +1331,7 @@ export default async function TransactionsPage({
             categories={inlineCategories}
             payeeSuggestions={payeeSuggestions}
             returnTo={returnTo}
+            compact={preferences.transactions.compactList}
           />
         ) : selectedReview === 'unreviewed' ? (
           <EmptyState

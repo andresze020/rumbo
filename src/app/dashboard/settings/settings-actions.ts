@@ -3,6 +3,12 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import {
+  DEFAULT_UI_PREFERENCES,
+  isTransactionPeriod,
+  TRANSACTION_FORM_FIELDS,
+  type UiPreferences,
+} from '@/lib/preferences/shared'
 
 async function getAuthContext() {
   const supabase = await createClient()
@@ -101,6 +107,61 @@ export async function updateHouseholdAction(formData: FormData) {
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/settings')
   redirect('/dashboard/settings?saved=household')
+}
+
+/**
+ * BR-032 + BR-038 — saves the per-user UI preferences.
+ *
+ * Checkboxes only appear in the FormData when checked, so each one is read as
+ * "present = on". The whole object is rewritten from the submitted form rather
+ * than merged, which keeps the stored shape in step with the settings UI; the
+ * parser tolerates anything missing.
+ */
+export async function updateUiPreferencesAction(formData: FormData) {
+  const accountId = String(formData.get('default_account_id') ?? '').trim()
+  const period = String(formData.get('default_period') ?? '')
+
+  const preferences: UiPreferences = {
+    formFields: Object.fromEntries(
+      TRANSACTION_FORM_FIELDS.map((field) => [field, formData.get(`field_${field}`) !== null])
+    ) as UiPreferences['formFields'],
+    transactions: {
+      defaultPeriod: isTransactionPeriod(period)
+        ? period
+        : DEFAULT_UI_PREFERENCES.transactions.defaultPeriod,
+      defaultAccountId: accountId || null,
+      compactList: formData.get('compact_list') !== null,
+      showBalanceAdjustments: formData.get('show_balance_adjustments') !== null,
+    },
+  }
+
+  const { supabase, user, householdId } = await getAuthContext()
+
+  // A stale default account (archived or from another household) would filter
+  // the list down to nothing, so verify it still belongs here before saving.
+  if (preferences.transactions.defaultAccountId) {
+    const { data: account } = await supabase
+      .from('accounts')
+      .select('id')
+      .eq('id', preferences.transactions.defaultAccountId)
+      .eq('household_id', householdId)
+      .is('deleted_at', null)
+      .eq('is_archived', false)
+      .maybeSingle()
+
+    if (!account) redirectWithError('Select an active account from this household.')
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ ui_preferences: preferences })
+    .eq('id', user.id)
+
+  if (error) redirectWithError('Could not save your preferences. Please try again.')
+
+  revalidatePath('/dashboard/settings')
+  revalidatePath('/dashboard/transactions')
+  redirect('/dashboard/settings?saved=preferences')
 }
 
 export async function signOutAllAction() {

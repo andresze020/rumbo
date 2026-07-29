@@ -44,6 +44,7 @@ import { useLanguage } from '@/components/language-provider'
 import { RECURRING_FREQUENCIES } from '@/lib/recurring/shared'
 import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
+import type { TransactionFormField } from '@/lib/preferences/shared'
 import { cn } from '@/lib/utils'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
@@ -93,6 +94,12 @@ type TransactionFormProps = {
   defaultTagIds?: string[]
   defaultFromAccountId?: string
   defaultToAccountId?: string
+  /**
+   * BR-032: which optional fields to render. Omitted means all of them, which
+   * is both the default preference and the right answer for callers that have
+   * no user preference in hand (e.g. the AI assistant's draft review).
+   */
+  visibleFields?: Partial<Record<TransactionFormField, boolean>>
   returnTo?: string
 }
 
@@ -165,10 +172,15 @@ export function TransactionForm({
   defaultTagIds,
   defaultFromAccountId,
   defaultToAccountId,
+  visibleFields,
   returnTo,
 }: TransactionFormProps) {
   const { t, locale } = useLanguage()
   const ui = useUiTranslation()
+  // BR-032: a field is shown unless the user has explicitly turned it off.
+  // A hidden field is not rendered at all, so it submits nothing and the server
+  // action falls back to its own default (e.g. status → posted).
+  const showField = (field: TransactionFormField) => visibleFields?.[field] !== false
   const categoryName = (category: TransactionFormCategory) =>
     localizeSystemCategoryName(category.name, Boolean(category.is_system), locale)
   const [transactionType, setTransactionType] = useState<TransactionType>(defaultType ?? 'expense')
@@ -558,8 +570,10 @@ export function TransactionForm({
   )
 
   // Shared status segmented control, paired with another compact field in the
-  // essentials grid.
-  const statusField = (
+  // essentials grid. When the user has hidden it (BR-032) the value still has
+  // to reach the server action, which requires a status — so the control is
+  // replaced by a hidden input carrying the default rather than dropped.
+  const statusField = showField('status') ? (
     <SegmentedField
       label={t('transactionForm.status')}
       name="status"
@@ -571,6 +585,8 @@ export function TransactionForm({
         { value: 'pending', label: t('transactionForm.statusPending') },
       ]}
     />
+  ) : (
+    <input type="hidden" name="status" value={status} />
   )
 
   // Exchange-rate block, shared by the transfer and single-account paths. Stays
@@ -1394,7 +1410,9 @@ export function TransactionForm({
         <>
           <input type="hidden" name="account_id" value={accountId} />
           <input type="hidden" name="category_id" value={categoryId} />
-          <input type="hidden" name="payee_name" value={payeeName} />
+          {showField('payee') ? (
+            <input type="hidden" name="payee_name" value={payeeName} />
+          ) : null}
         </>
       )}
 
@@ -1443,36 +1461,47 @@ export function TransactionForm({
             placeholder: t('transactionForm.selectCategory'),
             onOpen: syncCategoryDrillToSelection,
           })}
-          {pickerRow({
-            id: 'payee',
-            icon: <Store className="size-4.5" />,
-            label: t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee'),
-            value: payeeName,
-            placeholder: '—',
-          })}
-          {editRow({
-            id: 'repeat',
-            icon: <Repeat className="size-4.5" />,
-            label: t('transactionForm.repeat'),
-            value: repeatValue,
-            placeholder: t('transactionForm.repeatNever'),
-            children: (
-              <>
-                <input type="hidden" name="frequency" value={recurringFrequency} />
-                {optionList(
-                  [
-                    { value: '', label: t('transactionForm.repeatNever') },
-                    ...RECURRING_FREQUENCIES.map((f) => ({ value: f.value, label: ui(f.label) })),
-                  ],
-                  recurringFrequency,
-                  (value) => {
-                    setRecurringFrequency(value)
-                    setExpandedField(null)
-                  }
-                )}
-              </>
-            ),
-          })}
+          {showField('payee')
+            ? pickerRow({
+                id: 'payee',
+                icon: <Store className="size-4.5" />,
+                label: t(
+                  transactionType === 'income'
+                    ? 'transactionForm.payer'
+                    : 'transactionForm.payee'
+                ),
+                value: payeeName,
+                placeholder: '—',
+              })
+            : null}
+          {showField('repeat')
+            ? editRow({
+                id: 'repeat',
+                icon: <Repeat className="size-4.5" />,
+                label: t('transactionForm.repeat'),
+                value: repeatValue,
+                placeholder: t('transactionForm.repeatNever'),
+                children: (
+                  <>
+                    <input type="hidden" name="frequency" value={recurringFrequency} />
+                    {optionList(
+                      [
+                        { value: '', label: t('transactionForm.repeatNever') },
+                        ...RECURRING_FREQUENCIES.map((f) => ({
+                          value: f.value,
+                          label: ui(f.label),
+                        })),
+                      ],
+                      recurringFrequency,
+                      (value) => {
+                        setRecurringFrequency(value)
+                        setExpandedField(null)
+                      }
+                    )}
+                  </>
+                ),
+              })
+            : null}
         </>
       )}
 
@@ -1494,33 +1523,37 @@ export function TransactionForm({
           </div>
         ),
       })}
-      {editRow({
-        id: 'note',
-        icon: <StickyNote className="size-4.5" />,
-        label: t('transactionForm.notes'),
-        value: notes,
-        placeholder: '—',
-        children: (
-          <div className="space-y-1.5">
-            <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-            <Textarea
-              id="notes"
-              name="notes"
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-        ),
-      })}
-      {editRow({
-        id: 'status',
-        icon: <ListChecks className="size-4.5" />,
-        label: t('transactionForm.status'),
-        value: statusValue,
-        placeholder: '',
-        children: statusField,
-      })}
+      {showField('notes')
+        ? editRow({
+            id: 'note',
+            icon: <StickyNote className="size-4.5" />,
+            label: t('transactionForm.notes'),
+            value: notes,
+            placeholder: '—',
+            children: (
+              <div className="space-y-1.5">
+                <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
+                <Textarea
+                  id="notes"
+                  name="notes"
+                  rows={3}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
+            ),
+          })
+        : null}
+      {showField('status')
+        ? editRow({
+            id: 'status',
+            icon: <ListChecks className="size-4.5" />,
+            label: t('transactionForm.status'),
+            value: statusValue,
+            placeholder: '',
+            children: statusField,
+          })
+        : statusField}
 
       {isTransfer && availableAccounts.length < 2 ? (
         <p className="border-t px-1 py-3 text-sm text-muted-foreground">
@@ -1733,38 +1766,42 @@ export function TransactionForm({
             <Input id="description" name="description" defaultValue={defaultDescription} />
           </div>
 
-          <div className="col-span-2">
-            <PayeePicker
-              payees={payees}
-              defaultValue={defaultMerchantName}
-              // "Payer" for income (who paid you), "Payee" for an expense (whom you
-              // paid) — same underlying payees table, context-appropriate wording.
-              label={t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')}
-              helpText={t('transactionForm.payeeHelp')}
-              inputId="payee_name"
-            />
-          </div>
+          {showField('payee') ? (
+            <div className="col-span-2">
+              <PayeePicker
+                payees={payees}
+                defaultValue={defaultMerchantName}
+                // "Payer" for income (who paid you), "Payee" for an expense (whom you
+                // paid) — same underlying payees table, context-appropriate wording.
+                label={t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')}
+                helpText={t('transactionForm.payeeHelp')}
+                inputId="payee_name"
+              />
+            </div>
+          ) : null}
 
           {/* UC-10: turn a normal entry into a recurring one. Kept essential so
               the recurring feature is discoverable. Transfers are not supported
               as recurring templates yet, so this is income/expense only. */}
-          <div className="space-y-1.5">
-            <SelectField
-              id="frequency"
-              name="frequency"
-              label={t('transactionForm.repeat')}
-              leading={<Repeat className="size-4.5" />}
-              value={recurringFrequency}
-              onChange={(e) => setRecurringFrequency(e.target.value)}
-            >
-              <option value="">{t('transactionForm.repeatNever')}</option>
-              {RECURRING_FREQUENCIES.map((frequency) => (
-                <option key={frequency.value} value={frequency.value}>
-                  {ui(frequency.label)}
-                </option>
-              ))}
-            </SelectField>
-          </div>
+          {showField('repeat') ? (
+            <div className="space-y-1.5">
+              <SelectField
+                id="frequency"
+                name="frequency"
+                label={t('transactionForm.repeat')}
+                leading={<Repeat className="size-4.5" />}
+                value={recurringFrequency}
+                onChange={(e) => setRecurringFrequency(e.target.value)}
+              >
+                <option value="">{t('transactionForm.repeatNever')}</option>
+                {RECURRING_FREQUENCIES.map((frequency) => (
+                  <option key={frequency.value} value={frequency.value}>
+                    {ui(frequency.label)}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+          ) : null}
 
           {statusField}
 
@@ -1789,10 +1826,12 @@ export function TransactionForm({
           />
         </button>
 
-        <div className={cn('space-y-1.5 sm:block', showMoreDetails ? 'block' : 'hidden')}>
-          <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-          <Textarea id="notes" name="notes" rows={2} defaultValue={defaultNotes} />
-        </div>
+        {showField('notes') ? (
+          <div className={cn('space-y-1.5 sm:block', showMoreDetails ? 'block' : 'hidden')}>
+            <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
+            <Textarea id="notes" name="notes" rows={2} defaultValue={defaultNotes} />
+          </div>
+        ) : null}
       </div>
       </>
       )}
@@ -1801,7 +1840,7 @@ export function TransactionForm({
       {/* Rendered outside the mobile/desktop branch so the selection survives a
           breakpoint change. Shown even with no tags yet — the picker can create
           the first one inline. */}
-      {!isTransfer ? (
+      {!isTransfer && showField('tags') ? (
         <TagMultiSelect
           tags={tags}
           defaultValue={defaultTagIds}
