@@ -115,6 +115,23 @@
 | BR-046 | P3 | Accounts / safety UX | Changing an existing account's currency has no confirmation or explanation of the consequence, even though our own historical-FX correctness (BR-002/BR-003) means past entries keep their originally-stored rate regardless. | Cheapest possible safety addition — a confirm dialog, zero logic change. App B's warning is explicit: *"Changing the currency will affect the entry made before... Are you sure you want to change the currency for this account?"* `[8:20]`. | Add a confirmation dialog on account-currency change explaining that historical entries keep their original stored rate (accurately describing our *better* behaviour, not copying App B's cruder one). | N | Dialog appears only on an actual currency change, not on other account edits; cancelling leaves the currency untouched; confirming does not alter any historical `exchange_rate_to_base` on existing entries (that would be a regression, not a feature). |
 | BR-047 | P3 | Categories | A subcategory cannot be promoted back to a top-level category, and there is no bulk re-parent action; `parent_category_id` can only be set at creation/edit of a single category. | Small, self-contained category-management gap. App B's `Modify Subcategory → → Main Category` walks into a picker with a confirm dialog (*"This subcategory will be changed to main category. Do you wish to continue?"*) `[4:14–4:52]`. | Add a "Move to main category" action on a subcategory that clears `parent_category_id`, with a confirmation dialog. Bulk re-parenting (moving several subcategories at once) is a later slice, not part of the first cut. | ~ | Promoting a subcategory does not orphan any transaction/allocation referencing it; archived subcategories are excluded from the picker; existing reports/budgets keyed on the category still resolve correctly after the move. |
 
+### Status — 2026-07-28
+
+Shipped on `sprint/mobile-capture-parity` (not yet merged): **BR-032, BR-033,
+BR-034, BR-038, BR-041, BR-042, BR-046, BR-047**. Still open from this table:
+BR-030 (card statement cycle), BR-031 (bidirectional amount input), BR-035
+(installments), BR-036 (month start day), BR-037 (calendar view), BR-039
+(transfer-as-expense), BR-040 (negative-amount refunds), BR-043 (budget
+vs-last-month), BR-044 (standalone notes), BR-045 (time-of-day).
+
+Two notes for whoever picks this up next:
+- BR-046 was documented as "add a confirmation to an existing currency change".
+  There was no currency change to confirm — the account **edit** form had no
+  currency field at all, so an account's currency could only ever be set at
+  creation. The ticket shipped as the field plus the confirmation.
+- BR-042 shipped weeks-within-month only, as its row specifies.
+  Months-within-year is still unbuilt.
+
 ### Package 5 — Mobile capture parity
 
 Suggested ordering if this becomes a sprint. Grouped so that each package is

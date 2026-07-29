@@ -23,6 +23,38 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Mobile-capture parity sprint** (2026-07-28, branch
+  `sprint/mobile-capture-parity`, **not yet merged**). Seven benchmark items
+  from `docs/benchmark-review-mobile-money-managers.md`:
+  - **BR-033** relative-date chips (today / yesterday / two days ago) above the
+    transaction form's date control, on both the desktop grid and the mobile
+    row list. New `todayIsoDateLocal` in `lib/format.ts` — the viewer's
+    calendar day, not UTC — is also what the transaction dialog seeds its
+    default date with, so the "Today" chip and the prefilled date agree.
+  - **BR-034** `Copy` on a transaction row opens the create form pre-filled and
+    dated today. Transfers copy both legs; a split copies everything except the
+    category; voided rows stay copyable and always copy as posted; opening
+    balances, debt payments and archived-account rows are not copyable.
+  - **BR-041** `.xlsx` export beside CSV on `/dashboard/export`. Each export
+    builds one column/row table serialized either way. The writer
+    (`lib/exports/xlsx.ts`) is hand-rolled over `node:zlib` rather than a
+    dependency; a strict decimal pattern promotes Postgres's numeric-as-string
+    values to real numeric cells, and `last_four` opts out via `type: 'text'`.
+  - **BR-042** week-by-week rollup rows on `/dashboard/reports`, shown only
+    when the range is one calendar month. Weeks are ISO (Monday-start) clipped
+    to the month, so they partition it exactly and always sum to the month
+    totals. Months-within-year is deliberately deferred.
+  - **BR-032 + BR-046 + BR-047 + BR-038**: per-user UI preferences
+    (`profiles.ui_preferences` jsonb, migration `20260728120000`, **pending
+    `db push`**) drive which optional add-form fields render (BR-032) and how
+    `/dashboard/transactions` opens and renders (BR-038: default period,
+    default account, compact rows, show/hide balance adjustments). Account
+    currency is now editable and a change is confirm-gated (BR-046) — it
+    previously could only be set at creation. A subcategory can be promoted to
+    the main level via `promoteCategoryAction` (BR-047).
+  - `ArchiveConfirmButton` was renamed to `ConfirmActionButton`
+    (`components/confirm-action-button.tsx`) with an optional `triggerVariant`;
+    it was always a generic confirm-before-submit button.
 - **Full UI localization + persisted language preference** (2026-07-25).
   All authenticated views and shared UI have English, Spanish, and Canadian
   French coverage, including dynamic dialogs, loading states, accessible
@@ -260,8 +292,12 @@ The product is household-first. All financial data must belong to a household.
 - recurring_autopost_log
 - month_closures
 
-Pending migration prepared locally: `20260725120000_payees_bulk_merge.sql`
-(adds the `merge_payees_bulk` function; no new table).
+Pending migrations prepared locally:
+- `20260725120000_payees_bulk_merge.sql` (adds the `merge_payees_bulk`
+  function; no new table).
+- `20260728120000_br_032_038_ui_preferences.sql` (adds
+  `profiles.ui_preferences` jsonb + an object-shape check constraint; no new
+  table, no new policy — `profiles_update_own` already covers it).
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
