@@ -225,10 +225,13 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     { label: 'Year to date', from: `${thisYear}-01-01`, to: today },
     { label: 'All time', from: ALL_TIME_FROM, to: ALL_TIME_TO },
   ]
-  const presetLinks = rawPresets.map((p) => ({
+  // Ranges, not links: a preset stages the From/To fields and waits for
+  // "Apply filters" like every other control here (same fix as the
+  // transactions bar — a navigating preset applied itself on click).
+  const presetOptions = rawPresets.map((p) => ({
     label: p.label,
-    href: reportHref({ dateFrom: p.from, dateTo: p.to }),
-    isActive: dateFrom === p.from && dateTo === p.to,
+    dateFrom: p.from,
+    dateTo: p.to,
   }))
 
   // Deep-link a ranked category into the transactions list, keeping the range.
@@ -336,7 +339,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           accountOptions={accountOptions}
           categoryOptions={categoryOptions}
           tagOptions={tagOptions}
-          presetLinks={presetLinks}
+          presetOptions={presetOptions}
         />
       </div>
 

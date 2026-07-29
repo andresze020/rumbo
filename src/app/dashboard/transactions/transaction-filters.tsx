@@ -1,11 +1,11 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react'
+import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { buttonVariants } from '@/components/ui/button'
-import { MultiSelectChip } from '@/components/multi-select-chip'
+import { MultiSelectChip, type MultiSelectOption } from '@/components/multi-select-chip'
 import { cn } from '@/lib/utils'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
@@ -27,16 +27,17 @@ type TagOption = {
   isArchived?: boolean
 }
 
-type PresetLink = {
+/** A date range the user can stage in the form; applied only on submit. */
+type PresetOption = {
   label: string
-  href: string
-  isActive: boolean
+  dateFrom: string
+  dateTo: string
 }
 
 type TransactionFiltersProps = {
   searchText: string
-  selectedType: string
-  selectedStatus: string
+  selectedTypes: string[]
+  selectedStatuses: string[]
   selectedReview: string
   selectedAccountIds: string[]
   selectedCategoryIds: string[]
@@ -47,20 +48,27 @@ type TransactionFiltersProps = {
   categoryOptions: CategoryOption[]
   tagOptions: TagOption[]
   selectedTagIds: string[]
-  presetLinks: PresetLink[]
-  /** Active payee focus filter, carried through the form so Apply keeps it. */
-  payeeId?: string
+  payeeOptions: MultiSelectOption[]
+  selectedPayeeIds: string[]
+  presetOptions: PresetOption[]
 }
 
+/**
+ * Multi-select, so "income + transfer" is expressible. Nothing selected means
+ * every type, which is why there is no explicit "All" entry — the segmented
+ * control's first cell clears the selection instead.
+ */
 const TYPE_OPTIONS = [
-  { value: 'all', label: 'All' },
   { value: 'income', label: 'Income' },
   { value: 'expense', label: 'Expense' },
   { value: 'transfer', label: 'Transfer' },
 ] as const
 
-const chipSelectClassName =
-  'max-w-[150px] cursor-pointer truncate bg-transparent text-sm font-medium text-foreground outline-none'
+const STATUS_OPTIONS: MultiSelectOption[] = [
+  { id: 'posted', label: 'Posted' },
+  { id: 'pending', label: 'Pending' },
+  { id: 'voided', label: 'Voided' },
+]
 
 /**
  * A labelled control that fills the width as a tappable row on phones and
@@ -80,16 +88,18 @@ const pillCls =
 
 const activePillCls = 'border-primary/40 bg-primary/10 text-primary'
 
-const STATUS_LABELS: Record<string, string> = {
-  posted: 'Posted',
-  pending: 'Pending',
-  voided: 'Voided',
-}
+/** Repeated query params this bar owns. */
+type FilterParam = 'type' | 'status' | 'account_id' | 'category_id' | 'tag_id' | 'payee_id'
+
+const typeButtonCls =
+  'flex-1 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:flex-none sm:rounded-md sm:py-1.5'
+
+const typeButtonActiveCls = 'bg-primary text-primary-foreground shadow-sm hover:text-primary-foreground'
 
 export function TransactionFilters({
   searchText,
-  selectedType,
-  selectedStatus,
+  selectedTypes,
+  selectedStatuses,
   selectedReview,
   selectedAccountIds,
   selectedCategoryIds,
@@ -100,105 +110,164 @@ export function TransactionFilters({
   categoryOptions,
   tagOptions,
   selectedTagIds,
-  presetLinks,
-  payeeId,
+  payeeOptions,
+  selectedPayeeIds,
+  presetOptions,
 }: TransactionFiltersProps) {
   const ui = useUiTranslation()
-  const typeRef = useRef<HTMLInputElement>(null)
   const [moreOpen, setMoreOpen] = useState(false)
   // Phones start with search collapsed behind its pill; it opens with a query
   // already typed so an active search is never invisible.
   const [searchOpen, setSearchOpen] = useState(false)
   // Only one option list at a time — their panels overlap otherwise.
-  const [openChip, setOpenChip] = useState<null | 'account' | 'category' | 'tag'>(null)
+  const [openChip, setOpenChip] = useState<
+    null | 'account' | 'category' | 'tag' | 'payee' | 'status'
+  >(null)
 
-  function selectType(form: HTMLFormElement | null, value: string) {
-    if (!form) return
-    // The chip selects auto-submit without a submitter, so `type` is carried by
-    // this single hidden input rather than per-button submit values.
-    if (typeRef.current) typeRef.current.value = value
-    form.requestSubmit()
+  // Every control is staged locally and only reaches the server on submit, so
+  // "Apply filters" means what it says. Presets used to be links that navigated
+  // on click, which applied a range the user had not confirmed — and dismissing
+  // the sheet left it stuck on.
+  const [types, setTypes] = useState<string[]>(selectedTypes)
+  const [dateFrom, setDateFrom] = useState(resolvedDateFrom)
+  const [dateTo, setDateTo] = useState(resolvedDateTo)
+
+  function toggleType(value: string) {
+    setTypes((current) =>
+      current.includes(value)
+        ? current.filter((entry) => entry !== value)
+        : [...current, value]
+    )
   }
 
   const moreFiltersCount =
     selectedAccountIds.length +
     selectedCategoryIds.length +
     selectedTagIds.length +
-    (selectedStatus !== 'all' ? 1 : 0)
+    selectedPayeeIds.length +
+    selectedStatuses.length
 
   /**
-   * The current filter state as a URL, minus one value. Powers the mobile
-   * summary chips: on phones the secondary bar is collapsed, so without these
-   * you can see *that* something is filtered (the badge count) but not what —
-   * and you have to open the panel to undo it.
+   * The applied filter state as a URL, minus one value. Powers the mobile
+   * summary chips: on phones the secondary controls are behind a sheet, so
+   * without these you can see *that* something is filtered (the badge count)
+   * but not what — and undoing one would mean opening the sheet.
+   *
+   * Built from the **applied** props, never the staged state: these are links,
+   * so they must describe a view the server already knows about.
    */
-  function hrefWithout(param: 'account_id' | 'category_id' | 'tag_id' | 'status', value?: string) {
+  function hrefWithout(param: FilterParam, value?: string) {
     const params = new URLSearchParams()
-    if (selectedType !== 'all') params.set('type', selectedType)
     if (selectedReview !== 'all') params.set('review', selectedReview)
     if (searchText) params.set('search', searchText)
-    if (payeeId) params.set('payee_id', payeeId)
     params.set('date_from', resolvedDateFrom)
     params.set('date_to', resolvedDateTo)
 
-    const keep = (name: 'account_id' | 'category_id' | 'tag_id', ids: string[]) => {
-      for (const id of ids) {
-        if (param === name && id === value) continue
-        params.append(name, id)
+    const keep = (name: FilterParam, values: string[]) => {
+      for (const entry of values) {
+        if (param === name && entry === value) continue
+        params.append(name, entry)
       }
     }
+    keep('type', selectedTypes)
+    keep('status', selectedStatuses)
     keep('account_id', selectedAccountIds)
     keep('category_id', selectedCategoryIds)
     keep('tag_id', selectedTagIds)
-    if (selectedStatus !== 'all' && param !== 'status') {
-      params.set('status', selectedStatus)
-    }
+    keep('payee_id', selectedPayeeIds)
 
     return `/dashboard/transactions?${params.toString()}`
   }
 
+  const labelOf = (options: MultiSelectOption[], id: string, fallback: string) =>
+    options.find((option) => option.id === id)?.label ?? fallback
+
+  /**
+   * Multi-toggle segmented control, shared by the desktop toolbar and the
+   * mobile sheet so both offer the same thing. "All" is not a fourth value —
+   * it clears the selection, which is what an empty list already means.
+   */
+  const typeToggle = (
+    <div
+      role="group"
+      aria-label={ui('Filter by type')}
+      className="flex w-full rounded-xl border bg-background p-0.5 sm:w-auto sm:rounded-lg"
+    >
+      <button
+        type="button"
+        onClick={() => setTypes([])}
+        aria-pressed={types.length === 0}
+        className={cn(typeButtonCls, types.length === 0 && typeButtonActiveCls)}
+      >
+        {ui('All')}
+      </button>
+      {TYPE_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => toggleType(option.value)}
+          aria-pressed={types.includes(option.value)}
+          className={cn(
+            typeButtonCls,
+            types.includes(option.value) && typeButtonActiveCls
+          )}
+        >
+          {ui(option.label)}
+        </button>
+      ))}
+    </div>
+  )
+
   const activeChips: { key: string; label: string; href: string }[] = [
+    ...selectedTypes.map((value) => ({
+      key: `type-${value}`,
+      label: ui(TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value),
+      href: hrefWithout('type', value),
+    })),
     ...selectedAccountIds.map((id) => ({
       key: `account-${id}`,
-      label: accountOptions.find((o) => o.id === id)?.label ?? ui('Account'),
+      label: labelOf(accountOptions, id, ui('Account')),
       href: hrefWithout('account_id', id),
     })),
     ...selectedCategoryIds.map((id) => ({
       key: `category-${id}`,
-      label: categoryOptions.find((o) => o.id === id)?.label ?? ui('Category'),
+      label: labelOf(categoryOptions, id, ui('Category')),
       href: hrefWithout('category_id', id),
+    })),
+    ...selectedPayeeIds.map((id) => ({
+      key: `payee-${id}`,
+      label: labelOf(payeeOptions, id, ui('Payee')),
+      href: hrefWithout('payee_id', id),
     })),
     ...selectedTagIds.map((id) => ({
       key: `tag-${id}`,
-      label: tagOptions.find((o) => o.id === id)?.label ?? ui('Tags'),
+      label: labelOf(tagOptions, id, ui('Tags')),
       href: hrefWithout('tag_id', id),
     })),
-    ...(selectedStatus !== 'all'
-      ? [
-          {
-            key: 'status',
-            label: ui(STATUS_LABELS[selectedStatus] ?? selectedStatus),
-            href: hrefWithout('status'),
-          },
-        ]
-      : []),
+    ...selectedStatuses.map((value) => ({
+      key: `status-${value}`,
+      label: ui(labelOf(STATUS_OPTIONS, value, value)),
+      href: hrefWithout('status', value),
+    })),
   ]
 
   return (
     <form method="get" action="/dashboard/transactions" className="space-y-2.5">
-      <input type="hidden" name="type" ref={typeRef} defaultValue={selectedType} />
+      {/* Staged type selection travels as one hidden input per value, so it
+          round-trips as repeated `type` params like every other multi-filter. */}
+      {types.map((value) => (
+        <input key={value} type="hidden" name="type" value={value} />
+      ))}
       {selectedReview !== 'all' ? (
         <input type="hidden" name="review" value={selectedReview} />
       ) : null}
-      {payeeId ? <input type="hidden" name="payee_id" value={payeeId} /> : null}
 
-      {/* ── Mobile: one scrollable line of pills ────────────────────────
+      {/* ── Mobile: one line of pills ───────────────────────────────────
           Phones get a native-style control strip instead of the desktop
-          toolbar: search collapses to an icon, the type toggle becomes a
-          dropdown, and the active filters sit inline. Three stacked rows
-          become one, so the list starts near the top of the screen. */}
-      {/* Wraps rather than scrolls sideways: an off-screen filter is a filter
-          you forget you set. With one or two active it stays a single line. */}
+          toolbar: search collapses to an icon, everything else lives in the
+          sheet, and whatever is applied shows as a removable chip.
+          Wraps rather than scrolls sideways: an off-screen filter is a filter
+          you forget you set. */}
       <div className="flex flex-wrap items-center gap-1.5 sm:hidden">
         <button
           type="button"
@@ -210,26 +279,6 @@ export function TransactionFilters({
           <Search className="size-3.5 shrink-0" aria-hidden="true" />
           {searchText ? <span className="max-w-[90px] truncate">{searchText}</span> : null}
         </button>
-
-        <label
-          className={cn(pillCls, selectedType !== 'all' && activePillCls)}
-          // The chevron sits inside the pill, so the whole thing reads as one
-          // control rather than a bare native select.
-        >
-          <select
-            value={selectedType}
-            onChange={(e) => selectType(e.currentTarget.form, e.target.value)}
-            aria-label={ui('Filter by type')}
-            className="cursor-pointer appearance-none bg-transparent pr-1 text-xs font-medium outline-none"
-          >
-            {TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value} className="text-foreground">
-                {ui(option.label)}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="size-3 shrink-0 opacity-60" aria-hidden="true" />
-        </label>
 
         <button
           type="button"
@@ -267,27 +316,7 @@ export function TransactionFilters({
           searchOpen ? 'flex' : 'hidden sm:flex'
         )}
       >
-        <div className="hidden shrink-0 rounded-lg border bg-background p-0.5 sm:flex">
-          {TYPE_OPTIONS.map((option) => {
-            const isActive = selectedType === option.value
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={(e) => selectType(e.currentTarget.form, option.value)}
-                aria-pressed={isActive}
-                className={cn(
-                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {ui(option.label)}
-              </button>
-            )
-          })}
-        </div>
+        <div className="hidden shrink-0 sm:block">{typeToggle}</div>
 
         <div className="relative min-w-[140px] flex-1">
           <Search
@@ -356,6 +385,11 @@ export function TransactionFilters({
           {/* ── Narrow down ──────────────────────────────────────────── */}
           <section className="space-y-2 sm:contents">
             <p className={sectionLabelCls}>{ui('Narrow down')}</p>
+
+            {/* The type toggle lives in the sheet on phones and in the toolbar
+                on desktop — same control, rendered once per breakpoint. */}
+            <div className="sm:hidden">{typeToggle}</div>
+
             <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
               <MultiSelectChip
                 label={ui('Account')}
@@ -375,6 +409,17 @@ export function TransactionFilters({
                 onOpenChange={(next) => setOpenChip(next ? 'category' : null)}
               />
 
+              {payeeOptions.length > 0 || selectedPayeeIds.length > 0 ? (
+                <MultiSelectChip
+                  label={ui('Payee')}
+                  name="payee_id"
+                  options={payeeOptions}
+                  selectedIds={selectedPayeeIds}
+                  open={openChip === 'payee'}
+                  onOpenChange={(next) => setOpenChip(next ? 'payee' : null)}
+                />
+              ) : null}
+
               {tagOptions.length > 0 || selectedTagIds.length > 0 ? (
                 <MultiSelectChip
                   label={ui('Tags')}
@@ -386,26 +431,17 @@ export function TransactionFilters({
                 />
               ) : null}
 
-              <label className={fieldRowCls}>
-                <span className="text-xs font-medium text-muted-foreground">
-                  {ui('Status')}
-                </span>
-                <select
-                  name="status"
-                  defaultValue={selectedStatus}
-                  className={cn(chipSelectClassName, 'min-w-0 flex-1 sm:flex-none')}
-                  aria-label={ui('Filter by status')}
-                >
-                  <option value="all">{ui('All')}</option>
-                  <option value="posted">{ui('Posted')}</option>
-                  <option value="pending">{ui('Pending')}</option>
-                  <option value="voided">{ui('Voided')}</option>
-                </select>
-                <ChevronDown
-                  className="size-4 shrink-0 text-muted-foreground sm:hidden"
-                  aria-hidden="true"
-                />
-              </label>
+              <MultiSelectChip
+                label={ui('Status')}
+                name="status"
+                options={STATUS_OPTIONS.map((option) => ({
+                  ...option,
+                  label: ui(option.label),
+                }))}
+                selectedIds={selectedStatuses}
+                open={openChip === 'status'}
+                onOpenChange={(next) => setOpenChip(next ? 'status' : null)}
+              />
             </div>
           </section>
 
@@ -416,44 +452,51 @@ export function TransactionFilters({
             {/* Presets and the custom range share one row on desktop, as
                 before, and stack on phones. */}
             <div className="space-y-2 sm:flex sm:flex-wrap sm:items-center sm:gap-1.5 sm:space-y-0">
-              {/* An even two-column grid on phones instead of a ragged wrap. */}
+              {/* An even two-column grid on phones instead of a ragged wrap.
+                  Buttons, not links: a preset stages the range in the From/To
+                  fields and waits for Apply, like everything else here. */}
               <div className="grid grid-cols-2 gap-2 sm:contents">
-                {presetLinks.map((link) => (
-                  <Link
-                    key={link.label}
-                    href={link.href}
-                    aria-current={link.isActive ? 'true' : undefined}
-                    className={cn(
-                      buttonVariants({
-                        // Solid primary fill for the active preset (matching the
-                        // type toggle) so the selected range is obvious, not a
-                        // faint tint.
-                        variant: link.isActive ? 'default' : 'outline',
-                        size: 'sm',
-                      }),
-                      'h-10 w-full rounded-xl sm:h-8 sm:w-auto sm:rounded-lg'
-                    )}
-                  >
-                    {ui(link.label)}
-                  </Link>
-                ))}
+                {presetOptions.map((preset) => {
+                  const isActive =
+                    dateFrom === preset.dateFrom && dateTo === preset.dateTo
+                  return (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        setDateFrom(preset.dateFrom)
+                        setDateTo(preset.dateTo)
+                      }}
+                      aria-pressed={isActive}
+                      className={cn(
+                        buttonVariants({
+                          // Solid primary fill for the staged preset (matching
+                          // the type toggle) so the chosen range is obvious,
+                          // not a faint tint.
+                          variant: isActive ? 'default' : 'outline',
+                          size: 'sm',
+                        }),
+                        'h-10 w-full rounded-xl sm:h-8 sm:w-auto sm:rounded-lg'
+                      )}
+                    >
+                      {ui(preset.label)}
+                    </button>
+                  )
+                })}
               </div>
 
-              {/* `key` ties each uncontrolled input to the server-resolved range so a
-                  client-side preset navigation remounts it with the new value. Without
-                  this, `defaultValue` is ignored on re-render and the field keeps its
-                  stale (e.g. this-month) value, which "Apply filters" would then
-                  re-submit and clobber the range the user just picked (BF-024). */}
+              {/* Controlled, so a preset click is reflected here immediately and
+                  the pair always submits exactly what the user sees. */}
               <div className="grid grid-cols-2 gap-2 sm:contents">
                 <label className={fieldRowCls}>
                   <span className="text-xs font-medium text-muted-foreground">
                     {ui('From')}
                   </span>
                   <input
-                    key={resolvedDateFrom}
                     type="date"
                     name="date_from"
-                    defaultValue={resolvedDateFrom}
+                    value={dateFrom}
+                    onChange={(event) => setDateFrom(event.target.value)}
                     className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none sm:flex-none"
                     aria-label={ui('From date')}
                   />
@@ -464,10 +507,10 @@ export function TransactionFilters({
                     {ui('To')}
                   </span>
                   <input
-                    key={resolvedDateTo}
                     type="date"
                     name="date_to"
-                    defaultValue={resolvedDateTo}
+                    value={dateTo}
+                    onChange={(event) => setDateTo(event.target.value)}
                     className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none sm:flex-none"
                     aria-label={ui('To date')}
                   />

@@ -147,10 +147,10 @@ type TransactionFilters = {
   dateFrom: string
   dateTo: string
   search: string
-  status: string
+  statuses: string[]
   review: string
-  type: string
-  payeeId: string
+  types: string[]
+  payeeIds: string[]
   tagIds: string[]
 }
 
@@ -230,6 +230,31 @@ function normalizeOption(value: string | undefined, allowedValues: string[]) {
   return value && allowedValues.includes(value) ? value : 'all'
 }
 
+/** Repeated query params → a trimmed, de-duplicated id list. */
+function toIdList(raw: string | string[] | undefined): string[] {
+  const values = Array.isArray(raw) ? raw : raw ? [raw] : []
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+}
+
+/** Same, but keeping only values the column actually allows. */
+function normalizeOptions(
+  raw: string | string[] | undefined,
+  allowedValues: readonly string[]
+): string[] {
+  return toIdList(raw).filter((value) => allowedValues.includes(value))
+}
+
+const TRANSACTION_TYPE_VALUES = [
+  'income',
+  'expense',
+  'transfer',
+  'opening_balance',
+  'debt_payment',
+  'adjustment',
+] as const
+
+const STATUS_VALUES = ['posted', 'pending', 'voided'] as const
+
 type TransactionGroup = {
   date: string
   label: string
@@ -301,33 +326,25 @@ function transactionsPath(
   if (filters.dateFrom && filters.dateTo) {
     params.set('date_from', filters.dateFrom)
     params.set('date_to', filters.dateTo)
-  } else if (!filters.payeeId && filters.tagIds.length === 0) {
+  } else if (filters.payeeIds.length === 0 && filters.tagIds.length === 0) {
     // A payee/tag filter with no explicit range is an all-time view of that
     // payee/tag — don't pin it to the current month, or navigating back to this
     // URL would hide its transactions from other months.
     params.set('month', filters.month || currentMonth())
   }
 
-  if (filters.type !== 'all') params.set('type', filters.type)
-  if (filters.status !== 'all') params.set('status', filters.status)
+  for (const value of filters.types) params.append('type', value)
+  for (const value of filters.statuses) params.append('status', value)
   if (filters.review !== 'all') params.set('review', filters.review)
   for (const id of filters.accountIds) params.append('account_id', id)
   for (const id of filters.categoryIds) params.append('category_id', id)
   if (filters.search) params.set('search', filters.search)
-  if (filters.payeeId) params.set('payee_id', filters.payeeId)
+  for (const id of filters.payeeIds) params.append('payee_id', id)
   for (const id of filters.tagIds) params.append('tag_id', id)
   if (panel?.mode) params.set('mode', panel.mode)
   if (panel?.edit) params.set('edit', panel.edit)
 
   return `/dashboard/transactions?${params.toString()}`
-}
-
-function presetPath(
-  filters: TransactionFilters,
-  dateFrom: string,
-  dateTo: string
-) {
-  return transactionsPath({ ...filters, dateFrom, dateTo, month: '' })
 }
 
 /**
@@ -430,52 +447,26 @@ export default async function TransactionsPage({
     resolvedDateTo = monthLastDay(resolvedMonth)
   }
 
-  const selectedType = normalizeOption(params.type, [
-    'income',
-    'expense',
-    'transfer',
-    'opening_balance',
-    'debt_payment',
-    'adjustment',
-  ])
-  const selectedStatus = normalizeOption(params.status, [
-    'posted',
-    'pending',
-    'voided',
-  ])
+  // Type, status and payee are multi-value like account/category/tag: an empty
+  // list means "all", so "no filter" and "every option ticked" stay the same
+  // query. Unknown values are dropped rather than passed through to the RPC.
+  const selectedTypes = normalizeOptions(params.type, TRANSACTION_TYPE_VALUES)
+  const selectedStatuses = normalizeOptions(params.status, STATUS_VALUES)
   const selectedReview = normalizeOption(params.review, [
     'unreviewed',
     'reviewed',
     'flagged',
   ])
-  const rawAccountIds = params.account_id
-  const selectedAccountIds: string[] = Array.isArray(rawAccountIds)
-    ? rawAccountIds
-    : rawAccountIds
-    ? [rawAccountIds]
-    : []
-  const rawCategoryIds = params.category_id
-  const selectedCategoryIds: string[] = Array.isArray(rawCategoryIds)
-    ? rawCategoryIds
-    : rawCategoryIds
-    ? [rawCategoryIds]
-    : []
+  const selectedAccountIds = toIdList(params.account_id)
+  const selectedCategoryIds = toIdList(params.category_id)
   const searchText = typeof params.search === 'string' ? params.search.trim() : ''
-  const selectedPayeeId =
-    typeof params.payee_id === 'string' && params.payee_id.trim()
-      ? params.payee_id.trim()
-      : ''
-  const rawTagIds = params.tag_id
-  const selectedTagIds: string[] = (
-    Array.isArray(rawTagIds) ? rawTagIds : rawTagIds ? [rawTagIds] : []
-  )
-    .map((id) => id.trim())
-    .filter(Boolean)
+  const selectedPayeeIds = toIdList(params.payee_id)
+  const selectedTagIds = toIdList(params.tag_id)
 
   // A payee/tag filter defaults to an all-time view; only constrain by date when
   // the user has explicitly picked a month or a custom range.
   const applyDateWindow =
-    (!selectedPayeeId && selectedTagIds.length === 0) ||
+    (selectedPayeeIds.length === 0 && selectedTagIds.length === 0) ||
     hasCustomDateRange ||
     params.month !== undefined
 
@@ -486,23 +477,23 @@ export default async function TransactionsPage({
     dateFrom: hasCustomDateRange ? resolvedDateFrom : '',
     dateTo: hasCustomDateRange ? resolvedDateTo : '',
     search: searchText,
-    status: selectedStatus,
+    statuses: selectedStatuses,
     review: selectedReview,
-    type: selectedType,
-    payeeId: selectedPayeeId,
+    types: selectedTypes,
+    payeeIds: selectedPayeeIds,
     tagIds: selectedTagIds,
   }
 
   const hasActiveFilters =
     hasCustomDateRange ||
     params.month !== undefined ||
-    selectedType !== 'all' ||
-    selectedStatus !== 'all' ||
+    selectedTypes.length > 0 ||
+    selectedStatuses.length > 0 ||
     selectedReview !== 'all' ||
     selectedAccountIds.length > 0 ||
     selectedCategoryIds.length > 0 ||
     searchText.length > 0 ||
-    selectedPayeeId.length > 0 ||
+    selectedPayeeIds.length > 0 ||
     selectedTagIds.length > 0
 
   const editTransactionId =
@@ -557,10 +548,18 @@ export default async function TransactionsPage({
     .eq('household_id', household.id)
     .order('name', { ascending: true })
   const payeeOptions = (payeeRows ?? []) as { id: string; name: string }[]
-  const selectedPayeeName = selectedPayeeId
-    ? payeeOptions.find((p) => p.id === selectedPayeeId)?.name ?? null
-    : null
-  const clearPayeeHref = transactionsPath({ ...filters, payeeId: '' })
+  // The focus banner only makes sense for a single payee — it's what the
+  // Payees page's "View transactions" button produces. With several picked,
+  // the filter chips carry the story instead.
+  const selectedPayeeName =
+    selectedPayeeIds.length === 1
+      ? payeeOptions.find((p) => p.id === selectedPayeeIds[0])?.name ?? null
+      : null
+  const clearPayeeHref = transactionsPath({ ...filters, payeeIds: [] })
+  const payeeFilterOptions = payeeOptions.map((payee) => ({
+    id: payee.id,
+    label: payee.name,
+  }))
 
   // BR-023: household tags for the edit picker + list chips. Load all (incl.
   // archived) so a transaction tagged with a since-archived tag still renders
@@ -642,11 +641,11 @@ export default async function TransactionsPage({
       p_household_id: household.id,
       p_date_from: applyDateWindow ? resolvedDateFrom : null,
       p_date_to: applyDateWindow ? resolvedDateTo : null,
-      p_type: selectedType !== 'all' ? selectedType : null,
-      p_status: selectedStatus !== 'all' ? selectedStatus : null,
+      p_types: selectedTypes.length ? selectedTypes : null,
+      p_statuses: selectedStatuses.length ? selectedStatuses : null,
       p_review: selectedReview !== 'all' ? selectedReview : null,
       p_search: searchText || null,
-      p_payee_id: selectedPayeeId || null,
+      p_payee_ids: selectedPayeeIds.length ? selectedPayeeIds : null,
       p_account_ids: selectedAccountIds.length ? selectedAccountIds : null,
       p_category_ids: effectiveCategoryIds.size
         ? Array.from(effectiveCategoryIds)
@@ -960,10 +959,14 @@ export default async function TransactionsPage({
     { label: 'Year to date', from: `${thisYear}-01-01`, to: todayStr },
     { label: 'All time', from: ALL_TIME_FROM, to: ALL_TIME_TO },
   ]
-  const presetLinks = rawPresets.map((p) => ({
+  // Presets carry their raw range, not a link: clicking one has to stage the
+  // range in the form and wait for "Apply filters" like every other control.
+  // A navigating preset applied itself immediately, so dismissing the sheet
+  // left a range the user never confirmed.
+  const presetOptions = rawPresets.map((p) => ({
     label: p.label,
-    href: presetPath(filters, p.from, p.to),
-    isActive: resolvedDateFrom === p.from && resolvedDateTo === p.to,
+    dateFrom: p.from,
+    dateTo: p.to,
   }))
 
   const accountOptions = allAccounts.map((a) => {
@@ -1171,7 +1174,7 @@ export default async function TransactionsPage({
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
 
       {/* ── Payee focus chip ───────────────────────────────────────────── */}
-      {selectedPayeeId ? (
+      {selectedPayeeName ? (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-primary/5 px-3 py-2 text-sm">
           <Store className="size-4 shrink-0 text-primary" aria-hidden="true" />
           <span className="text-muted-foreground">{ui('Showing all transactions for')}</span>
@@ -1193,8 +1196,8 @@ export default async function TransactionsPage({
       <div className="sm:rounded-xl sm:border sm:bg-card sm:p-3 sm:shadow-sm sm:shadow-black/[0.03]">
         <TransactionFilters
           searchText={searchText}
-          selectedType={selectedType}
-          selectedStatus={selectedStatus}
+          selectedTypes={selectedTypes}
+          selectedStatuses={selectedStatuses}
           selectedReview={selectedReview}
           selectedAccountIds={selectedAccountIds}
           selectedCategoryIds={selectedCategoryIds}
@@ -1205,8 +1208,9 @@ export default async function TransactionsPage({
           categoryOptions={categoryOpts}
           tagOptions={tagFilterOptions}
           selectedTagIds={selectedTagIds}
-          presetLinks={presetLinks}
-          payeeId={selectedPayeeId}
+          payeeOptions={payeeFilterOptions}
+          selectedPayeeIds={selectedPayeeIds}
+          presetOptions={presetOptions}
         />
       </div>
 
