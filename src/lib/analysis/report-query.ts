@@ -29,6 +29,17 @@ export type ReportFilters = {
   tagIds: string[]
 }
 
+/** BR-042: one week inside the selected month. */
+export type SubPeriod = {
+  /** ISO start/end of the week, already clipped to the selected month. */
+  dateFrom: string
+  dateTo: string
+  income: number
+  expenses: number
+  net: number
+  txCount: number
+}
+
 export type ReportData = {
   income: number
   expenses: number
@@ -40,6 +51,12 @@ export type ReportData = {
   categories: CategorySlice[]
   merchants: MerchantSlice[]
   trend: MonthlyPoint[]
+  /**
+   * Week-by-week rollup of the selected range, or `null` when the range isn't a
+   * single month (BR-042's first slice is weeks-within-month only —
+   * months-within-year comes later).
+   */
+  subPeriods: SubPeriod[] | null
 }
 
 export type CategoryLookup = {
@@ -68,6 +85,8 @@ type FilteredRow = {
   id: string
   type: 'income' | 'expense'
   merchant: string
+  /** `YYYY-MM-DD` — the transaction's own date, for sub-period grouping. */
+  date: string
   month: string
   baseSigned: number
   categoryId: string | null
@@ -192,6 +211,7 @@ async function fetchFilteredRows(
       id: tx.id,
       type: tx.transaction_type === 'income' ? 'income' : 'expense',
       merchant: tx.merchant_name?.trim() || 'Uncategorized',
+      date: tx.transaction_date,
       month: tx.transaction_date.slice(0, 7),
       baseSigned: baseByTx.get(tx.id) ?? 0,
       categoryId: alloc?.category_id ?? null,
@@ -201,6 +221,68 @@ async function fetchFilteredRows(
   }
 
   return rows
+}
+
+/** Adds whole days to a `YYYY-MM-DD` date, staying on the calendar grid. */
+function addDays(iso: string, days: number) {
+  const [year, month, day] = iso.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10)
+}
+
+/**
+ * BR-042 — splits a single-month range into ISO weeks (Monday-start) clipped to
+ * the month, and totals each one. Clipping is what guarantees the invariant
+ * that matters: the weeks partition the month exactly, so their totals always
+ * sum back to the month totals shown above them. Weeks with no activity are
+ * kept, rendering as zero rows rather than silently disappearing.
+ *
+ * Returns null unless the range is one calendar month — a multi-month range
+ * would want month rows instead, which is a later slice.
+ */
+function buildSubPeriods(
+  rows: FilteredRow[],
+  dateFrom: string,
+  dateTo: string
+): SubPeriod[] | null {
+  const month = dateFrom.slice(0, 7)
+  const [year, monthNumber] = month.split('-').map(Number)
+  const monthStart = `${month}-01`
+  const monthEnd = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10)
+  if (dateFrom !== monthStart || dateTo !== monthEnd) return null
+
+  const periods: SubPeriod[] = []
+  let cursor = monthStart
+  while (cursor <= monthEnd) {
+    // 0 = Sunday … 6 = Saturday; shift so Monday is the start of the week.
+    const [y, m, d] = cursor.split('-').map(Number)
+    const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+    const daysToSunday = (7 - ((weekday + 6) % 7)) - 1
+    const weekEnd = addDays(cursor, daysToSunday)
+    const periodEnd = weekEnd > monthEnd ? monthEnd : weekEnd
+
+    periods.push({
+      dateFrom: cursor,
+      dateTo: periodEnd,
+      income: 0,
+      expenses: 0,
+      net: 0,
+      txCount: 0,
+    })
+    cursor = addDays(periodEnd, 1)
+  }
+
+  for (const row of rows) {
+    const period = periods.find((p) => row.date >= p.dateFrom && row.date <= p.dateTo)
+    if (!period) continue
+    if (row.type === 'income') period.income += row.baseSigned
+    else period.expenses += Math.abs(row.baseSigned)
+    period.txCount += 1
+  }
+  for (const period of periods) {
+    period.net = period.income - period.expenses
+  }
+
+  return periods
 }
 
 export async function getReportData(
@@ -298,5 +380,6 @@ export async function getReportData(
     categories,
     merchants,
     trend,
+    subPeriods: buildSubPeriods(rangeRows, filters.dateFrom, filters.dateTo),
   }
 }

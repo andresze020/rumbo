@@ -83,6 +83,7 @@ const phrases = [
 const missing = []
 const unchanged = []
 const allowedUnchanged = new Set([
+  '1 transaction',
   'Actions',
   'App Finanzas',
   'Assistant',

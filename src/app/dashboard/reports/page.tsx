@@ -381,6 +381,57 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         />
       </div>
 
+      {/* BR-042: week-by-week rollup, shown only when the range is one month.
+          Each row links to the transactions list filtered to that week. */}
+      {report.subPeriods ? (
+        <div className={cn(CARD, 'p-4 sm:p-5')}>
+          <h2 className="mb-1 text-sm font-bold">Week by week</h2>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Each week of the selected month. Weeks add up to the month totals above.
+          </p>
+          <ul className="divide-y">
+            {report.subPeriods.map((period) => (
+              <li key={period.dateFrom}>
+                <Link
+                  href={`/dashboard/transactions?date_from=${period.dateFrom}&date_to=${period.dateTo}`}
+                  className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/40"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium">
+                      {formatIsoDateRange(period.dateFrom, period.dateTo, locale)}
+                    </span>
+                    <span className="block text-[11.5px] text-muted-foreground">
+                      {period.txCount === 1
+                        ? '1 transaction'
+                        : `${period.txCount} transactions`}
+                    </span>
+                  </span>
+                  <span className="hidden shrink-0 text-right text-[11.5px] tabular-nums sm:block">
+                    <span className="block text-emerald-600 dark:text-emerald-400">
+                      +{formatCurrency(period.income, currency, locale)}
+                    </span>
+                    <span className="block text-red-600 dark:text-red-400">
+                      −{formatCurrency(period.expenses, currency, locale)}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      'w-28 shrink-0 text-right text-sm font-semibold tabular-nums',
+                      period.net >= 0
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-red-600 dark:text-red-400'
+                    )}
+                  >
+                    {period.net >= 0 ? '+' : '−'}
+                    {formatCurrency(Math.abs(period.net), currency, locale)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {/* Tabs */}
       <div className="flex w-full gap-1 overflow-x-auto rounded-xl border bg-muted/40 p-1 sm:w-fit">
         {TABS.map((tab) => {
