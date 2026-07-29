@@ -128,6 +128,18 @@
 phones, so BR-047's "Move to main level" button and the edit form's parent
 dropdown both stay. Drag-and-drop is the fast path, not the only path.
 
+**BR-048 shipped** in the same sprint (2026-07-29). `sortable-category-list.tsx`
+now renders one `DndContext` per type group over a **flattened** `{category,
+depth, childCount}` list; `projectDrop` reads the drag's horizontal offset to
+decide the landing depth, clamped to the two levels the schema allows (a
+category with children can never leave depth 0). `moveCategoryAction` writes
+`parent_category_id` and the destination siblings' `sort_order` together,
+re-checking every rule `validateParentCategory` enforces and rolling the parent
+change back by hand if the reorder fails. Rejections return a message instead
+of redirecting, so the row springs back and the reason is shown.
+`reorderCategoriesAction` was removed — `moveCategoryAction` supersedes it.
+Still not built: multi-select drag.
+
 ### Status — 2026-07-28
 
 Shipped on `sprint/mobile-capture-parity` (not yet merged): **BR-032, BR-033,

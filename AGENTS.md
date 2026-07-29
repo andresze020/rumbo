@@ -63,10 +63,25 @@ The product is household-first. All financial data must belong to a household.
     the duplicate header actions are dropped on phones, and `MultiSelectChip`
     takes a controlled `open` so only one option list shows at a time (also
     applied to `/dashboard/reports`).
-  - **BR-048** (drag-and-drop category nesting) was raised during this sprint's
-    QA and documented in `docs/alpha/benchmark-follow-up-issues.md`; **not
-    built**. It needs the dnd-kit *tree* pattern (one `DndContext` over a
-    flattened list), not the current per-level sibling lists.
+  - **BR-048 drag-and-drop category nesting** (raised and built in this sprint's
+    QA). `sortable-category-list.tsx` renders one `DndContext` per type group
+    over a flattened `{category, depth, childCount}` list; `projectDrop` reads
+    the drag's horizontal offset for the landing depth, clamped to the two
+    levels the schema allows. New `moveCategoryAction` writes
+    `parent_category_id` + the destination siblings' `sort_order` together and
+    re-checks every `validateParentCategory` rule, returning a message (not a
+    redirect) so a rejected drop springs back. `reorderCategoriesAction` was
+    removed as superseded.
+  - **Transaction filters take multiple values.** Migration
+    `20260729120000_multi_value_transaction_filters.sql` (**pending `db push`**)
+    swaps `search_household_transactions`' `p_type`/`p_status`/`p_payee_id` for
+    `p_types`/`p_statuses`/`p_payee_ids` arrays — **the old signature is DROPped
+    first**, since `create or replace` cannot change a parameter's name or type
+    and would leave an ambiguous overload. Type is a multi-toggle segmented
+    control, status and payee are multi-selects, and date presets stage the
+    From/To fields instead of navigating (they used to apply on click, so
+    dismissing the sheet left an unconfirmed range applied). Same preset fix on
+    `/dashboard/reports`.
 - **Full UI localization + persisted language preference** (2026-07-25).
   All authenticated views and shared UI have English, Spanish, and Canadian
   French coverage, including dynamic dialogs, loading states, accessible
@@ -310,6 +325,9 @@ Pending migrations prepared locally:
 - `20260728120000_br_032_038_ui_preferences.sql` (adds
   `profiles.ui_preferences` jsonb + an object-shape check constraint; no new
   table, no new policy — `profiles_update_own` already covers it).
+- `20260729120000_multi_value_transaction_filters.sql` (drops and recreates
+  `search_household_transactions` with array type/status/payee params; no
+  schema change).
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
