@@ -101,6 +101,7 @@ const allowedUnchanged = new Set([
   'Description',
   'Distribution ·',
   'Email',
+  'Excel (.xlsx)',
   'Finanzas',
   'Manual',
   'Menu',

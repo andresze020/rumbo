@@ -22,9 +22,21 @@ type ExportStatus = {
   loading: ExportKind | null
 }
 
-const formatOptions: Array<{ value: ExportFormat; label: string; hint: string }> = [
-  { value: 'xlsx', label: 'Excel (.xlsx)', hint: 'Opens directly in Excel, Sheets or LibreOffice.' },
-  { value: 'csv', label: 'CSV', hint: 'Plain text, best for importing into other tools.' },
+const formatOptions: Array<{
+  format: ExportFormat
+  label: string
+  description: string
+}> = [
+  {
+    format: 'xlsx',
+    label: 'Excel (.xlsx)',
+    description: 'Opens directly in Excel, Sheets or LibreOffice.',
+  },
+  {
+    format: 'csv',
+    label: 'CSV',
+    description: 'Plain text, best for importing into other tools.',
+  },
 ]
 
 const exportOptions: Array<{
@@ -120,6 +132,8 @@ export function ExportDownloadClient() {
     }
   }
 
+  const downloadLabel = format === 'xlsx' ? 'Download Excel' : 'Download CSV'
+
   return (
     <div className="space-y-4">
       {status.error ? (
@@ -139,19 +153,21 @@ export function ExportDownloadClient() {
         <div className="flex flex-col gap-2 sm:flex-row">
           {formatOptions.map((option) => (
             <button
-              key={option.value}
+              key={option.format}
               type="button"
-              aria-pressed={format === option.value}
-              onClick={() => setFormat(option.value)}
+              aria-pressed={format === option.format}
+              onClick={() => setFormat(option.format)}
               className={cn(
                 'flex-1 rounded-lg border px-3 py-2 text-left transition-colors',
-                format === option.value
+                format === option.format
                   ? 'border-primary bg-primary/10'
                   : 'border-border hover:bg-muted'
               )}
             >
               <span className="block text-sm font-medium">{option.label}</span>
-              <span className="block text-xs text-muted-foreground">{option.hint}</span>
+              <span className="block text-xs text-muted-foreground">
+                {option.description}
+              </span>
             </button>
           ))}
         </div>
@@ -172,11 +188,7 @@ export function ExportDownloadClient() {
                 onClick={() => downloadExport(option.type)}
               >
                 <Download />
-                {status.loading === option.type
-                  ? 'Exporting'
-                  : format === 'xlsx'
-                    ? 'Download Excel'
-                    : 'Download CSV'}
+                {status.loading === option.type ? 'Exporting' : downloadLabel}
               </Button>
             </CardContent>
           </Card>
