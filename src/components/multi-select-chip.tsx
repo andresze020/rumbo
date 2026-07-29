@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 
 export type MultiSelectOption = { id: string; label: string; isArchived?: boolean }
 
@@ -52,7 +53,13 @@ export function MultiSelectChip({
         : `${checked.size} selected`
 
   return (
-    <details className="relative shrink-0" open={isControlled ? open : undefined}>
+    // Full-width disclosure row on phones, compact chip from `sm` up: a row of
+    // truncated chips is unusable on a narrow screen, and a floating panel has
+    // nowhere to float inside a bottom sheet.
+    <details
+      className="group relative w-full shrink-0 sm:w-auto"
+      open={isControlled ? open : undefined}
+    >
       <summary
         // With a controlled `open`, the browser's own toggle would fight the
         // prop — take over the click and report the intent instead.
@@ -64,21 +71,25 @@ export function MultiSelectChip({
               }
             : undefined
         }
-        className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg border bg-background px-2.5 [&::-webkit-details-marker]:hidden"
+        className="flex h-11 cursor-pointer list-none items-center gap-1.5 rounded-xl border bg-background px-3 transition-colors hover:bg-muted/50 sm:h-9 sm:rounded-lg sm:px-2.5 [&::-webkit-details-marker]:hidden"
       >
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        <span className="max-w-[120px] truncate text-sm font-medium text-foreground">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground sm:max-w-[120px] sm:flex-none">
           {summary}
         </span>
+        <ChevronDown
+          className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+          aria-hidden="true"
+        />
       </summary>
-      <div className="absolute z-20 mt-1 max-h-60 w-56 overflow-auto rounded-lg border bg-popover p-1 shadow-md">
+      <div className="static mt-1.5 max-h-60 w-full overflow-auto rounded-xl border bg-popover p-1 sm:absolute sm:z-20 sm:mt-1 sm:w-56 sm:rounded-lg sm:shadow-md">
         {options.length === 0 ? (
           <p className="px-2 py-1.5 text-sm text-muted-foreground">No options</p>
         ) : (
           options.map((option) => (
             <label
               key={option.id}
-              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
+              className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2.5 text-sm hover:bg-accent sm:py-1.5"
             >
               <input
                 type="checkbox"
@@ -86,7 +97,7 @@ export function MultiSelectChip({
                 value={option.id}
                 checked={checked.has(option.id)}
                 onChange={(e) => toggle(option.id, e.currentTarget.checked)}
-                className="size-3.5 accent-primary"
+                className="size-4 shrink-0 accent-primary sm:size-3.5"
               />
               <span className="truncate">
                 {option.label}

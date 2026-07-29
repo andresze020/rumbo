@@ -62,8 +62,17 @@ const TYPE_OPTIONS = [
 const chipSelectClassName =
   'max-w-[150px] cursor-pointer truncate bg-transparent text-sm font-medium text-foreground outline-none'
 
-const chipLabelClassName =
-  'flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-background px-2.5'
+/**
+ * A labelled control that fills the width as a tappable row on phones and
+ * shrinks back to a toolbar chip from `sm` up — matching MultiSelectChip, so
+ * the sheet reads as one set of controls rather than several shapes.
+ */
+const fieldRowCls =
+  'flex h-11 w-full items-center gap-1.5 rounded-xl border bg-background px-3 sm:h-9 sm:w-auto sm:shrink-0 sm:rounded-lg sm:px-2.5'
+
+/** Section heading inside the mobile sheet; the desktop toolbar has no sections. */
+const sectionLabelCls =
+  'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:hidden'
 
 /** Mobile control-strip pill: one compact, tappable, horizontally scrolling unit. */
 const pillCls =
@@ -297,147 +306,201 @@ export function TransactionFilters({
       </div>
 
       {/* ── Backdrop for the mobile filter sheet ───────────────────────── */}
+      {/* Above the bottom nav (z-40) and the assistant button (z-50), which
+          would otherwise punch through the sheet. */}
       {moreOpen ? (
         <div
           aria-hidden="true"
           onClick={() => setMoreOpen(false)}
-          className="fixed inset-0 z-40 bg-black/40 duration-200 animate-in fade-in-0 sm:hidden"
+          className="fixed inset-0 z-[60] bg-black/50 duration-200 animate-in fade-in-0 sm:hidden"
         />
       ) : null}
 
       {/* ── Secondary controls: inline on desktop, bottom sheet on phones ─
           One DOM node, styled two ways, rather than two copies: these are real
           form controls, and a second copy would submit a second value for every
-          filter. Kept inside the <form> (no portal) for the same reason. */}
+          filter. Kept inside the <form> (no portal) for the same reason.
+          `sm:contents` unwraps the phone-only structure so the desktop toolbar
+          keeps its original flat rows. */}
       <div
         className={cn(
-          'flex-col gap-2.5',
+          'flex-col',
           moreOpen
-            ? 'fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-2xl border-t bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] duration-200 animate-in slide-in-from-bottom-4'
+            ? 'fixed inset-x-0 bottom-0 z-[61] flex max-h-[88dvh] rounded-t-2xl border-t bg-background shadow-2xl duration-300 animate-in slide-in-from-bottom-8'
             : 'hidden',
-          'sm:static sm:z-auto sm:flex sm:max-h-none sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:animate-none'
+          'sm:static sm:z-auto sm:flex sm:max-h-none sm:gap-2.5 sm:rounded-none sm:border-0 sm:bg-transparent sm:shadow-none sm:animate-none'
         )}
       >
-        <header className="flex items-center justify-between sm:hidden">
-          <h2 className="font-heading text-base font-medium">{ui('Filters')}</h2>
-          <button
-            type="button"
-            onClick={() => setMoreOpen(false)}
-            aria-label={ui('Close')}
-            className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
-          >
-            <X className="size-5" aria-hidden="true" />
-          </button>
-        </header>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <MultiSelectChip
-            label={ui('Account')}
-            name="account_id"
-            options={accountOptions}
-            selectedIds={selectedAccountIds}
-            open={openChip === 'account'}
-            onOpenChange={(next) => setOpenChip(next ? 'account' : null)}
+        {/* Grab handle + title: the affordance that says "this is a sheet". */}
+        <div className="shrink-0 sm:hidden">
+          <div
+            aria-hidden="true"
+            className="mx-auto mt-2.5 h-1 w-9 rounded-full bg-muted-foreground/30"
           />
-
-          <MultiSelectChip
-            label={ui('Category')}
-            name="category_id"
-            options={categoryOptions}
-            selectedIds={selectedCategoryIds}
-            open={openChip === 'category'}
-            onOpenChange={(next) => setOpenChip(next ? 'category' : null)}
-          />
-
-          {tagOptions.length > 0 || selectedTagIds.length > 0 ? (
-            <MultiSelectChip
-              label={ui('Tags')}
-              name="tag_id"
-              options={tagOptions}
-              selectedIds={selectedTagIds}
-              open={openChip === 'tag'}
-              onOpenChange={(next) => setOpenChip(next ? 'tag' : null)}
-            />
-          ) : null}
-
-          <label className={chipLabelClassName}>
-            <span className="text-xs font-medium text-muted-foreground">{ui('Status')}</span>
-            <select
-              name="status"
-              defaultValue={selectedStatus}
-              className={chipSelectClassName}
-              aria-label={ui('Filter by status')}
-            >
-              <option value="all">{ui('All')}</option>
-              <option value="posted">{ui('Posted')}</option>
-              <option value="pending">{ui('Pending')}</option>
-              <option value="voided">{ui('Voided')}</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {presetLinks.map((link) => (
-            <Link
-              key={link.label}
-              href={link.href}
-              aria-current={link.isActive ? 'true' : undefined}
-              className={buttonVariants({
-                // Solid primary fill for the active preset (matching the type
-                // toggle) so the selected range is obvious, not a faint tint.
-                variant: link.isActive ? 'default' : 'outline',
-                size: 'sm',
-              })}
-            >
-              {ui(link.label)}
-            </Link>
-          ))}
-
-          {/* `key` ties each uncontrolled input to the server-resolved range so a
-              client-side preset navigation remounts it with the new value. Without
-              this, `defaultValue` is ignored on re-render and the field keeps its
-              stale (e.g. this-month) value, which "Apply filters" would then
-              re-submit and clobber the range the user just picked (BF-024). */}
-          <label className={chipLabelClassName}>
-            <span className="text-xs font-medium text-muted-foreground">{ui('From')}</span>
-            <input
-              key={resolvedDateFrom}
-              type="date"
-              name="date_from"
-              defaultValue={resolvedDateFrom}
-              className="bg-transparent text-sm text-foreground outline-none"
-              aria-label={ui('From date')}
-            />
-          </label>
-
-          <label className={chipLabelClassName}>
-            <span className="text-xs font-medium text-muted-foreground">{ui('To')}</span>
-            <input
-              key={resolvedDateTo}
-              type="date"
-              name="date_to"
-              defaultValue={resolvedDateTo}
-              className="bg-transparent text-sm text-foreground outline-none"
-              aria-label={ui('To date')}
-            />
-          </label>
-
-          <div className="ml-auto flex items-center gap-1.5">
-            {hasActiveFilters ? (
-              <Link
-                href="/dashboard/transactions"
-                className={buttonVariants({ variant: 'ghost', size: 'sm' })}
-              >
-                {ui('Clear all')}
-              </Link>
-            ) : null}
+          <div className="flex items-center justify-between px-4 pb-1 pt-3">
+            <h2 className="font-heading text-lg font-semibold tracking-tight">
+              {ui('Filters')}
+            </h2>
             <button
-              type="submit"
-              className={buttonVariants({ size: 'sm' })}
+              type="button"
+              onClick={() => setMoreOpen(false)}
+              aria-label={ui('Close')}
+              className="-mr-2 flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
             >
-              {ui('Apply filters')}
+              <X className="size-5" aria-hidden="true" />
             </button>
           </div>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-4 sm:contents sm:space-y-0 sm:overflow-visible sm:p-0">
+          {/* ── Narrow down ──────────────────────────────────────────── */}
+          <section className="space-y-2 sm:contents">
+            <p className={sectionLabelCls}>{ui('Narrow down')}</p>
+            <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+              <MultiSelectChip
+                label={ui('Account')}
+                name="account_id"
+                options={accountOptions}
+                selectedIds={selectedAccountIds}
+                open={openChip === 'account'}
+                onOpenChange={(next) => setOpenChip(next ? 'account' : null)}
+              />
+
+              <MultiSelectChip
+                label={ui('Category')}
+                name="category_id"
+                options={categoryOptions}
+                selectedIds={selectedCategoryIds}
+                open={openChip === 'category'}
+                onOpenChange={(next) => setOpenChip(next ? 'category' : null)}
+              />
+
+              {tagOptions.length > 0 || selectedTagIds.length > 0 ? (
+                <MultiSelectChip
+                  label={ui('Tags')}
+                  name="tag_id"
+                  options={tagOptions}
+                  selectedIds={selectedTagIds}
+                  open={openChip === 'tag'}
+                  onOpenChange={(next) => setOpenChip(next ? 'tag' : null)}
+                />
+              ) : null}
+
+              <label className={fieldRowCls}>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {ui('Status')}
+                </span>
+                <select
+                  name="status"
+                  defaultValue={selectedStatus}
+                  className={cn(chipSelectClassName, 'min-w-0 flex-1 sm:flex-none')}
+                  aria-label={ui('Filter by status')}
+                >
+                  <option value="all">{ui('All')}</option>
+                  <option value="posted">{ui('Posted')}</option>
+                  <option value="pending">{ui('Pending')}</option>
+                  <option value="voided">{ui('Voided')}</option>
+                </select>
+                <ChevronDown
+                  className="size-4 shrink-0 text-muted-foreground sm:hidden"
+                  aria-hidden="true"
+                />
+              </label>
+            </div>
+          </section>
+
+          {/* ── Period ───────────────────────────────────────────────── */}
+          <section className="space-y-2 sm:contents">
+            <p className={sectionLabelCls}>{ui('Period')}</p>
+
+            {/* Presets and the custom range share one row on desktop, as
+                before, and stack on phones. */}
+            <div className="space-y-2 sm:flex sm:flex-wrap sm:items-center sm:gap-1.5 sm:space-y-0">
+              {/* An even two-column grid on phones instead of a ragged wrap. */}
+              <div className="grid grid-cols-2 gap-2 sm:contents">
+                {presetLinks.map((link) => (
+                  <Link
+                    key={link.label}
+                    href={link.href}
+                    aria-current={link.isActive ? 'true' : undefined}
+                    className={cn(
+                      buttonVariants({
+                        // Solid primary fill for the active preset (matching the
+                        // type toggle) so the selected range is obvious, not a
+                        // faint tint.
+                        variant: link.isActive ? 'default' : 'outline',
+                        size: 'sm',
+                      }),
+                      'h-10 w-full rounded-xl sm:h-8 sm:w-auto sm:rounded-lg'
+                    )}
+                  >
+                    {ui(link.label)}
+                  </Link>
+                ))}
+              </div>
+
+              {/* `key` ties each uncontrolled input to the server-resolved range so a
+                  client-side preset navigation remounts it with the new value. Without
+                  this, `defaultValue` is ignored on re-render and the field keeps its
+                  stale (e.g. this-month) value, which "Apply filters" would then
+                  re-submit and clobber the range the user just picked (BF-024). */}
+              <div className="grid grid-cols-2 gap-2 sm:contents">
+                <label className={fieldRowCls}>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {ui('From')}
+                  </span>
+                  <input
+                    key={resolvedDateFrom}
+                    type="date"
+                    name="date_from"
+                    defaultValue={resolvedDateFrom}
+                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none sm:flex-none"
+                    aria-label={ui('From date')}
+                  />
+                </label>
+
+                <label className={fieldRowCls}>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {ui('To')}
+                  </span>
+                  <input
+                    key={resolvedDateTo}
+                    type="date"
+                    name="date_to"
+                    defaultValue={resolvedDateTo}
+                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none sm:flex-none"
+                    aria-label={ui('To date')}
+                  />
+                </label>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* ── Actions ────────────────────────────────────────────────────
+            Pinned footer on phones so Apply stays in thumb reach no matter how
+            far the body has scrolled. */}
+        <div className="flex shrink-0 items-center gap-2 border-t bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:ml-auto sm:border-0 sm:p-0">
+          {hasActiveFilters ? (
+            <Link
+              href="/dashboard/transactions"
+              className={cn(
+                buttonVariants({ variant: 'ghost', size: 'sm' }),
+                'h-11 flex-1 rounded-xl sm:h-8 sm:flex-none sm:rounded-lg'
+              )}
+            >
+              {ui('Clear all')}
+            </Link>
+          ) : null}
+          <button
+            type="submit"
+            className={cn(
+              buttonVariants({ size: 'sm' }),
+              'h-11 flex-1 rounded-xl text-sm font-semibold sm:h-8 sm:flex-none sm:rounded-lg sm:font-medium'
+            )}
+          >
+            {ui('Apply filters')}
+          </button>
         </div>
       </div>
 
