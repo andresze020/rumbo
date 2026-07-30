@@ -1,8 +1,15 @@
 // Pure, dependency-free helpers for recurring transactions, shared between the
 // server (page + actions) and the client form. No 'use server'/'use client'.
 
-export const RECURRING_TYPES = ['income', 'expense'] as const
+/** UC-9 added `transfer`; a transfer template carries a destination account
+ * instead of a category. */
+export const RECURRING_TYPES = ['income', 'expense', 'transfer'] as const
 export type RecurringType = (typeof RECURRING_TYPES)[number]
+
+/** A transfer template has a From/To account pair and no category. */
+export function isTransferType(value: string): boolean {
+  return value === 'transfer'
+}
 
 export const RECURRING_FREQUENCIES = [
   { value: 'daily', label: 'Daily' },

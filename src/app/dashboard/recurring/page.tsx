@@ -45,6 +45,8 @@ type RecurringTransaction = {
   name: string
   transaction_type: string
   account_id: string | null
+  /** UC-9: destination account on a transfer template. */
+  to_account_id: string | null
   category_id: string | null
   payee_id: string | null
   amount: number | string
@@ -129,7 +131,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
     supabase
       .from('recurring_transactions')
       .select(
-        'id, name, transaction_type, account_id, category_id, payee_id, amount, currency_code, frequency, start_date, end_date, next_run_date, is_active, auto_post, last_error, last_error_at'
+        'id, name, transaction_type, account_id, to_account_id, category_id, payee_id, amount, currency_code, frequency, start_date, end_date, next_run_date, is_active, auto_post, last_error, last_error_at'
       )
       .eq('household_id', household.id)
       .order('next_run_date', { ascending: true, nullsFirst: false }),
@@ -168,10 +170,15 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
   function toVM(row: RecurringTransaction): RecurringRowVM {
     const category = row.category_id ? categoriesById.get(row.category_id) : undefined
     const account = row.account_id ? accountsById.get(row.account_id) : undefined
+    const toAccount = row.to_account_id ? accountsById.get(row.to_account_id) : undefined
     return {
       id: row.id,
       name: row.name,
       transaction_type: row.transaction_type,
+      // UC-9: a transfer's "category" slot shows its destination instead — the
+      // row has no category to show, and the destination is the other half of
+      // what the template actually does.
+      toAccountName: toAccount?.name ?? null,
       amount: Number(row.amount),
       currency_code: row.currency_code,
       frequencyLabel: frequencyLabel(row.frequency),
@@ -414,6 +421,13 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
             }
             currencyCode={postTemplate.currency_code}
             baseCurrency={baseCurrency}
+            // UC-9: present only for a transfer, and what makes the form ask
+            // for the received amount when the two currencies differ.
+            toCurrencyCode={
+              postTemplate.to_account_id
+                ? (accountsById.get(postTemplate.to_account_id)?.currency_code ?? null)
+                : null
+            }
           />
         </FormDialog>
       ) : null}
@@ -484,14 +498,23 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
                             </span>
                           )}
                         </div>
+                        {/* UC-9: a transfer is neither income nor expense, so it
+                            gets the ⇄ glyph and no sign — a "−" here would read
+                            as money leaving the household, which it is not. */}
                         <span
                           className={`shrink-0 text-sm font-semibold tabular-nums ${
                             item.type === 'income'
                               ? 'text-emerald-600 dark:text-emerald-400'
+                              : item.type === 'transfer'
+                              ? 'text-sky-600 dark:text-sky-400'
                               : ''
                           }`}
                         >
-                          {item.type === 'income' ? '+' : '−'}
+                          {item.type === 'income'
+                            ? '+'
+                            : item.type === 'transfer'
+                            ? '⇄ '
+                            : '−'}
                           {formatCurrency(item.amount, item.currency, locale)}
                         </span>
                       </div>
