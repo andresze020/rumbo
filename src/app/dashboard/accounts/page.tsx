@@ -7,7 +7,11 @@ import {
   updateAccountAction,
 } from './actions'
 import { CurrencyChangeGuard } from './currency-change-guard'
-import { AccountTypeWithTransferExpense } from './transfer-expense-field'
+import {
+  AccountTypeDependentFields,
+  type BillingAccountOption,
+} from './account-type-fields'
+import type { CardCycleView } from './account-card-details'
 import { OpeningBalanceForm } from './opening-balance-form'
 import { BalanceAdjustmentForm } from './balance-adjustment-form'
 import {
@@ -18,7 +22,7 @@ import { FormDialog } from '@/components/form-dialog'
 import { AccountsViewToggle } from '@/components/accounts-view-toggle'
 import { getAccountsView } from '@/lib/accounts-view/server'
 import { createClient } from '@/lib/supabase/server'
-import { formatCurrency, formatLabel } from '@/lib/format'
+import { formatCurrency, formatIsoDate, formatLabel } from '@/lib/format'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -76,6 +80,29 @@ type Currency = {
   name: string
 }
 
+/**
+ * BR-030 — one row per card with a configured cycle, from
+ * `get_card_cycle_summaries`. Every figure is in the card's own currency and
+ * positive-as-owed. `payable` deliberately excludes `outstanding`: the first is
+ * what the closed statement bills on `closed_payment_due`, the second is spend
+ * that has not been billed yet.
+ */
+type CardCycleSummary = {
+  account_id: string
+  closed_period_start: string
+  closed_period_end: string
+  closed_payment_due: string
+  open_period_start: string
+  open_period_end: string
+  open_payment_due: string
+  statement_balance: number | string
+  paid_since_close: number | string
+  payable: number | string
+  outstanding: number | string
+  is_overdue: boolean
+  billing_account_name: string | null
+}
+
 type AccountMetadata = {
   id: string
   name: string
@@ -91,6 +118,10 @@ type AccountMetadata = {
   include_in_net_worth: boolean
   /** BR-039: reporting-only opt-in; savings / investment / other accounts only. */
   treat_transfers_as_expense: boolean
+  /** BR-030: statement cycle; both days are null unless a cycle is configured. */
+  statement_day: number | null
+  payment_day: number | null
+  billing_account_id: string | null
   sort_order: number | null
   notes: string | null
 }
@@ -246,11 +277,14 @@ function CreateAccountForm({
   activeCurrencies,
   defaultCurrency,
   showArchived,
+  billingAccounts,
   locale,
 }: {
   activeCurrencies: Currency[]
   defaultCurrency: string
   showArchived: boolean
+  /** BR-030: accounts a card can be paid from. */
+  billingAccounts: BillingAccountOption[]
   locale: Locale
 }) {
   const accountTypes = getAccountTypes(locale)
@@ -262,21 +296,19 @@ function CreateAccountForm({
           <Input id="name" name="name" required />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="account_type">{translate(locale, 'accounts.type')}</Label>
-          <select
-            id="account_type"
-            name="account_type"
-            defaultValue="checking"
-            className={selectClassName}
-          >
-            {accountTypes.map((accountType) => (
-              <option key={accountType.value} value={accountType.value}>
-                {accountType.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* BR-030: the same component as the edit form, so the cycle-window
+            preview renders during creation — the detail the App B recording
+            showed, and the reason the preview is client-side date math. */}
+        <AccountTypeDependentFields
+          accountId="new"
+          accountTypes={accountTypes}
+          defaultAccountType="checking"
+          defaultTreatTransfersAsExpense={false}
+          typeLabel={translate(locale, 'accounts.type')}
+          toggleLabel={translate(locale, 'accounts.transferAsExpense')}
+          toggleDescription={translate(locale, 'accounts.transferAsExpenseDesc')}
+          billingAccounts={billingAccounts}
+        />
 
         <div className="space-y-2">
           <Label htmlFor="currency_code">{translate(locale, 'accounts.currency')}</Label>
@@ -354,6 +386,7 @@ function EditAccountForm({
   hasOpeningBalance,
   openingBalanceHref,
   adjustBalanceHref,
+  billingAccounts,
   locale,
 }: {
   row: AccountRow
@@ -364,6 +397,8 @@ function EditAccountForm({
   hasOpeningBalance: boolean
   openingBalanceHref: string
   adjustBalanceHref: string
+  /** BR-030: accounts a card can be paid from. */
+  billingAccounts: BillingAccountOption[]
   locale: Locale
 }) {
   const account = row.metadata
@@ -408,9 +443,9 @@ function EditAccountForm({
           />
         </div>
 
-        {/* BR-039: the type select and the transfer-as-expense toggle move
-            together, because the toggle is only legal on some types. */}
-        <AccountTypeWithTransferExpense
+        {/* The type select plus every field whose legality depends on it:
+            BR-039's transfer-as-expense toggle and BR-030's statement cycle. */}
+        <AccountTypeDependentFields
           accountId={account.id}
           accountTypes={accountTypes}
           defaultAccountType={account.account_type}
@@ -418,6 +453,10 @@ function EditAccountForm({
           typeLabel={translate(locale, 'accounts.type')}
           toggleLabel={translate(locale, 'accounts.transferAsExpense')}
           toggleDescription={translate(locale, 'accounts.transferAsExpenseDesc')}
+          defaultStatementDay={account.statement_day?.toString() ?? ''}
+          defaultPaymentDay={account.payment_day?.toString() ?? ''}
+          defaultBillingAccountId={account.billing_account_id ?? ''}
+          billingAccounts={billingAccounts.filter((option) => option.id !== account.id)}
         />
 
         <div className="space-y-2">
@@ -672,13 +711,20 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const { data: accountMetadata, error: accountMetadataError } = await supabase
     .from('accounts')
     .select(
-      'id, name, account_type, account_class, currency_code, institution_name, last_four, color, icon, opening_balance_date, is_archived, include_in_net_worth, treat_transfers_as_expense, sort_order, notes'
+      'id, name, account_type, account_class, currency_code, institution_name, last_four, color, icon, opening_balance_date, is_archived, include_in_net_worth, treat_transfers_as_expense, statement_day, payment_day, billing_account_id, sort_order, notes'
     )
     .eq('household_id', household.id)
     .is('deleted_at', null)
     .order('is_archived', { ascending: true })
     .order('sort_order', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true })
+
+  // BR-030: one call for every configured card, not one per card. A failure here
+  // is not fatal — the cycle is an extra reading of data the balances already
+  // show, so the page degrades to today's single-balance view.
+  const { data: cardCycleRows } = await supabase.rpc('get_card_cycle_summaries', {
+    p_household_id: household.id,
+  })
 
   const { data: openingBalanceEntries, error: openingBalanceEntriesError } =
     await supabase
@@ -770,6 +816,59 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const displayRows = showArchived ? archivedRows : activeRows
   const accountTypeLabelMap = new Map(getAccountTypes(locale).map((at) => [at.value, at.label]))
 
+  const cardCycleByAccountId = new Map(
+    ((cardCycleRows ?? []) as CardCycleSummary[]).map((cycle) => [cycle.account_id, cycle])
+  )
+
+  // BR-030: a card is paid from an asset account, never from another liability.
+  const billingAccounts: BillingAccountOption[] = allAccounts
+    .filter((account) => !account.is_archived && account.account_class === 'asset')
+    .map((account) => ({ id: account.id, name: account.name }))
+
+  /**
+   * BR-030 — format one card's cycle for display. The *window dates come from
+   * the RPC*, not from `lib/cards/cycle.ts`: the figures and the period they
+   * describe are computed together in SQL, so they cannot drift apart. The TS
+   * helper is only for the creation preview, where no account exists yet.
+   */
+  function buildCardCycleView(
+    accountId: string,
+    currencyCode: string
+  ): CardCycleView | null {
+    const cycle = cardCycleByAccountId.get(accountId)
+    if (!cycle) return null
+
+    const paidSinceClose = Number(cycle.paid_since_close)
+    const windowOptions: Intl.DateTimeFormatOptions = {
+      month: 'short',
+      day: 'numeric',
+    }
+
+    return {
+      payableLabel: formatCurrency(Number(cycle.payable), currencyCode, locale),
+      outstandingLabel: formatCurrency(Number(cycle.outstanding), currencyCode, locale),
+      // Only worth a line when something actually landed after the close.
+      paidSinceCloseLabel:
+        paidSinceClose > 0
+          ? formatCurrency(paidSinceClose, currencyCode, locale)
+          : null,
+      closedWindowLabel: `${formatIsoDate(
+        cycle.closed_period_start,
+        locale,
+        windowOptions
+      )} – ${formatIsoDate(cycle.closed_period_end, locale, windowOptions)}`,
+      closedDueLabel: formatIsoDate(cycle.closed_payment_due, locale, windowOptions),
+      openWindowLabel: `${formatIsoDate(
+        cycle.open_period_start,
+        locale,
+        windowOptions
+      )} – ${formatIsoDate(cycle.open_period_end, locale, windowOptions)}`,
+      openDueLabel: formatIsoDate(cycle.open_payment_due, locale, windowOptions),
+      isOverdue: cycle.is_overdue,
+      billingAccountName: cycle.billing_account_name,
+    }
+  }
+
   const accountRowVMs: AccountRowVM[] = displayRows.map((row) => {
     const { balance, metadata } = row
     const isLiability = metadata.account_class === 'liability'
@@ -810,6 +909,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
         metadata.currency_code
       ),
       balanceType: isLiability ? 'owed' : 'posted',
+      cardCycle: buildCardCycleView(metadata.id, metadata.currency_code),
       baseAmount,
       editHref: accountsPath({ showArchived, edit: metadata.id }),
       openingBalanceHref: accountsPath({ showArchived, openingBalance: metadata.id }),
@@ -948,6 +1048,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
             activeCurrencies={activeCurrencies}
             defaultCurrency={defaultCurrency}
             showArchived={showArchived}
+            billingAccounts={billingAccounts}
             locale={locale}
           />
         </FormDialog>
@@ -968,6 +1069,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
             hasOpeningBalance={selectedEditRow.hasOpeningBalance}
             openingBalanceHref={accountsPath({ showArchived, openingBalance: selectedEditRow.metadata.id })}
             adjustBalanceHref={accountsPath({ showArchived, adjustBalance: selectedEditRow.metadata.id })}
+            billingAccounts={billingAccounts}
             locale={locale}
           />
         </FormDialog>

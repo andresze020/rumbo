@@ -6,6 +6,23 @@ import { ArrowRight, ChevronDown } from 'lucide-react'
 import { BalanceAmount } from '@/components/balance-amount'
 import { useLanguage } from '@/components/language-provider'
 
+/**
+ * BR-030 — the card's statement cycle, already formatted. The strings are built
+ * on the server (which has the locale and the currency) so this stays a dumb
+ * renderer, matching how every other label reaches this component.
+ */
+export type CardCycleView = {
+  payableLabel: string
+  outstandingLabel: string
+  paidSinceCloseLabel: string | null
+  closedWindowLabel: string
+  closedDueLabel: string
+  openWindowLabel: string
+  openDueLabel: string
+  isOverdue: boolean
+  billingAccountName: string | null
+}
+
 type AccountCardDetailsProps = {
   accountId: string
   summaryLeft: ReactNode
@@ -17,6 +34,8 @@ type AccountCardDetailsProps = {
   projectedLabel: string
   balanceType: 'posted' | 'owed'
   baseCurrencyLabel?: string | null
+  /** BR-030 — present only for a card with a configured cycle. */
+  cardCycle?: CardCycleView | null
 }
 
 export function AccountCardDetails({
@@ -29,6 +48,7 @@ export function AccountCardDetails({
   projectedLabel,
   balanceType,
   baseCurrencyLabel,
+  cardCycle = null,
 }: AccountCardDetailsProps) {
   const [open, setOpen] = useState(false)
   const { t } = useLanguage()
@@ -58,9 +78,26 @@ export function AccountCardDetails({
             {baseCurrencyLabel ? (
               <p className="text-[11px] text-muted-foreground">≈ {baseCurrencyLabel}</p>
             ) : null}
-            <p className="text-[11px] text-muted-foreground">
-              {isOwed ? t('accounts.owed') : t('accounts.available')}
-            </p>
+            {/* BR-030: on a card with a cycle, the running balance alone cannot
+                answer "what do I owe next" — so the payable figure and its due
+                date replace the bare "Owed" label right on the card. */}
+            {cardCycle ? (
+              <p className="text-[11px] text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {cardCycle.payableLabel}
+                </span>{' '}
+                {t('accounts.cyclePayableDueShort')} {cardCycle.closedDueLabel}
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                {isOwed ? t('accounts.owed') : t('accounts.available')}
+              </p>
+            )}
+            {cardCycle?.isOverdue ? (
+              <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                {t('accounts.cycleOverdue')}
+              </p>
+            ) : null}
           </div>
           <ChevronDown
             className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
@@ -93,6 +130,59 @@ export function AccountCardDetails({
                 <p className="text-sm font-semibold tabular-nums">{projectedLabel}</p>
               </div>
             </div>
+
+            {/* BR-030: the two figures side by side. They are never added
+                together — the left one is billed on its due date, the right one
+                has not been billed at all yet. */}
+            {cardCycle ? (
+              <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
+                <div className="space-y-0.5">
+                  <p className="text-xs text-muted-foreground">
+                    {t('accounts.cyclePayable')}
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {cardCycle.payableLabel}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {cardCycle.closedWindowLabel}
+                  </p>
+                  <p
+                    className={`text-[11px] ${
+                      cardCycle.isOverdue
+                        ? 'font-semibold text-rose-600 dark:text-rose-400'
+                        : 'text-muted-foreground'
+                    }`}
+                  >
+                    {t('accounts.cycleDue')} {cardCycle.closedDueLabel}
+                  </p>
+                  {cardCycle.paidSinceCloseLabel ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      {t('accounts.cyclePaidSinceClose')}{' '}
+                      {cardCycle.paidSinceCloseLabel}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-xs text-muted-foreground">
+                    {t('accounts.cycleOutstanding')}
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {cardCycle.outstandingLabel}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {cardCycle.openWindowLabel}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t('accounts.cycleDue')} {cardCycle.openDueLabel}
+                  </p>
+                  {cardCycle.billingAccountName ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      {t('accounts.cyclePaidFrom')} {cardCycle.billingAccountName}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             {/* View transactions link */}
             <div className="flex items-center">

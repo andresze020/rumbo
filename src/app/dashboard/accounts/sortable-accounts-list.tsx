@@ -33,7 +33,7 @@ import { formatCurrency } from '@/lib/format'
 import type { AccountsView } from '@/lib/accounts-view/server'
 import { cn } from '@/lib/utils'
 import { reorderAccountsAction } from './actions'
-import { AccountCardDetails } from './account-card-details'
+import { AccountCardDetails, type CardCycleView } from './account-card-details'
 
 export type AccountRowVM = {
   id: string
@@ -61,6 +61,8 @@ export type AccountRowVM = {
   baseAmount: number
   /** Pre-formatted base-currency equivalent — set when account currency ≠ household base currency. */
   baseCurrencyLabel: string | null
+  /** BR-030: statement cycle, already formatted; null unless configured. */
+  cardCycle: CardCycleView | null
   editHref: string
   openingBalanceHref: string
 }
@@ -153,6 +155,7 @@ function AccountRowBody({
           projectedLabel={row.projectedLabel}
           balanceType={row.balanceType}
           baseCurrencyLabel={row.baseCurrencyLabel}
+          cardCycle={row.cardCycle}
         />
         {/* Row action icons */}
         <div className="-mx-2 mt-1 flex items-center justify-end gap-0.5 border-t pt-1">
@@ -270,7 +273,27 @@ function AccountCard({ row }: { row: AccountRowVM }) {
           {row.baseCurrencyLabel ? (
             <p className="text-[11px] text-muted-foreground">≈ {row.baseCurrencyLabel}</p>
           ) : null}
-          <p className="text-[11px] text-muted-foreground">{isOwed ? t('accounts.owed') : t('accounts.available')}</p>
+          {/* BR-030: the grouped/card view gets the same payable figure as the
+              list view — App B shows both numbers per card, and a card whose
+              cycle is configured in one view but invisible in the other would
+              just look broken. */}
+          {row.cardCycle ? (
+            <>
+              <p className="text-[11px] text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {row.cardCycle.payableLabel}
+                </span>{' '}
+                {t('accounts.cyclePayableDueShort')} {row.cardCycle.closedDueLabel}
+              </p>
+              {row.cardCycle.isOverdue ? (
+                <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                  {t('accounts.cycleOverdue')}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">{isOwed ? t('accounts.owed') : t('accounts.available')}</p>
+          )}
         </div>
       </div>
 

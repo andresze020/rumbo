@@ -51,6 +51,65 @@ const TRANSFER_AS_EXPENSE_TYPES = new Set<AccountType>([
   'other',
 ])
 
+// BR-030: a statement cycle only exists where a statement does. Mirrors the
+// `accounts_cycle_type_chk` constraint.
+const CARD_CYCLE_TYPES = new Set<AccountType>(['credit_card', 'debt'])
+
+/**
+ * BR-030 — a day-of-month field. Returns `null` for blank (no cycle) and
+ * `undefined` for a value that is not a usable day, which the callers turn into
+ * an error rather than silently dropping a cycle the user meant to set.
+ */
+function parseCycleDayField(value: FormDataEntryValue | null) {
+  const text = String(value ?? '').trim()
+  if (!text) return null
+  const parsed = Number(text)
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 31) return undefined
+  return parsed
+}
+
+/**
+ * BR-030 — resolve the three cycle columns for a write.
+ *
+ * Both days or neither (the DB enforces this too): a statement day with no
+ * payment day cannot produce a due date. An ineligible account type clears all
+ * three rather than failing the save — the form hides the block when the type
+ * changes, so arriving here with a cycle set means a stale or hand-made submit,
+ * and the same reasoning applies as for `treat_transfers_as_expense`.
+ */
+function resolveCycleFields(
+  accountType: AccountType,
+  formData: FormData,
+  fail: (message: string) => never
+) {
+  if (!CARD_CYCLE_TYPES.has(accountType)) {
+    return { statement_day: null, payment_day: null, billing_account_id: null }
+  }
+
+  const statementDay = parseCycleDayField(formData.get('statement_day'))
+  const paymentDay = parseCycleDayField(formData.get('payment_day'))
+
+  if (statementDay === undefined || paymentDay === undefined) {
+    fail('The statement and payment days must each be a day of the month, 1 to 31.')
+  }
+
+  if ((statementDay === null) !== (paymentDay === null)) {
+    fail(
+      'Set both the statement day and the payment day, or leave both empty to track this account without a cycle.'
+    )
+  }
+
+  const billingAccountId = String(formData.get('billing_account_id') ?? '').trim()
+
+  return {
+    statement_day: statementDay,
+    payment_day: paymentDay,
+    // Without a cycle there is nothing to pay, so the source account is dropped
+    // with it rather than left dangling.
+    billing_account_id: statementDay === null ? null : billingAccountId || null,
+  }
+}
+
 function parseNullableInteger(value: FormDataEntryValue | null) {
   const text = String(value ?? '').trim()
 
@@ -102,6 +161,32 @@ function revalidateAccountSurfaces() {
   revalidatePath('/dashboard')
 }
 
+/**
+ * BR-030 — the billing account is a plain uuid on the form, so it has to be
+ * proven to belong to this household before it is stored. RLS would not catch
+ * it: the FK only checks that the row exists in `accounts`, not whose it is.
+ */
+async function assertBillingAccountBelongsToHousehold(
+  supabase: Awaited<ReturnType<typeof getAuthenticatedHousehold>>['supabase'],
+  householdId: string,
+  billingAccountId: string | null,
+  fail: (message: string) => never
+) {
+  if (!billingAccountId) return
+
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('id')
+    .eq('id', billingAccountId)
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (error || !data) {
+    fail('Select an account in this household to pay this card from.')
+  }
+}
+
 export async function createAccountAction(formData: FormData) {
   // The onboarding wizard reuses this action; `return_to=onboarding` keeps
   // success/error redirects inside the wizard instead of /dashboard/accounts.
@@ -137,7 +222,18 @@ export async function createAccountAction(formData: FormData) {
     fail('Last four must be 1 to 4 digits.')
   }
 
+  // BR-030: the cycle can be set at creation — the form previews its windows
+  // before any transaction exists, which is the whole point of that preview.
+  const cycleFields = resolveCycleFields(accountType, formData, fail)
+
   const { supabase, userId, householdId } = await getAuthenticatedHousehold()
+
+  await assertBillingAccountBelongsToHousehold(
+    supabase,
+    householdId,
+    cycleFields.billing_account_id,
+    fail
+  )
 
   const { data: currency, error: currencyError } = await supabase
     .from('currencies')
@@ -160,6 +256,7 @@ export async function createAccountAction(formData: FormData) {
     last_four: lastFour || null,
     notes: notes || null,
     include_in_net_worth: includeInNetWorth,
+    ...cycleFields,
     created_by: userId,
   })
 
@@ -214,7 +311,17 @@ export async function updateAccountAction(formData: FormData) {
     redirectWithError('Sort order must be a whole number.')
   }
 
+  // BR-030: resolved before the write so an invalid pairing fails the save
+  // rather than reaching a DB check constraint.
+  const cycleFields = resolveCycleFields(accountType, formData, redirectWithError)
+
   const { supabase, userId, householdId } = await getAuthenticatedHousehold()
+
+  // BR-030: a card cannot be paid from itself, and the source must belong to
+  // this household — the select below is the household check.
+  if (cycleFields.billing_account_id === accountId) {
+    redirectWithError('An account cannot be paid from itself.')
+  }
 
   const { data: account, error: accountError } = await supabase
     .from('accounts')
@@ -227,6 +334,13 @@ export async function updateAccountAction(formData: FormData) {
   if (accountError || !account) {
     redirectWithError('Account was not found for this household.')
   }
+
+  await assertBillingAccountBelongsToHousehold(
+    supabase,
+    householdId,
+    cycleFields.billing_account_id,
+    redirectWithError
+  )
 
   // BR-046: an account's currency can only be corrected while the account is
   // still empty.
@@ -288,6 +402,7 @@ export async function updateAccountAction(formData: FormData) {
       // reporting preference is better than failing the whole save.
       treat_transfers_as_expense:
         treatTransfersAsExpense && TRANSFER_AS_EXPENSE_TYPES.has(accountType),
+      ...cycleFields,
       sort_order: sortOrder,
       notes: notes || null,
       updated_by: userId,
