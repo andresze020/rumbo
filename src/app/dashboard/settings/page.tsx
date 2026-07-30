@@ -54,7 +54,7 @@ export default async function SettingsPage({ searchParams }: Props) {
 
   const { data: household } = await supabase
     .from('households')
-    .select('name, base_currency')
+    .select('name, base_currency, month_start_day')
     .eq('id', profile.default_household_id)
     .maybeSingle()
 
@@ -203,6 +203,30 @@ export default async function SettingsPage({ searchParams }: Props) {
               </p>
               <p className="text-xs text-muted-foreground">
                 The base currency is set at household creation. Changing it would invalidate all stored balance calculations and requires a full data migration.
+              </p>
+            </div>
+            {/* BR-036 — slice 1. The copy states plainly which screen honours
+                this, because a setting that only half applies is worse than no
+                setting if the user has to discover the boundary themselves. */}
+            <div className="space-y-1.5">
+              <Label htmlFor="month_start_day">Month starts on day</Label>
+              <Input
+                id="month_start_day"
+                name="month_start_day"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={31}
+                step={1}
+                defaultValue={household?.month_start_day ?? 1}
+              />
+              <p className="text-xs text-muted-foreground">
+                For a household paid on the 25th, set 25 and a period runs from
+                the 25th to the 24th. Leave it at 1 for the calendar month.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Applies to Reports for now. Budgets, month closures and the
+                dashboard still use the calendar month.
               </p>
             </div>
             <SubmitButton type="submit" size="sm" pendingText="Saving…">

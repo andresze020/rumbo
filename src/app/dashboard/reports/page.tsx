@@ -13,13 +13,16 @@ import { getLocale } from '@/lib/i18n/server'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { cn } from '@/lib/utils'
 import {
+  hasCustomMonthStart,
+  periodLabelForDate,
+  resolvePeriod,
+  shiftPeriodLabel,
+} from '@/lib/periods/month'
+import {
   getHousehold,
   getCategoryLookup,
   currentMonthParam,
-  monthStartDate,
-  monthEndDate,
   longMonthLabel,
-  shiftMonth,
   POSITIVE_COLOR,
   NEGATIVE_COLOR,
   SERIES_PALETTE,
@@ -130,15 +133,26 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const categoryIds = toArray(params.category_id)
   const tagIds = toArray(params.tag_id)
 
-  // Date range: an explicit from/to wins; otherwise fall back to a month
-  // (default current month, which reads as the "This month" preset).
+  // Resolved before the date range: BR-036 lets the household move its period
+  // boundary off the 1st, and every range below is derived from that.
+  const ctx = await getHousehold()
+  const monthStartDay = ctx.household.month_start_day
+  const customMonthStart = hasCustomMonthStart(monthStartDay)
+
+  // Date range: an explicit from/to wins; otherwise fall back to a period
+  // (default current period, which reads as the "This month" preset).
+  //
+  // BR-036: `resolvePeriod` is the single shared resolver. With the default start
+  // day of 1 it returns exactly what monthStartDate/monthEndDate returned, so an
+  // untouched household sees byte-identical ranges here.
   const rawFrom = typeof params.date_from === 'string' ? params.date_from : ''
   const rawTo = typeof params.date_to === 'string' ? params.date_to : ''
   const hasCustomRange = ISO_DATE.test(rawFrom) && ISO_DATE.test(rawTo)
   const fallbackMonth =
     params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : currentMonthParam()
-  const dateFrom = hasCustomRange ? rawFrom : monthStartDate(fallbackMonth)
-  const dateTo = hasCustomRange ? rawTo : monthEndDate(fallbackMonth)
+  const fallbackPeriod = resolvePeriod(fallbackMonth, monthStartDay)
+  const dateFrom = hasCustomRange ? rawFrom : fallbackPeriod.dateFrom
+  const dateTo = hasCustomRange ? rawTo : fallbackPeriod.dateTo
 
   const hasActiveFilters =
     hasCustomRange ||
@@ -148,7 +162,6 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     categoryIds.length > 0 ||
     tagIds.length > 0
 
-  const ctx = await getHousehold()
   const currency = ctx.household.base_currency
   const categoryLookup = await getCategoryLookup(ctx)
 
@@ -222,18 +235,31 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     return `/dashboard/reports?${qs.toString()}`
   }
 
-  const todayMonth = currentMonthParam()
   const today = todayIso()
-  const thisYear = todayMonth.slice(0, 4)
+  // BR-036: "this month" means "the period containing today", which with a
+  // non-1st start day is not the calendar month today falls in. Deriving the
+  // label from the date is what keeps the presets and the default view agreeing.
+  const todayMonth = periodLabelForDate(today, monthStartDay)
+  const thisPeriod = resolvePeriod(todayMonth, monthStartDay)
+  const lastPeriod = resolvePeriod(shiftPeriodLabel(todayMonth, -1), monthStartDay)
+  const thisYear = today.slice(0, 4)
   const rawPresets = [
-    { label: 'This month', from: monthStartDate(todayMonth), to: monthEndDate(todayMonth) },
+    { label: 'This month', from: thisPeriod.dateFrom, to: thisPeriod.dateTo },
     {
       label: 'Last month',
-      from: monthStartDate(shiftMonth(todayMonth, -1)),
-      to: monthEndDate(shiftMonth(todayMonth, -1)),
+      from: lastPeriod.dateFrom,
+      to: lastPeriod.dateTo,
     },
-    { label: 'Last 3 months', from: monthStartDate(shiftMonth(todayMonth, -2)), to: today },
-    { label: 'Last 6 months', from: monthStartDate(shiftMonth(todayMonth, -5)), to: today },
+    {
+      label: 'Last 3 months',
+      from: resolvePeriod(shiftPeriodLabel(todayMonth, -2), monthStartDay).dateFrom,
+      to: today,
+    },
+    {
+      label: 'Last 6 months',
+      from: resolvePeriod(shiftPeriodLabel(todayMonth, -5), monthStartDay).dateFrom,
+      to: today,
+    },
     { label: 'Year to date', from: `${thisYear}-01-01`, to: today },
     { label: 'All time', from: ALL_TIME_FROM, to: ALL_TIME_TO },
   ]
@@ -383,6 +409,17 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       {!hasActivity ? (
         <Callout variant="info" className="border-dashed text-muted-foreground">
           No posted income or expense activity for {rangeLabel(dateFrom, dateTo, locale)} with these filters.
+        </Callout>
+      ) : null}
+
+      {/* BR-036 slice 1: this screen honours the household's period boundary and
+          the rest of the app does not yet. Saying so is the difference between a
+          deliberate slice and a report that mysteriously disagrees with the
+          budget for the same "month". */}
+      {customMonthStart ? (
+        <Callout variant="info" className="border-dashed text-muted-foreground">
+          {`Your household's periods start on day ${monthStartDay}, so a "month" here runs from day ${monthStartDay} to the day before the next one.`}{' '}
+          {`Budgets, month closures and the dashboard still use the calendar month, so their figures for the same month name will differ.`}
         </Callout>
       ) : null}
 

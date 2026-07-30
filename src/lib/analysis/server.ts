@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatMonthLabel } from '@/lib/format'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { localeToBcp47 } from '@/lib/format'
+import { parseMonthStartDay } from '@/lib/periods/month'
 
 /**
  * Shared server-side data helpers for the analysis & planning screens
@@ -18,7 +19,13 @@ import { localeToBcp47 } from '@/lib/format'
 export type HouseholdContext = {
   supabase: Awaited<ReturnType<typeof createClient>>
   userId: string
-  household: { id: string; name: string; base_currency: string }
+  household: {
+    id: string
+    name: string
+    base_currency: string
+    /** BR-036: day a financial period begins; 1 = the calendar month. */
+    month_start_day: number
+  }
   displayName: string | null
 }
 
@@ -44,10 +51,24 @@ export async function getHousehold(): Promise<HouseholdContext> {
     .single()
   if (!household) redirect('/onboarding')
 
+  // BR-036: read separately and tolerate failure. Selecting `month_start_day` in
+  // the query above would make the whole `.single()` fail while the migration is
+  // unapplied — and because this helper backs *every* analysis screen, that would
+  // bounce all of them to /onboarding rather than degrade one page. A missing
+  // column simply means the calendar month, which is the default anyway.
+  const { data: periodSetting } = await supabase
+    .from('households')
+    .select('month_start_day')
+    .eq('id', profile.default_household_id)
+    .maybeSingle()
+
   return {
     supabase,
     userId: user.id,
-    household: household as HouseholdContext['household'],
+    household: {
+      ...(household as Omit<HouseholdContext['household'], 'month_start_day'>),
+      month_start_day: parseMonthStartDay(periodSetting?.month_start_day),
+    },
     displayName: (profile.display_name as string | null) ?? null,
   }
 }

@@ -363,6 +363,16 @@ function addDays(iso: string, days: number) {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10)
 }
 
+/** Whole days from `from` to `to` (both `YYYY-MM-DD`), exclusive of `from`. */
+function daysBetween(from: string, to: string) {
+  const [fy, fm, fd] = from.split('-').map(Number)
+  const [ty, tm, td] = to.split('-').map(Number)
+  const msPerDay = 24 * 60 * 60 * 1000
+  return Math.round(
+    (Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / msPerDay
+  )
+}
+
 /**
  * BR-042 — splits a single-month range into ISO weeks (Monday-start) clipped to
  * the month, and totals each one. Clipping is what guarantees the invariant
@@ -378,11 +388,20 @@ function buildSubPeriods(
   dateFrom: string,
   dateTo: string
 ): SubPeriod[] | null {
-  const month = dateFrom.slice(0, 7)
-  const [year, monthNumber] = month.split('-').map(Number)
-  const monthStart = `${month}-01`
-  const monthEnd = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10)
-  if (dateFrom !== monthStart || dateTo !== monthEnd) return null
+  // BR-042 shipped this as "only when the range is exactly one calendar month".
+  // BR-036 lets a household's period start on any day, so that test would switch
+  // the week rows off for every such household — a silent regression rather than
+  // a decision. The rows only ever needed the range to be *about* a month long:
+  // the weeks below are ISO weeks clipped to the range, so they partition it
+  // exactly and sum to its totals whatever the boundaries are.
+  //
+  // 28–31 days covers a calendar month and every BR-036 period, and excludes the
+  // multi-month presets, which is the distinction that actually matters.
+  const spanDays = daysBetween(dateFrom, dateTo) + 1
+  if (spanDays < 28 || spanDays > 31) return null
+
+  const monthStart = dateFrom
+  const monthEnd = dateTo
 
   const periods: SubPeriod[] = []
   let cursor = monthStart
