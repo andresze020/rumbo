@@ -217,10 +217,11 @@ export const en = {
     category: 'Category',
     selectCategory: 'Select category',
     amount: 'Amount',
-    amountInBase: 'Same amount in {currency}',
-    amountInBaseHelp:
-      'Type in either field — the other one converts at the exchange rate below.',
-    amountInBaseNeedsRate: 'Enter an exchange rate below to convert.',
+    amountInBasePreview: '≈ {amount} {currency} at the exchange rate below.',
+    amountInBaseNeedsRate: 'Enter an exchange rate below to see the equivalent.',
+    amountSent: 'Amount sent',
+    amountArrivesSame:
+      'Both accounts use the same currency, so the same amount arrives.',
     description: 'Description',
     merchant: 'Merchant',
     payee: 'Payee',
@@ -681,10 +682,12 @@ export const es: DeepStringify<typeof en> = {
     category: 'Categoría',
     selectCategory: 'Selecciona una categoría',
     amount: 'Monto',
-    amountInBase: 'El mismo monto en {currency}',
-    amountInBaseHelp:
-      'Escribe en cualquiera de los dos campos: el otro se convierte con el tipo de cambio de abajo.',
-    amountInBaseNeedsRate: 'Introduce un tipo de cambio abajo para convertir.',
+    amountInBasePreview: '≈ {amount} {currency} al tipo de cambio de abajo.',
+    amountInBaseNeedsRate:
+      'Introduce un tipo de cambio abajo para ver el equivalente.',
+    amountSent: 'Monto enviado',
+    amountArrivesSame:
+      'Ambas cuentas usan la misma moneda, así que llega el mismo monto.',
     description: 'Descripción',
     merchant: 'Comercio',
     payee: 'Beneficiario',
@@ -1145,10 +1148,12 @@ export const fr: DeepStringify<typeof en> = {
     category: 'Catégorie',
     selectCategory: 'Sélectionnez une catégorie',
     amount: 'Montant',
-    amountInBase: 'Le même montant en {currency}',
-    amountInBaseHelp:
-      'Saisissez dans l’un ou l’autre champ : l’autre se convertit selon le taux de change ci-dessous.',
-    amountInBaseNeedsRate: 'Saisissez un taux de change ci-dessous pour convertir.',
+    amountInBasePreview: '≈ {amount} {currency} au taux de change ci-dessous.',
+    amountInBaseNeedsRate:
+      'Saisissez un taux de change ci-dessous pour voir l’équivalent.',
+    amountSent: 'Montant envoyé',
+    amountArrivesSame:
+      'Les deux comptes utilisent la même devise : le même montant arrive donc.',
     description: 'Description',
     merchant: 'Commerçant',
     payee: 'Bénéficiaire',

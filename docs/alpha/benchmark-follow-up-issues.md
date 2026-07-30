@@ -149,17 +149,27 @@ files". Three migrations are prepared and **pending `npx supabase db push`**
 
 Decisions worth not re-litigating:
 
-- **BR-031** is on the **create** form only. The row says "the amount field is
-  single-currency"; the *edit* form turned out to have no FX plumbing at all —
-  it neither collects nor submits a rate — so a linked field there would have
-  meant building the whole exchange-rate block first. That is a separate slice.
-  The no-drift requirement is met by deriving rather than storing: the side the
-  user typed is state, the other is computed from the rate on every render, so
-  the edited side is never overwritten with a rounded version of itself and a
-  rate re-fetch updates only the derived side. (An effect that wrote the derived
-  side into state was the first implementation; the repo's
-  `react-hooks/set-state-in-effect` lint rule rejects it, and deriving is the
-  better answer anyway.)
+- **BR-031's row asks for the wrong thing on an expense, and the right thing on
+  a transfer.** Corrected after QA on 2026-07-29; the row's "render a second,
+  linked amount field whenever `account.currency_code <> household base`" is
+  kept here for the record but is **not** what shipped.
+  - A COP expense has one real value: the COP. The CAD figure is derived from
+    the rate and will never be typed, so a large editable base field is weight
+    spent on a number the user does not own. It shipped that way first and was
+    rejected on sight — correctly. It is now a **line of text** under the
+    amount, which still removes the mental arithmetic the row complains about.
+  - The genuine two-amount case is the **transfer**: what left the source and
+    what arrived in the destination are both entered, and both are ledger
+    values. Those are now paired in one card, each above its own account
+    selector. Before this, the second amount sat below the date, description
+    and notes — the two figures were never on screen together, which is exactly
+    what made the pairing worth doing.
+  - Consequence: the row's "both directions recompute" check does not apply
+    anywhere. Nothing converts one entered amount into another; the transfer's
+    two amounts are independent, and the expense's base figure is read-only.
+- **BR-031 is on the create form only.** The *edit* form has no FX plumbing at
+  all — it neither collects nor submits a rate — so anything here would have
+  meant building the whole exchange-rate block first. Separate slice.
 - **BR-039 changes `/dashboard/reports` and `/dashboard/calendar` only.** The
   dashboard, trends, cash-flow and month-review read monthly-summary *SQL* RPCs;
   teaching those about the flag means changing shared financial SQL, which is

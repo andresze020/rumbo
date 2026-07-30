@@ -26,17 +26,25 @@ The product is household-first. All financial data must belong to a household.
 - **Tier-3 medium sprint** (2026-07-29, branch `sprint/tier3-medium`). The five
   "medium" benchmark items — real features, several files each, no big-bang
   schema:
-  - **BR-031 bidirectional currency entry.** When the selected account's
-    currency differs from the household base, the amount hero renders a second
-    linked field in the base currency. Only the side the user typed is held in
-    state; the other is **derived at render time** from `userRate`. That is what
-    makes a round-trip non-drifting (the edited side is never rewritten with a
-    rounded copy of itself) and makes the existing "Refresh" rate control
-    re-derive the other side with no effect to synchronize. What is submitted is
-    unchanged: `amount` in account currency plus `exchange_rate_to_base`.
-    `AmountInput`'s `name` is now optional — omitting it renders no hidden
-    input, which is what the display-only mirror needs. Create form only: the
-    edit form has no FX plumbing at all, and adding it is a separate slice.
+  - **BR-031 multi-currency entry.** Two different problems, and the ticket
+    conflated them — corrected after QA:
+    - **Expense / income in a foreign-currency account** has exactly *one* real
+      value, the one in the account's own currency. Nobody records a COP
+      purchase by typing CAD. So the base-currency figure is a **line of text**
+      under the amount (`transactionForm.amountInBasePreview`), not a second
+      input. A linked editable base field shipped first and was wrong: it gave
+      a large, prominent control to a number that is always derived.
+    - **Transfers** are where two real amounts exist — what left the source and
+      what arrived in the destination, both entered by the user. Those now sit
+      in **one card** (`transferAmountsCard`), each amount directly above the
+      account it applies to, replacing "amount at the top, *amount received*
+      pushed below the date, description and notes". The From/To selectors moved
+      out of the desktop grid and the mobile row list into that card; on mobile
+      they open the same `SelectorSheet` (their hidden inputs stay in
+      `mobileFields`, which never unmounts), on desktop the usual popover
+      combobox, which carries its own hidden input.
+    What is submitted is unchanged in both cases. Create form only: the edit
+    form has no FX plumbing at all, and adding it is a separate slice.
   - **BR-037 calendar view.** New `/dashboard/calendar` (Analysis nav group): a
     Monday-start month grid with per-day income/expense/net, empty days kept as
     zero cells, each active day linking to that day in the transaction list.

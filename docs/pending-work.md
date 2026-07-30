@@ -85,7 +85,7 @@ refunds), BR-045 (time-of-day).
 | ID | Priority | Area | One-line |
 |---|---:|---|---|
 | BR-030 | P1 | Accounts / credit cards | Statement cycle (statement day, payment day, billing account) → Balance Payable vs Outstanding, then a `Pay` settlement action — **now confirmed live** |
-| ~~BR-031~~ ✅ | P1 | Multi-currency entry | **Built** on `sprint/tier3-medium` (no migration): linked base-currency amount field on the create form; the typed side is state, the other is derived from the rate, so round-trips do not drift |
+| ~~BR-031~~ ✅ | P1 | Multi-currency entry | **Built** on `sprint/tier3-medium` (no migration): base-currency equivalent as read-only text on an expense (the COP is the only real value), and the transfer's two real amounts paired with their accounts in one card. The row's "second linked input" was wrong for expenses — see the 2026-07-29 status note |
 | BR-032 | P2 | UX speed / settings | User-configurable transaction-form fields (which optional fields render) |
 | BR-033 | P2 | UX speed | Relative date chips (today / yesterday / two days ago) |
 | BR-034 | P2 | Transactions | Duplicate ("Copy") an existing transaction — preferred over a bookmark/template entity |
