@@ -12,6 +12,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Clock,
   FileText,
   ListChecks,
   Plus,
@@ -32,7 +33,13 @@ import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
 import { AdvancedFields } from '@/components/advanced-fields'
 import { AmountInput } from '@/components/amount-input'
-import { DateField, SegmentedField, SelectField, nativeSelectCls } from '@/components/form-field'
+import {
+  DateField,
+  SegmentedField,
+  SelectField,
+  TimeField,
+  nativeSelectCls,
+} from '@/components/form-field'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,7 +48,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { roundToCents } from '@/lib/calc'
 import { fetchFxRate } from '@/lib/fx'
-import { formatCurrency } from '@/lib/format'
+import { currentTimeLocal, formatCurrency } from '@/lib/format'
 import { useLanguage } from '@/components/language-provider'
 import { RECURRING_FREQUENCIES } from '@/lib/recurring/shared'
 import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
@@ -193,6 +200,12 @@ export function TransactionForm({
     localizeSystemCategoryName(category.name, Boolean(category.is_system), locale)
   const [transactionType, setTransactionType] = useState<TransactionType>(defaultType ?? 'expense')
   const [transactionDate, setTransactionDate] = useState(defaultDate)
+  // BR-045: optional time of day. Seeded from the *viewer's* clock — same
+  // reasoning as RelativeDateChips' `useState(() => todayIsoDateLocal())`, and
+  // the same precedent for reading local time in an initializer. Only submitted
+  // when the field is visible (it is off by default), so a household that does
+  // not record times never writes one.
+  const [transactionTime, setTransactionTime] = useState(() => currentTimeLocal())
   const [accountId, setAccountId] = useState(defaultAccountId ?? '')
   const [fromAccountId, setFromAccountId] = useState(defaultFromAccountId ?? '')
   const [toAccountId, setToAccountId] = useState(defaultToAccountId ?? '')
@@ -572,6 +585,18 @@ export function TransactionForm({
       required
     />
   )
+
+  // BR-045: time of day, opt-in via preferences. Clearing it is meaningful —
+  // an empty value submits nothing and the transaction stays untimed.
+  const timeField = showField('time') ? (
+    <TimeField
+      id="transaction_time"
+      name="transaction_time"
+      label={t('transactionForm.time')}
+      value={transactionTime}
+      onChange={(e) => setTransactionTime(e.target.value)}
+    />
+  ) : null
 
   // Shared status segmented control, paired with another compact field in the
   // essentials grid. When the user has hidden it (BR-032) the value still has
@@ -1500,6 +1525,19 @@ export function TransactionForm({
         children: dateField,
       })}
 
+      {/* BR-045: sits directly under the date, since together they are one
+          "when". Absent entirely unless the user turned the field on. */}
+      {showField('time')
+        ? editRow({
+            id: 'time',
+            icon: <Clock className="size-4.5" />,
+            label: t('transactionForm.time'),
+            value: transactionTime,
+            placeholder: '—',
+            children: timeField,
+          })
+        : null}
+
       {/* A transfer's From/To selectors live in the amounts card above, beside
           the figure each one applies to — they are deliberately absent here. */}
       {isTransfer ? null : (
@@ -1898,6 +1936,7 @@ export function TransactionForm({
           <div className="space-y-1.5">
             {dateField}
             {dateChips}
+            {timeField}
           </div>
           {statusField}
 
@@ -1923,6 +1962,7 @@ export function TransactionForm({
           <div className="space-y-1.5">
             {dateField}
             {dateChips}
+            {timeField}
           </div>
 
           {desktopCombo({

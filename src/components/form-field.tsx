@@ -1,7 +1,7 @@
 'use client'
 
 import type { ComponentProps, ReactNode } from 'react'
-import { CalendarDays, ChevronDown } from 'lucide-react'
+import { CalendarDays, ChevronDown, Clock } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { nativeSelectCls, selectFieldCls } from '@/lib/form-styles'
@@ -86,6 +86,47 @@ export function DateField({
           className={cn('pl-10', className)}
           // Open the native calendar on any click/focus of the field, so the
           // user doesn't have to hit the small picker glyph.
+          onClick={(e) => {
+            try {
+              ;(e.currentTarget as HTMLInputElement).showPicker?.()
+            } catch {
+              // showPicker() throws if the picker is already open; ignore.
+            }
+          }}
+          {...inputProps}
+        />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Labelled time input (BR-045), matching DateField's look with a clock glyph.
+ * Kept separate from DateField rather than parameterising it: the two differ in
+ * icon, input type and picker behaviour, and a `type` prop would let a caller
+ * put a calendar glyph on a time field.
+ */
+export function TimeField({
+  id,
+  label,
+  className,
+  ...inputProps
+}: ComponentProps<'input'> & {
+  id: string
+  label: ReactNode
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="relative">
+        <Clock
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          id={id}
+          type="time"
+          className={cn('pl-10', className)}
           onClick={(e) => {
             try {
               ;(e.currentTarget as HTMLInputElement).showPicker?.()

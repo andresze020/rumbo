@@ -85,6 +85,8 @@ export type TransactionListRow = {
   categoryIcon: string | null
   categoryColor: string | null
   merchantName: string | null
+  /** BR-045 — locale-formatted time of day, or null when none was recorded. */
+  timeFormatted: string | null
   notes: string | null
   voidReason: string | null
   currencyCode: string | null
@@ -482,6 +484,16 @@ function DisplayRow({
           <span className="min-w-0 flex-1">
             <span className="block truncate font-medium leading-snug">{row.title}</span>
             <span className="block truncate text-xs text-muted-foreground">
+              {/* BR-045: the rows are already grouped under a date header, so
+                  the time is what actually distinguishes two entries on the
+                  same day — it leads the subtitle. Untimed rows render exactly
+                  as before. */}
+              {row.timeFormatted ? (
+                <>
+                  <span className="tabular-nums">{row.timeFormatted}</span>
+                  {' · '}
+                </>
+              ) : null}
               {row.accountName}
               {/* A transfer's "category" is the literal word Transfer, which the
                   ⇄ icon and the "from → to" route already say. */}

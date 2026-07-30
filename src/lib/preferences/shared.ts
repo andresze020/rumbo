@@ -10,7 +10,14 @@
  */
 
 /** BR-032 — optional fields the add-transaction form can hide. */
-export const TRANSACTION_FORM_FIELDS = ['payee', 'tags', 'notes', 'repeat', 'status'] as const
+export const TRANSACTION_FORM_FIELDS = [
+  'payee',
+  'tags',
+  'notes',
+  'repeat',
+  'status',
+  'time',
+] as const
 export type TransactionFormField = (typeof TRANSACTION_FORM_FIELDS)[number]
 
 /** BR-038 — which window /dashboard/transactions opens on. */
@@ -18,7 +25,12 @@ export const TRANSACTION_PERIODS = ['current_month', 'last_30_days', 'all_time']
 export type TransactionPeriod = (typeof TRANSACTION_PERIODS)[number]
 
 export type UiPreferences = {
-  /** Which optional form fields render. Every field defaults to visible. */
+  /**
+   * Which optional form fields render. Every field that existed before BR-045
+   * defaults to visible; `time` defaults to **hidden**, because it is a brand
+   * new input and the whole point of BR-032 is that nobody grows a field they
+   * never asked for.
+   */
   formFields: Record<TransactionFormField, boolean>
   transactions: {
     defaultPeriod: TransactionPeriod
@@ -37,6 +49,9 @@ export const DEFAULT_UI_PREFERENCES: UiPreferences = {
     notes: true,
     repeat: true,
     status: true,
+    // BR-045: opt-in. A household that never records times should not have to
+    // turn a new field off.
+    time: false,
   },
   transactions: {
     defaultPeriod: 'current_month',

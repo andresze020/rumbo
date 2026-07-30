@@ -32,6 +32,7 @@ import type { Locale } from '@/lib/i18n/dictionaries'
 import {
   formatCurrency,
   formatIsoDateRange,
+  formatIsoTime,
   formatLabel as formatValue,
   formatMonthLabel,
   localeToBcp47,
@@ -84,6 +85,8 @@ type Category = {
 type Transaction = {
   id: string
   transaction_date: string
+  /** BR-045 — optional wall-clock time; null for every untimed transaction. */
+  transaction_time: string | null
   transaction_type: string
   status: string
   review_status: string
@@ -100,6 +103,7 @@ type Transaction = {
 type SearchTransactionRow = {
   id: string
   transaction_date: string
+  transaction_time: string | null
   created_at: string
   transaction_type: string
   status: string
@@ -671,6 +675,7 @@ export default async function TransactionsPage({
   const transactions: Transaction[] = rpcData.map((r) => ({
     id: r.id,
     transaction_date: r.transaction_date,
+    transaction_time: r.transaction_time,
     transaction_type: r.transaction_type,
     status: r.status,
     review_status: r.review_status,
@@ -1105,6 +1110,7 @@ export default async function TransactionsPage({
       categoryIcon: row.categoryIcon,
       categoryColor: row.categoryColor,
       merchantName: row.transaction.merchant_name,
+      timeFormatted: formatIsoTime(row.transaction.transaction_time, locale),
       notes: row.transaction.notes,
       voidReason: row.transaction.void_reason,
       currencyCode: row.amountEntry?.currency_code ?? null,
@@ -1252,6 +1258,12 @@ export default async function TransactionsPage({
                 selectedEditRow.transaction.transaction_type as 'income' | 'expense'
               }
               transactionDate={selectedEditRow.transaction.transaction_date}
+              // BR-045: Postgres returns `HH:MM:SS`; an `<input type="time">`
+              // without a step only round-trips `HH:MM`, so trim the seconds or
+              // the control renders empty and a save would silently clear it.
+              transactionTime={
+                selectedEditRow.transaction.transaction_time?.slice(0, 5) ?? ''
+              }
               accountId={selectedEditRow.entry.account_id}
               categoryId={selectedEditRow.allocation.category_id}
               amount={Math.abs(Number(selectedEditRow.entry.amount_account_currency))}

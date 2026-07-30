@@ -43,6 +43,11 @@ const FORM_FIELD_LABELS: Record<TransactionFormField, { label: string; descripti
     label: 'Status',
     description: 'Posted or pending. Hiding it always saves as posted.',
   },
+  time: {
+    label: 'Time of day',
+    description:
+      'Orders same-day entries. Off by default, and it never changes which month a transaction belongs to.',
+  },
 }
 
 const PERIOD_LABELS: Record<UiPreferences['transactions']['defaultPeriod'], string> = {

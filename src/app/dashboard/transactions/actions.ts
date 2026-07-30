@@ -77,9 +77,26 @@ function parseNonNegativeNumber(value: FormDataEntryValue | null) {
   return numberValue
 }
 
+/**
+ * BR-045: the optional time of day. Returns `null` for both "the field was not
+ * on the form" and "the user cleared it" — an untimed transaction is the normal
+ * case, so neither is an error. An unparseable value is also `null` rather than
+ * a redirect: the time is descriptive metadata, and refusing to save a whole
+ * transaction over it would be the wrong trade.
+ *
+ * `<input type="time">` submits `HH:MM` (or `HH:MM:SS` when a step is set);
+ * Postgres accepts both for a `time` column, so the string passes through.
+ */
+function parseOptionalTime(value: FormDataEntryValue | null) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(raw) ? raw : null
+}
+
 export async function createManualTransactionAction(formData: FormData) {
   const transactionType = String(formData.get('transaction_type') ?? '').trim()
   const transactionDate = String(formData.get('transaction_date') ?? '').trim()
+  const transactionTime = parseOptionalTime(formData.get('transaction_time'))
   const accountId = String(formData.get('account_id') ?? '').trim()
   const categoryId = String(formData.get('category_id') ?? '').trim()
   const amount = parsePositiveNumber(formData.get('amount'))
@@ -205,6 +222,25 @@ export async function createManualTransactionAction(formData: FormData) {
     redirectWithError(
       'Could not create the transaction. Please check the form and try again.'
     )
+  }
+
+  // BR-045: stamp the time on the row the RPC just created. Deliberately a
+  // separate UPDATE rather than a new RPC parameter — a 13th argument on
+  // create_manual_transaction would sit alongside the existing 12-argument
+  // function as an overload and make named-argument calls ambiguous. Same
+  // after-the-fact shape as set_transaction_tags below.
+  if (transactionTime && newTransactionId) {
+    const { error: timeError } = await supabase
+      .from('transactions')
+      .update({ transaction_time: transactionTime })
+      .eq('id', newTransactionId as string)
+      .eq('household_id', profile.default_household_id)
+
+    if (timeError) {
+      redirectWithError(
+        'Transaction created, but its time could not be saved. Edit it to set the time.'
+      )
+    }
   }
 
   // BR-023: attach the selected tags to the just-created transaction. A failure
@@ -445,6 +481,13 @@ export async function createTransferTransactionAction(formData: FormData) {
 export async function updateManualTransactionAction(formData: FormData) {
   const transactionId = String(formData.get('transaction_id') ?? '').trim()
   const transactionDate = String(formData.get('transaction_date') ?? '').trim()
+  // BR-045: same "absent vs present-but-empty" distinction the payee field
+  // makes below. The inline quick-edit has no time control, so it must not wipe
+  // a time the edit form set; the edit form always submits the field, so an
+  // empty value there is a deliberate clear.
+  const rawTime = formData.get('transaction_time')
+  const timeProvided = rawTime !== null
+  const transactionTime = parseOptionalTime(rawTime)
   const accountId = String(formData.get('account_id') ?? '').trim()
   const categoryId = String(formData.get('category_id') ?? '').trim()
   const amount = parsePositiveNumber(formData.get('amount'))
@@ -530,6 +573,23 @@ export async function updateManualTransactionAction(formData: FormData) {
       p_payee_name: payeeProvided ? payeeName : null,
     }
   )
+
+  // BR-045: the RPC has no time parameter (see the create path for why), so the
+  // column is written alongside it.
+  if (timeProvided && !transactionError) {
+    const { error: timeError } = await supabase
+      .from('transactions')
+      .update({ transaction_time: transactionTime })
+      .eq('id', transactionId)
+      .eq('household_id', profile.default_household_id)
+
+    if (timeError) {
+      redirectWithTransactionError(
+        'Transaction updated, but its time could not be saved.',
+        returnTo
+      )
+    }
+  }
 
   if (transactionError) {
     redirectWithTransactionError(
