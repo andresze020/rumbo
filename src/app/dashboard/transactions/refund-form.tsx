@@ -12,6 +12,7 @@ import { SubmitButton } from '@/components/submit-button'
 import { formActionsCls, formBtnCls } from '@/lib/form-styles'
 import { formatCurrency, todayIsoDateLocal } from '@/lib/format'
 import { useLanguage } from '@/components/language-provider'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { cn } from '@/lib/utils'
 
 /**
@@ -55,6 +56,7 @@ export function RefundForm({
   returnTo: string
 }) {
   const { locale } = useLanguage()
+  const ui = useUiTranslation()
   const [amount, setAmount] = useState(remainingAmount.toFixed(2))
   const [refundDate, setRefundDate] = useState(() => todayIsoDateLocal())
 
@@ -84,7 +86,9 @@ export function RefundForm({
         </p>
         {remainingAmount < originalAmount ? (
           <p>
-            {formatCurrency(remainingAmount, currencyCode, locale)} left to refund.
+            {ui(
+              `${formatCurrency(remainingAmount, currencyCode, locale)} left to refund.`
+            )}
           </p>
         ) : null}
       </div>
@@ -139,9 +143,12 @@ export function RefundForm({
         <Textarea id={`refund_notes_${transactionId}`} name="notes" rows={2} />
       </div>
 
+      {/* One template literal, so this reaches the catalog as a sentence rather
+          than as fragments around two proper nouns. */}
       <p className="text-xs text-muted-foreground">
-        The money goes back into {accountName}, and {categoryName} is reduced by
-        this amount — so your reports show what the purchase actually cost.
+        {ui(
+          `The money goes back into ${accountName}, and ${categoryName} is reduced by this amount — so your reports show what the purchase actually cost.`
+        )}
       </p>
 
       <div className={formActionsCls}>

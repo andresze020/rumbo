@@ -58,20 +58,21 @@ export function InstallmentPlanRow({ plan }: { plan: InstallmentPlanVM }) {
               </Badge>
             ) : null}
           </div>
-          <p className="text-xs text-muted-foreground">
+          {/* Pure arithmetic and proper nouns — nothing to translate. */}
+          <p className="text-xs text-muted-foreground tabular-nums">
             {plan.perInstallmentLabel} × {plan.installmentCount} = {plan.totalLabel}
           </p>
           <p className="text-xs text-muted-foreground">
             {plan.accountName} · {plan.categoryName}
           </p>
-          {/* Each English fragment is its own translated node — composing one
-              into a sentence around a value is what leaves phrases untranslated
-              for es/fr, since the runtime looks up rendered text. */}
+          {/* One template literal per line, so the catalog gets whole sentences
+              with {n} placeholders. Fragments around the values would translate
+              into nonsense word order for es/fr. */}
           {plan.nextDueLabel ? (
             <p className="text-xs text-muted-foreground">
-              {plan.remainingCount} {ui('left')}
-              {' · '}
-              {ui('next')} {plan.nextDueLabel}
+              {ui(
+                `${plan.remainingCount} payments left, next on ${plan.nextDueLabel}`
+              )}
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">

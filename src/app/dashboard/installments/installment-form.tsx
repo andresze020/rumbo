@@ -13,6 +13,7 @@ import { PayeePicker, type PayeeOption } from '../transactions/payee-picker'
 import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
 import { formatCurrency, formatIsoDate, todayIsoDateLocal } from '@/lib/format'
 import { useLanguage } from '@/components/language-provider'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { splitInstallments, installmentDate } from '@/lib/installments/shared'
 import { cn } from '@/lib/utils'
 
@@ -68,6 +69,7 @@ export function InstallmentForm({
   cancelHref: string
 }) {
   const { locale } = useLanguage()
+  const ui = useUiTranslation()
   const [accountId, setAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [totalInput, setTotalInput] = useState('')
@@ -230,23 +232,44 @@ export function InstallmentForm({
       </div>
 
       {/* The split, before anything is written. Saving creates N real
-          transactions — the user should see exactly what they are. */}
+          transactions — the user should see exactly what they are.
+
+          Each line below is ONE template literal, so it reaches the translation
+          catalog as a whole sentence with {n} placeholders. Splitting it into
+          fragments around the values would translate into nonsense word order
+          for es/fr. */}
       {split ? (
         <div className="space-y-1.5 rounded-lg bg-muted/40 p-3 text-xs">
           <p className="font-medium text-foreground">
-            {count} payments of{' '}
-            {formatCurrency(split.perInstallment, currencyCode || baseCurrency, locale)}
+            {ui(
+              `${count} payments of ${formatCurrency(
+                split.perInstallment,
+                currencyCode || baseCurrency,
+                locale
+              )}`
+            )}
           </p>
           {split.lastInstallment !== split.perInstallment ? (
             <p className="text-muted-foreground">
-              The last one is{' '}
-              {formatCurrency(split.lastInstallment, currencyCode || baseCurrency, locale)}, so the
-              payments add up to the total exactly.
+              {ui(
+                `The last payment is ${formatCurrency(
+                  split.lastInstallment,
+                  currencyCode || baseCurrency,
+                  locale
+                )}, so the payments add up to the total exactly.`
+              )}
             </p>
           ) : null}
           <p className="text-muted-foreground">
-            First {formatIsoDate(startDate, locale)}, last{' '}
-            {formatIsoDate(installmentDate(startDate, count), locale)}.
+            {ui(
+              `First payment ${formatIsoDate(
+                startDate,
+                locale
+              )}, last payment ${formatIsoDate(
+                installmentDate(startDate, count),
+                locale
+              )}.`
+            )}
           </p>
           <p className="text-muted-foreground">
             Each payment is saved as its own expense on its own date. There is no

@@ -90,10 +90,9 @@ export function PostForm({
               currencyCode={toCurrencyCode as string}
               required
             />
+            {/* One template literal, so the catalog gets a whole sentence. */}
             <p className="text-xs text-muted-foreground">
-              What actually landed in the destination account, in{' '}
-              {toCurrencyCode}. This changes with the rate, so it is asked for
-              every time.
+              {`What actually landed in the destination account, in ${toCurrencyCode}. This changes with the rate, so it is asked for every time.`}
             </p>
           </div>
         ) : null}

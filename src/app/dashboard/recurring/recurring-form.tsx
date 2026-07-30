@@ -274,9 +274,10 @@ export function RecurringForm({
           />
           {currencyCode ? (
             isCrossCurrencyTransfer ? (
+              // One template literal, so the catalog gets a whole sentence
+              // rather than fragments around the two currency codes.
               <p className="text-xs text-muted-foreground">
-                The amount leaving, in {currencyCode}. You enter what arrives in{' '}
-                {selectedToAccount?.currency_code} each time you post.
+                {`The amount leaving, in ${currencyCode}. You enter what arrives in ${selectedToAccount?.currency_code} each time you post.`}
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">In {currencyCode}.</p>
