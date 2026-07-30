@@ -140,6 +140,49 @@ of redirecting, so the row springs back and the reason is shown.
 `reorderCategoriesAction` was removed — `moveCategoryAction` supersedes it.
 Still not built: multi-select drag.
 
+### Status — 2026-07-29 (Tier-3 medium sprint)
+
+Branch `sprint/tier3-medium`. Shipped **BR-031, BR-037, BR-039, BR-043,
+BR-044** — the five rows classed as "medium: a real feature across several
+files". Three migrations are prepared and **pending `npx supabase db push`**
+(`20260729130000`, `20260729140000`, `20260729150000`).
+
+Decisions worth not re-litigating:
+
+- **BR-031** is on the **create** form only. The row says "the amount field is
+  single-currency"; the *edit* form turned out to have no FX plumbing at all —
+  it neither collects nor submits a rate — so a linked field there would have
+  meant building the whole exchange-rate block first. That is a separate slice.
+  The no-drift requirement is met by deriving rather than storing: the side the
+  user typed is state, the other is computed from the rate on every render, so
+  the edited side is never overwritten with a rounded version of itself and a
+  rate re-fetch updates only the derived side. (An effect that wrote the derived
+  side into state was the first implementation; the repo's
+  `react-hooks/set-state-in-effect` lint rule rejects it, and deriving is the
+  better answer anyway.)
+- **BR-039 changes `/dashboard/reports` and `/dashboard/calendar` only.** The
+  dashboard, trends, cash-flow and month-review read monthly-summary *SQL* RPCs;
+  teaching those about the flag means changing shared financial SQL, which is
+  not what a P3 reporting toggle should cost. The two filter-aware screens are
+  where the "am I actually saving?" question is asked, and both state on screen
+  that the figure includes transfers and that the category breakdown does not.
+- **BR-039 puts nothing in the category breakdown.** A transfer has no
+  allocation, and inventing a synthetic category to make the donut add up would
+  be the exact thing the row's "budgets agree with reports" check forbids. The
+  amount is instead surfaced explicitly: on the "Total spent" KPI, in a callout,
+  and — usefully — in the *merchant* breakdown as `→ Account name`.
+- **BR-043's "vs last month" is over this month's budgeted categories**, not
+  over all expenses. Comparing against a different category set would produce a
+  percentage that moves when a budget line is added, which is not a spending
+  signal. A first month (no prior spend in those categories) renders "nothing to
+  compare yet" rather than 0 % or ∞.
+- **BR-044 uses archive-over-delete** (no delete policy on `notes`), matching
+  tags and payees. Notes are not financial records, so a hard delete would be
+  defensible — but one lifecycle for user-created lists beats two.
+- **BR-044 does not put note markers on the calendar grid.** The grid's day
+  cells already navigate to that day's transactions; a second meaning per cell
+  is a later slice. The two screens cross-link per month instead.
+
 ### Status — 2026-07-28
 
 Shipped on `sprint/mobile-capture-parity` (not yet merged): **BR-032, BR-033,

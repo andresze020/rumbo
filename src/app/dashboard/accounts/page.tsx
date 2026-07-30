@@ -7,6 +7,7 @@ import {
   updateAccountAction,
 } from './actions'
 import { CurrencyChangeGuard } from './currency-change-guard'
+import { AccountTypeWithTransferExpense } from './transfer-expense-field'
 import { OpeningBalanceForm } from './opening-balance-form'
 import { BalanceAdjustmentForm } from './balance-adjustment-form'
 import {
@@ -88,6 +89,8 @@ type AccountMetadata = {
   opening_balance_date: string
   is_archived: boolean
   include_in_net_worth: boolean
+  /** BR-039: reporting-only opt-in; savings / investment / other accounts only. */
+  treat_transfers_as_expense: boolean
   sort_order: number | null
   notes: string | null
 }
@@ -405,21 +408,17 @@ function EditAccountForm({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`account_type_${account.id}`}>{translate(locale, 'accounts.type')}</Label>
-          <select
-            id={`account_type_${account.id}`}
-            name="account_type"
-            defaultValue={account.account_type}
-            className={selectClassName}
-          >
-            {accountTypes.map((accountType) => (
-              <option key={accountType.value} value={accountType.value}>
-                {accountType.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* BR-039: the type select and the transfer-as-expense toggle move
+            together, because the toggle is only legal on some types. */}
+        <AccountTypeWithTransferExpense
+          accountId={account.id}
+          accountTypes={accountTypes}
+          defaultAccountType={account.account_type}
+          defaultTreatTransfersAsExpense={account.treat_transfers_as_expense}
+          typeLabel={translate(locale, 'accounts.type')}
+          toggleLabel={translate(locale, 'accounts.transferAsExpense')}
+          toggleDescription={translate(locale, 'accounts.transferAsExpenseDesc')}
+        />
 
         <div className="space-y-2">
           <Label htmlFor={`account_class_${account.id}`}>{translate(locale, 'accounts.class')}</Label>
@@ -673,7 +672,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const { data: accountMetadata, error: accountMetadataError } = await supabase
     .from('accounts')
     .select(
-      'id, name, account_type, account_class, currency_code, institution_name, last_four, color, icon, opening_balance_date, is_archived, include_in_net_worth, sort_order, notes'
+      'id, name, account_type, account_class, currency_code, institution_name, last_four, color, icon, opening_balance_date, is_archived, include_in_net_worth, treat_transfers_as_expense, sort_order, notes'
     )
     .eq('household_id', household.id)
     .is('deleted_at', null)
@@ -790,6 +789,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       currencyCode: metadata.currency_code,
       isArchived: metadata.is_archived,
       includeInNetWorth: metadata.include_in_net_worth,
+      treatTransfersAsExpense: metadata.treat_transfers_as_expense,
       hasOpeningBalance: row.hasOpeningBalance,
       institutionName: metadata.institution_name ?? null,
       lastFour: metadata.last_four ?? null,

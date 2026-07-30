@@ -23,8 +23,56 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Tier-3 medium sprint** (2026-07-29, branch `sprint/tier3-medium`). The five
+  "medium" benchmark items — real features, several files each, no big-bang
+  schema:
+  - **BR-031 bidirectional currency entry.** When the selected account's
+    currency differs from the household base, the amount hero renders a second
+    linked field in the base currency. Only the side the user typed is held in
+    state; the other is **derived at render time** from `userRate`. That is what
+    makes a round-trip non-drifting (the edited side is never rewritten with a
+    rounded copy of itself) and makes the existing "Refresh" rate control
+    re-derive the other side with no effect to synchronize. What is submitted is
+    unchanged: `amount` in account currency plus `exchange_rate_to_base`.
+    `AmountInput`'s `name` is now optional — omitting it renders no hidden
+    input, which is what the display-only mirror needs. Create form only: the
+    edit form has no FX plumbing at all, and adding it is a separate slice.
+  - **BR-037 calendar view.** New `/dashboard/calendar` (Analysis nav group): a
+    Monday-start month grid with per-day income/expense/net, empty days kept as
+    zero cells, each active day linking to that day in the transaction list.
+    `getCalendarMonth` in `lib/analysis/report-query.ts` reuses the same
+    `fetchFilteredRows` the Reports screen uses, so the grid and the report
+    agree for the same range by construction.
+  - **BR-039 transfer-as-expense.** `accounts.treat_transfers_as_expense`
+    (migration `20260729130000`, **pending `db push`**), constrained in the
+    database to savings / investment / other. **Reporting only**: the ledger
+    keeps two balancing entries, `transaction_allocations` is untouched, and
+    balances, net worth and budgets do not move. `fetchTransferExpenseRows`
+    reads the *inflow leg* directly (a transfer's entries sum to ~0, so the
+    transaction-level sum is useless here) and emits it as an expense row with
+    no allocation — which is why it reaches the KPIs, trend, week rows and
+    calendar but never the category breakdown. Reports and Calendar both say so
+    on screen. Editing the type and the toggle together is why
+    `AccountTypeWithTransferExpense` exists as one client component.
+  - **BR-043 budget vs last month + payment split.** Two read-only functions in
+    migration `20260729140000` (**pending `db push`**):
+    `get_budget_previous_actuals` (last month's actuals for *this* month's
+    budgeted categories, so the comparison is like-for-like) and
+    `get_budget_payment_split` (cash / card / other, exhaustive buckets that sum
+    back to Total spent). Both copy `get_monthly_budget_details`' actuals
+    predicate verbatim, since a divergence would read as a budget disagreeing
+    with its own lines. An allocation has no account, so the split attributes
+    each transaction to the entry with the most negative amount — the paying
+    account, and the right one for a split transaction.
+  - **BR-044 standalone dated notes.** New `notes` table (migration
+    `20260729150000`, **pending `db push`**) plus `/dashboard/notes` (Money nav
+    group): month-at-a-time or all-months browsing, search, create/edit,
+    archive with Undo via the shared `ArchiveToast`. Deliberately outside the
+    ledger — `notes` references nothing in transactions/entries/allocations and
+    nothing references it. Archive-over-delete with no delete policy, matching
+    tags and payees. Cross-linked with the BR-037 calendar in both directions.
 - **Mobile-capture parity sprint** (2026-07-28, branch
-  `sprint/mobile-capture-parity`, **not yet merged**). Seven benchmark items
+  `sprint/mobile-capture-parity`, merged into `main` as `ded206b`). Seven benchmark items
   from `docs/benchmark-review-mobile-money-managers.md`:
   - **BR-033** relative-date chips (today / yesterday / two days ago) above the
     transaction form's date control, on both the desktop grid and the mobile
@@ -318,6 +366,7 @@ The product is household-first. All financial data must belong to a household.
 - categorization_rules
 - recurring_autopost_log
 - month_closures
+- notes (BR-044 — migration prepared, **pending `db push`**)
 
 Pending migrations prepared locally:
 - `20260725120000_payees_bulk_merge.sql` (adds the `merge_payees_bulk`
@@ -328,15 +377,24 @@ Pending migrations prepared locally:
 - `20260729120000_multi_value_transaction_filters.sql` (drops and recreates
   `search_household_transactions` with array type/status/payee params; no
   schema change).
+- `20260729130000_br_039_transfer_as_expense.sql` (adds
+  `accounts.treat_transfers_as_expense` + a type check constraint + a partial
+  index; no new table). **Until this is applied `/dashboard/accounts` shows its
+  "could not load" state**, because the page selects the new column.
+- `20260729140000_br_043_budget_comparison_split.sql` (adds
+  `get_budget_previous_actuals` and `get_budget_payment_split`; no schema
+  change). Budgets degrade to "no comparison" and a zero split without it.
+- `20260729150000_br_044_notes.sql` (adds the `notes` table, its indexes and
+  its RLS policies). `/dashboard/notes` shows its load-error state without it.
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
 ## Key areas of the app
 
-- `src/app/dashboard/` — accounts, categories, payees, transactions, budgets,
-  debts, net-worth, recurring, goals, export, settings, assistant (AI), plus the
-  analysis/planning screens: reports, trends, cash-flow, month-review,
-  debt-planner.
+- `src/app/dashboard/` — accounts, categories, payees, tags, notes,
+  transactions, budgets, debts, net-worth, recurring, goals, export, settings,
+  assistant (AI), plus the analysis/planning screens: reports, trends,
+  cash-flow, calendar, month-review, debt-planner.
 - `src/lib/supabase/{client,server,middleware}.ts` + `src/proxy.ts` — auth/SSR
   (renamed from `src/middleware.ts` in Sprint 13, per Next 16 convention).
 - `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `recurring/`, `imports/`,

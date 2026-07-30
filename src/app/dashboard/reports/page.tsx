@@ -24,7 +24,11 @@ import {
   NEGATIVE_COLOR,
   SERIES_PALETTE,
 } from '@/lib/analysis/server'
-import { getReportData, type ReportFilters as ReportFilterValues } from '@/lib/analysis/report-query'
+import {
+  getReportData,
+  getTransferExpenseAccounts,
+  type ReportFilters as ReportFilterValues,
+} from '@/lib/analysis/report-query'
 
 type ReportsPageProps = {
   searchParams: Promise<{
@@ -171,7 +175,15 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     categoryIds,
     tagIds,
   }
-  const report = await getReportData(ctx, filters, categoryLookup)
+  // BR-039: accounts opted into "transfers in count as expense". Reporting only
+  // — the ledger, balances and budgets are untouched by this.
+  const transferExpenseAccounts = await getTransferExpenseAccounts(ctx)
+  const report = await getReportData(
+    ctx,
+    filters,
+    categoryLookup,
+    transferExpenseAccounts
+  )
 
   // ── Filter options ──────────────────────────────────────────────────────
   const accountOptions: MultiSelectOption[] = (accountRows ?? []).map((a) => ({
@@ -274,7 +286,11 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       label: 'Total spent',
       value: formatCurrency(report.expenses, currency, locale),
       valueClass: 'text-red-600 dark:text-red-400',
-      sub: null as string | null,
+      // BR-039: say so when part of "spent" is money moved into savings.
+      sub:
+        report.transferExpenses > 0
+          ? `incl. ${formatCurrency(report.transferExpenses, currency, locale)} moved to savings`
+          : null,
       icon: <ArrowDownRight />,
       accent: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
     },
@@ -367,6 +383,16 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       {!hasActivity ? (
         <Callout variant="info" className="border-dashed text-muted-foreground">
           No posted income or expense activity for {rangeLabel(dateFrom, dateTo, locale)} with these filters.
+        </Callout>
+      ) : null}
+
+      {/* BR-039: the flag changes this report and nothing else, and the money it
+          adds has no category — both worth stating rather than leaving the user
+          to reconcile the KPI against the breakdown below. */}
+      {report.transferExpenses > 0 ? (
+        <Callout variant="info" className="border-dashed text-muted-foreground">
+          {`${formatCurrency(report.transferExpenses, currency, locale)} of transfers into savings or investment accounts is counted as spending here, because those accounts are set to treat transfers as expense.`}{' '}
+          {`Transfers carry no category, so this amount is in the totals and the week rows but not in the category breakdown. Account balances, net worth and budgets are unaffected.`}
         </Callout>
       ) : null}
 

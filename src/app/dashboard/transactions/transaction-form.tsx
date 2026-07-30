@@ -38,6 +38,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
+import { roundToCents } from '@/lib/calc'
 import { fetchFxRate } from '@/lib/fx'
 import { formatCurrency } from '@/lib/format'
 import { useLanguage } from '@/components/language-provider'
@@ -196,6 +197,13 @@ export function TransactionForm({
   const [toAccountId, setToAccountId] = useState(defaultToAccountId ?? '')
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
   const [amountInput, setAmountInput] = useState(defaultAmount ?? '')
+  // BR-031: the same amount expressed in the household base currency, shown as a
+  // second linked field when the account is in another currency. `amountDrivenBy`
+  // records which of the two the user actually typed in; only the *other* one is
+  // ever recomputed, which is what keeps a round-trip from drifting (recomputing
+  // the edited side would round its own value back at it on every keystroke).
+  const [baseAmountInput, setBaseAmountInput] = useState('')
+  const [amountDrivenBy, setAmountDrivenBy] = useState<'account' | 'base'>('account')
   // BR-007: destination amount for a cross-currency transfer (to-account currency).
   const [toAmountInput, setToAmountInput] = useState(defaultToAmount ?? '')
   // Unified transfer cost (FX spread + fee), in base currency, + its category.
@@ -296,13 +304,61 @@ export function TransactionForm({
   const rateIsValid =
     userRate.trim() !== '' && Number.isFinite(parsedRate) && parsedRate > 0
   const exchangeRateToBase = rateIsValid ? String(1 / parsedRate) : ''
-  const parsedAmount = Number(amountInput)
+
+  // ── BR-031: linked account-currency ⇄ base-currency amounts ───────────────
+  // `userRate` is "how many account-currency units make 1 base unit", so the
+  // account amount divides and the base amount multiplies.
+  //
+  // Only the side the user typed is held in state; the other is *derived at
+  // render time*. That is what keeps a round-trip from drifting — the edited
+  // side is never rewritten with a rounded version of itself — and it makes a
+  // rate change (the auto-fetch or the explicit Refresh) re-derive the other
+  // side for free, with no effect to synchronize.
+  const numericOrNull = (raw: string) => {
+    if (raw.trim() === '') return null
+    const value = Number(raw)
+    return Number.isFinite(value) ? value : null
+  }
+  const convertToBase = (accountAmount: number) => roundToCents(accountAmount / parsedRate)
+  const convertToAccount = (baseAmount: number) => roundToCents(baseAmount * parsedRate)
+
+  /** True while the base-currency field is the one being typed into. */
+  const baseDrivesAmount = isMultiCurrency && amountDrivenBy === 'base'
+  const typedBaseAmount = baseDrivesAmount ? numericOrNull(baseAmountInput) : null
+  /** The account-currency amount: typed, or converted from the base side. */
+  const amountValue = baseDrivesAmount
+    ? rateIsValid && typedBaseAmount !== null
+      ? String(convertToAccount(typedBaseAmount))
+      : ''
+    : amountInput
+  /** The base-currency amount: typed, or converted from the account side. */
+  const baseAmountValue = baseDrivesAmount
+    ? baseAmountInput
+    : (() => {
+        const account = numericOrNull(amountInput)
+        return rateIsValid && account !== null ? String(convertToBase(account)) : ''
+      })()
+
+  const parsedAmount = Number(amountValue)
   const amountIsValid =
-    amountInput.trim() !== '' && Number.isFinite(parsedAmount) && parsedAmount !== 0
+    amountValue.trim() !== '' && Number.isFinite(parsedAmount) && parsedAmount !== 0
 
   function conversionPreview(foreignCurrency: string | undefined) {
     if (!foreignCurrency || !rateIsValid || !amountIsValid) return null
     return `${formatCurrency(parsedAmount, foreignCurrency)} ≈ ${formatCurrency(parsedAmount / parsedRate, baseCurrency)}`
+  }
+
+  /**
+   * Freeze the pair back to a single source of truth on the account side, used
+   * when the account (and so the amount's currency) changes. The currently
+   * derived account amount is written into state first, so switching to a
+   * base-currency account — where the base field no longer renders — cannot drop
+   * a figure that was typed on the base side.
+   */
+  function collapseLinkedAmounts() {
+    if (baseDrivesAmount) setAmountInput(amountValue)
+    setBaseAmountInput('')
+    setAmountDrivenBy('account')
   }
 
   const compatibleCategories = useMemo(
@@ -507,6 +563,7 @@ export function TransactionForm({
     setUserRate('')
     setFxNote('')
     setFxError('')
+    collapseLinkedAmounts()
   }
 
   const typeOptions = [
@@ -537,6 +594,8 @@ export function TransactionForm({
       setUserRate('')
       setFxNote('')
       setFxError('')
+      // No amount bookkeeping needed: BR-031's derived side is computed from the
+      // rate at render time, so clearing the rate blanks it on its own.
     }
   }
 
@@ -731,6 +790,9 @@ export function TransactionForm({
     setUserRate('')
     setFxNote('')
     setFxError('')
+    // The amount's currency just changed, so BR-031's pair collapses onto the
+    // account side; the number itself is kept.
+    collapseLinkedAmounts()
     if (!categoryId) advanceToRef.current = 'category'
   }
 
@@ -1693,9 +1755,10 @@ export function TransactionForm({
           id="amount"
           name="amount"
           currencyCode={amountCurrencyCode}
-          value={amountInput}
+          value={amountValue}
           onValueChange={(v) => {
             setAmountInput(v)
+            setAmountDrivenBy('account')
             // Changing what you sent re-enables the transfer-cost estimate.
             if (isTransfer) setCostTouched(false)
           }}
@@ -1713,6 +1776,42 @@ export function TransactionForm({
           required
           className="mt-1.5"
         />
+
+        {/* BR-031: the same amount in the household base currency, linked both
+            ways. Only shown on the single-account paths — a transfer's second
+            amount field is already a real ledger figure (what arrived in the
+            destination account), not a conversion of the first. */}
+        {isMultiCurrency && !isTransfer ? (
+          <div className="mt-3 border-t border-dashed pt-2.5">
+            <div className="flex items-center justify-between">
+              <Label
+                htmlFor="amount_in_base"
+                className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
+              >
+                {t('transactionForm.amountInBase', { currency: baseCurrency })}
+              </Label>
+              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
+                {baseCurrency}
+              </span>
+            </div>
+            <AmountInput
+              id="amount_in_base"
+              currencyCode={baseCurrency}
+              value={baseAmountValue}
+              onValueChange={(v) => {
+                setBaseAmountInput(v)
+                setAmountDrivenBy('base')
+              }}
+              withCalculator={false}
+              className="mt-1.5"
+            />
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {rateIsValid
+                ? t('transactionForm.amountInBaseHelp')
+                : t('transactionForm.amountInBaseNeedsRate')}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       {/* ── Fields: mobile row-list vs desktop two-column grid ─────────── */}

@@ -17,8 +17,13 @@ import {
 import { cn } from '@/lib/utils'
 
 type AmountInputProps = {
-  /** Form field name for the raw (unformatted) numeric value submitted with the form. */
-  name: string
+  /**
+   * Form field name for the raw (unformatted) numeric value submitted with the
+   * form. Omit for a display-only field whose value the form derives from
+   * something else (BR-031's base-currency mirror) — no hidden input is then
+   * rendered, so nothing extra is submitted.
+   */
+  name?: string
   /** Currency whose symbol is shown as a prefix (e.g. the budget's currency). */
   currencyCode: string
   id?: string
@@ -205,7 +210,7 @@ export function AmountInput({
           </button>
         ) : null}
       </div>
-      <input type="hidden" name={name} value={raw} />
+      {name ? <input type="hidden" name={name} value={raw} /> : null}
 
       {withCalculator && calcOpen ? (
         <div className="mt-2 rounded-xl border bg-card p-2 shadow-sm">

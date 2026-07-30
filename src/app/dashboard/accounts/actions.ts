@@ -41,6 +41,16 @@ function getAccountClass(accountType: AccountType) {
     : 'asset'
 }
 
+// BR-039: "count transfers in as expense" is only meaningful where money is set
+// aside. On cash, checking, a credit card or a debt account a transfer in was not
+// spending — it was moving spendable money or settling a balance. Mirrors the
+// `accounts_transfer_as_expense_type_chk` constraint.
+const TRANSFER_AS_EXPENSE_TYPES = new Set<AccountType>([
+  'savings',
+  'investment',
+  'other',
+])
+
 function parseNullableInteger(value: FormDataEntryValue | null) {
   const text = String(value ?? '').trim()
 
@@ -173,6 +183,7 @@ export async function updateAccountAction(formData: FormData) {
   const icon = String(formData.get('icon') ?? '').trim()
   const notes = String(formData.get('notes') ?? '').trim()
   const includeInNetWorth = formData.get('include_in_net_worth') !== null
+  const treatTransfersAsExpense = formData.get('treat_transfers_as_expense') !== null
   const sortOrder = parseNullableInteger(formData.get('sort_order'))
   const showArchived = String(formData.get('show_archived') ?? '') === 'true'
   const redirectPath = showArchived
@@ -271,6 +282,12 @@ export async function updateAccountAction(formData: FormData) {
       color: color || null,
       icon: icon || null,
       include_in_net_worth: includeInNetWorth,
+      // Forced off for an ineligible type rather than rejected: the form hides
+      // the toggle when the type changes, so the only way to arrive here with
+      // both set is a stale or hand-made submit, and silently dropping a
+      // reporting preference is better than failing the whole save.
+      treat_transfers_as_expense:
+        treatTransfersAsExpense && TRANSFER_AS_EXPENSE_TYPES.has(accountType),
       sort_order: sortOrder,
       notes: notes || null,
       updated_by: userId,

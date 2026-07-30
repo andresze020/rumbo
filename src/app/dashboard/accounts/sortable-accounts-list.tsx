@@ -44,6 +44,8 @@ export type AccountRowVM = {
   currencyCode: string
   isArchived: boolean
   includeInNetWorth: boolean
+  /** BR-039: reporting-only "transfers in count as expense" opt-in. */
+  treatTransfersAsExpense: boolean
   hasOpeningBalance: boolean
   institutionName: string | null
   lastFour: string | null
@@ -128,6 +130,16 @@ function AccountRowBody({
                   {row.isArchived ? (
                     <Badge variant="outline" className="text-[11px]">
                       {t('common.archived')}
+                    </Badge>
+                  ) : null}
+                  {/* BR-039: the flag silently changes what Reports call
+                      "spent", so it has to be visible from the list. */}
+                  {row.treatTransfersAsExpense ? (
+                    <Badge
+                      variant="outline"
+                      className="border-sky-200 text-[11px] text-sky-700 dark:border-sky-900 dark:text-sky-400"
+                    >
+                      {t('accounts.transferAsExpenseBadge')}
                     </Badge>
                   ) : null}
                 </div>
