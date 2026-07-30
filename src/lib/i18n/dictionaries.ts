@@ -289,6 +289,7 @@ export const en = {
     toastUpdated: 'Transaction updated.',
     toastVoided: 'Transaction voided.',
     toastRestored: 'Transaction restored.',
+    toastRefunded: 'Refund recorded.',
   },
   goals: {
     totalDescription: 'Of {target} target, {currency} goals',
@@ -765,6 +766,7 @@ export const es: DeepStringify<typeof en> = {
     toastUpdated: 'Transacción actualizada.',
     toastVoided: 'Transacción anulada.',
     toastRestored: 'Transacción restaurada.',
+    toastRefunded: 'Reembolso registrado.',
   },
   goals: {
     totalDescription: 'De una meta de {target} para objetivos en {currency}',
@@ -1241,6 +1243,7 @@ export const fr: DeepStringify<typeof en> = {
     toastUpdated: 'Transaction mise à jour.',
     toastVoided: 'Transaction annulée.',
     toastRestored: 'Transaction rétablie.',
+    toastRefunded: 'Remboursement enregistré.',
   },
   goals: {
     totalDescription: 'Sur un objectif de {target} pour les objectifs en {currency}',

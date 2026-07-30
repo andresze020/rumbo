@@ -13,6 +13,7 @@ import {
   Pencil,
   RotateCcw,
   Tag,
+  Undo2,
   X,
 } from 'lucide-react'
 import { PayeePicker, type PayeeOption } from './payee-picker'
@@ -97,6 +98,8 @@ export type TransactionListRow = {
   canEditTransfer: boolean
   canVoid: boolean
   editHref: string
+  /** BR-040 — set only on a posted expense that can still be refunded. */
+  refundHref: string | null
   // Inline quick-edit source values (income/expense manual rows only).
   transactionDate: string
   accountId: string | null
@@ -145,6 +148,10 @@ const REVIEW_ORDER: ReviewStatus[] = ['unreviewed', 'reviewed', 'flagged']
 function getAmountColorClass(transactionType: string) {
   if (transactionType === 'income') return 'text-emerald-600 dark:text-emerald-400'
   if (transactionType === 'expense') return 'text-red-600 dark:text-red-400'
+  // BR-040: a refund is money coming back, so it reads green like an inflow —
+  // but it is deliberately not the same green as income, because it did not
+  // increase what the household earned, it reduced what it spent.
+  if (transactionType === 'refund') return 'text-teal-600 dark:text-teal-400'
   return ''
 }
 
@@ -160,6 +167,9 @@ function RowTypeIcon({
   }
   if (transactionType === 'expense') {
     return <ArrowUpRight className={className} aria-hidden="true" />
+  }
+  if (transactionType === 'refund') {
+    return <Undo2 className={className} aria-hidden="true" />
   }
   return <ArrowLeftRight className={className} aria-hidden="true" />
 }
@@ -603,6 +613,18 @@ function DisplayRow({
               <Copy className="size-3.5" aria-hidden="true" />
               {ui('Copy')}
             </button>
+          ) : null}
+          {/* BR-040: a refund goes in the *same category* as a negative amount,
+              so the category nets to what the purchase really cost. Booking it
+              as income would inflate both sides instead. */}
+          {row.refundHref ? (
+            <Link
+              href={row.refundHref}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
+            >
+              <Undo2 className="size-3.5" aria-hidden="true" />
+              {ui('Refund')}
+            </Link>
           ) : null}
           {row.canVoid ? <VoidTransactionForm transactionId={row.id} /> : null}
         </div>
