@@ -154,6 +154,13 @@ export const navGroups: NavGroup[] = [
         phase: 'alpha',
       },
       { href: '/dashboard/recurring', labelKey: 'nav.recurring', icon: Repeat, phase: 'alpha' },
+      {
+        href: '/dashboard/installments',
+        labelKey: 'nav.installments',
+        icon: CreditCard,
+        phase: 'alpha',
+        hint: 'Split a purchase into a fixed number of monthly payments',
+      },
     ],
   },
   {
