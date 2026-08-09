@@ -329,7 +329,13 @@ row keeps its value.
 
 ## Delivery plan
 
-### Phase 0 — Detection spike (hard gate, ~2 hours, no code in the repo)
+### Phase 0 — Detection spike (hard gate, ~2 hours, no app code)
+
+**Run book: [../alpha/tap-capture-phase-0-spike.md](../alpha/tap-capture-phase-0-spike.md)**
+— step-by-step per platform, the payload contract, results tables, and the
+go/no-go decision. A parse sandbox ships with it
+(`scripts/parse-capture-sample.mjs`, offline, dev-only) so notification text can
+be tested for parseability without standing up any infrastructure.
 
 Prove the tap produces a machine-readable event **on the user's actual phone and
 card**, before anything is built.
@@ -452,6 +458,8 @@ manually, per the project's database rules.
 
 ## Related
 
+- [../alpha/tap-capture-phase-0-spike.md](../alpha/tap-capture-phase-0-spike.md) —
+  the Phase 0 run book, and the gate this whole design depends on
 - [pwa.md](./pwa.md) — install, share target, and the standing no-service-worker decision
 - [recurring-transactions.md](./recurring-transactions.md) — the existing
   `SECURITY DEFINER` + scheduled-job precedent this design follows
