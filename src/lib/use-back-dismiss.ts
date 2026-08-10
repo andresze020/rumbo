@@ -17,7 +17,23 @@ type OverlayEntry = { token: string; dismiss: () => boolean }
 const overlayStack: OverlayEntry[] = []
 let listening = false
 
+/**
+ * Pops this hook triggered itself, by calling `history.back()` to reclaim the
+ * entry of an overlay that was closed from the UI.
+ *
+ * They are indistinguishable from a real Back press once they reach the
+ * listener, and mistaking one for the other dismisses whatever is underneath:
+ * closing a picker sheet from inside the transaction dialog would tear the
+ * dialog down with it.
+ */
+let selfInitiatedPops = 0
+
 function handlePopState() {
+  if (selfInitiatedPops > 0) {
+    selfInitiatedPops -= 1
+    return
+  }
+
   const entry = overlayStack.pop()
   if (!entry) return
 
@@ -47,6 +63,10 @@ function stopListening() {
   if (!listening) return
   window.removeEventListener('popstate', handlePopState)
   listening = false
+  // Nothing is armed any more, so a self-pop still in flight has no listener
+  // left to reach. Clearing the count keeps it from swallowing the next real
+  // Back press instead.
+  selfInitiatedPops = 0
 }
 
 /**
@@ -97,7 +117,12 @@ export function useBackDismiss(open: boolean, onDismiss: () => boolean | void) {
       // while it is still the current one. A navigation (a server action
       // redirect, "Apply filters") replaces it, and going back then would undo
       // that navigation instead.
-      if (window.history.state?.__overlay === token) window.history.back()
+      if (window.history.state?.__overlay !== token) return
+
+      // Only count the pop when a listener is left to receive it — with the
+      // stack empty it was just detached, and the count would go stale.
+      if (listening) selfInitiatedPops += 1
+      window.history.back()
     }
   }, [open])
 }
