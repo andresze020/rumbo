@@ -365,6 +365,23 @@ function transactionsPath(
 const CLEAR_FILTERS_HREF = `/dashboard/transactions?date_from=${ALL_TIME_FROM}&date_to=${ALL_TIME_TO}`
 
 /**
+ * One totals figure — a stacked label/amount tile on phones, and the original
+ * inline "Expenses $8,950.28" run of text from `sm` up.
+ */
+const totalCellCls = (accent: string) =>
+  cn(
+    'flex min-w-0 flex-col gap-0.5 font-semibold sm:flex-row sm:items-baseline sm:gap-1.5',
+    accent
+  )
+
+const totalLabelCls =
+  'text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:text-sm sm:font-semibold sm:normal-case sm:tracking-normal sm:text-current'
+
+// Slightly under `text-sm` on phones so a six-figure amount still fits its
+// third of the row; `tabular-nums` keeps the three tiles optically aligned.
+const totalValueCls = 'text-[13px] tabular-nums sm:text-sm'
+
+/**
  * BR-038 — every search param that means "the user (or a link) chose a view".
  * If any of these is present the URL is authoritative and the landing
  * preferences stay out of the way.
@@ -972,6 +989,12 @@ export default async function TransactionsPage({
   const filteredExpenseBase = totalExpenseBase
   const filteredNetBase = filteredIncomeBase - filteredExpenseBase
   const hasFilteredTotals = filteredIncomeBase > 0 || filteredExpenseBase > 0
+  // Net only exists when both sides do, so the mobile tiles split by however
+  // many figures are actually shown rather than always assuming three.
+  const filteredTotalsCount =
+    (filteredExpenseBase > 0 ? 1 : 0) +
+    (filteredIncomeBase > 0 ? 1 : 0) +
+    (filteredIncomeBase > 0 && filteredExpenseBase > 0 ? 1 : 0)
 
   const selectedEditRow = transactionRows.find(
     (row) => row.transaction.id === editTransactionId
@@ -1390,27 +1413,52 @@ export default async function TransactionsPage({
         </div>
 
         {/* ── Filtered totals (base currency) ─────────────────────────── */}
-        {/* One scrolling line on phones instead of a wrapping block. */}
+        {/* These three numbers are the answer to "how did this period go", so
+            they have to be readable at a glance. As one nowrap scrolling line
+            the last one was clipped at the screen edge and the currency note
+            sat entirely off-screen — you had to drag sideways to read a total.
+            Phones get evenly split tiles (label over amount) sized to however
+            many totals there are; `sm:` keeps the original inline row, which
+            has always had the room. */}
         {hasFilteredTotals ? (
-          <div className="-mx-1 flex items-center gap-x-3 gap-y-1 overflow-x-auto whitespace-nowrap px-1 text-sm sm:mx-0 sm:flex-wrap sm:whitespace-normal">
-            {filteredExpenseBase > 0 ? (
-              <span className="font-semibold text-red-600 dark:text-red-400">
-                {ui('Expenses')} {formatCurrency(filteredExpenseBase, household.base_currency, locale)}
+          <div className="rounded-xl border bg-card p-2.5 text-sm sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
+            <div
+              className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1 sm:px-1"
+              // Ignored once the container is a flex row from `sm` up.
+              style={{
+                gridTemplateColumns: `repeat(${filteredTotalsCount}, minmax(0, 1fr))`,
+              }}
+            >
+              {filteredExpenseBase > 0 ? (
+                <span className={totalCellCls('text-red-600 dark:text-red-400')}>
+                  <span className={totalLabelCls}>{ui('Expenses')}</span>
+                  <span className={totalValueCls}>
+                    {formatCurrency(filteredExpenseBase, household.base_currency, locale)}
+                  </span>
+                </span>
+              ) : null}
+              {filteredIncomeBase > 0 ? (
+                <span className={totalCellCls('text-emerald-600 dark:text-emerald-400')}>
+                  <span className={totalLabelCls}>{ui('Income')}</span>
+                  <span className={totalValueCls}>
+                    {formatCurrency(filteredIncomeBase, household.base_currency, locale)}
+                  </span>
+                </span>
+              ) : null}
+              {filteredIncomeBase > 0 && filteredExpenseBase > 0 ? (
+                <span className={totalCellCls('text-foreground')}>
+                  <span className={totalLabelCls}>{ui('Net')}</span>
+                  <span className={totalValueCls}>
+                    {formatCurrency(filteredNetBase, household.base_currency, locale)}
+                  </span>
+                </span>
+              ) : null}
+              {/* Which "$" these are — the households here hold both CAD and
+                  COP accounts, so the code is not decoration. */}
+              <span className="col-span-full text-right text-[11px] text-muted-foreground sm:col-auto sm:text-left sm:text-xs">
+                {ui('in')} {household.base_currency}
               </span>
-            ) : null}
-            {filteredIncomeBase > 0 ? (
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                {ui('Income')} {formatCurrency(filteredIncomeBase, household.base_currency, locale)}
-              </span>
-            ) : null}
-            {filteredIncomeBase > 0 && filteredExpenseBase > 0 ? (
-              <span className="font-semibold text-foreground">
-                {ui('Net')} {formatCurrency(filteredNetBase, household.base_currency, locale)}
-              </span>
-            ) : null}
-            <span className="text-xs text-muted-foreground">
-              {ui('in')} {household.base_currency}
-            </span>
+            </div>
           </div>
         ) : null}
 
