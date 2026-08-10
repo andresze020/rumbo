@@ -40,7 +40,8 @@ The product is household-first. All financial data must belong to a household.
   - `useBackDismiss` (`lib/use-back-dismiss.ts`) gives overlays a history entry
     so Android Back closes them; nested overlays share one listener and only the
     top one is dismissed per press, and a drill-down stays armed after stepping
-    up. `SelectorSheet` uses it and moved its back affordance into the header.
+    up. `SelectorSheet` (which also moved its back affordance into the header)
+    and the add-transaction dialog both use it.
   - `CategoryPicker`'s two-select version chains into Subcategory
     (`showPicker()`, focus fallback) after a parent with children is chosen.
   - `ScreenTransition` animates route changes; globals.css adds tap/overscroll

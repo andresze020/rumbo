@@ -24,6 +24,7 @@ import {
   type QuickAddFormData,
 } from '@/app/dashboard/quick-add-actions'
 import { useLanguage } from '@/components/language-provider'
+import { useBackDismiss } from '@/lib/use-back-dismiss'
 import { todayIsoDateLocal } from '@/lib/format'
 
 type TransactionType = 'income' | 'expense'
@@ -361,6 +362,14 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
     setOpen(false)
     clearPrefills()
   }
+
+  // Back dismisses the entry sheet instead of leaving the screen behind it.
+  // A picker sheet opened on top of this one owns its own history entry, so it
+  // is always the one Back reaches first.
+  useBackDismiss(open, () => {
+    closeDialog()
+    return false
+  })
 
   return (
     <TransactionDialogContext.Provider value={{ openDialog }}>
