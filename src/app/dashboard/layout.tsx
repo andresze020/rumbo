@@ -9,6 +9,7 @@ import { AssistantDrawer } from '@/components/assistant-drawer'
 import { InstallAppHint } from '@/components/install-app-hint'
 import { LanguageProvider } from '@/components/language-provider'
 import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
+import { ScreenTransition } from '@/components/screen-transition'
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { createClient } from '@/lib/supabase/server'
@@ -40,7 +41,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             <InstallAppHint />
 
             <main className="flex-1 pt-14 pb-24 lg:pt-0 lg:pb-24">
-              {children}
+              <ScreenTransition>{children}</ScreenTransition>
             </main>
           </div>
 

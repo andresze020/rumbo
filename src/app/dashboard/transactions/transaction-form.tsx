@@ -1005,7 +1005,9 @@ export function TransactionForm({
       <>
         {showAccountCreate ? (
           <div className="space-y-2">
-            {backButton(() => setShowAccountCreate(false), 'Back to accounts')}
+            {/* On mobile the sheet header owns the back chevron; this inline
+                link is the desktop popover's only way up. */}
+            {isMobile ? null : backButton(() => setShowAccountCreate(false), 'Back to accounts')}
             <Input
               placeholder="Account name"
               value={newAccountName}
@@ -1134,16 +1136,22 @@ export function TransactionForm({
       <>
         {drillParent ? (
           <div className="space-y-2">
-            {backButton(() => {
-              setCategoryDrillParentId(null)
-              setSubcategorySearch('')
-            }, 'All categories')}
-            <div className="flex items-center gap-2 px-1 text-sm font-medium">
-              {drillParent.icon ? (
-                <span aria-hidden="true">{drillParent.icon}</span>
-              ) : null}
-              <span className="truncate">{categoryName(drillParent)}</span>
-            </div>
+            {/* Desktop only — the mobile sheet's header carries the chevron and
+                the parent's name, so repeating both here would be noise. */}
+            {isMobile ? null : (
+              <>
+                {backButton(() => {
+                  setCategoryDrillParentId(null)
+                  setSubcategorySearch('')
+                }, 'All categories')}
+                <div className="flex items-center gap-2 px-1 text-sm font-medium">
+                  {drillParent.icon ? (
+                    <span aria-hidden="true">{drillParent.icon}</span>
+                  ) : null}
+                  <span className="truncate">{categoryName(drillParent)}</span>
+                </div>
+              </>
+            )}
             <Input
               placeholder="Search or add a subcategory"
               value={subcategorySearch}
@@ -1627,7 +1635,26 @@ export function TransactionForm({
   // A single sheet instance drives every sheet-backed row; its title and body
   // switch on which row opened it. The picker bodies are the same ones the
   // desktop Popover uses, so behaviour stays consistent across breakpoints.
-  const sheetTitle =
+  // Drilled-in subviews retitle the sheet and light up its back chevron, so the
+  // header always says where you are and how to get back out — one tap, in the
+  // same place, whichever picker is open.
+  const drilledCategoryParent =
+    sheetField === 'category' && categoryDrillParentId
+      ? availableCategories.find((c) => c.id === categoryDrillParentId)
+      : null
+  const drilledAccountCreate =
+    showAccountCreate && (sheetField === 'account' || sheetField === 'from' || sheetField === 'to')
+
+  const sheetBack = drilledCategoryParent
+    ? () => {
+        setCategoryDrillParentId(null)
+        setSubcategorySearch('')
+      }
+    : drilledAccountCreate
+      ? () => setShowAccountCreate(false)
+      : undefined
+
+  const baseSheetTitle =
     sheetField === 'category'
       ? 'Category'
       : sheetField === 'payee'
@@ -1637,6 +1664,12 @@ export function TransactionForm({
           : sheetField === 'to'
             ? t('transactionForm.toAccount')
             : t('transactionForm.account')
+
+  const sheetTitle = drilledCategoryParent
+    ? `${drilledCategoryParent.icon ? `${drilledCategoryParent.icon} ` : ''}${categoryName(drilledCategoryParent)}`
+    : drilledAccountCreate
+      ? ui('New account')
+      : baseSheetTitle
 
   let sheetBody: ReactNode = null
   if (sheetField === 'category') {
@@ -1655,7 +1688,12 @@ export function TransactionForm({
     <form action={submitAction} onSubmit={rememberCategoryUsage} className="space-y-3">
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
 
-      <SelectorSheet open={sheetField !== null} onClose={closePicker} title={sheetTitle}>
+      <SelectorSheet
+        open={sheetField !== null}
+        onClose={closePicker}
+        onBack={sheetBack}
+        title={sheetTitle}
+      >
         {sheetBody}
       </SelectorSheet>
 

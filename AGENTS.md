@@ -23,6 +23,28 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Sticky filters + native-feeling mobile navigation** (2026-08-10, branch
+  `claude/filtros-ux-mobile-uqa5zt`, **not yet merged**). No schema changes.
+  - `/dashboard/transactions` remembers the last applied filter scope in the
+    `af_tx_scope` cookie (`lib/filters/transaction-scope-memory.ts`, written by
+    the client `remember-scope.tsx`, read by the page's server component). A
+    bare landing is redirected to it, ahead of the BR-038 landing preferences;
+    the cookie expires after 12 hours so a pinned month cannot outlive the
+    month, and only a view the user actually narrowed is recorded.
+  - `TransactionDialogProvider` now passes the **full** current URL as
+    `return_to`, not just the pathname — creating a transaction used to redirect
+    to an unfiltered list.
+  - The filter bar applies through `router.push` instead of a native GET submit
+    (no full document reload). Because the bar now survives navigation, both it
+    and `MultiSelectChip` re-seed their staged state from the applied props.
+  - `useBackDismiss` (`lib/use-back-dismiss.ts`) gives overlays a history entry
+    so Android Back closes them; nested overlays share one listener and only the
+    top one is dismissed per press, and a drill-down stays armed after stepping
+    up. `SelectorSheet` uses it and moved its back affordance into the header.
+  - `CategoryPicker`'s two-select version chains into Subcategory
+    (`showPicker()`, focus fallback) after a parent with children is chosen.
+  - `ScreenTransition` animates route changes; globals.css adds tap/overscroll
+    behaviour for the installed PWA.
 - **Mobile-capture parity sprint** (2026-07-28, branch
   `sprint/mobile-capture-parity`, **not yet merged**). Seven benchmark items
   from `docs/benchmark-review-mobile-money-managers.md`:

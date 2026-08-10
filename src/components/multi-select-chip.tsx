@@ -36,6 +36,19 @@ export function MultiSelectChip({
   const isControlled = open !== undefined && onOpenChange !== undefined
   const [checked, setChecked] = useState<Set<string>>(() => new Set(selectedIds))
 
+  // Re-seed the draft whenever the applied selection changes under us. The
+  // transactions bar applies filters with a client-side navigation, so this
+  // component is no longer remounted on every apply, and a stale draft would
+  // silently re-add a filter the user had just removed. Adjusted during render
+  // rather than in an effect, per
+  // https://react.dev/learn/you-might-not-need-an-effect.
+  const appliedKey = selectedIds.join(',')
+  const [syncedKey, setSyncedKey] = useState(appliedKey)
+  if (appliedKey !== syncedKey) {
+    setSyncedKey(appliedKey)
+    setChecked(new Set(selectedIds))
+  }
+
   function toggle(id: string, isChecked: boolean) {
     setChecked((prev) => {
       const next = new Set(prev)

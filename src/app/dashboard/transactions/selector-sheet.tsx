@@ -1,15 +1,21 @@
 'use client'
 
 import { useEffect, type ReactNode } from 'react'
-import { X } from 'lucide-react'
+import { ChevronLeft, X } from 'lucide-react'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
+import { useBackDismiss } from '@/lib/use-back-dismiss'
 import { cn } from '@/lib/utils'
 
 type SelectorSheetProps = {
   open: boolean
   onClose: () => void
   title: ReactNode
-  /** Optional leading control (e.g. a back chevron when drilled into a subview). */
-  leading?: ReactNode
+  /**
+   * Where "up one level" goes when the sheet is drilled into a subview (a
+   * category's subcategories, the inline create-account form). Given one, the
+   * header shows a back chevron and Back/Escape step up instead of closing.
+   */
+  onBack?: () => void
   children: ReactNode
 }
 
@@ -34,22 +40,38 @@ export function SelectorSheet({
   open,
   onClose,
   title,
-  leading,
+  onBack,
   children,
 }: SelectorSheetProps) {
-  // Escape closes this sheet first (capture phase + stopPropagation), so it
-  // doesn't also bubble up and dismiss the parent transaction dialog.
+  const ui = useUiTranslation()
+
+  // Android Back closes the sheet (or steps up a level) rather than leaving the
+  // screen — the same thing the header chevron does, which is what makes this
+  // read as a native picker instead of a page.
+  useBackDismiss(open, () => {
+    if (!onBack) {
+      onClose()
+      return false
+    }
+    onBack()
+    // Still open, one level up: stay armed for the next press.
+    return true
+  })
+
+  // Escape resolves here first (capture phase + stopPropagation), so it doesn't
+  // also bubble up and dismiss the parent transaction dialog.
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation()
-        onClose()
+        if (onBack) onBack()
+        else onClose()
       }
     }
     document.addEventListener('keydown', onKey, true)
     return () => document.removeEventListener('keydown', onKey, true)
-  }, [open, onClose])
+  }, [open, onBack, onClose])
 
   if (!open) return null
 
@@ -76,16 +98,33 @@ export function SelectorSheet({
           'animate-in slide-in-from-bottom-4 duration-200'
         )}
       >
-        <header className="flex items-center gap-2 border-b px-2 pb-2 pt-2">
-          {leading ? <div className="shrink-0">{leading}</div> : null}
+        <div
+          aria-hidden="true"
+          className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-muted-foreground/30"
+        />
+
+        <header className="flex items-center gap-1 border-b px-2 pb-2 pt-1.5">
+          {/* A full-size tap target in the header, not a small text link buried
+              in the scrolling body: stepping back out of a subcategory list is
+              the most repeated move in this sheet. */}
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label={ui('Back')}
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ChevronLeft className="size-5" aria-hidden="true" />
+            </button>
+          ) : null}
           <h2 className="min-w-0 flex-1 truncate px-1 font-heading text-base font-medium text-foreground">
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
-            className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={ui('Close')}
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="size-5" aria-hidden="true" />
           </button>

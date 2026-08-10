@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Store, X } from 'lucide-react'
@@ -12,6 +13,7 @@ import {
   type ReviewStatus,
 } from './transaction-list'
 import { TransactionToasts } from './transaction-toasts'
+import { RememberTransactionScope } from './remember-scope'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
@@ -20,6 +22,11 @@ import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { Callout } from '@/components/callout'
 import { createClient } from '@/lib/supabase/server'
 import { getUiPreferences } from '@/lib/preferences/server'
+import {
+  TRANSACTION_SCOPE_COOKIE,
+  isTransactionScopeKey,
+  parseTransactionScope,
+} from '@/lib/filters/transaction-scope-memory'
 import {
   hasDefaultTransactionScope,
   type UiPreferences,
@@ -378,6 +385,37 @@ const FILTER_PARAM_KEYS = [
 ] as const
 
 /**
+ * The URL for the filters the user last applied, restored from the cookie the
+ * page writes on every filtered render.
+ *
+ * Takes precedence over the BR-038 landing preferences: those describe where to
+ * *start*, and a remembered scope means the user has already moved on from
+ * there. Returns null when nothing usable was remembered, which drops through
+ * to the preferences as before.
+ *
+ * Non-scope params (`created`, `edit`, `mode`…) ride along, so the toast or
+ * dialog a redirect asked for still shows after the restore.
+ */
+function rememberedScopeHref(
+  rawCookieValue: string,
+  currentParams: Record<string, string | string[] | undefined>
+) {
+  const scope = parseTransactionScope(rawCookieValue)
+  if ([...scope.keys()].length === 0) return null
+
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(currentParams)) {
+    if (value === undefined || isTransactionScopeKey(key)) continue
+    for (const entry of Array.isArray(value) ? value : [value]) {
+      params.append(key, entry)
+    }
+  }
+  for (const [key, value] of scope) params.append(key, value)
+
+  return `/dashboard/transactions?${params.toString()}`
+}
+
+/**
  * The explicit URL that represents this user's preferred landing view.
  *
  * Non-filter params ride along: a server action that redirects back here with
@@ -431,6 +469,17 @@ export default async function TransactionsPage({
   // carries real params and this branch is not re-entered.
   const preferences = await getUiPreferences()
   const hasAnyFilterParam = FILTER_PARAM_KEYS.some((key) => params[key] !== undefined)
+
+  // Filters the user applied earlier in the session win over the landing
+  // preferences: switching screens, or being redirected back here after
+  // creating a transaction, should return to the view they were working in.
+  if (!hasAnyFilterParam) {
+    const rememberedScope = (await cookies()).get(TRANSACTION_SCOPE_COOKIE)?.value
+    const restoredHref = rememberedScope
+      ? rememberedScopeHref(rememberedScope, params)
+      : null
+    if (restoredHref) redirect(restoredHref)
+  }
 
   if (!hasAnyFilterParam && !hasDefaultTransactionScope(preferences)) {
     redirect(preferredScopeHref(preferences, params))
@@ -509,6 +558,11 @@ export default async function TransactionsPage({
   const editTransactionId =
     typeof params.edit === 'string' ? params.edit : null
   const returnTo = transactionsPath(filters)
+
+  // What a bare `/dashboard/transactions` should be restored to. Only recorded
+  // once the user has actually narrowed something down — remembering the
+  // untouched default view would pin them to whichever month they first opened.
+  const rememberedScopeQuery = hasActiveFilters ? returnTo.split('?')[1] ?? '' : ''
 
   const supabase = await createClient()
   const {
@@ -1188,6 +1242,11 @@ export default async function TransactionsPage({
           </>
         }
       />
+
+      {/* Keeps these filters for the next bare landing on this screen. */}
+      {rememberedScopeQuery ? (
+        <RememberTransactionScope query={rememberedScopeQuery} />
+      ) : null}
 
       {/* ── Notifications ──────────────────────────────────────────────── */}
       <TransactionToasts />

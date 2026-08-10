@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -90,6 +91,42 @@ function useMobileKeyboardInset() {
   return inset
 }
 
+/**
+ * Params that describe *this* navigation rather than the view behind the
+ * dialog: a toast to show, a dialog to reopen, a share payload to consume.
+ * Everything else — the transactions screen's filters, above all — has to
+ * survive the round trip, or creating a transaction silently drops the filters
+ * the user was working in.
+ */
+const TRANSIENT_RETURN_PARAMS = [
+  'created',
+  'updated',
+  'voided',
+  'unvoided',
+  'undo_id',
+  'error',
+  'edit',
+  'mode',
+  'page',
+  'quick_add',
+  'share_title',
+  'share_text',
+  'share_url',
+  'next_date',
+  'next_type',
+  'next_account',
+  'next_status',
+  'next_seq',
+] as const
+
+/** The current view as a URL the server action can redirect back to. */
+function buildReturnTo(pathname: string, searchParams: URLSearchParams) {
+  const kept = new URLSearchParams(searchParams.toString())
+  for (const key of TRANSIENT_RETURN_PARAMS) kept.delete(key)
+  const query = kept.toString()
+  return query ? `${pathname}?${query}` : pathname
+}
+
 function readQuickAddType(searchParams: URLSearchParams): OpenDialogType | null {
   const type = searchParams.get('quick_add')
   return type === 'income' || type === 'expense' || type === 'transfer' ? type : null
@@ -157,6 +194,11 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   const [sharedDescription, setSharedDescription] = useState<string | undefined>()
   // BR-034: the source transaction a "Copy" is seeded from.
   const [copyDefaults, setCopyDefaults] = useState<TransactionCopyPayload | undefined>()
+
+  const returnTo = useMemo(
+    () => buildReturnTo(pathname, new URLSearchParams(searchParams.toString())),
+    [pathname, searchParams]
+  )
 
   const nextDate = searchParams.get('next_date')
   const nextType = searchParams.get('next_type')
@@ -394,7 +436,10 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
                 defaultFromAccountId={copyDefaults?.fromAccountId}
                 defaultToAccountId={copyDefaults?.toAccountId}
                 visibleFields={formData.formFields}
-                returnTo={pathname}
+                // The full view, filters included — not just the pathname, or
+                // the redirect after "Create transaction" lands on an
+                // unfiltered list.
+                returnTo={returnTo}
                 onCancel={closeDialog}
               />
             )
