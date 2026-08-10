@@ -46,6 +46,20 @@ The product is household-first. All financial data must belong to a household.
     (`showPicker()`, focus fallback) after a parent with children is chosen.
   - `ScreenTransition` animates route changes; globals.css adds tap/overscroll
     behaviour for the installed PWA.
+  - **Faster capture.** "Save & Add Next" now carries the whole entry context
+    (`next_category`, `next_payee`, `next_tags` alongside date/type/account/
+    status); amount, description and notes stay empty, since those are what
+    differs inside a batch. A new entry opened from `/dashboard/transactions`
+    also seeds itself from the filters when they name exactly one account,
+    category, payee or type — a category only when it matches the type the
+    form opens on. Prefilling from "the last transaction you saved" was
+    deliberately not added: a carried-over category is a miscategorised
+    transaction nobody chose.
+  - **Amount visible over the keyboard.** With the sheet lifted above the
+    keyboard the header plus the sticky action bar covered the amount field.
+    The dialog header collapses to `sr-only` while the keyboard is up, and
+    `useKeepFocusedFieldVisible` re-centres the focused field once the sheet
+    has finished resizing (the browser's own scroll runs too early).
 - **Mobile-capture parity sprint** (2026-07-28, branch
   `sprint/mobile-capture-parity`, **not yet merged**). Seven benchmark items
   from `docs/benchmark-review-mobile-money-managers.md`:
