@@ -31,7 +31,9 @@ export function TransactionToasts() {
     const updated = searchParams.get('updated') === '1'
     const voided = searchParams.get('voided') === '1'
     const unvoided = searchParams.get('unvoided') === '1'
-    if (!created && !updated && !voided && !unvoided) return
+    // BR-040
+    const refunded = searchParams.get('refunded') === '1'
+    if (!created && !updated && !voided && !unvoided && !refunded) return
 
     hasRun.current = true
 
@@ -41,6 +43,7 @@ export function TransactionToasts() {
       if (created) toast({ message: t('transactionsList.toastCreated') })
       if (updated) toast({ message: t('transactionsList.toastUpdated') })
       if (unvoided) toast({ message: t('transactionsList.toastRestored') })
+      if (refunded) toast({ message: t('transactionsList.toastRefunded') })
       if (voided) {
         const undoId = searchParams.get('undo_id')
         const undoStatus = searchParams.get('undo_status')
@@ -60,6 +63,7 @@ export function TransactionToasts() {
       params.delete('updated')
       params.delete('voided')
       params.delete('unvoided')
+      params.delete('refunded')
       params.delete('undo_id')
       params.delete('undo_status')
       router.replace(params.size ? `${pathname}?${params.toString()}` : pathname, { scroll: false })

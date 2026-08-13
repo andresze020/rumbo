@@ -186,6 +186,40 @@ export function todayIsoDateLocal(now: Date = new Date()) {
   return `${year}-${month}-${day}`
 }
 
+/**
+ * The current wall-clock time as `HH:MM` in the **viewer's** timezone, for
+ * prefilling BR-045's optional time field. Same reasoning as
+ * `todayIsoDateLocal`: a control that offers "now" must mean the user's now.
+ */
+export function currentTimeLocal(now: Date = new Date()) {
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
+/**
+ * Formats a stored `time` value (BR-045). Postgres hands back `HH:MM:SS`, and an
+ * `<input type="time">` submits `HH:MM` — both are accepted. Rendered in the
+ * locale's own clock convention (24-hour for es/fr, 12-hour for en-CA), with the
+ * seconds dropped: a household records the 8am coffee, not 08:00:00.
+ *
+ * Returns `null` rather than a "not available" label, because an absent time is
+ * the normal case and callers omit the element entirely instead of printing a
+ * placeholder next to every untimed row.
+ */
+export function formatIsoTime(time: string | null, locale: Locale = 'en'): string | null {
+  if (!time) return null
+  const [hours, minutes] = time.split(':').map(Number)
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
+
+  return new Intl.DateTimeFormat(localeToBcp47(locale), {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(2000, 0, 1, hours, minutes)))
+}
+
 /** Shifts a `YYYY-MM-DD` date by whole days, staying on the calendar grid. */
 export function shiftIsoDate(iso: string, days: number) {
   const [year, month, day] = iso.split('-').map(Number)

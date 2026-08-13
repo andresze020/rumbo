@@ -23,8 +23,156 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Tier-4 large sprint** (2026-07-30, branch `sprint/tier4-large`, based on
+  `sprint/tier3-medium` — **both are unmerged**, so this branch stacks two
+  Tier-3 commits under its own). The six "grandes" benchmark items, each at the
+  first slice its row prescribes. **Six migrations pending `npx supabase db
+  push`** (`20260730120000`–`20260730170000`), on top of Tier-3's three.
+  - **BR-045 optional time-of-day.** Nullable `transactions.transaction_time`
+    (a `time`, not a `timestamptz` — promoting the column would re-interpret
+    every existing date-only row against a timezone the database does not know).
+    Display and ordering only: every monthly RPC, budget, report and closure
+    still filters on `transaction_date` alone, so a timed transaction lands in
+    the same period as before. Opt-in through BR-032 preferences and **the first
+    such field that defaults to hidden**. Written with a plain UPDATE after
+    `create_manual_transaction` returns, never a 13th parameter, which would
+    make named-argument calls ambiguous. `search_household_transactions` is
+    DROPped and recreated (its `RETURNS TABLE` gains a column) and orders by
+    `transaction_time desc nulls last` between the existing date and created_at
+    keys, so a day of untimed rows sorts exactly as it did.
+  - **UC-9 recurring transfers.** `recurring_transactions.to_account_id` plus a
+    `recurring_transactions_shape_chk` requiring a transfer to have both
+    accounts, differing, and **no** category. The destination selector takes the
+    category's slot in the form and the payee field disappears. Manual posting
+    routes to `create_transfer_transaction`; `run_recurring_autopost` gains a
+    transfer branch writing two entries at the source rate, so the pair sums to
+    zero in base currency. **Cross-currency transfers cannot auto-post** — the
+    amount that arrives is a real value only the user knows and it moves with the
+    rate, so the form disables the toggle, the server action refuses it, and the
+    job flags-and-skips. Such a template still works by hand.
+  - **BR-030 credit-card statement cycle** (slice 1 — the `Pay` action is
+    deliberately *not* bundled, per the row). `accounts.statement_day`,
+    `payment_day`, `billing_account_id`, all nullable, both days or neither, and
+    only on `credit_card`/`debt`. `get_card_cycle_summaries` returns `payable`,
+    `outstanding`, `statement_balance`, `paid_since_close` and `is_overdue` per
+    card, positive-as-owed; `payable` excludes `outstanding` and the two are
+    never added together on screen. Household-scoped and plural rather than the
+    per-account name in the row, because the list renders every card at once.
+    Date math exists in SQL *and* in `lib/cards/cycle.ts` on purpose: SQL
+    computes windows beside the money so they cannot drift, while the TS helper
+    backs the creation-time preview, which has no account to read yet.
+    `AccountTypeWithTransferExpense` became `AccountTypeDependentFields` — it now
+    owns every field whose legality depends on the selected type.
+    See `docs/features/card-statement-cycle.md`.
+  - **BR-035 installment purchases.** New `installment_plans` table (not a reuse
+    of `recurring_transactions`, as the row insists) plus
+    `/dashboard/installments`. **The plan holds no money**: it has no entries and
+    no allocation, and all the value lives in N child expense transactions of
+    `total/N` linked by `installment_plan_id`/`installment_number`. That
+    satisfies "reports do not double-count the parent and its children" *by
+    construction* — there is no parent transaction — and **nothing in any report,
+    budget or monthly RPC had to change**. It also lands correctly in BR-030: a
+    future-dated installment falls after the statement close, so it counts as
+    `outstanding`, never `payable`. The last installment absorbs the rounding
+    remainder so the N amounts sum to the total exactly.
+    `create_installment_plan` writes plan and installments in one statement;
+    `cancel_installment_plan` voids only the not-yet-due ones.
+    See `docs/features/installment-plans.md`.
+  - **BR-040 refunds as a negative amount.** The row demanded a written decision
+    first; it is `docs/features/refunds-negative-amounts.md`. Finding:
+    `transaction_allocations` did **not** tolerate negatives (two `> 0` CHECKs),
+    but everything else already did — every reporting query sums
+    `amount_base_currency`, and the `allocation_actuals <= entry_movements`
+    invariant only becomes more true. Decision: allow negatives but **narrow**
+    the constraints rather than drop them — permitted only where
+    `allocation_type = 'expense'`, zero still forbidden, negative income /
+    financial / adjustment still raises. Because a refund is then an ordinary
+    expense allocation, **every** reporting surface nets it with no change at
+    all, and **not one line of shared financial SQL was touched**. New
+    `refund` transaction type, positive entry (so a refund can never fabricate a
+    negative balance), negative allocation in the original's category, and
+    `create_refund_transaction` refuses a refund larger than what is left.
+    New invariants in `supabase/tests/br_040_refund_invariants.sql`.
+  - **BR-036 configurable month start day** (slice 1). `households.month_start_day`
+    (default 1) + **one** resolver, `src/lib/periods/month.ts`, used by **one**
+    screen, `/dashboard/reports`. **No RPC was touched** — Reports already worked
+    from an explicit `date_from`/`date_to` pair, which is exactly why it was
+    chosen to prove the resolver on. Contract: a period labelled `YYYY-MM` starts
+    on `month_start_day` and ends the day before the next one starts; deriving
+    each end from the *next* start is what makes day-1 identical to today,
+    periods contiguous, and day-31 clamping safe across February. **The
+    inconsistency is intended and stated on screen**: budgets, closures and the
+    dashboard still use the calendar month, so their figures for the same month
+    name differ. "Budgets/closures/reports agree" is slice-2 acceptance.
+    See `docs/features/month-start-day.md`.
+  - Also fixed here: BR-042's week rows were gated on "exactly one calendar
+    month", which is never true under a custom start day, so they now gate on a
+    28–31 day span (the weeks are ISO weeks clipped to the range, so they still
+    partition it exactly). And **`scripts/generate-legacy-translations.mjs` was
+    destructive** — it built the catalog from `audit-i18n.mjs` findings alone and
+    wrote it wholesale, silently deleting every entry it did not collect
+    (`ui(...)` arguments are invisible to the audit but required by
+    `check-i18n-coverage.mjs`). It now collects from both sources, seeds from the
+    committed catalog, and writes sorted output. Coverage is 1,209 phrases × 2
+    locales.
+- **Tier-3 medium sprint** (2026-07-29, branch `sprint/tier3-medium`). The five
+  "medium" benchmark items — real features, several files each, no big-bang
+  schema:
+  - **BR-031 multi-currency entry.** Two different problems, and the ticket
+    conflated them — corrected after QA:
+    - **Expense / income in a foreign-currency account** has exactly *one* real
+      value, the one in the account's own currency. Nobody records a COP
+      purchase by typing CAD. So the base-currency figure is a **line of text**
+      under the amount (`transactionForm.amountInBasePreview`), not a second
+      input. A linked editable base field shipped first and was wrong: it gave
+      a large, prominent control to a number that is always derived.
+    - **Transfers** are where two real amounts exist — what left the source and
+      what arrived in the destination, both entered by the user. Those now sit
+      in **one card** (`transferAmountsCard`), each amount directly above the
+      account it applies to, replacing "amount at the top, *amount received*
+      pushed below the date, description and notes". The From/To selectors moved
+      out of the desktop grid and the mobile row list into that card; on mobile
+      they open the same `SelectorSheet` (their hidden inputs stay in
+      `mobileFields`, which never unmounts), on desktop the usual popover
+      combobox, which carries its own hidden input.
+    What is submitted is unchanged in both cases. Create form only: the edit
+    form has no FX plumbing at all, and adding it is a separate slice.
+  - **BR-037 calendar view.** New `/dashboard/calendar` (Analysis nav group): a
+    Monday-start month grid with per-day income/expense/net, empty days kept as
+    zero cells, each active day linking to that day in the transaction list.
+    `getCalendarMonth` in `lib/analysis/report-query.ts` reuses the same
+    `fetchFilteredRows` the Reports screen uses, so the grid and the report
+    agree for the same range by construction.
+  - **BR-039 transfer-as-expense.** `accounts.treat_transfers_as_expense`
+    (migration `20260729130000`, **pending `db push`**), constrained in the
+    database to savings / investment / other. **Reporting only**: the ledger
+    keeps two balancing entries, `transaction_allocations` is untouched, and
+    balances, net worth and budgets do not move. `fetchTransferExpenseRows`
+    reads the *inflow leg* directly (a transfer's entries sum to ~0, so the
+    transaction-level sum is useless here) and emits it as an expense row with
+    no allocation — which is why it reaches the KPIs, trend, week rows and
+    calendar but never the category breakdown. Reports and Calendar both say so
+    on screen. Editing the type and the toggle together is why
+    `AccountTypeWithTransferExpense` exists as one client component.
+  - **BR-043 budget vs last month + payment split.** Two read-only functions in
+    migration `20260729140000` (**pending `db push`**):
+    `get_budget_previous_actuals` (last month's actuals for *this* month's
+    budgeted categories, so the comparison is like-for-like) and
+    `get_budget_payment_split` (cash / card / other, exhaustive buckets that sum
+    back to Total spent). Both copy `get_monthly_budget_details`' actuals
+    predicate verbatim, since a divergence would read as a budget disagreeing
+    with its own lines. An allocation has no account, so the split attributes
+    each transaction to the entry with the most negative amount — the paying
+    account, and the right one for a split transaction.
+  - **BR-044 standalone dated notes.** New `notes` table (migration
+    `20260729150000`, **pending `db push`**) plus `/dashboard/notes` (Money nav
+    group): month-at-a-time or all-months browsing, search, create/edit,
+    archive with Undo via the shared `ArchiveToast`. Deliberately outside the
+    ledger — `notes` references nothing in transactions/entries/allocations and
+    nothing references it. Archive-over-delete with no delete policy, matching
+    tags and payees. Cross-linked with the BR-037 calendar in both directions.
 - **Mobile-capture parity sprint** (2026-07-28, branch
-  `sprint/mobile-capture-parity`, **not yet merged**). Seven benchmark items
+  `sprint/mobile-capture-parity`, merged into `main` as `ded206b`). Seven benchmark items
   from `docs/benchmark-review-mobile-money-managers.md`:
   - **BR-033** relative-date chips (today / yesterday / two days ago) above the
     transaction form's date control, on both the desktop grid and the mobile
@@ -318,6 +466,8 @@ The product is household-first. All financial data must belong to a household.
 - categorization_rules
 - recurring_autopost_log
 - month_closures
+- notes (BR-044 — migration prepared, **pending `db push`**)
+- installment_plans (BR-035 — migration prepared, **pending `db push`**)
 
 Pending migrations prepared locally:
 - `20260725120000_payees_bulk_merge.sql` (adds the `merge_payees_bulk`
@@ -328,19 +478,58 @@ Pending migrations prepared locally:
 - `20260729120000_multi_value_transaction_filters.sql` (drops and recreates
   `search_household_transactions` with array type/status/payee params; no
   schema change).
+- `20260729130000_br_039_transfer_as_expense.sql` (adds
+  `accounts.treat_transfers_as_expense` + a type check constraint + a partial
+  index; no new table). **Until this is applied `/dashboard/accounts` shows its
+  "could not load" state**, because the page selects the new column.
+- `20260729140000_br_043_budget_comparison_split.sql` (adds
+  `get_budget_previous_actuals` and `get_budget_payment_split`; no schema
+  change). Budgets degrade to "no comparison" and a zero split without it.
+- `20260729150000_br_044_notes.sql` (adds the `notes` table, its indexes and
+  its RLS policies). `/dashboard/notes` shows its load-error state without it.
+- `20260730120000_br_045_transaction_time.sql` (adds
+  `transactions.transaction_time`; **DROPs and recreates**
+  `search_household_transactions`, whose `RETURNS TABLE` gains the column).
+  Until applied, `/dashboard/transactions` fails to load — the page selects the
+  new column through that RPC.
+- `20260730130000_uc_009_recurring_transfers.sql` (adds
+  `recurring_transactions.to_account_id` + a shape check; replaces
+  `run_recurring_autopost` with a version that handles transfers — same name and
+  signature, so the existing `pg_cron` job needs no change). Until applied,
+  `/dashboard/recurring` fails to load.
+- `20260730140000_br_030_card_statement_cycle.sql` (adds three `accounts`
+  columns + checks, `card_cycle_day_in_month`, `get_card_cycle_summaries`).
+  Until applied, `/dashboard/accounts` fails to load.
+- `20260730150000_br_035_installment_plans.sql` (adds the `installment_plans`
+  table with RLS, two `transactions` columns, `create_installment_plan` and
+  `cancel_installment_plan`). `/dashboard/installments` shows its load-error
+  callout without it.
+- `20260730160000_br_040_refunds.sql` (**narrows** the two
+  `transaction_allocations` positivity CHECKs to permit a negative amount only
+  on an `expense` allocation, adds the `refund` transaction type,
+  `transactions.refunded_transaction_id` and `create_refund_transaction`). No
+  schema change is required for reporting — see the decision doc.
+- `20260730170000_br_036_month_start_day.sql` (adds
+  `households.month_start_day` + a check). Deliberately touches **no** RPC; it
+  degrades to the calendar month everywhere until applied, and
+  `getHousehold` reads the column in a separate tolerant query so the analysis
+  screens keep working without it.
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
 ## Key areas of the app
 
-- `src/app/dashboard/` — accounts, categories, payees, transactions, budgets,
-  debts, net-worth, recurring, goals, export, settings, assistant (AI), plus the
-  analysis/planning screens: reports, trends, cash-flow, month-review,
-  debt-planner.
+- `src/app/dashboard/` — accounts, categories, payees, tags, notes,
+  transactions, budgets, debts, net-worth, recurring, installments, goals,
+  export, settings, assistant (AI), plus the analysis/planning screens: reports,
+  trends, cash-flow, calendar, month-review, debt-planner.
 - `src/lib/supabase/{client,server,middleware}.ts` + `src/proxy.ts` — auth/SSR
   (renamed from `src/middleware.ts` in Sprint 13, per Next 16 convention).
 - `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `recurring/`, `imports/`,
-  `exports/`, `analysis/server.ts` (shared data helpers for the analysis screens).
+  `exports/`, `analysis/server.ts` (shared data helpers for the analysis screens),
+  `cards/cycle.ts` (BR-030 statement-cycle dates), `installments/shared.ts`
+  (BR-035 split + dates), `periods/month.ts` (BR-036 — **the** period resolver;
+  do not re-derive period boundaries anywhere else).
 - `src/components/ui/` — `alert-dialog.tsx` (Sprint 13) alongside the existing
   `dialog.tsx`; use for destructive-action confirms instead of an inline
   confirm-state pattern.

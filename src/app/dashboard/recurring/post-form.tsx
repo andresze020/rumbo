@@ -20,6 +20,8 @@ type PostFormProps = {
   defaultDate: string
   currencyCode: string
   baseCurrency: string
+  /** UC-9 — the destination account's currency on a transfer template. */
+  toCurrencyCode?: string | null
 }
 
 export function PostForm({
@@ -29,9 +31,15 @@ export function PostForm({
   defaultDate,
   currencyCode,
   baseCurrency,
+  toCurrencyCode = null,
 }: PostFormProps) {
   const isMultiCurrency = currencyCode !== baseCurrency
   const [rate, setRate] = useState('')
+  // UC-9: on a cross-currency transfer the amount that *arrives* is a real
+  // ledger value only the user knows, and it moves with the rate every month —
+  // which is exactly why such a template cannot auto-post. Ask for it here.
+  const isTransfer = Boolean(toCurrencyCode)
+  const isCrossCurrencyTransfer = isTransfer && toCurrencyCode !== currencyCode
 
   const rateNumber = Number(rate)
   const amountNumber = Number(defaultAmount)
@@ -61,7 +69,9 @@ export function PostForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`post_amount_${recurringId}`}>Amount</Label>
+          <Label htmlFor={`post_amount_${recurringId}`}>
+            {isCrossCurrencyTransfer ? 'Amount sent' : 'Amount'}
+          </Label>
           <AmountInput
             id={`post_amount_${recurringId}`}
             name="amount"
@@ -70,6 +80,22 @@ export function PostForm({
             required
           />
         </div>
+
+        {isCrossCurrencyTransfer ? (
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor={`post_to_amount_${recurringId}`}>Amount received</Label>
+            <AmountInput
+              id={`post_to_amount_${recurringId}`}
+              name="to_amount"
+              currencyCode={toCurrencyCode as string}
+              required
+            />
+            {/* One template literal, so the catalog gets a whole sentence. */}
+            <p className="text-xs text-muted-foreground">
+              {`What actually landed in the destination account, in ${toCurrencyCode}. This changes with the rate, so it is asked for every time.`}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       {isMultiCurrency ? (

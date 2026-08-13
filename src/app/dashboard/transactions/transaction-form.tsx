@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Popover } from '@base-ui/react/popover'
 import {
+  ArrowDown,
   ArrowDownRight,
   ArrowLeftRight,
   ArrowUpRight,
@@ -11,6 +12,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Clock,
   FileText,
   ListChecks,
   Plus,
@@ -31,15 +33,22 @@ import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
 import { AdvancedFields } from '@/components/advanced-fields'
 import { AmountInput } from '@/components/amount-input'
-import { DateField, SegmentedField, SelectField, nativeSelectCls } from '@/components/form-field'
+import {
+  DateField,
+  SegmentedField,
+  SelectField,
+  TimeField,
+  nativeSelectCls,
+} from '@/components/form-field'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
+import { roundToCents } from '@/lib/calc'
 import { fetchFxRate } from '@/lib/fx'
-import { formatCurrency } from '@/lib/format'
+import { currentTimeLocal, formatCurrency } from '@/lib/format'
 import { useLanguage } from '@/components/language-provider'
 import { RECURRING_FREQUENCIES } from '@/lib/recurring/shared'
 import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
@@ -191,6 +200,12 @@ export function TransactionForm({
     localizeSystemCategoryName(category.name, Boolean(category.is_system), locale)
   const [transactionType, setTransactionType] = useState<TransactionType>(defaultType ?? 'expense')
   const [transactionDate, setTransactionDate] = useState(defaultDate)
+  // BR-045: optional time of day. Seeded from the *viewer's* clock — same
+  // reasoning as RelativeDateChips' `useState(() => todayIsoDateLocal())`, and
+  // the same precedent for reading local time in an initializer. Only submitted
+  // when the field is visible (it is off by default), so a household that does
+  // not record times never writes one.
+  const [transactionTime, setTransactionTime] = useState(() => currentTimeLocal())
   const [accountId, setAccountId] = useState(defaultAccountId ?? '')
   const [fromAccountId, setFromAccountId] = useState(defaultFromAccountId ?? '')
   const [toAccountId, setToAccountId] = useState(defaultToAccountId ?? '')
@@ -304,6 +319,17 @@ export function TransactionForm({
     if (!foreignCurrency || !rateIsValid || !amountIsValid) return null
     return `${formatCurrency(parsedAmount, foreignCurrency)} ≈ ${formatCurrency(parsedAmount / parsedRate, baseCurrency)}`
   }
+
+  // BR-031 — on an expense or income the amount has exactly one real value: the
+  // one in the account's own currency. The base-currency figure is derived from
+  // the rate, never entered, so it belongs here as a line of text rather than as
+  // a second input. (An editable base field shipped first and was wrong: nobody
+  // records a COP purchase by typing CAD.) The two-real-amounts case is the
+  // transfer, and it is handled by the transfer card further down.
+  const baseEquivalent =
+    isMultiCurrency && rateIsValid && amountIsValid
+      ? formatCurrency(roundToCents(parsedAmount / parsedRate), baseCurrency, locale)
+      : null
 
   const compatibleCategories = useMemo(
     () =>
@@ -559,6 +585,18 @@ export function TransactionForm({
       required
     />
   )
+
+  // BR-045: time of day, opt-in via preferences. Clearing it is meaningful —
+  // an empty value submits nothing and the transaction stays untimed.
+  const timeField = showField('time') ? (
+    <TimeField
+      id="transaction_time"
+      name="transaction_time"
+      label={t('transactionForm.time')}
+      value={transactionTime}
+      onChange={(e) => setTransactionTime(e.target.value)}
+    />
+  ) : null
 
   // Shared status segmented control, paired with another compact field in the
   // essentials grid. When the user has hidden it (BR-032) the value still has
@@ -1487,24 +1525,22 @@ export function TransactionForm({
         children: dateField,
       })}
 
-      {isTransfer ? (
-        <>
-          {pickerRow({
-            id: 'from',
-            icon: <Wallet className="size-4.5" />,
-            label: t('transactionForm.fromAccount'),
-            value: selectedFromAccount ? formatAccountLabel(selectedFromAccount) : '',
-            placeholder: t('transactionForm.selectSource'),
-          })}
-          {pickerRow({
-            id: 'to',
-            icon: <Wallet className="size-4.5" />,
-            label: t('transactionForm.toAccount'),
-            value: selectedToAccount ? formatAccountLabel(selectedToAccount) : '',
-            placeholder: t('transactionForm.selectDestination'),
-          })}
-        </>
-      ) : (
+      {/* BR-045: sits directly under the date, since together they are one
+          "when". Absent entirely unless the user turned the field on. */}
+      {showField('time')
+        ? editRow({
+            id: 'time',
+            icon: <Clock className="size-4.5" />,
+            label: t('transactionForm.time'),
+            value: transactionTime,
+            placeholder: '—',
+            children: timeField,
+          })
+        : null}
+
+      {/* A transfer's From/To selectors live in the amounts card above, beside
+          the figure each one applies to — they are deliberately absent here. */}
+      {isTransfer ? null : (
         <>
           {pickerRow({
             id: 'account',
@@ -1615,8 +1651,176 @@ export function TransactionForm({
           })
         : statusField}
 
-      {isTransfer && availableAccounts.length < 2 ? (
-        <p className="border-t px-1 py-3 text-sm text-muted-foreground">
+    </div>
+  )
+
+  // ── Transfer: the two amounts, each next to its own account ──────────────
+  // A transfer's two figures are both real values the user enters — what left
+  // the source and what arrived in the destination — not one converted into the
+  // other. So they belong in one card, each directly above the account it
+  // applies to, instead of an amount at the top and "amount received" pushed
+  // below the date, description and notes.
+  const AMOUNT_LABEL_CLS =
+    'text-xs font-medium uppercase tracking-wider text-muted-foreground'
+  const CURRENCY_CHIP_CLS =
+    'rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground'
+
+  /**
+   * The account selector for the transfer card. On mobile it opens the same
+   * full-screen `SelectorSheet` the row list uses (its hidden input lives in
+   * `mobileFields`, which stays mounted); on desktop it is the usual popover
+   * combobox, which carries its own hidden input.
+   */
+  const transferAccountField = ({
+    id,
+    label,
+    account,
+    placeholder,
+    hiddenName,
+    hiddenValue,
+    body,
+  }: {
+    id: 'from' | 'to'
+    label: string
+    account: TransactionFormAccount | undefined
+    placeholder: string
+    hiddenName: string
+    hiddenValue: string
+    body: ReactNode
+  }) => {
+    const valueText = account ? formatAccountLabel(account) : ''
+    if (!isMobile) {
+      return desktopCombo({
+        id,
+        label,
+        leading: accountLeading(account),
+        valueText,
+        placeholder,
+        hiddenName,
+        hiddenValue,
+        body,
+      })
+    }
+    return (
+      <div className="space-y-1.5">
+        <Label>{label}</Label>
+        <button
+          type="button"
+          onClick={() => {
+            setExpandedField(null)
+            resetPickerState()
+            setSheetField(id)
+          }}
+          className="flex h-11 w-full items-center gap-2 rounded-xl border bg-background px-3 text-left text-sm"
+        >
+          {accountLeading(account) ? (
+            <span className="shrink-0 text-muted-foreground">{accountLeading(account)}</span>
+          ) : null}
+          <span className={cn('flex-1 truncate', valueText ? '' : 'text-muted-foreground')}>
+            {valueText || placeholder}
+          </span>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </button>
+      </div>
+    )
+  }
+
+  const transferAmountsCard = (
+    <div className="space-y-2.5 rounded-2xl border bg-muted/30 p-3">
+      <div>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="amount" className={AMOUNT_LABEL_CLS}>
+            {t('transactionForm.amountSent')}
+          </Label>
+          <span className={CURRENCY_CHIP_CLS}>{amountCurrencyCode}</span>
+        </div>
+        <AmountInput
+          id="amount"
+          name="amount"
+          currencyCode={amountCurrencyCode}
+          value={amountInput}
+          onValueChange={(v) => {
+            setAmountInput(v)
+            // Changing what you sent re-enables the transfer-cost estimate.
+            setCostTouched(false)
+          }}
+          onCommit={() => {
+            if (!fromAccountId) openPicker('from')
+            else if (!toAccountId) openPicker('to')
+          }}
+          size="lg"
+          withCalculator
+          required
+          className="mt-1.5"
+        />
+        <div className="mt-2">
+          {transferAccountField({
+            id: 'from',
+            label: t('transactionForm.fromAccount'),
+            account: selectedFromAccount,
+            placeholder: t('transactionForm.selectSource'),
+            hiddenName: 'from_account_id',
+            hiddenValue: fromAccountId,
+            body: accountPickerBody(fromAccountId, selectFromAccount, toAccountId),
+          })}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2" aria-hidden="true">
+        <span className="h-px flex-1 bg-border" />
+        <ArrowDown className="size-3.5 text-muted-foreground" />
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <div>
+        {/* Only a cross-currency transfer has a second amount to enter. When both
+            legs share a currency the same figure arrives, so the destination
+            block is just the account. */}
+        {isCrossCurrencyTransfer ? (
+          <>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="to_amount" className={AMOUNT_LABEL_CLS}>
+                {t('transactionForm.amountReceived')}
+              </Label>
+              <span className={CURRENCY_CHIP_CLS}>{selectedToAccount?.currency_code}</span>
+            </div>
+            <AmountInput
+              id="to_amount"
+              name="to_amount"
+              currencyCode={selectedToAccount?.currency_code ?? baseCurrency}
+              value={toAmountInput}
+              onValueChange={(v) => {
+                setToAmountInput(v)
+                // Changing what you received re-estimates the cost.
+                setCostTouched(false)
+              }}
+              size="lg"
+              withCalculator
+              required
+              className="mt-1.5"
+            />
+          </>
+        ) : null}
+        <div className={isCrossCurrencyTransfer ? 'mt-2' : undefined}>
+          {transferAccountField({
+            id: 'to',
+            label: t('transactionForm.toAccount'),
+            account: selectedToAccount,
+            placeholder: t('transactionForm.selectDestination'),
+            hiddenName: 'to_account_id',
+            hiddenValue: toAccountId,
+            body: accountPickerBody(toAccountId, selectToAccount, fromAccountId),
+          })}
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {isCrossCurrencyTransfer
+            ? t('transactionForm.amountReceivedHelp')
+            : t('transactionForm.amountArrivesSame')}
+        </p>
+      </div>
+
+      {availableAccounts.length < 2 ? (
+        <p className="text-sm text-muted-foreground">
           {t('transactionForm.needTwoAccounts')}
         </p>
       ) : null}
@@ -1676,75 +1880,63 @@ export function TransactionForm({
         }))}
       />
 
-      {/* ── Amount hero ──────────────────────────────────────────────── */}
-      <div className="rounded-2xl border bg-muted/30 p-3">
-        <div className="flex items-center justify-between">
-          <Label
-            htmlFor="amount"
-            className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
-          >
-            {t('transactionForm.amount')}
-          </Label>
-          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
-            {amountCurrencyCode}
-          </span>
+      {/* ── Amount: one hero for expense/income, a paired card for transfers ── */}
+      {isTransfer ? (
+        transferAmountsCard
+      ) : (
+        <div className="rounded-2xl border bg-muted/30 p-3">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="amount" className={AMOUNT_LABEL_CLS}>
+              {t('transactionForm.amount')}
+            </Label>
+            <span className={CURRENCY_CHIP_CLS}>{amountCurrencyCode}</span>
+          </div>
+          <AmountInput
+            id="amount"
+            name="amount"
+            currencyCode={amountCurrencyCode}
+            value={amountInput}
+            onValueChange={setAmountInput}
+            // Enter on the amount starts the fill-fast chain at the first field
+            // still missing, so a whole entry can be typed without hunting.
+            onCommit={() => {
+              if (!accountId) openPicker('account')
+              else if (!categoryId) openPicker('category')
+            }}
+            size="lg"
+            withCalculator
+            required
+            className="mt-1.5"
+          />
+
+          {/* BR-031: the base-currency equivalent, as text. On an expense the
+              only value the user has is the one in the account's currency —
+              nobody records a COP purchase by typing CAD — so this reads out the
+              conversion instead of asking for it. */}
+          {isMultiCurrency ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {baseEquivalent
+                ? t('transactionForm.amountInBasePreview', {
+                    amount: baseEquivalent,
+                    currency: baseCurrency,
+                  })
+                : t('transactionForm.amountInBaseNeedsRate')}
+            </p>
+          ) : null}
         </div>
-        <AmountInput
-          id="amount"
-          name="amount"
-          currencyCode={amountCurrencyCode}
-          value={amountInput}
-          onValueChange={(v) => {
-            setAmountInput(v)
-            // Changing what you sent re-enables the transfer-cost estimate.
-            if (isTransfer) setCostTouched(false)
-          }}
-          // Enter on the amount starts the fill-fast chain at the first field
-          // still missing, so a whole entry can be typed without hunting.
-          onCommit={() => {
-            if (isTransfer) {
-              if (!fromAccountId) openPicker('from')
-              else if (!toAccountId) openPicker('to')
-            } else if (!accountId) openPicker('account')
-            else if (!categoryId) openPicker('category')
-          }}
-          size="lg"
-          withCalculator
-          required
-          className="mt-1.5"
-        />
-      </div>
+      )}
 
       {/* ── Fields: mobile row-list vs desktop two-column grid ─────────── */}
       {isMobile ? mobileFields : (
       <>
       {isTransfer ? (
+        // The account selectors moved into the amounts card above, so what is
+        // left here is the rest of the transfer's detail.
         <div className="grid grid-cols-2 gap-3">
-          {desktopCombo({
-            id: 'from',
-            label: t('transactionForm.fromAccount'),
-            leading: accountLeading(selectedFromAccount),
-            valueText: selectedFromAccount ? formatAccountLabel(selectedFromAccount) : '',
-            placeholder: t('transactionForm.selectSource'),
-            hiddenName: 'from_account_id',
-            hiddenValue: fromAccountId,
-            body: accountPickerBody(fromAccountId, selectFromAccount, toAccountId),
-          })}
-
-          {desktopCombo({
-            id: 'to',
-            label: t('transactionForm.toAccount'),
-            leading: accountLeading(selectedToAccount),
-            valueText: selectedToAccount ? formatAccountLabel(selectedToAccount) : '',
-            placeholder: t('transactionForm.selectDestination'),
-            hiddenName: 'to_account_id',
-            hiddenValue: toAccountId,
-            body: accountPickerBody(toAccountId, selectToAccount, fromAccountId),
-          })}
-
           <div className="space-y-1.5">
             {dateField}
             {dateChips}
+            {timeField}
           </div>
           {statusField}
 
@@ -1753,12 +1945,6 @@ export function TransactionForm({
             <Label htmlFor="description">{t('transactionForm.description')}</Label>
             <Input id="description" name="description" defaultValue={defaultDescription} />
           </div>
-
-          {availableAccounts.length < 2 ? (
-            <p className="text-sm text-muted-foreground col-span-2">
-              {t('transactionForm.needTwoAccounts')}
-            </p>
-          ) : null}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
@@ -1776,6 +1962,7 @@ export function TransactionForm({
           <div className="space-y-1.5">
             {dateField}
             {dateChips}
+            {timeField}
           </div>
 
           {desktopCombo({
@@ -1881,41 +2068,6 @@ export function TransactionForm({
           helpText={t('transactionForm.tagsHelp')}
           manageLabel={t('transactionForm.tagsManage')}
         />
-      ) : null}
-
-      {/* ── Cross-currency: amount that arrives in the destination ─────── */}
-      {isTransfer && isCrossCurrencyTransfer ? (
-        <div className="rounded-2xl border bg-muted/30 p-3">
-          <div className="flex items-center justify-between">
-            <Label
-              htmlFor="to_amount"
-              className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
-            >
-              {t('transactionForm.amountReceived')}
-            </Label>
-            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
-              {selectedToAccount?.currency_code}
-            </span>
-          </div>
-          <AmountInput
-            id="to_amount"
-            name="to_amount"
-            currencyCode={selectedToAccount?.currency_code ?? baseCurrency}
-            value={toAmountInput}
-            onValueChange={(v) => {
-              setToAmountInput(v)
-              // Changing what you received re-estimates the cost.
-              setCostTouched(false)
-            }}
-            size="lg"
-            withCalculator
-            required
-            className="mt-1.5"
-          />
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            {t('transactionForm.amountReceivedHelp')}
-          </p>
-        </div>
       ) : null}
 
       {/* ── Cross-currency: unified transfer cost (fees + exchange) ────── */}

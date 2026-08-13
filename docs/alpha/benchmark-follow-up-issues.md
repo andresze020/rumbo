@@ -140,6 +140,128 @@ of redirecting, so the row springs back and the reason is shown.
 `reorderCategoriesAction` was removed — `moveCategoryAction` supersedes it.
 Still not built: multi-select drag.
 
+### Status — 2026-07-30 (Tier-4 large sprint)
+
+Branch `sprint/tier4-large`, based on the still-unmerged `sprint/tier3-medium`.
+Shipped **BR-030, BR-035, BR-036, BR-040, BR-045 and UC-9** — the six "grandes",
+each at the first slice its row prescribes. Six migrations are prepared and
+**pending `npx supabase db push`** (`20260730120000`–`20260730170000`).
+
+**Every row in the BR-030…BR-048 table is now built.** Remaining work is the
+explicitly-deferred later slices listed below, not unstarted tickets.
+
+Per-item detail lives in `AGENTS.md` and in three new feature docs
+(`card-statement-cycle.md`, `installment-plans.md`, `month-start-day.md`) plus the
+BR-040 decision (`refunds-negative-amounts.md`). Decisions worth not
+re-litigating:
+
+- **BR-040's answer was "narrow the constraint", not "drop it".** The finding is
+  that `transaction_allocations` genuinely did forbid negatives (two `> 0`
+  CHECKs) while everything else already tolerated them. The two options were a
+  negative `expense` allocation (one migration, every report nets automatically,
+  invariant lost) or a separate `expense_refund` type (invariant kept, but five
+  shared money functions rewritten so a P3 ticket could be *seen at all*). Making
+  the CHECK type-aware — negatives only where `allocation_type = 'expense'`, zero
+  still forbidden, income/financial/adjustment untouched — gets both, and **no
+  shared financial SQL was modified**.
+- **BR-035's plan holds no money.** The plan row has no entries and no
+  allocation; the N children carry everything. "Reports do not double-count the
+  parent and its children" is then true by construction rather than by a filter
+  someone has to remember, and no report, budget or monthly RPC changed.
+- **BR-036 stopped at one screen, on purpose, and says so on screen.** Reports
+  honours the household's period; budgets, closures and the dashboard do not.
+  The row's "budgets/month-closures/reports agree with each other" check is
+  therefore **not met yet, by design** — it is slice-2 acceptance, and the reason
+  slice 2 exists. A Settings note and a Reports callout state the boundary rather
+  than letting the user find it.
+- **BR-030 did not bundle the `Pay` action**, exactly as its row instructs.
+  `billing_account_id` is stored now so that slice has a source account to read.
+- **UC-9 refuses auto-post on a cross-currency transfer** in three places (form,
+  server action, job). The amount that arrives is a real ledger value only the
+  user knows and it moves with the rate every month; a template cannot carry it,
+  and guessing from a stale rate would write a wrong balance silently. Posting
+  such a template by hand works and asks for the received amount.
+- **BR-045 is display and ordering only.** No period predicate anywhere keys on
+  the time, so a timed transaction lands in exactly the month it does today.
+
+Deferred later slices, all deliberate:
+
+| Item | Deferred piece |
+|---|---|
+| BR-030 | The `Pay` action that posts the settlement transfer. |
+| BR-035 | The *n of N* badge on the **transaction list** (the plan list has it). Needs two more columns on `search_household_transactions`, forcing another DROP-and-recreate. |
+| BR-036 | Everything except Reports. The hard part is `budgets.budget_month` and `month_closures`, which key rows *by month* — a data-model decision, not arithmetic, deserving its own written decision. |
+| BR-045 | Configurable sort order. |
+| BR-042 | Months-within-year (weeks-within-month shipped in the previous sprint). |
+| BR-048 | Multi-select drag. |
+
+Two traps found here, both worth not rediscovering:
+
+- **`scripts/generate-legacy-translations.mjs` was destructive.** It built the
+  catalog from `audit-i18n.mjs` findings alone and wrote it wholesale, so every
+  entry it did not collect was silently deleted — one run dropped ~40
+  already-translated phrases. The audit sees only rendered JSX text, while
+  `check-i18n-coverage.mjs` *also* collects `ui(...)` arguments, so a phrase
+  passed straight to `ui()` was invisible to one and required by the other. Fixed:
+  it now collects from both, seeds from the committed catalog so nothing can be
+  lost, and writes sorted output.
+- **BR-042's week rows were gated on "exactly one calendar month"**, which is
+  never true once BR-036 moves the boundary — they would have silently vanished
+  for precisely the households that enabled it. Now gated on a 28–31 day span.
+
+### Status — 2026-07-29 (Tier-3 medium sprint)
+
+Branch `sprint/tier3-medium`. Shipped **BR-031, BR-037, BR-039, BR-043,
+BR-044** — the five rows classed as "medium: a real feature across several
+files". Three migrations are prepared and **pending `npx supabase db push`**
+(`20260729130000`, `20260729140000`, `20260729150000`).
+
+Decisions worth not re-litigating:
+
+- **BR-031's row asks for the wrong thing on an expense, and the right thing on
+  a transfer.** Corrected after QA on 2026-07-29; the row's "render a second,
+  linked amount field whenever `account.currency_code <> household base`" is
+  kept here for the record but is **not** what shipped.
+  - A COP expense has one real value: the COP. The CAD figure is derived from
+    the rate and will never be typed, so a large editable base field is weight
+    spent on a number the user does not own. It shipped that way first and was
+    rejected on sight — correctly. It is now a **line of text** under the
+    amount, which still removes the mental arithmetic the row complains about.
+  - The genuine two-amount case is the **transfer**: what left the source and
+    what arrived in the destination are both entered, and both are ledger
+    values. Those are now paired in one card, each above its own account
+    selector. Before this, the second amount sat below the date, description
+    and notes — the two figures were never on screen together, which is exactly
+    what made the pairing worth doing.
+  - Consequence: the row's "both directions recompute" check does not apply
+    anywhere. Nothing converts one entered amount into another; the transfer's
+    two amounts are independent, and the expense's base figure is read-only.
+- **BR-031 is on the create form only.** The *edit* form has no FX plumbing at
+  all — it neither collects nor submits a rate — so anything here would have
+  meant building the whole exchange-rate block first. Separate slice.
+- **BR-039 changes `/dashboard/reports` and `/dashboard/calendar` only.** The
+  dashboard, trends, cash-flow and month-review read monthly-summary *SQL* RPCs;
+  teaching those about the flag means changing shared financial SQL, which is
+  not what a P3 reporting toggle should cost. The two filter-aware screens are
+  where the "am I actually saving?" question is asked, and both state on screen
+  that the figure includes transfers and that the category breakdown does not.
+- **BR-039 puts nothing in the category breakdown.** A transfer has no
+  allocation, and inventing a synthetic category to make the donut add up would
+  be the exact thing the row's "budgets agree with reports" check forbids. The
+  amount is instead surfaced explicitly: on the "Total spent" KPI, in a callout,
+  and — usefully — in the *merchant* breakdown as `→ Account name`.
+- **BR-043's "vs last month" is over this month's budgeted categories**, not
+  over all expenses. Comparing against a different category set would produce a
+  percentage that moves when a budget line is added, which is not a spending
+  signal. A first month (no prior spend in those categories) renders "nothing to
+  compare yet" rather than 0 % or ∞.
+- **BR-044 uses archive-over-delete** (no delete policy on `notes`), matching
+  tags and payees. Notes are not financial records, so a hard delete would be
+  defensible — but one lifecycle for user-created lists beats two.
+- **BR-044 does not put note markers on the calendar grid.** The grid's day
+  cells already navigate to that day's transactions; a second meaning per cell
+  is a later slice. The two screens cross-link per month instead.
+
 ### Status — 2026-07-28
 
 Shipped on `sprint/mobile-capture-parity` (not yet merged): **BR-032, BR-033,

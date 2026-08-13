@@ -77,9 +77,26 @@ function parseNonNegativeNumber(value: FormDataEntryValue | null) {
   return numberValue
 }
 
+/**
+ * BR-045: the optional time of day. Returns `null` for both "the field was not
+ * on the form" and "the user cleared it" — an untimed transaction is the normal
+ * case, so neither is an error. An unparseable value is also `null` rather than
+ * a redirect: the time is descriptive metadata, and refusing to save a whole
+ * transaction over it would be the wrong trade.
+ *
+ * `<input type="time">` submits `HH:MM` (or `HH:MM:SS` when a step is set);
+ * Postgres accepts both for a `time` column, so the string passes through.
+ */
+function parseOptionalTime(value: FormDataEntryValue | null) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(raw) ? raw : null
+}
+
 export async function createManualTransactionAction(formData: FormData) {
   const transactionType = String(formData.get('transaction_type') ?? '').trim()
   const transactionDate = String(formData.get('transaction_date') ?? '').trim()
+  const transactionTime = parseOptionalTime(formData.get('transaction_time'))
   const accountId = String(formData.get('account_id') ?? '').trim()
   const categoryId = String(formData.get('category_id') ?? '').trim()
   const amount = parsePositiveNumber(formData.get('amount'))
@@ -207,6 +224,25 @@ export async function createManualTransactionAction(formData: FormData) {
     )
   }
 
+  // BR-045: stamp the time on the row the RPC just created. Deliberately a
+  // separate UPDATE rather than a new RPC parameter — a 13th argument on
+  // create_manual_transaction would sit alongside the existing 12-argument
+  // function as an overload and make named-argument calls ambiguous. Same
+  // after-the-fact shape as set_transaction_tags below.
+  if (transactionTime && newTransactionId) {
+    const { error: timeError } = await supabase
+      .from('transactions')
+      .update({ transaction_time: transactionTime })
+      .eq('id', newTransactionId as string)
+      .eq('household_id', profile.default_household_id)
+
+    if (timeError) {
+      redirectWithError(
+        'Transaction created, but its time could not be saved. Edit it to set the time.'
+      )
+    }
+  }
+
   // BR-023: attach the selected tags to the just-created transaction. A failure
   // here doesn't undo the (already posted) transaction — surface a soft error.
   if (tagsProvided && newTransactionId) {
@@ -309,6 +345,101 @@ export async function createManualTransactionAction(formData: FormData) {
   }
 
   redirectWithTransactionInfo('created', returnTo)
+}
+
+/**
+ * BR-040 — record a refund against an expense.
+ *
+ * The account, category and FX rate all come from the original transaction (the
+ * form submits them as hidden fields), because a refund that landed in a
+ * different category would defeat the whole point: the category has to net to
+ * what the purchase really cost.
+ *
+ * The RPC does the real guarding — that the category is an expense category, and
+ * that the refund does not exceed what is left of the original.
+ */
+export async function createRefundTransactionAction(formData: FormData) {
+  const refundedTransactionId = String(
+    formData.get('refunded_transaction_id') ?? ''
+  ).trim()
+  const accountId = String(formData.get('account_id') ?? '').trim()
+  const categoryId = String(formData.get('category_id') ?? '').trim()
+  const amount = parsePositiveNumber(formData.get('amount'))
+  const transactionDate = String(formData.get('transaction_date') ?? '').trim()
+  const description = String(formData.get('description') ?? '').trim()
+  const notes = String(formData.get('notes') ?? '').trim()
+  const returnTo = String(formData.get('return_to') ?? '').trim() || undefined
+  const exchangeRateToBase =
+    parsePositiveNumber(formData.get('exchange_rate_to_base')) ?? 1
+
+  if (!accountId) {
+    redirectWithTransactionError('The refund needs an account.', returnTo)
+  }
+  if (!categoryId) {
+    redirectWithTransactionError('The refund needs a category.', returnTo)
+  }
+  if (amount === null) {
+    redirectWithTransactionError('The refund amount must be greater than 0.', returnTo)
+  }
+  if (!transactionDate) {
+    redirectWithTransactionError('The refund date is required.', returnTo)
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    redirect('/login')
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('default_household_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    redirectWithTransactionError('Could not load your household.', returnTo)
+  }
+
+  if (!profile?.default_household_id) {
+    redirect('/onboarding')
+  }
+
+  const { error: refundError } = await supabase.rpc('create_refund_transaction', {
+    p_household_id: profile.default_household_id,
+    p_account_id: accountId,
+    p_category_id: categoryId,
+    p_amount: amount,
+    p_transaction_date: transactionDate,
+    p_description: description || null,
+    p_refunded_transaction_id: refundedTransactionId || null,
+    p_notes: notes || null,
+    p_payee_name: null,
+    p_exchange_rate_to_base: exchangeRateToBase,
+  })
+
+  if (refundError) {
+    redirectWithTransactionError(
+      cleanRpcError(
+        refundError.message,
+        'Could not record the refund. Please check the form and try again.'
+      ),
+      returnTo
+    )
+  }
+
+  revalidatePath('/dashboard/transactions')
+  revalidatePath('/dashboard/accounts')
+  revalidatePath('/dashboard/reports')
+  revalidatePath('/dashboard/budgets')
+  revalidatePath('/dashboard')
+
+  redirectWithTransactionInfo('refunded', returnTo)
 }
 
 export async function createTransferTransactionAction(formData: FormData) {
@@ -445,6 +576,13 @@ export async function createTransferTransactionAction(formData: FormData) {
 export async function updateManualTransactionAction(formData: FormData) {
   const transactionId = String(formData.get('transaction_id') ?? '').trim()
   const transactionDate = String(formData.get('transaction_date') ?? '').trim()
+  // BR-045: same "absent vs present-but-empty" distinction the payee field
+  // makes below. The inline quick-edit has no time control, so it must not wipe
+  // a time the edit form set; the edit form always submits the field, so an
+  // empty value there is a deliberate clear.
+  const rawTime = formData.get('transaction_time')
+  const timeProvided = rawTime !== null
+  const transactionTime = parseOptionalTime(rawTime)
   const accountId = String(formData.get('account_id') ?? '').trim()
   const categoryId = String(formData.get('category_id') ?? '').trim()
   const amount = parsePositiveNumber(formData.get('amount'))
@@ -530,6 +668,23 @@ export async function updateManualTransactionAction(formData: FormData) {
       p_payee_name: payeeProvided ? payeeName : null,
     }
   )
+
+  // BR-045: the RPC has no time parameter (see the create path for why), so the
+  // column is written alongside it.
+  if (timeProvided && !transactionError) {
+    const { error: timeError } = await supabase
+      .from('transactions')
+      .update({ transaction_time: transactionTime })
+      .eq('id', transactionId)
+      .eq('household_id', profile.default_household_id)
+
+    if (timeError) {
+      redirectWithTransactionError(
+        'Transaction updated, but its time could not be saved.',
+        returnTo
+      )
+    }
+  }
 
   if (transactionError) {
     redirectWithTransactionError(

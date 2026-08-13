@@ -38,7 +38,13 @@ const CIRC = 2 * Math.PI * RADIUS
 
 /** Pure-SVG donut: stroke-dasharray arcs over a track circle. Server-safe. */
 export function CategoryDonut({ data, currency, total, totalLabel, month }: CategoryDonutProps) {
-  const fractions = data.map((slice) => (total > 0 ? slice.value / total : 0))
+  // BR-040: a category whose refunds in a month exceed its spend nets negative.
+  // The listed figure below stays the true net, but a wedge has no meaningful
+  // negative area — and a negative `stroke-dasharray` is invalid SVG — so the
+  // arc geometry clamps at zero.
+  const fractions = data.map((slice) =>
+    total > 0 ? Math.max(slice.value, 0) / total : 0
+  )
   const segments = fractions.map((fraction, i) => {
     const dash = fraction * CIRC
     // Offset = sum of preceding fractions (clockwise, opposite to accumulation).

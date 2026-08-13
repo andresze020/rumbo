@@ -20,23 +20,43 @@ daily `recurring-autopost` job is scheduled.
   `20260723150000_br_014_recurring_autopost.sql`. The page also shows one
   aggregate alert when any active auto-post template has `last_error`, so
   failures do not require opening every row.
-- 🟡 **Sprint C** — UC-8 (**Dashboard "Upcoming payments" widget**) already
-  shipped on `/dashboard`. **UC-9 (recurring transfers) is the only remaining
-  piece** and is deliberately deferred (see below).
+- ✅ **Sprint C** — UC-8 (**Dashboard "Upcoming payments" widget**) and **UC-9
+  (recurring transfers)** are both shipped. Sprint C is closed.
 
-### UC-9 — recurring transfers (remaining Sprint C work, deferred)
-Needs, as one focused sprint (touches financial posting — must be DB-tested):
-1. Migration: add `to_account_id uuid references accounts(id)` to
-   `recurring_transactions` (+ relax the account/category NOT-NULL expectations
-   for transfer rows).
-2. Recurring form: allow `transfer` type — swap the account+category fields for
-   From/To accounts (mirror the transaction form), incl. cross-currency
-   `to_amount` now that BR-007 supports it.
-3. Manual post (`postRecurringAction` / `post-form.tsx`): route transfer
-   templates to `create_transfer_transaction`.
-4. Auto-post: add a `transfer` branch to `run_recurring_autopost()` that mirrors
-   `create_transfer_transaction`'s two-entry ledger writes (it currently rejects
-   non-income/expense templates).
+### UC-9 — recurring transfers (shipped 2026-07-30)
+Migration `20260730130000_uc_009_recurring_transfers.sql`.
+
+1. **`recurring_transactions.to_account_id`** (nullable) plus a
+   `recurring_transactions_shape_chk` constraint: a `transfer` row must have
+   both accounts, they must differ, and it must have **no** `category_id` —
+   mirroring the ledger rule that a transfer has entries but no allocation. A
+   non-transfer row must have a null `to_account_id`. Existing rows satisfy the
+   `else` branch, so the ALTER validates without a rewrite.
+2. **Form**: `transfer` joins the type select. The destination account occupies
+   the same slot the category does (they are mutually exclusive by schema), the
+   account label becomes From/To, and the payee field is dropped — a transfer
+   moves money between the household's own accounts, so nobody is being paid.
+3. **Manual post** routes to `create_transfer_transaction` (two balancing
+   entries, no allocation). `advanceTemplateSchedule` was extracted so the
+   transfer and income/expense paths share one cursor advance — a transfer that
+   posted without advancing would re-post on the next run.
+4. **Auto-post** gained a `transfer` branch writing the same two entries, both
+   valued at the source account's last known rate, so the pair sums to zero in
+   base currency and net worth does not move.
+
+**Cross-currency transfers are deliberately not auto-postable.** The amount that
+*arrives* is a real ledger value only the user knows, and it moves with the rate
+every month — `create_transfer_transaction` rightly raises without it. So such a
+template is allowed and can be posted by hand (the post form asks for the
+received amount, exactly as the transfer form does), but `auto_post` is refused
+on it in three places: the form disables and explains the checkbox (derived, not
+stored, so switching the accounts back restores the user's own choice),
+`parseAndValidateTemplate` rejects it server-side so a hand-built POST cannot set
+it, and the job flags-and-skips rather than guessing. Same "fail visibly, never
+post a silent 1:1" rule BR-014 already applies to missing FX rates.
+
+The forecast list renders a transfer with `⇄` and no sign: a `−` there would
+read as money leaving the household, which it is not.
 - 🟡 **Requested evolution — inline creation from the transaction form** (UC-10):
   the normal create-transaction form now has a **Repeat** frequency field; a
   single submit posts the first transaction and creates the template

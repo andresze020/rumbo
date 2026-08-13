@@ -33,6 +33,8 @@ export type RecurringTemplate = {
   name: string
   transaction_type: string
   account_id: string | null
+  /** UC-9: destination account on a transfer template; null otherwise. */
+  to_account_id?: string | null
   category_id: string | null
   amount: number | string
   frequency: string
@@ -80,8 +82,11 @@ export function RecurringForm({
     (template?.transaction_type as RecurringType) ?? 'expense'
   )
   const [accountId, setAccountId] = useState(template?.account_id ?? '')
+  const [toAccountId, setToAccountId] = useState(template?.to_account_id ?? '')
   const [categoryId, setCategoryId] = useState(template?.category_id ?? '')
   const [autoPost, setAutoPost] = useState(template?.auto_post ?? false)
+
+  const isTransfer = transactionType === 'transfer'
 
   const categoriesById = useMemo(
     () => new Map(categories.map((c) => [c.id, c])),
@@ -95,11 +100,34 @@ export function RecurringForm({
 
   const selectedAccount = accounts.find((a) => a.id === accountId)
   const currencyCode = selectedAccount?.currency_code ?? ''
+  const selectedToAccount = accounts.find((a) => a.id === toAccountId)
+
+  // UC-9: a template cannot carry the amount that *arrives* in a different
+  // currency — it changes with every month's rate, and only the user knows it.
+  // Such a template is still useful by hand (the post form asks for the received
+  // amount), so it is allowed; auto-post is what gets refused.
+  const isCrossCurrencyTransfer =
+    isTransfer &&
+    Boolean(selectedAccount && selectedToAccount) &&
+    selectedAccount!.currency_code !== selectedToAccount!.currency_code
+
+  // Derived, not stored — an effect writing this back into state is what the
+  // repo's react-hooks/set-state-in-effect rule rejects, and deriving keeps the
+  // user's own choice intact while the pairing is temporarily cross-currency.
+  const effectiveAutoPost = autoPost && !isCrossCurrencyTransfer
 
   const formAction = mode === 'create' ? createRecurringAction : updateRecurringAction
 
   function handleTypeChange(value: string) {
     setTransactionType(value as RecurringType)
+    if (value === 'transfer') {
+      // A transfer has no reporting category (the DB shape constraint enforces
+      // this), so drop any category the user had picked.
+      setCategoryId('')
+      return
+    }
+    // Leaving transfer: the destination account stops being meaningful.
+    setToAccountId('')
     // Clear the category if it no longer matches the new type.
     const stillValid = categories.some(
       (c) => c.id === categoryId && c.category_type === value
@@ -138,6 +166,7 @@ export function RecurringForm({
           >
             <option value="expense">Expense</option>
             <option value="income">Income</option>
+            <option value="transfer">Transfer</option>
           </select>
         </div>
 
@@ -158,7 +187,9 @@ export function RecurringForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`account_${mode}`}>Account</Label>
+          <Label htmlFor={`account_${mode}`}>
+            {isTransfer ? 'From account' : 'Account'}
+          </Label>
           <select
             id={`account_${mode}`}
             name="account_id"
@@ -168,7 +199,7 @@ export function RecurringForm({
             required
           >
             <option value="" disabled>
-              Select account
+              {isTransfer ? 'Select source' : 'Select account'}
             </option>
             {accounts.map((account) => (
               <option key={account.id} value={account.id}>
@@ -178,32 +209,59 @@ export function RecurringForm({
           </select>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`category_${mode}`}>Category</Label>
-          <select
-            id={`category_${mode}`}
-            name="category_id"
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className={selectClassName}
-            required
-            disabled={!compatibleCategories.length}
-          >
-            <option value="" disabled>
-              Select category
-            </option>
-            {compatibleCategories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {categoryLabel(category, categoriesById)}
+        {/* UC-9: a transfer's second half replaces the category — the two are
+            mutually exclusive by schema, so they occupy the same slot. */}
+        {isTransfer ? (
+          <div className="space-y-2">
+            <Label htmlFor={`to_account_${mode}`}>To account</Label>
+            <select
+              id={`to_account_${mode}`}
+              name="to_account_id"
+              value={toAccountId}
+              onChange={(e) => setToAccountId(e.target.value)}
+              className={selectClassName}
+              required
+            >
+              <option value="" disabled>
+                Select destination
               </option>
-            ))}
-          </select>
-          {!compatibleCategories.length ? (
-            <p className="text-xs text-muted-foreground">
-              No {transactionType} categories available.
-            </p>
-          ) : null}
-        </div>
+              {accounts
+                .filter((account) => account.id !== accountId)
+                .map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {accountLabel(account)}
+                  </option>
+                ))}
+            </select>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor={`category_${mode}`}>Category</Label>
+            <select
+              id={`category_${mode}`}
+              name="category_id"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className={selectClassName}
+              required
+              disabled={!compatibleCategories.length}
+            >
+              <option value="" disabled>
+                Select category
+              </option>
+              {compatibleCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {categoryLabel(category, categoriesById)}
+                </option>
+              ))}
+            </select>
+            {!compatibleCategories.length ? (
+              <p className="text-xs text-muted-foreground">
+                No {transactionType} categories available.
+              </p>
+            ) : null}
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor={`amount_${mode}`}>Amount</Label>
@@ -215,7 +273,15 @@ export function RecurringForm({
             required
           />
           {currencyCode ? (
-            <p className="text-xs text-muted-foreground">In {currencyCode}.</p>
+            isCrossCurrencyTransfer ? (
+              // One template literal, so the catalog gets a whole sentence
+              // rather than fragments around the two currency codes.
+              <p className="text-xs text-muted-foreground">
+                {`The amount leaving, in ${currencyCode}. You enter what arrives in ${selectedToAccount?.currency_code} each time you post.`}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">In {currencyCode}.</p>
+            )
           ) : (
             <p className="text-xs text-muted-foreground">
               Select an account to set the currency.
@@ -248,29 +314,49 @@ export function RecurringForm({
         </div>
       </div>
 
-      <PayeePicker
-        payees={payees}
-        defaultValue={template?.payee_name ?? ''}
-        // Same wording split as the transaction form: who paid you vs. whom you paid.
-        label={transactionType === 'income' ? 'Payer (optional)' : 'Payee (optional)'}
-        helpText="Search an existing payee or type a new name to create one."
-      />
+      {/* A transfer moves money between the household's own accounts, so there
+          is nobody being paid — the payee field would have no meaning. */}
+      {isTransfer ? null : (
+        <PayeePicker
+          payees={payees}
+          defaultValue={template?.payee_name ?? ''}
+          // Same wording split as the transaction form: who paid you vs. whom you paid.
+          label={transactionType === 'income' ? 'Payer (optional)' : 'Payee (optional)'}
+          helpText="Search an existing payee or type a new name to create one."
+        />
+      )}
 
-      {/* Sprint B / BR-014: auto-post toggle. */}
-      <input type="hidden" name="auto_post" value={autoPost ? 'true' : 'false'} />
+      {/* Sprint B / BR-014: auto-post toggle. UC-9 refuses it on a
+          cross-currency transfer, whose received amount only the user knows —
+          derived rather than stored, so switching the accounts back re-enables
+          the choice the user already made instead of silently losing it. */}
+      <input
+        type="hidden"
+        name="auto_post"
+        value={effectiveAutoPost ? 'true' : 'false'}
+      />
       <label className="flex items-start gap-3 rounded-xl border p-3 text-sm">
         <input
           type="checkbox"
-          checked={autoPost}
+          checked={effectiveAutoPost}
+          disabled={isCrossCurrencyTransfer}
           onChange={(e) => setAutoPost(e.target.checked)}
           className="mt-0.5 size-4 rounded border-input"
         />
         <span>
           <span className="font-medium">Post automatically</span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">
-            A daily job posts this on its due date using the last known exchange
-            rate. Leave off to post it yourself from the list.
-          </span>
+          {isCrossCurrencyTransfer ? (
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Not available for a transfer between two currencies: the amount
+              that arrives changes with the rate, so it has to be entered when
+              you post. Post this one from the list each time.
+            </span>
+          ) : (
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              A daily job posts this on its due date using the last known
+              exchange rate. Leave off to post it yourself from the list.
+            </span>
+          )}
         </span>
       </label>
 

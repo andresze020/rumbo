@@ -34,6 +34,12 @@ type BudgetLineRowProps = {
   rolloverEnabled: boolean
   /** Accumulated carryover for this category (planned − actual of prior rollover months). */
   carryover: number
+  /**
+   * BR-043: last month's actual spend in this category, or `null` when it isn't
+   * known. `0` is a real answer ("nothing last month") and reads differently
+   * from `null`, so the two are kept apart.
+   */
+  previousActual: number | null
 }
 
 const NEAR_LIMIT_THRESHOLD = 0.8
@@ -89,6 +95,7 @@ export function BudgetLineRow({
   editHref,
   rolloverEnabled,
   carryover,
+  previousActual,
 }: BudgetLineRowProps) {
   const [open, setOpen] = useState(false)
 
@@ -110,6 +117,13 @@ export function BudgetLineRow({
       : lineRemaining > 0
         ? 'text-emerald-600 dark:text-emerald-400'
         : 'text-muted-foreground'
+  // BR-043: month-over-month move for this one category. Only a non-zero prior
+  // month gives a meaningful percentage; "spent 40 after spending nothing" is a
+  // fact, not a +∞ % increase, so it shows the amounts instead.
+  const previousDelta =
+    previousActual !== null && previousActual > 0
+      ? actualAmount / previousActual - 1
+      : null
 
   return (
     <div className={cn(overBudget && 'bg-destructive/5')}>
@@ -316,6 +330,29 @@ export function BudgetLineRow({
                 <p className="text-xs text-muted-foreground">Used</p>
                 <p className="mt-0.5 text-sm font-medium tabular-nums">{formatPercent(linePercent, 'en', { minimumFractionDigits: 0 })}</p>
               </div>
+              {previousActual !== null ? (
+                <div className="rounded-md border bg-background p-2.5">
+                  <p className="text-xs text-muted-foreground">Last month</p>
+                  <p className="mt-0.5 font-mono text-sm font-medium tabular-nums">
+                    {formatCurrency(previousActual, budgetCurrency)}
+                  </p>
+                  {previousDelta !== null ? (
+                    <p
+                      className={cn(
+                        'mt-0.5 text-[11px] font-semibold tabular-nums',
+                        previousDelta > 0
+                          ? 'text-destructive'
+                          : previousDelta < 0
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-muted-foreground'
+                      )}
+                    >
+                      {previousDelta >= 0 ? '+' : '−'}
+                      {formatPercent(Math.abs(previousDelta), 'en', { minimumFractionDigits: 0 })}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-1.5">

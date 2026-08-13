@@ -13,6 +13,7 @@ import {
   Pencil,
   RotateCcw,
   Tag,
+  Undo2,
   X,
 } from 'lucide-react'
 import { PayeePicker, type PayeeOption } from './payee-picker'
@@ -85,6 +86,8 @@ export type TransactionListRow = {
   categoryIcon: string | null
   categoryColor: string | null
   merchantName: string | null
+  /** BR-045 — locale-formatted time of day, or null when none was recorded. */
+  timeFormatted: string | null
   notes: string | null
   voidReason: string | null
   currencyCode: string | null
@@ -95,6 +98,8 @@ export type TransactionListRow = {
   canEditTransfer: boolean
   canVoid: boolean
   editHref: string
+  /** BR-040 — set only on a posted expense that can still be refunded. */
+  refundHref: string | null
   // Inline quick-edit source values (income/expense manual rows only).
   transactionDate: string
   accountId: string | null
@@ -143,6 +148,10 @@ const REVIEW_ORDER: ReviewStatus[] = ['unreviewed', 'reviewed', 'flagged']
 function getAmountColorClass(transactionType: string) {
   if (transactionType === 'income') return 'text-emerald-600 dark:text-emerald-400'
   if (transactionType === 'expense') return 'text-red-600 dark:text-red-400'
+  // BR-040: a refund is money coming back, so it reads green like an inflow —
+  // but it is deliberately not the same green as income, because it did not
+  // increase what the household earned, it reduced what it spent.
+  if (transactionType === 'refund') return 'text-teal-600 dark:text-teal-400'
   return ''
 }
 
@@ -158,6 +167,9 @@ function RowTypeIcon({
   }
   if (transactionType === 'expense') {
     return <ArrowUpRight className={className} aria-hidden="true" />
+  }
+  if (transactionType === 'refund') {
+    return <Undo2 className={className} aria-hidden="true" />
   }
   return <ArrowLeftRight className={className} aria-hidden="true" />
 }
@@ -482,6 +494,16 @@ function DisplayRow({
           <span className="min-w-0 flex-1">
             <span className="block truncate font-medium leading-snug">{row.title}</span>
             <span className="block truncate text-xs text-muted-foreground">
+              {/* BR-045: the rows are already grouped under a date header, so
+                  the time is what actually distinguishes two entries on the
+                  same day — it leads the subtitle. Untimed rows render exactly
+                  as before. */}
+              {row.timeFormatted ? (
+                <>
+                  <span className="tabular-nums">{row.timeFormatted}</span>
+                  {' · '}
+                </>
+              ) : null}
               {row.accountName}
               {/* A transfer's "category" is the literal word Transfer, which the
                   ⇄ icon and the "from → to" route already say. */}
@@ -591,6 +613,18 @@ function DisplayRow({
               <Copy className="size-3.5" aria-hidden="true" />
               {ui('Copy')}
             </button>
+          ) : null}
+          {/* BR-040: a refund goes in the *same category* as a negative amount,
+              so the category nets to what the purchase really cost. Booking it
+              as income would inflate both sides instead. */}
+          {row.refundHref ? (
+            <Link
+              href={row.refundHref}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
+            >
+              <Undo2 className="size-3.5" aria-hidden="true" />
+              {ui('Refund')}
+            </Link>
           ) : null}
           {row.canVoid ? <VoidTransactionForm transactionId={row.id} /> : null}
         </div>

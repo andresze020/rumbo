@@ -37,6 +37,8 @@ type TransactionEditFormProps = {
   transactionId: string
   transactionType: TransactionType
   transactionDate: string
+  /** BR-045 — `HH:MM` or empty for an untimed transaction. */
+  transactionTime: string
   accountId: string
   categoryId: string
   amount: number
@@ -68,6 +70,7 @@ export function TransactionEditForm({
   transactionId,
   transactionType,
   transactionDate,
+  transactionTime,
   accountId,
   categoryId,
   amount,
@@ -103,6 +106,19 @@ export function TransactionEditForm({
             type="date"
             defaultValue={transactionDate}
             required
+          />
+        </div>
+
+        {/* BR-045: the edit form always shows the time, even when the add form
+            has it hidden — otherwise a time set once could never be corrected
+            or cleared. Empty submits as "untimed". */}
+        <div className="space-y-2">
+          <Label htmlFor={`edit_time_${transactionId}`}>Time</Label>
+          <Input
+            id={`edit_time_${transactionId}`}
+            name="transaction_time"
+            type="time"
+            defaultValue={transactionTime}
           />
         </div>
 

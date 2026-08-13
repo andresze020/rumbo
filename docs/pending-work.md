@@ -65,7 +65,7 @@ Full detail, "why soon," and acceptance criteria live in
 | ~~BR-010~~ ✅ | Rules / automation | Shipped in PR #37: `categorization_rules` migration, CRUD and application flow. |
 | BR-011 | Review workflow | ✅ Core already shipped (Sprint 4 + PR #17): `review_status` column, filter chips, bulk "Mark reviewed"/categorize, per-row control, dashboard "N to review" pill. Polished on branch `feat/br-011-review-queue-polish` (no migration): activated the "Review queue" nav entry (was locked "coming soon") → `/dashboard/transactions?review=unreviewed`, added bulk **Flag** / **Mark unreviewed**, and an "all caught up" empty state |
 
-## BR backlog — mobile capture parity (BR-030…BR-047, not started)
+## BR backlog — mobile capture parity (BR-030…BR-048)
 
 Added 2026-07-27 (BR-030…041) and 2026-07-28 (BR-042…047) from the mobile-app
 benchmark. Full rows (priority, first slice, DB impact, verification) live in
@@ -77,23 +77,29 @@ we already ship, so nothing here is a duplicate. BR-030's credit-card cycle
 and BR-042…047 come from a 2026-07-28 screen recording of App B itself (the
 2026-07-27 pass only had App B's help-centre documentation to go on).
 
+Progress: BR-032/033/034/038/041/042/046/047/048 shipped in the
+mobile-capture-parity sprint (merged to `main`). BR-031/037/039/043/044 shipped
+on `sprint/tier3-medium` (2026-07-29). Still open: BR-030 (card statement
+cycle), BR-035 (installments), BR-036 (month start day), BR-040 (negative-amount
+refunds), BR-045 (time-of-day).
+
 | ID | Priority | Area | One-line |
 |---|---:|---|---|
 | BR-030 | P1 | Accounts / credit cards | Statement cycle (statement day, payment day, billing account) → Balance Payable vs Outstanding, then a `Pay` settlement action — **now confirmed live** |
-| BR-031 | P1 | Multi-currency entry | Bidirectional dual-currency amount field with explicit rate re-fetch |
+| ~~BR-031~~ ✅ | P1 | Multi-currency entry | **Built** on `sprint/tier3-medium` (no migration): base-currency equivalent as read-only text on an expense (the COP is the only real value), and the transfer's two real amounts paired with their accounts in one card. The row's "second linked input" was wrong for expenses — see the 2026-07-29 status note |
 | BR-032 | P2 | UX speed / settings | User-configurable transaction-form fields (which optional fields render) |
 | BR-033 | P2 | UX speed | Relative date chips (today / yesterday / two days ago) |
 | BR-034 | P2 | Transactions | Duplicate ("Copy") an existing transaction — preferred over a bookmark/template entity |
 | BR-035 | P2 | Transactions / cards | Installment purchases (fixed count + total, *n of N*) |
 | BR-036 | P3 | Periods / budgets | Configurable month start day (payday-aligned period) — high blast radius |
-| BR-037 | P3 | Reports | Calendar month view of per-day income/expense/net |
+| ~~BR-037~~ ✅ | P3 | Reports | **Built** on `sprint/tier3-medium` (no migration): `/dashboard/calendar` month grid over the same query Reports uses |
 | BR-038 | P3 | Settings / display | Default landing scope + period, compact list, hide balance adjustments |
-| BR-039 | P3 | Accounts / reporting | Per-account "transfer as expense" opt-in |
+| ~~BR-039~~ ✅ | P3 | Accounts / reporting | **Built** on `sprint/tier3-medium` (migration `20260729130000`, pending `db push`): reporting-only flag on savings/investment/other; Reports + Calendar only, never the ledger |
 | BR-040 | P3 | Modelling | Refunds/rebates as a negative amount in the same category — decision first |
 | BR-041 | P3 | Export | `.xlsx` export alongside CSV |
 | BR-042 | P2 | Reports / transactions | Sub-period rollup rows (weeks inside a month, months inside a year) |
-| BR-043 | P2 | Budgeting | Budget vs-last-month comparison + cash/card expense split, extends BR-018 |
-| BR-044 | P2 | New feature | Standalone dated Notes, separate from the transaction Comment field |
+| ~~BR-043~~ ✅ | P2 | Budgeting | **Built** on `sprint/tier3-medium` (migration `20260729140000`, pending `db push`): `get_budget_previous_actuals` + `get_budget_payment_split`, summary and per-line |
+| ~~BR-044~~ ✅ | P2 | New feature | **Built** on `sprint/tier3-medium` (migration `20260729150000`, pending `db push`): `notes` table + `/dashboard/notes` CRUD, archive+Undo, fully outside the ledger |
 | BR-045 | P3 | Transactions / schema | Optional time-of-day on transactions — schema change, scope narrowly |
 | BR-046 | P3 | Accounts / safety UX | Confirmation warning when changing an account's currency |
 | BR-047 | P3 | Categories | Promote a subcategory to a top-level category |

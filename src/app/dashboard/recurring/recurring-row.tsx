@@ -26,6 +26,8 @@ export type RecurringRowVM = {
   autoPost: boolean
   lastError: string | null
   accountName: string
+  /** UC-9 — destination account on a transfer; null on income/expense. */
+  toAccountName: string | null
   categoryName: string
   categoryIcon: string | null
   editHref: string
@@ -61,10 +63,16 @@ export function RecurringRow({ vm, locale }: { vm: RecurringRowVM; locale: Local
               className={
                 vm.transaction_type === 'income'
                   ? 'text-xs text-emerald-600 dark:text-emerald-400'
+                  : vm.transaction_type === 'transfer'
+                  ? 'text-xs text-sky-600 dark:text-sky-400'
                   : 'text-xs text-muted-foreground'
               }
             >
-              {vm.transaction_type === 'income' ? 'Income' : 'Expense'}
+              {vm.transaction_type === 'income'
+                ? 'Income'
+                : vm.transaction_type === 'transfer'
+                ? 'Transfer'
+                : 'Expense'}
             </Badge>
             {vm.is_active && vm.isDue ? (
               <Badge
@@ -116,12 +124,21 @@ export function RecurringRow({ vm, locale }: { vm: RecurringRowVM; locale: Local
         <div className="overflow-hidden">
           <div className="mx-4 mb-4 space-y-3 rounded-lg bg-muted/40 p-3">
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              {/* UC-9: a transfer has a From/To route and no category, so the
+                  two labels change rather than one showing "Unknown". */}
               <span>
-                Account: <span className="text-foreground">{vm.accountName}</span>
+                {vm.toAccountName ? 'From: ' : 'Account: '}
+                <span className="text-foreground">{vm.accountName}</span>
               </span>
-              <span>
-                Category: <span className="text-foreground">{vm.categoryName}</span>
-              </span>
+              {vm.toAccountName ? (
+                <span>
+                  To: <span className="text-foreground">{vm.toAccountName}</span>
+                </span>
+              ) : (
+                <span>
+                  Category: <span className="text-foreground">{vm.categoryName}</span>
+                </span>
+              )}
               <span>
                 Starts: <span className="text-foreground">{formatIsoDate(vm.start_date, locale)}</span>
               </span>

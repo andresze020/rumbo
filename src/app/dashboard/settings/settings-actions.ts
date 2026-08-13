@@ -95,14 +95,32 @@ export async function updateHouseholdAction(formData: FormData) {
   // so changing the base would silently invalidate all balances and reports.
   // Changing it would require a full data migration (re-conversion of every
   // entry), so this action never updates it.
+  // BR-036: the day a financial period begins. 1 (the default) is the calendar
+  // month and the pre-BR-036 behaviour.
+  const monthStartDayRaw = String(formData.get('month_start_day') ?? '').trim()
+  const monthStartDay = Number(monthStartDayRaw)
+
+  if (
+    monthStartDayRaw !== '' &&
+    (!Number.isInteger(monthStartDay) || monthStartDay < 1 || monthStartDay > 31)
+  ) {
+    redirectWithError('The month start day must be a day of the month, 1 to 31.')
+  }
+
   const { supabase, householdId } = await getAuthContext()
 
   const { error } = await supabase
     .from('households')
-    .update({ name })
+    .update({
+      name,
+      ...(monthStartDayRaw === '' ? {} : { month_start_day: monthStartDay }),
+    })
     .eq('id', householdId)
 
   if (error) redirectWithError('Could not update household. Please try again.')
+
+  // BR-036: Reports is the only screen that honours it in slice 1.
+  revalidatePath('/dashboard/reports')
 
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/settings')

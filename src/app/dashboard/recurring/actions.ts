@@ -27,6 +27,17 @@ function parsePositiveNumber(value: FormDataEntryValue | null) {
   return numberValue
 }
 
+/** Like parsePositiveNumber but allows 0, for the optional transfer cost. */
+function parseNonNegativeNumber(value: FormDataEntryValue | null) {
+  const raw = String(value ?? '').trim()
+  if (raw === '') return null
+  const numberValue = Number(raw)
+  if (!Number.isFinite(numberValue) || numberValue < 0) {
+    return null
+  }
+  return numberValue
+}
+
 function isIsoDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value))
 }
@@ -73,9 +84,12 @@ function revalidateRecurringSurfaces() {
 
 type ValidatedTemplate = {
   name: string
-  transactionType: 'income' | 'expense'
+  transactionType: 'income' | 'expense' | 'transfer'
   accountId: string
-  categoryId: string
+  /** UC-9: destination account on a transfer; null on income/expense. */
+  toAccountId: string | null
+  /** Null on a transfer — the DB shape constraint forbids a category there. */
+  categoryId: string | null
   currencyCode: string
   amount: number
   frequency: Frequency
@@ -98,6 +112,7 @@ async function parseAndValidateTemplate(
   const name = String(formData.get('name') ?? '').trim()
   const transactionType = String(formData.get('transaction_type') ?? '').trim()
   const accountId = String(formData.get('account_id') ?? '').trim()
+  const toAccountId = String(formData.get('to_account_id') ?? '').trim()
   const categoryId = String(formData.get('category_id') ?? '').trim()
   const amount = parsePositiveNumber(formData.get('amount'))
   const frequency = String(formData.get('frequency') ?? '').trim()
@@ -114,12 +129,20 @@ async function parseAndValidateTemplate(
     redirectWithError(`Name must be ${MAX_NAME_LENGTH} characters or fewer.`)
   }
   if (!isRecurringType(transactionType)) {
-    redirectWithError('Select income or expense.')
+    redirectWithError('Select income, expense or transfer.')
   }
+  const isTransfer = transactionType === 'transfer'
   if (!accountId) {
-    redirectWithError('Select an account.')
+    redirectWithError(isTransfer ? 'Select the source account.' : 'Select an account.')
   }
-  if (!categoryId) {
+  if (isTransfer) {
+    if (!toAccountId) {
+      redirectWithError('Select the destination account.')
+    }
+    if (toAccountId === accountId) {
+      redirectWithError('Source and destination accounts must be different.')
+    }
+  } else if (!categoryId) {
     redirectWithError('Select a category.')
   }
   if (amount === null) {
@@ -153,30 +176,60 @@ async function parseAndValidateTemplate(
     redirectWithError('Select an active account.')
   }
 
-  const { data: category, error: categoryError } = await supabase
-    .from('categories')
-    .select('id, category_type')
-    .eq('id', categoryId)
-    .eq('household_id', householdId)
-    .eq('is_archived', false)
-    .is('deleted_at', null)
-    .maybeSingle()
+  // UC-9: a transfer validates its destination account instead of a category.
+  let destinationCurrency: string | null = null
+  if (isTransfer) {
+    const { data: toAccount, error: toAccountError } = await supabase
+      .from('accounts')
+      .select('id, currency_code, is_archived')
+      .eq('id', toAccountId)
+      .eq('household_id', householdId)
+      .is('deleted_at', null)
+      .maybeSingle()
 
-  if (categoryError || !category) {
-    redirectWithError('Select an active category for this household.')
+    if (toAccountError || !toAccount) {
+      redirectWithError('Select a destination account for this household.')
+    }
+    if (toAccount.is_archived) {
+      redirectWithError('Select an active destination account.')
+    }
+    destinationCurrency = toAccount.currency_code as string
+  } else {
+    const { data: category, error: categoryError } = await supabase
+      .from('categories')
+      .select('id, category_type')
+      .eq('id', categoryId)
+      .eq('household_id', householdId)
+      .eq('is_archived', false)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (categoryError || !category) {
+      redirectWithError('Select an active category for this household.')
+    }
+    if (category.category_type !== transactionType) {
+      redirectWithError(
+        transactionType === 'income'
+          ? 'Income templates require an income category.'
+          : 'Expense templates require an expense category.'
+      )
+    }
   }
-  if (category.category_type !== transactionType) {
+
+  // The server-side half of the form's disabled checkbox: an unattended job
+  // cannot know the amount that arrives in another currency, so it must never be
+  // asked to guess one. Refused here too, so a hand-built POST cannot set it.
+  if (isTransfer && autoPost && destinationCurrency !== account.currency_code) {
     redirectWithError(
-      transactionType === 'income'
-        ? 'Income templates require an income category.'
-        : 'Expense templates require an expense category.'
+      'A transfer between two currencies cannot post automatically — the amount received has to be entered each time. Turn off automatic posting.'
     )
   }
 
   // BR-009: resolve the payee name to an id (get-or-create, case-insensitive).
-  // Empty name → null, which clears the payee on update.
+  // Empty name → null, which clears the payee on update. A transfer has no
+  // payee (the form omits the field), so this is skipped for one.
   let payeeId: string | null = null
-  if (payeeName) {
+  if (payeeName && !isTransfer) {
     const { data: resolvedPayeeId, error: payeeError } = await supabase.rpc(
       'get_or_create_payee',
       { p_household_id: householdId, p_name: payeeName }
@@ -191,7 +244,8 @@ async function parseAndValidateTemplate(
     name,
     transactionType,
     accountId,
-    categoryId,
+    toAccountId: isTransfer ? toAccountId : null,
+    categoryId: isTransfer ? null : categoryId,
     currencyCode: account.currency_code as string,
     amount: amount as number,
     frequency: frequency as Frequency,
@@ -217,6 +271,7 @@ export async function createRecurringAction(formData: FormData) {
     name: t.name,
     transaction_type: t.transactionType,
     account_id: t.accountId,
+    to_account_id: t.toAccountId,
     category_id: t.categoryId,
     payee_id: t.payeeId,
     amount: t.amount,
@@ -278,6 +333,7 @@ export async function updateRecurringAction(formData: FormData) {
       name: t.name,
       transaction_type: t.transactionType,
       account_id: t.accountId,
+      to_account_id: t.toAccountId,
       category_id: t.categoryId,
       payee_id: t.payeeId,
       amount: t.amount,
@@ -378,12 +434,54 @@ export async function deleteRecurringAction(formData: FormData) {
   redirect('/dashboard/recurring?deleted=1')
 }
 
+/**
+ * Move a template's cursor one step forward after a successful post, and
+ * deactivate it once the new date passes its end date. Shared by the
+ * income/expense and the UC-9 transfer path so the two can never drift — a
+ * transfer that posted but did not advance would re-post on the next run.
+ *
+ * Never returns: every branch redirects.
+ */
+async function advanceTemplateSchedule(
+  supabase: Awaited<ReturnType<typeof getAuthenticatedHousehold>>['supabase'],
+  householdId: string,
+  recurringId: string,
+  template: { next_run_date: string | null; frequency: string; end_date: string | null },
+  postDate: string
+): Promise<never> {
+  const cursor = template.next_run_date ?? postDate
+  const newNextRunDate = computeNextRunDate(cursor, template.frequency as Frequency)
+  const passedEnd = Boolean(template.end_date && newNextRunDate > template.end_date)
+
+  const { error: advanceError } = await supabase
+    .from('recurring_transactions')
+    .update({
+      next_run_date: newNextRunDate,
+      is_active: !passedEnd,
+    })
+    .eq('id', recurringId)
+    .eq('household_id', householdId)
+
+  if (advanceError) {
+    // The transaction posted successfully; surface a soft warning but don't fail.
+    redirect('/dashboard/recurring?posted=1&advance_warning=1')
+  }
+
+  revalidateRecurringSurfaces()
+  redirect(`/dashboard/recurring?posted=1${passedEnd ? '&completed=1' : ''}`)
+}
+
 export async function postRecurringAction(formData: FormData) {
   const recurringId = String(formData.get('recurring_id') ?? '').trim()
   const postDate = String(formData.get('post_date') ?? '').trim()
   const amount = parsePositiveNumber(formData.get('amount'))
   const notes = String(formData.get('notes') ?? '').trim()
   const rateBaseToAccount = parsePositiveNumber(formData.get('rate_base_to_account'))
+  // UC-9: a cross-currency transfer's received amount, plus the optional
+  // transfer cost BR-007 introduced. Only present on the transfer post form.
+  const toAmount = parsePositiveNumber(formData.get('to_amount'))
+  const costBase = parseNonNegativeNumber(formData.get('cost_base'))
+  const costCategoryId = String(formData.get('cost_category_id') ?? '').trim() || null
 
   if (!recurringId) {
     redirectWithError('Recurring transaction is required.')
@@ -400,7 +498,7 @@ export async function postRecurringAction(formData: FormData) {
   const { data: template, error: templateError } = await supabase
     .from('recurring_transactions')
     .select(
-      'id, name, transaction_type, account_id, category_id, payee_id, currency_code, frequency, end_date, next_run_date, is_active'
+      'id, name, transaction_type, account_id, to_account_id, category_id, payee_id, currency_code, frequency, end_date, next_run_date, is_active'
     )
     .eq('id', recurringId)
     .eq('household_id', householdId)
@@ -412,8 +510,18 @@ export async function postRecurringAction(formData: FormData) {
   if (!template.is_active) {
     redirectWithError('This recurring transaction is inactive.')
   }
-  if (!template.account_id || !template.category_id) {
-    redirectWithError('This template is missing its account or category. Edit it first.')
+
+  const isTransfer = template.transaction_type === 'transfer'
+
+  if (!template.account_id) {
+    redirectWithError('This template is missing its account. Edit it first.')
+  }
+  if (isTransfer) {
+    if (!template.to_account_id) {
+      redirectWithError('This transfer template is missing its destination account. Edit it first.')
+    }
+  } else if (!template.category_id) {
+    redirectWithError('This template is missing its category. Edit it first.')
   }
 
   // Verify the account is still active and get its currency for FX handling.
@@ -429,23 +537,79 @@ export async function postRecurringAction(formData: FormData) {
     redirectWithError('The template account is archived or unavailable. Edit the template.')
   }
 
-  // Verify the category is still active and matches the type.
-  const { data: category, error: categoryError } = await supabase
-    .from('categories')
-    .select('category_type')
-    .eq('id', template.category_id)
-    .eq('household_id', householdId)
-    .eq('is_archived', false)
-    .is('deleted_at', null)
-    .maybeSingle()
+  if (!isTransfer) {
+    // Verify the category is still active and matches the type.
+    const { data: category, error: categoryError } = await supabase
+      .from('categories')
+      .select('category_type')
+      .eq('id', template.category_id)
+      .eq('household_id', householdId)
+      .eq('is_archived', false)
+      .is('deleted_at', null)
+      .maybeSingle()
 
-  if (categoryError || !category || category.category_type !== template.transaction_type) {
-    redirectWithError(
-      'The template category is archived or no longer matches its type. Edit the template.'
-    )
+    if (categoryError || !category || category.category_type !== template.transaction_type) {
+      redirectWithError(
+        'The template category is archived or no longer matches its type. Edit the template.'
+      )
+    }
   }
 
   const exchangeRateToBase = rateBaseToAccount !== null ? 1 / rateBaseToAccount : 1
+
+  // ── UC-9: a transfer posts through create_transfer_transaction ────────────
+  // Two balancing entries and no allocation, which is the only way a transfer
+  // stays out of income and expense. `toAmount` is required by the RPC when the
+  // currencies differ, and the post form asks for it in exactly that case.
+  if (isTransfer) {
+    const { data: toAccount, error: toAccountError } = await supabase
+      .from('accounts')
+      .select('currency_code, is_archived')
+      .eq('id', template.to_account_id)
+      .eq('household_id', householdId)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (toAccountError || !toAccount || toAccount.is_archived) {
+      redirectWithError(
+        'The destination account is archived or unavailable. Edit the template.'
+      )
+    }
+
+    const crossCurrency = toAccount.currency_code !== account.currency_code
+    if (crossCurrency && toAmount === null) {
+      redirectWithError(
+        `Enter the amount that arrives in ${toAccount.currency_code} to post this transfer.`
+      )
+    }
+
+    const { error: transferError } = await supabase.rpc('create_transfer_transaction', {
+      p_household_id: householdId,
+      p_from_account_id: template.account_id,
+      p_to_account_id: template.to_account_id,
+      p_amount: amount,
+      p_transaction_date: postDate,
+      p_description: template.name,
+      p_notes: notes || null,
+      p_status: 'posted',
+      p_exchange_rate_to_base: exchangeRateToBase,
+      p_to_amount: crossCurrency ? toAmount : null,
+      p_cost_base: crossCurrency ? costBase : null,
+      p_cost_category_id: crossCurrency ? costCategoryId : null,
+    })
+
+    if (transferError) {
+      redirectWithError(
+        cleanRpcError(
+          transferError.message,
+          'Could not post the transfer. Please check the form and try again.'
+        )
+      )
+    }
+
+    await advanceTemplateSchedule(supabase, householdId, recurringId, template, postDate)
+    return
+  }
 
   // BR-009: carry the template's payee onto the posted occurrence. The RPC
   // takes the payee *name* (it re-resolves get-or-create), so read it here.
@@ -484,26 +648,5 @@ export async function postRecurringAction(formData: FormData) {
     )
   }
 
-  // Advance the schedule one step from the current cursor; auto-deactivate if
-  // the new run date passes the end date.
-  const cursor = (template.next_run_date as string | null) ?? postDate
-  const newNextRunDate = computeNextRunDate(cursor, template.frequency as Frequency)
-  const passedEnd = Boolean(template.end_date && newNextRunDate > (template.end_date as string))
-
-  const { error: advanceError } = await supabase
-    .from('recurring_transactions')
-    .update({
-      next_run_date: newNextRunDate,
-      is_active: !passedEnd,
-    })
-    .eq('id', recurringId)
-    .eq('household_id', householdId)
-
-  if (advanceError) {
-    // The transaction posted successfully; surface a soft warning but don't fail.
-    redirect('/dashboard/recurring?posted=1&advance_warning=1')
-  }
-
-  revalidateRecurringSurfaces()
-  redirect(`/dashboard/recurring?posted=1${passedEnd ? '&completed=1' : ''}`)
+  await advanceTemplateSchedule(supabase, householdId, recurringId, template, postDate)
 }

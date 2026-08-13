@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Store, X } from 'lucide-react'
 import { TransactionEditForm } from './transaction-edit-form'
+import { RefundForm } from './refund-form'
 import { TransferEditForm } from './transfer-edit-form'
 import { TransactionFilters } from './transaction-filters'
 import {
@@ -32,6 +33,7 @@ import type { Locale } from '@/lib/i18n/dictionaries'
 import {
   formatCurrency,
   formatIsoDateRange,
+  formatIsoTime,
   formatLabel as formatValue,
   formatMonthLabel,
   localeToBcp47,
@@ -57,6 +59,9 @@ type TransactionsPageProps = {
     tag_id?: string
     mode?: string
     edit?: string
+    /** BR-040 — id of the expense being refunded. */
+    refund?: string
+    refunded?: string
     page?: string
   }>
 }
@@ -84,6 +89,8 @@ type Category = {
 type Transaction = {
   id: string
   transaction_date: string
+  /** BR-045 — optional wall-clock time; null for every untimed transaction. */
+  transaction_time: string | null
   transaction_type: string
   status: string
   review_status: string
@@ -100,6 +107,7 @@ type Transaction = {
 type SearchTransactionRow = {
   id: string
   transaction_date: string
+  transaction_time: string | null
   created_at: string
   transaction_type: string
   status: string
@@ -160,6 +168,8 @@ type TransactionRow = {
   amountEntry?: TransactionEntry
   canEdit: boolean
   canEditTransfer: boolean
+  /** BR-040: a posted expense with an entry and an allocation can be refunded. */
+  canRefund: boolean
   canVoid: boolean
   categoryColor: string | null
   categoryIcon: string | null
@@ -248,6 +258,9 @@ const TRANSACTION_TYPE_VALUES = [
   'income',
   'expense',
   'transfer',
+  // BR-040: filterable in its own right — "show me what came back" is a real
+  // question, and lumping refunds in with income was the thing BR-040 fixes.
+  'refund',
   'opening_balance',
   'debt_payment',
   'adjustment',
@@ -319,7 +332,7 @@ function getCategoryPath(
 
 function transactionsPath(
   filters: TransactionFilters,
-  panel?: { edit?: string; mode?: 'create' }
+  panel?: { edit?: string; mode?: 'create'; refund?: string }
 ) {
   const params = new URLSearchParams()
 
@@ -343,6 +356,7 @@ function transactionsPath(
   for (const id of filters.tagIds) params.append('tag_id', id)
   if (panel?.mode) params.set('mode', panel.mode)
   if (panel?.edit) params.set('edit', panel.edit)
+  if (panel?.refund) params.set('refund', panel.refund)
 
   return `/dashboard/transactions?${params.toString()}`
 }
@@ -671,6 +685,7 @@ export default async function TransactionsPage({
   const transactions: Transaction[] = rpcData.map((r) => ({
     id: r.id,
     transaction_date: r.transaction_date,
+    transaction_time: r.transaction_time,
     transaction_type: r.transaction_type,
     status: r.status,
     review_status: r.review_status,
@@ -816,6 +831,13 @@ export default async function TransactionsPage({
         transaction.transaction_type === 'expense') &&
       (transaction.status === 'posted' || transaction.status === 'pending') &&
       Boolean(entry && allocation)
+    // BR-040: an imported expense is refundable too — the refund is a new
+    // transaction, so nothing about the original is edited. A voided or pending
+    // expense is not: there is no settled cost to reduce yet.
+    const canRefund =
+      transaction.transaction_type === 'expense' &&
+      transaction.status === 'posted' &&
+      Boolean(entry && allocation)
     const canEditTransfer =
       transaction.source === 'manual' &&
       transaction.transaction_type === 'transfer' &&
@@ -875,6 +897,7 @@ export default async function TransactionsPage({
       amountEntry,
       canEdit,
       canEditTransfer,
+      canRefund,
       canVoid: !['voided', 'deleted_soft'].includes(transaction.status),
       categoryColor,
       categoryIcon,
@@ -922,6 +945,35 @@ export default async function TransactionsPage({
   const selectedEditRow = transactionRows.find(
     (row) => row.transaction.id === editTransactionId
   )
+
+  // BR-040: the expense being refunded, and how much of it is still refundable.
+  // The remaining amount is derived here so the form can default to it; the RPC
+  // re-checks it, since this page only ever sees the current result set.
+  const refundTransactionId = String(params.refund ?? '').trim()
+  const selectedRefundRow = refundTransactionId
+    ? transactionRows.find(
+        (row) => row.transaction.id === refundTransactionId && row.canRefund
+      )
+    : undefined
+  let refundedAlreadyBase = 0
+  if (selectedRefundRow) {
+    // Refunds are stored as negative allocations, so this sum is negative or 0.
+    const { data: priorRefunds } = await supabase
+      .from('transactions')
+      .select('transaction_allocations(amount_base_currency)')
+      .eq('household_id', household.id)
+      .eq('refunded_transaction_id', selectedRefundRow.transaction.id)
+      .eq('status', 'posted')
+      .is('deleted_at', null)
+    for (const refund of priorRefunds ?? []) {
+      const allocations =
+        (refund as { transaction_allocations?: { amount_base_currency: number | string }[] })
+          .transaction_allocations ?? []
+      for (const allocation of allocations) {
+        refundedAlreadyBase += Number(allocation.amount_base_currency)
+      }
+    }
+  }
   // Tags currently on the edited transaction, plus a picker list that includes
   // any archived tag already on it (so editing never silently drops it).
   const selectedEditTagIds = selectedEditRow
@@ -1105,6 +1157,7 @@ export default async function TransactionsPage({
       categoryIcon: row.categoryIcon,
       categoryColor: row.categoryColor,
       merchantName: row.transaction.merchant_name,
+      timeFormatted: formatIsoTime(row.transaction.transaction_time, locale),
       notes: row.transaction.notes,
       voidReason: row.transaction.void_reason,
       currencyCode: row.amountEntry?.currency_code ?? null,
@@ -1128,6 +1181,9 @@ export default async function TransactionsPage({
           : null,
       canEdit: row.canEdit,
       canEditTransfer: row.canEditTransfer,
+      refundHref: row.canRefund
+        ? transactionsPath(filters, { refund: row.transaction.id })
+        : null,
       canVoid: row.canVoid,
       editHref: transactionsPath(filters, { edit: row.transaction.id }),
       transactionDate: row.transaction.transaction_date,
@@ -1235,6 +1291,41 @@ export default async function TransactionsPage({
         />
       </div>
 
+      {/* BR-040: the refund goes back to the same account and the same category
+          as the original — those are hidden inputs, not selects, because a
+          refund landing elsewhere would defeat the point of the feature. */}
+      {selectedRefundRow && selectedRefundRow.entry && selectedRefundRow.allocation ? (
+        <FormDialog
+          title="Record a refund"
+          description="Money coming back on a purchase. It is recorded against the original category, so your reports show what the purchase actually cost."
+          cancelHref={returnTo}
+        >
+          <RefundForm
+            transactionId={selectedRefundRow.transaction.id}
+            accountId={selectedRefundRow.entry.account_id}
+            categoryId={selectedRefundRow.allocation.category_id}
+            accountName={selectedRefundRow.accountName}
+            categoryName={selectedRefundRow.categoryName}
+            currencyCode={selectedRefundRow.entry.currency_code}
+            originalAmount={Math.abs(
+              Number(selectedRefundRow.entry.amount_account_currency)
+            )}
+            remainingAmount={Math.max(
+              Math.abs(Number(selectedRefundRow.entry.amount_account_currency)) +
+                refundedAlreadyBase /
+                  Number(selectedRefundRow.entry.exchange_rate_to_base || 1),
+              0
+            )}
+            exchangeRateToBase={Number(
+              selectedRefundRow.entry.exchange_rate_to_base || 1
+            )}
+            description={selectedRefundRow.title}
+            cancelHref={returnTo}
+            returnTo={returnTo}
+          />
+        </FormDialog>
+      ) : null}
+
       {/* ── Edit dialogs ───────────────────────────────────────────────── */}
       {selectedEditRow ? (
         <FormDialog
@@ -1252,6 +1343,12 @@ export default async function TransactionsPage({
                 selectedEditRow.transaction.transaction_type as 'income' | 'expense'
               }
               transactionDate={selectedEditRow.transaction.transaction_date}
+              // BR-045: Postgres returns `HH:MM:SS`; an `<input type="time">`
+              // without a step only round-trips `HH:MM`, so trim the seconds or
+              // the control renders empty and a save would silently clear it.
+              transactionTime={
+                selectedEditRow.transaction.transaction_time?.slice(0, 5) ?? ''
+              }
               accountId={selectedEditRow.entry.account_id}
               categoryId={selectedEditRow.allocation.category_id}
               amount={Math.abs(Number(selectedEditRow.entry.amount_account_currency))}

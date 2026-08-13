@@ -294,16 +294,35 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   // BR-018: per-line rollover opt-in + accumulated carryover per category.
   // rollover_enabled is not part of get_monthly_budget_details, so it's read
   // from budget_lines directly; carryover comes from its own RPC.
+  //
+  // BR-043 adds two more reads on the same trip: last month's actuals for the
+  // same categories, and this month's actuals split by how they were paid.
   const rolloverByLineId = new Map<string, boolean>()
   const carryoverByCategoryId = new Map<string, number>()
+  const previousActualByCategoryId = new Map<string, number>()
+  const paymentSplit = { cash: 0, card: 0, other: 0 }
+  let previousActualsAvailable = false
   if (budget) {
-    const [{ data: rolloverRows }, { data: carryoverRows }] = await Promise.all([
+    const [
+      { data: rolloverRows },
+      { data: carryoverRows },
+      { data: previousActualRows },
+      { data: paymentSplitRows },
+    ] = await Promise.all([
       supabase
         .from('budget_lines')
         .select('id, rollover_enabled')
         .eq('budget_id', budget.budget_id)
         .is('deleted_at', null),
       supabase.rpc('get_budget_line_carryovers', {
+        p_household_id: household.id,
+        p_budget_month: selectedMonthDate,
+      }),
+      supabase.rpc('get_budget_previous_actuals', {
+        p_household_id: household.id,
+        p_budget_month: selectedMonthDate,
+      }),
+      supabase.rpc('get_budget_payment_split', {
         p_household_id: household.id,
         p_budget_month: selectedMonthDate,
       }),
@@ -316,6 +335,21 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
       carryover_amount: number | string
     }[]) {
       carryoverByCategoryId.set(row.category_id, Number(row.carryover_amount))
+    }
+    previousActualsAvailable = Array.isArray(previousActualRows)
+    for (const row of (previousActualRows ?? []) as {
+      category_id: string
+      actual_amount: number | string
+    }[]) {
+      previousActualByCategoryId.set(row.category_id, Number(row.actual_amount))
+    }
+    for (const row of (paymentSplitRows ?? []) as {
+      payment_group: string
+      actual_amount: number | string
+    }[]) {
+      if (row.payment_group === 'cash') paymentSplit.cash = Number(row.actual_amount)
+      else if (row.payment_group === 'card') paymentSplit.card = Number(row.actual_amount)
+      else paymentSplit.other += Number(row.actual_amount)
     }
   }
 
@@ -353,6 +387,23 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   const overBudgetCount = budgetLines.filter(
     (line) => Number(line.actual_amount ?? 0) > Number(line.planned_amount ?? 0) + appliedCarryover(line)
   ).length
+
+  // BR-043 — "vs last month" over the same categories this month budgets, so the
+  // two figures are comparable. `null` means there is nothing to compare
+  // against (no prior-month spend at all, e.g. a first month), which renders as
+  // an explicit "no comparison" rather than a misleading 0 % or ∞.
+  const previousSpent = budgetLines.reduce(
+    (sum, line) =>
+      sum + (line.category_id ? previousActualByCategoryId.get(line.category_id) ?? 0 : 0),
+    0
+  )
+  const hasPreviousSpend = previousActualsAvailable && previousSpent > 0
+  const spentVsPrevious = hasPreviousSpend ? totalSpent / previousSpent - 1 : null
+  // BR-043 — cash vs card. The buckets are exhaustive server-side, so this sums
+  // back to totalSpent; `other` is only shown when it is non-zero, since most
+  // households never pay a budgeted expense from an investment account.
+  const splitTotal = paymentSplit.cash + paymentSplit.card + paymentSplit.other
+  const splitShare = (value: number) => (splitTotal > 0 ? value / splitTotal : null)
 
   const cancelHref = budgetsPath({ month: selectedMonth })
   const canAddLine = Boolean(!budgetError && budget && categoryOptions.length > 0)
@@ -496,7 +547,18 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
             <BudgetKpiCard
               label="Total spent"
               value={formatCurrency(totalSpent, budgetCurrency)}
-              description={`${budgetLines.length} active lines`}
+              // BR-043: the month-over-month move replaces the line count here —
+              // "is this month heavier than last?" is the question this card
+              // gets asked, and the line count is already on the section below.
+              description={
+                spentVsPrevious === null
+                  ? `${budgetLines.length} active lines`
+                  : `${spentVsPrevious >= 0 ? '+' : '−'}${formatPercent(
+                      Math.abs(spentVsPrevious),
+                      locale,
+                      { minimumFractionDigits: 0 }
+                    )} vs ${formatCurrency(previousSpent, budgetCurrency)} last month`
+              }
               icon={<HandCoins />}
               accent="bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400"
               progress={{ width: usageWidth, className: usageTone.barClassName }}
@@ -525,6 +587,82 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
               progress={{ width: usageWidth, className: usageTone.barClassName }}
             />
           </div>
+
+          {/* BR-043 — how this month was paid, and how it compares. Both read
+              off the same actuals the lines below use, so the three payment rows
+              add up to Total spent exactly. */}
+          <section className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03] md:p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h2 className="text-sm font-bold">How this month was paid</h2>
+              <p className="text-[11px] text-muted-foreground">
+                {spentVsPrevious === null
+                  ? 'No spending last month in these categories, so there is nothing to compare yet.'
+                  : `Last month, the same categories came to ${formatCurrency(previousSpent, budgetCurrency)}.`}
+              </p>
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {[
+                {
+                  key: 'cash',
+                  label: 'Cash and accounts',
+                  hint: 'Cash, chequing and savings',
+                  value: paymentSplit.cash,
+                  barClassName: 'bg-emerald-500',
+                },
+                {
+                  key: 'card',
+                  label: 'Cards and debt',
+                  hint: 'Credit cards and loans',
+                  value: paymentSplit.card,
+                  barClassName: 'bg-sky-500',
+                },
+                {
+                  key: 'other',
+                  label: 'Other accounts',
+                  hint: 'Investment and other',
+                  value: paymentSplit.other,
+                  barClassName: 'bg-muted-foreground',
+                },
+              ]
+                // `other` is noise for most households — only surface it when a
+                // budgeted expense really was paid from one of those accounts.
+                .filter((row) => row.key !== 'other' || row.value !== 0)
+                .map((row) => {
+                  const share = splitShare(row.value)
+                  return (
+                    <div key={row.key} className="rounded-lg border bg-background p-2.5">
+                      <p className="text-[11px] font-medium text-muted-foreground">{row.label}</p>
+                      <p className="mt-1 font-mono text-sm font-bold tabular-nums">
+                        {formatCurrency(row.value, budgetCurrency)}
+                      </p>
+                      {/* Share and hint are separate text nodes on purpose: the
+                          runtime translation catalog keys on whole rendered
+                          phrases, so composing them would splice an English
+                          hint into a translated sentence. */}
+                      {share === null ? null : (
+                        <p className="mt-0.5 text-[10.5px] text-muted-foreground">
+                          {`${formatPercent(share, locale, { minimumFractionDigits: 0 })} of spend`}
+                        </p>
+                      )}
+                      <p className="mt-0.5 text-[10.5px] text-muted-foreground">{row.hint}</p>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={cn('h-full rounded-full', row.barClassName)}
+                          style={{ width: `${share === null ? 0 : Math.round(share * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+
+            {splitTotal === 0 ? (
+              <p className="mt-3 text-[11px] text-muted-foreground">
+                No posted spending in the budgeted categories yet this month.
+              </p>
+            ) : null}
+          </section>
 
           {isAddingLine ? (
             <FormDialog
@@ -685,6 +823,11 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                           editHref={budgetsPath({ month: selectedMonth, edit: line.line_id ?? '' })}
                           rolloverEnabled={line.line_id ? rolloverByLineId.get(line.line_id) ?? false : false}
                           carryover={line.category_id ? carryoverByCategoryId.get(line.category_id) ?? 0 : 0}
+                          previousActual={
+                            line.category_id
+                              ? previousActualByCategoryId.get(line.category_id) ?? null
+                              : null
+                          }
                         />
                       )
                     })}
