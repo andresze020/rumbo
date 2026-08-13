@@ -61,6 +61,13 @@ línea discontinua para distinguirlos de una dependencia real.
 
 ## Alcance
 
-Refleja el estado del código en la rama `sprint/tier4-large` (2026-07-30), con
-133 componentes, 272 conexiones y 27 flujos. Cuando el código y este mapa
-discrepen, gana el código — y este mapa es el bug, igual que `AGENTS.md`.
+Refleja el código de `main` a partir del 2026-08-12, cuando Tier-3, Tier-4 y la
+rama de filtros/UX móvil se fusionaron: 133 componentes, 272 conexiones y 27
+flujos. Cuando el código y este mapa discrepen, gana el código — y este mapa es
+el bug, igual que `AGENTS.md`.
+
+**Lo que aún no recoge:** la rama de filtros/UX móvil (cookie `af_tx_scope`,
+`useBackDismiss`, `ScreenTransition`) entró después de dibujar el mapa, así que
+sus componentes nuevos todavía no son nodos. Y las nueve migraciones de Tier-3 y
+Tier-4 están en el repositorio pero **sin aplicar** a la base: el mapa describe
+el esquema que definen, no el que hay hoy en Supabase.
