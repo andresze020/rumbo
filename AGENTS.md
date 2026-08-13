@@ -64,9 +64,10 @@ The product is household-first. All financial data must belong to a household.
 - **Tier-4 large sprint** (2026-07-30, branch `sprint/tier4-large`, based on
   `sprint/tier3-medium` — **both merged into `main` 2026-08-12**, Tier-4
   carrying Tier-3's two commits under its own). The six "grandes" benchmark
-  items, each at the first slice its row prescribes. **Six migrations still
-  pending `npx supabase db push`** (`20260730120000`–`20260730170000`), on top
-  of Tier-3's three: the code is in `main` but the schema is not yet applied.
+  items, each at the first slice its row prescribes. Its six migrations
+  (`20260730120000`–`20260730170000`) were **applied 2026-08-12**, together with
+  Tier-3's three. `npx supabase migration list --linked` reports 58/58; nothing
+  is pending.
   - **BR-045 optional time-of-day.** Nullable `transactions.transaction_time`
     (a `time`, not a `timestamptz` — promoting the column would re-interpret
     every existing date-only row against a timezone the database does not know).
@@ -156,8 +157,8 @@ The product is household-first. All financial data must belong to a household.
     locales.
 - **Tier-3 medium sprint** (2026-07-29, branch `sprint/tier3-medium`, **merged
   into `main` 2026-08-12** underneath Tier-4). The five "medium" benchmark
-  items — real features, several files each, no big-bang schema. **Its three
-  migrations (`20260729130000`–`20260729150000`) are still pending `db push`:**
+  items — real features, several files each, no big-bang schema. Its three
+  migrations (`20260729130000`–`20260729150000`) were **applied 2026-08-12**:
   - **BR-031 multi-currency entry.** Two different problems, and the ticket
     conflated them — corrected after QA:
     - **Expense / income in a foreign-currency account** has exactly *one* real
@@ -184,7 +185,7 @@ The product is household-first. All financial data must belong to a household.
     `fetchFilteredRows` the Reports screen uses, so the grid and the report
     agree for the same range by construction.
   - **BR-039 transfer-as-expense.** `accounts.treat_transfers_as_expense`
-    (migration `20260729130000`, **pending `db push`**), constrained in the
+    (migration `20260729130000`, **applied 2026-08-12**), constrained in the
     database to savings / investment / other. **Reporting only**: the ledger
     keeps two balancing entries, `transaction_allocations` is untouched, and
     balances, net worth and budgets do not move. `fetchTransferExpenseRows`
@@ -195,7 +196,7 @@ The product is household-first. All financial data must belong to a household.
     on screen. Editing the type and the toggle together is why
     `AccountTypeWithTransferExpense` exists as one client component.
   - **BR-043 budget vs last month + payment split.** Two read-only functions in
-    migration `20260729140000` (**pending `db push`**):
+    migration `20260729140000` (**applied 2026-08-12**):
     `get_budget_previous_actuals` (last month's actuals for *this* month's
     budgeted categories, so the comparison is like-for-like) and
     `get_budget_payment_split` (cash / card / other, exhaustive buckets that sum
@@ -205,7 +206,7 @@ The product is household-first. All financial data must belong to a household.
     each transaction to the entry with the most negative amount — the paying
     account, and the right one for a split transaction.
   - **BR-044 standalone dated notes.** New `notes` table (migration
-    `20260729150000`, **pending `db push`**) plus `/dashboard/notes` (Money nav
+    `20260729150000`, **applied 2026-08-12**) plus `/dashboard/notes` (Money nav
     group): month-at-a-time or all-months browsing, search, create/edit,
     archive with Undo via the shared `ArchiveToast`. Deliberately outside the
     ledger — `notes` references nothing in transactions/entries/allocations and
@@ -233,8 +234,8 @@ The product is household-first. All financial data must belong to a household.
     to the month, so they partition it exactly and always sum to the month
     totals. Months-within-year is deliberately deferred.
   - **BR-032 + BR-046 + BR-047 + BR-038**: per-user UI preferences
-    (`profiles.ui_preferences` jsonb, migration `20260728120000`, **pending
-    `db push`**) drive which optional add-form fields render (BR-032) and how
+    (`profiles.ui_preferences` jsonb, migration `20260728120000`, **applied**)
+    drive which optional add-form fields render (BR-032) and how
     `/dashboard/transactions` opens and renders (BR-038: default period,
     default account, compact rows, show/hide balance adjustments). Account
     currency is now editable and a change is confirm-gated (BR-046) — it
@@ -261,7 +262,7 @@ The product is household-first. All financial data must belong to a household.
     redirect) so a rejected drop springs back. `reorderCategoriesAction` was
     removed as superseded.
   - **Transaction filters take multiple values.** Migration
-    `20260729120000_multi_value_transaction_filters.sql` (**pending `db push`**)
+    `20260729120000_multi_value_transaction_filters.sql` (**applied 2026-08-12**)
     swaps `search_household_transactions`' `p_type`/`p_status`/`p_payee_id` for
     `p_types`/`p_statuses`/`p_payee_ids` arrays — **the old signature is DROPped
     first**, since `create or replace` cannot change a parameter's name or type
@@ -288,7 +289,7 @@ The product is household-first. All financial data must belong to a household.
   theme, language, and global sign-out. Recurring shows an aggregate auto-post
   health alert. BR-025 now centralizes locale-aware daily date formatting in
   `lib/format.ts`. Payees bulk merge is implemented with additive migration
-  `20260725120000_payees_bulk_merge.sql` (pending `db push`).
+  `20260725120000_payees_bulk_merge.sql` (applied 2026-08-12).
 - **Tags — BR-023** and **CSV import presets + revert — BR-024** are merged and
   their migrations are applied. BR-023
   adds a free-form tagging layer orthogonal to categories (many-to-many):
@@ -506,54 +507,12 @@ The product is household-first. All financial data must belong to a household.
 - categorization_rules
 - recurring_autopost_log
 - month_closures
-- notes (BR-044 — migration prepared, **pending `db push`**)
-- installment_plans (BR-035 — migration prepared, **pending `db push`**)
+- notes (BR-044)
+- installment_plans (BR-035)
 
-Pending migrations prepared locally:
-- `20260725120000_payees_bulk_merge.sql` (adds the `merge_payees_bulk`
-  function; no new table).
-- `20260728120000_br_032_038_ui_preferences.sql` (adds
-  `profiles.ui_preferences` jsonb + an object-shape check constraint; no new
-  table, no new policy — `profiles_update_own` already covers it).
-- `20260729120000_multi_value_transaction_filters.sql` (drops and recreates
-  `search_household_transactions` with array type/status/payee params; no
-  schema change).
-- `20260729130000_br_039_transfer_as_expense.sql` (adds
-  `accounts.treat_transfers_as_expense` + a type check constraint + a partial
-  index; no new table). **Until this is applied `/dashboard/accounts` shows its
-  "could not load" state**, because the page selects the new column.
-- `20260729140000_br_043_budget_comparison_split.sql` (adds
-  `get_budget_previous_actuals` and `get_budget_payment_split`; no schema
-  change). Budgets degrade to "no comparison" and a zero split without it.
-- `20260729150000_br_044_notes.sql` (adds the `notes` table, its indexes and
-  its RLS policies). `/dashboard/notes` shows its load-error state without it.
-- `20260730120000_br_045_transaction_time.sql` (adds
-  `transactions.transaction_time`; **DROPs and recreates**
-  `search_household_transactions`, whose `RETURNS TABLE` gains the column).
-  Until applied, `/dashboard/transactions` fails to load — the page selects the
-  new column through that RPC.
-- `20260730130000_uc_009_recurring_transfers.sql` (adds
-  `recurring_transactions.to_account_id` + a shape check; replaces
-  `run_recurring_autopost` with a version that handles transfers — same name and
-  signature, so the existing `pg_cron` job needs no change). Until applied,
-  `/dashboard/recurring` fails to load.
-- `20260730140000_br_030_card_statement_cycle.sql` (adds three `accounts`
-  columns + checks, `card_cycle_day_in_month`, `get_card_cycle_summaries`).
-  Until applied, `/dashboard/accounts` fails to load.
-- `20260730150000_br_035_installment_plans.sql` (adds the `installment_plans`
-  table with RLS, two `transactions` columns, `create_installment_plan` and
-  `cancel_installment_plan`). `/dashboard/installments` shows its load-error
-  callout without it.
-- `20260730160000_br_040_refunds.sql` (**narrows** the two
-  `transaction_allocations` positivity CHECKs to permit a negative amount only
-  on an `expense` allocation, adds the `refund` transaction type,
-  `transactions.refunded_transaction_id` and `create_refund_transaction`). No
-  schema change is required for reporting — see the decision doc.
-- `20260730170000_br_036_month_start_day.sql` (adds
-  `households.month_start_day` + a check). Deliberately touches **no** RPC; it
-  degrades to the calendar month everywhere until applied, and
-  `getHousehold` reads the column in a separate tolerant query so the analysis
-  screens keep working without it.
+All migrations are applied. `npx supabase migration list --linked`
+reported 58/58 on 2026-08-12, the day Tier-3 and Tier-4 were merged and
+pushed. Nothing is pending.
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
