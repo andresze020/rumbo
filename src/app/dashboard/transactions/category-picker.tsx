@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Shapes } from 'lucide-react'
 import { selectFieldCls } from '@/components/form-field'
 import { Label } from '@/components/ui/label'
@@ -121,10 +121,41 @@ export function CategoryPicker({
   const selectedParent = parentCategories.find((c) => c.id === parentCategoryId)
   const selectedChild = childCategories.find((c) => c.id === subcategoryId)
 
+  /**
+   * Picking a parent that has children is only half the choice, but the
+   * Subcategory field appears *below* the one you just used — on a phone it can
+   * land off-screen, and it always costs a second deliberate tap. Chaining
+   * straight into it is what the mobile picker sheet already does; this keeps
+   * the two-select version in step.
+   */
+  const subcategorySelectRef = useRef<HTMLSelectElement>(null)
+  const openSubcategoryOnRender = useRef(false)
+
+  useEffect(() => {
+    if (!openSubcategoryOnRender.current) return
+    openSubcategoryOnRender.current = false
+
+    const select = subcategorySelectRef.current
+    if (!select) return
+    try {
+      // Chromium only, and only while the tap that changed the parent still
+      // counts as user activation — everywhere else the field is simply there,
+      // focused, waiting to be tapped.
+      ;(select as HTMLSelectElement & { showPicker?: () => void }).showPicker?.()
+    } catch {
+      select.focus()
+    }
+  }, [parentCategoryId])
+
   function handleParentChange(value: string) {
     setParentCategoryId(value)
     setSubcategoryId('')
     onCategoryChange(value)
+    openSubcategoryOnRender.current = categories.some(
+      (category) =>
+        category.category_type === transactionType &&
+        category.parent_category_id === value
+    )
   }
 
   function handleSubcategoryChange(value: string) {
@@ -168,6 +199,7 @@ export function CategoryPicker({
           </Label>
           <SelectShell hasEmoji={Boolean(selectedChild?.icon)}>
             <select
+              ref={subcategorySelectRef}
               id={`subcategory_id_${transactionType}`}
               value={subcategoryId}
               onChange={(event) => handleSubcategoryChange(event.target.value)}

@@ -123,9 +123,24 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Installed as a PWA this is an app screen, not a document: don't chain
+       scroll to the browser (pull-to-refresh, rubber-band past the end), and
+       never let a stray wide element produce a sideways drag. */
+    overscroll-behavior-y: none;
+    overflow-x: hidden;
   }
   html {
     @apply font-sans;
+    /* No grey flash box around tapped controls, and no 300ms wait before a tap
+       is delivered — both read as "web page" on a phone. */
+    -webkit-tap-highlight-color: transparent;
+  }
+  a,
+  button,
+  summary,
+  label,
+  [role='button'] {
+    touch-action: manipulation;
   }
   /* Native select option popup inherits OS colors — override so dark mode works */
   select {
@@ -135,5 +150,33 @@
   option {
     background-color: var(--card);
     color: var(--foreground);
+  }
+}
+
+@layer utilities {
+  /*
+   * Route change transition. A native app never swaps a screen instantly and
+   * without motion — the new screen arrives. The easing is the iOS/Android
+   * "decelerate" curve: fast out of the gate, settling at the end.
+   */
+  @keyframes app-screen-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 10px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .animate-screen-in {
+    animation: app-screen-in 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-screen-in {
+      animation: none;
+    }
   }
 }

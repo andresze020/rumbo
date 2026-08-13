@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { buttonVariants } from '@/components/ui/button'
@@ -118,6 +119,7 @@ export function TransactionFilters({
   clearHref,
 }: TransactionFiltersProps) {
   const ui = useUiTranslation()
+  const router = useRouter()
   const [moreOpen, setMoreOpen] = useState(false)
   // Phones start with search collapsed behind its pill; it opens with a query
   // already typed so an active search is never invisible.
@@ -134,6 +136,57 @@ export function TransactionFilters({
   const [types, setTypes] = useState<string[]>(selectedTypes)
   const [dateFrom, setDateFrom] = useState(resolvedDateFrom)
   const [dateTo, setDateTo] = useState(resolvedDateTo)
+
+  // Applying used to reload the document, which reset the staged values for
+  // free. Now that navigation is client-side this component survives it, so the
+  // staging has to be re-seeded from whatever the server actually applied —
+  // otherwise removing a chip would leave its type still lit in the toggle.
+  // Adjusted during render rather than in an effect, per
+  // https://react.dev/learn/you-might-not-need-an-effect.
+  const appliedScope = [
+    selectedTypes.join(','),
+    resolvedDateFrom,
+    resolvedDateTo,
+  ].join('|')
+  const [syncedScope, setSyncedScope] = useState(appliedScope)
+  if (appliedScope !== syncedScope) {
+    setSyncedScope(appliedScope)
+    setTypes(selectedTypes)
+    setDateFrom(resolvedDateFrom)
+    setDateTo(resolvedDateTo)
+  }
+
+  // The sheet covers the screen; letting the list keep scrolling underneath it
+  // is the clearest tell that this is a web page and not an app.
+  useEffect(() => {
+    if (!moreOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [moreOpen])
+
+  /**
+   * Apply through the router instead of letting the browser submit the GET
+   * form. A native form submit is a full document load — blank screen, fonts
+   * and layout repainted, scroll position lost — for what is only a change of
+   * query string. `router.push` keeps the shell mounted and streams the new
+   * list in.
+   */
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const params = new URLSearchParams()
+    for (const [name, value] of new FormData(event.currentTarget).entries()) {
+      const entry = String(value).trim()
+      if (entry) params.append(name, entry)
+    }
+
+    setMoreOpen(false)
+    setSearchOpen(false)
+    router.push(`/dashboard/transactions?${params.toString()}`)
+  }
 
   function toggleType(value: string) {
     setTypes((current) =>
@@ -255,7 +308,12 @@ export function TransactionFilters({
   ]
 
   return (
-    <form method="get" action="/dashboard/transactions" className="space-y-2.5">
+    <form
+      method="get"
+      action="/dashboard/transactions"
+      onSubmit={applyFilters}
+      className="space-y-2.5"
+    >
       {/* Staged type selection travels as one hidden input per value, so it
           round-trips as repeated `type` params like every other multi-filter. */}
       {types.map((value) => (
@@ -327,6 +385,10 @@ export function TransactionFilters({
             aria-hidden="true"
           />
           <Input
+            // Uncontrolled, so re-key it on the applied query: a client-side
+            // apply keeps this input mounted, and it would otherwise hold text
+            // the list is no longer filtered by.
+            key={searchText}
             name="search"
             defaultValue={searchText}
             placeholder="Search transactions…"

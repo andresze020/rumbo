@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -23,6 +24,7 @@ import {
   type QuickAddFormData,
 } from '@/app/dashboard/quick-add-actions'
 import { useLanguage } from '@/components/language-provider'
+import { useBackDismiss } from '@/lib/use-back-dismiss'
 import { todayIsoDateLocal } from '@/lib/format'
 
 type TransactionType = 'income' | 'expense'
@@ -33,7 +35,22 @@ type AddNextDefaults = {
   type?: TransactionType
   accountId?: string
   status?: string
+  categoryId?: string
+  payeeName?: string
+  tagIds?: string[]
 }
+
+/** The `next_*` params `createManualTransactionAction` sends back for a batch. */
+const ADD_NEXT_PARAMS = [
+  'next_date',
+  'next_type',
+  'next_account',
+  'next_status',
+  'next_category',
+  'next_payee',
+  'next_tags',
+  'next_seq',
+] as const
 
 type OpenDialogOptions = {
   accountId?: string
@@ -90,6 +107,76 @@ function useMobileKeyboardInset() {
   return inset
 }
 
+/**
+ * Scroll whatever field is being typed into back into view once the keyboard
+ * is up.
+ *
+ * Lifting the sheet above the keyboard keeps its footer reachable but leaves
+ * very little sheet: header, the pinned action buttons and the keyboard
+ * together can cover the amount field you just tapped, so you were typing a
+ * number you could not see. The browser's own "scroll the focused input into
+ * view" runs before the sheet has been resized and lands in the wrong place,
+ * so redo it against the final geometry.
+ */
+function useKeepFocusedFieldVisible(keyboardInset: number) {
+  useEffect(() => {
+    if (!keyboardInset) return
+
+    const reveal = () => {
+      const active = document.activeElement
+      if (!(active instanceof HTMLElement)) return
+      if (!active.matches('input, select, textarea')) return
+      // Centred rather than merely "in view": the action bar is sticky over the
+      // bottom of the sheet, and `nearest` happily parks a field underneath it.
+      active.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }
+
+    // The sheet resizes a frame or two behind the keyboard animation; wait for
+    // the new height before deciding where the middle is.
+    const timer = window.setTimeout(reveal, 150)
+    // Moving between fields while the keyboard is already up never changes the
+    // inset, so this effect would not re-run on its own.
+    document.addEventListener('focusin', reveal)
+
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('focusin', reveal)
+    }
+  }, [keyboardInset])
+}
+
+/**
+ * Params that describe *this* navigation rather than the view behind the
+ * dialog: a toast to show, a dialog to reopen, a share payload to consume.
+ * Everything else — the transactions screen's filters, above all — has to
+ * survive the round trip, or creating a transaction silently drops the filters
+ * the user was working in.
+ */
+const TRANSIENT_RETURN_PARAMS = [
+  'created',
+  'updated',
+  'voided',
+  'unvoided',
+  'undo_id',
+  'error',
+  'edit',
+  'mode',
+  'page',
+  'quick_add',
+  'share_title',
+  'share_text',
+  'share_url',
+  ...ADD_NEXT_PARAMS,
+] as const
+
+/** The current view as a URL the server action can redirect back to. */
+function buildReturnTo(pathname: string, searchParams: URLSearchParams) {
+  const kept = new URLSearchParams(searchParams.toString())
+  for (const key of TRANSIENT_RETURN_PARAMS) kept.delete(key)
+  const query = kept.toString()
+  return query ? `${pathname}?${query}` : pathname
+}
+
 function readQuickAddType(searchParams: URLSearchParams): OpenDialogType | null {
   const type = searchParams.get('quick_add')
   return type === 'income' || type === 'expense' || type === 'transfer' ? type : null
@@ -124,11 +211,19 @@ function readAddNextDefaults(searchParams: URLSearchParams): AddNextDefaults | n
   if (!nextDate && !nextType && !nextAccount && !nextSeq) return null
 
   const type = nextType === 'income' || nextType === 'expense' ? nextType : undefined
+  const tagIds = (searchParams.get('next_tags') ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+
   return {
     date: nextDate ?? todayIsoDate(),
     type,
     accountId: nextAccount ?? undefined,
     status: nextStatus ?? undefined,
+    categoryId: searchParams.get('next_category') ?? undefined,
+    payeeName: searchParams.get('next_payee') ?? undefined,
+    tagIds: tagIds.length > 0 ? tagIds : undefined,
   }
 }
 
@@ -138,6 +233,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   const searchParams = useSearchParams()
   const { t } = useLanguage()
   const keyboardInset = useMobileKeyboardInset()
+  useKeepFocusedFieldVisible(keyboardInset)
 
   // Read pending "Save and Add Next" defaults straight from the URL on first
   // render so a freshly mounted provider (e.g. after a server-action redirect
@@ -157,6 +253,68 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   const [sharedDescription, setSharedDescription] = useState<string | undefined>()
   // BR-034: the source transaction a "Copy" is seeded from.
   const [copyDefaults, setCopyDefaults] = useState<TransactionCopyPayload | undefined>()
+
+  const returnTo = useMemo(
+    () => buildReturnTo(pathname, new URLSearchParams(searchParams.toString())),
+    [pathname, searchParams]
+  )
+
+  /**
+   * Seed a new entry from the list you are looking at.
+   *
+   * Filtering to one account, one category or one payee and then tapping + is
+   * a statement of intent — you are about to add something to *that*. Only a
+   * filter narrowed to exactly one value counts; two accounts is not a hint,
+   * and anything the caller passed to `openDialog` (an account card, a Copy)
+   * is more specific and wins.
+   *
+   * Deliberately not "whatever you entered last time": a category carried in
+   * from yesterday's groceries onto today's gas is a miscategorised
+   * transaction the user never chose, and this app exists to make the
+   * categories mean something.
+   */
+  const filterDefaults = useMemo(() => {
+    if (pathname !== '/dashboard/transactions') return null
+    const only = (key: string) => {
+      const values = searchParams.getAll(key)
+      return values.length === 1 ? values[0] : undefined
+    }
+    const type = only('type')
+    return {
+      accountId: only('account_id'),
+      categoryId: only('category_id'),
+      payeeId: only('payee_id'),
+      type:
+        type === 'income' || type === 'expense' || type === 'transfer'
+          ? (type as OpenDialogType)
+          : undefined,
+    }
+  }, [pathname, searchParams])
+
+  // The type the form will actually open on, needed before render to decide
+  // whether a filtered category is compatible with it. `'expense'` mirrors
+  // TransactionForm's own fallback.
+  const seededType: OpenDialogType =
+    copyDefaults?.type ??
+    addNextDefaults?.type ??
+    triggerType ??
+    filterDefaults?.type ??
+    'expense'
+
+  const seededCategoryId =
+    copyDefaults?.categoryId ??
+    addNextDefaults?.categoryId ??
+    formData?.categories.find(
+      (category) =>
+        category.id === filterDefaults?.categoryId &&
+        category.category_type === seededType
+    )?.id
+
+  // The filter carries a payee id; the form's combobox works in names.
+  const seededPayeeName =
+    copyDefaults?.payeeName ??
+    addNextDefaults?.payeeName ??
+    formData?.payees.find((payee) => payee.id === filterDefaults?.payeeId)?.name
 
   const nextDate = searchParams.get('next_date')
   const nextType = searchParams.get('next_type')
@@ -205,11 +363,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
 
       function cleanNextParams() {
         const cleaned = new URLSearchParams(searchParams.toString())
-        cleaned.delete('next_date')
-        cleaned.delete('next_type')
-        cleaned.delete('next_account')
-        cleaned.delete('next_status')
-        cleaned.delete('next_seq')
+        for (const key of ADD_NEXT_PARAMS) cleaned.delete(key)
         cleaned.delete('created') // prevent the auto-close effect from firing after the URL is cleaned
         const qs = cleaned.toString()
         router.replace(qs ? `${pathname}?${qs}` : pathname)
@@ -320,6 +474,14 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
     clearPrefills()
   }
 
+  // Back dismisses the entry sheet instead of leaving the screen behind it.
+  // A picker sheet opened on top of this one owns its own history entry, so it
+  // is always the one Back reaches first.
+  useBackDismiss(open, () => {
+    closeDialog()
+    return false
+  })
+
   return (
     <TransactionDialogContext.Provider value={{ openDialog }}>
       {children}
@@ -349,7 +511,11 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
           }
         >
           <div aria-hidden="true" className="mx-auto -mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
-          <DialogHeader>
+          {/* With the keyboard up the sheet is only a few hundred pixels tall,
+              and the title plus its subtitle eat a third of that describing
+              something you are already doing. Collapsed to screen-reader-only
+              (not unmounted) so the dialog keeps its accessible name. */}
+          <DialogHeader className={keyboardInset ? 'sr-only' : undefined}>
             <DialogTitle>{t('transactionForm.dialogTitle')}</DialogTitle>
             <DialogDescription>
               {t('transactionForm.dialogDescription')}
@@ -380,21 +546,27 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
                 // it comes from the source transaction.
                 defaultDate={addNextDefaults?.date ?? todayIsoDate()}
                 defaultAccountId={
-                  copyDefaults?.accountId ?? addNextDefaults?.accountId ?? triggerAccountId
+                  copyDefaults?.accountId ??
+                  addNextDefaults?.accountId ??
+                  triggerAccountId ??
+                  filterDefaults?.accountId
                 }
-                defaultType={copyDefaults?.type ?? addNextDefaults?.type ?? triggerType}
+                defaultType={seededType}
                 defaultStatus={addNextDefaults?.status}
                 defaultDescription={copyDefaults?.description ?? sharedDescription}
                 defaultAmount={copyDefaults?.amount}
                 defaultToAmount={copyDefaults?.toAmount}
-                defaultCategoryId={copyDefaults?.categoryId}
-                defaultMerchantName={copyDefaults?.payeeName}
+                defaultCategoryId={seededCategoryId}
+                defaultMerchantName={seededPayeeName}
                 defaultNotes={copyDefaults?.notes}
-                defaultTagIds={copyDefaults?.tagIds}
+                defaultTagIds={copyDefaults?.tagIds ?? addNextDefaults?.tagIds}
                 defaultFromAccountId={copyDefaults?.fromAccountId}
                 defaultToAccountId={copyDefaults?.toAccountId}
                 visibleFields={formData.formFields}
-                returnTo={pathname}
+                // The full view, filters included — not just the pathname, or
+                // the redirect after "Create transaction" lands on an
+                // unfiltered list.
+                returnTo={returnTo}
                 onCancel={closeDialog}
               />
             )

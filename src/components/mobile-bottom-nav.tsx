@@ -186,7 +186,9 @@ function BottomTab({ tab, active, label }: { tab: Tab; active: boolean; label: s
       href={tab.href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex h-full flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors',
+        // `active:` gives the tab the press-down a native tab bar has; without
+        // it a tap has no feedback at all until the next screen paints.
+        'flex h-full select-none flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-[color,transform] duration-150 active:scale-95',
         active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
       )}
     >

@@ -334,10 +334,22 @@ export async function createManualTransactionAction(formData: FormData) {
     const base = returnTo?.startsWith('/dashboard/') ? returnTo : '/dashboard/transactions'
     const url = new URL(base, 'http://localhost')
     url.searchParams.set('created', '1')
+    // Everything that describes *which kind of entry this is* carries over —
+    // "Save & Add Next" means a batch (a stack of receipts, a day of spending),
+    // and re-picking the category, payee and tags for each one is most of the
+    // typing. Amount, description and notes stay empty on purpose: those are
+    // what actually differs between two entries in the same batch, and a
+    // carried-over amount is the kind of prefill that gets posted by accident.
     url.searchParams.set('next_date', transactionDate)
     url.searchParams.set('next_type', transactionType)
     if (accountId) url.searchParams.set('next_account', accountId)
     if (status) url.searchParams.set('next_status', status)
+    if (categoryId) url.searchParams.set('next_category', categoryId)
+    const nextPayee = payeeName || merchantName
+    if (nextPayee) url.searchParams.set('next_payee', nextPayee)
+    if (tagsProvided && tagIds.length > 0) {
+      url.searchParams.set('next_tags', tagIds.join(','))
+    }
     // Unique per redirect so the dialog reopen effect fires even when the
     // next entry reuses the same date/type/account as the previous one.
     url.searchParams.set('next_seq', String(Date.now()))

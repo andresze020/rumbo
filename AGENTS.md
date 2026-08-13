@@ -23,11 +23,50 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Sticky filters + native-feeling mobile navigation** (2026-08-10, branch
+  `claude/filtros-ux-mobile-uqa5zt`, **merged into `main` 2026-08-12**). No
+  schema changes.
+  - `/dashboard/transactions` remembers the last applied filter scope in the
+    `af_tx_scope` cookie (`lib/filters/transaction-scope-memory.ts`, written by
+    the client `remember-scope.tsx`, read by the page's server component). A
+    bare landing is redirected to it, ahead of the BR-038 landing preferences;
+    the cookie expires after 12 hours so a pinned month cannot outlive the
+    month, and only a view the user actually narrowed is recorded.
+  - `TransactionDialogProvider` now passes the **full** current URL as
+    `return_to`, not just the pathname — creating a transaction used to redirect
+    to an unfiltered list.
+  - The filter bar applies through `router.push` instead of a native GET submit
+    (no full document reload). Because the bar now survives navigation, both it
+    and `MultiSelectChip` re-seed their staged state from the applied props.
+  - `useBackDismiss` (`lib/use-back-dismiss.ts`) gives overlays a history entry
+    so Android Back closes them; nested overlays share one listener and only the
+    top one is dismissed per press, and a drill-down stays armed after stepping
+    up. `SelectorSheet` (which also moved its back affordance into the header)
+    and the add-transaction dialog both use it.
+  - `CategoryPicker`'s two-select version chains into Subcategory
+    (`showPicker()`, focus fallback) after a parent with children is chosen.
+  - `ScreenTransition` animates route changes; globals.css adds tap/overscroll
+    behaviour for the installed PWA.
+  - **Faster capture.** "Save & Add Next" now carries the whole entry context
+    (`next_category`, `next_payee`, `next_tags` alongside date/type/account/
+    status); amount, description and notes stay empty, since those are what
+    differs inside a batch. A new entry opened from `/dashboard/transactions`
+    also seeds itself from the filters when they name exactly one account,
+    category, payee or type — a category only when it matches the type the
+    form opens on. Prefilling from "the last transaction you saved" was
+    deliberately not added: a carried-over category is a miscategorised
+    transaction nobody chose.
+  - **Amount visible over the keyboard.** With the sheet lifted above the
+    keyboard the header plus the sticky action bar covered the amount field.
+    The dialog header collapses to `sr-only` while the keyboard is up, and
+    `useKeepFocusedFieldVisible` re-centres the focused field once the sheet
+    has finished resizing (the browser's own scroll runs too early).
 - **Tier-4 large sprint** (2026-07-30, branch `sprint/tier4-large`, based on
-  `sprint/tier3-medium` — **both are unmerged**, so this branch stacks two
-  Tier-3 commits under its own). The six "grandes" benchmark items, each at the
-  first slice its row prescribes. **Six migrations pending `npx supabase db
-  push`** (`20260730120000`–`20260730170000`), on top of Tier-3's three.
+  `sprint/tier3-medium` — **both merged into `main` 2026-08-12**, Tier-4
+  carrying Tier-3's two commits under its own). The six "grandes" benchmark
+  items, each at the first slice its row prescribes. **Six migrations still
+  pending `npx supabase db push`** (`20260730120000`–`20260730170000`), on top
+  of Tier-3's three: the code is in `main` but the schema is not yet applied.
   - **BR-045 optional time-of-day.** Nullable `transactions.transaction_time`
     (a `time`, not a `timestamptz` — promoting the column would re-interpret
     every existing date-only row against a timezone the database does not know).
@@ -115,9 +154,10 @@ The product is household-first. All financial data must belong to a household.
     `check-i18n-coverage.mjs`). It now collects from both sources, seeds from the
     committed catalog, and writes sorted output. Coverage is 1,209 phrases × 2
     locales.
-- **Tier-3 medium sprint** (2026-07-29, branch `sprint/tier3-medium`). The five
-  "medium" benchmark items — real features, several files each, no big-bang
-  schema:
+- **Tier-3 medium sprint** (2026-07-29, branch `sprint/tier3-medium`, **merged
+  into `main` 2026-08-12** underneath Tier-4). The five "medium" benchmark
+  items — real features, several files each, no big-bang schema. **Its three
+  migrations (`20260729130000`–`20260729150000`) are still pending `db push`:**
   - **BR-031 multi-currency entry.** Two different problems, and the ticket
     conflated them — corrected after QA:
     - **Expense / income in a foreign-currency account** has exactly *one* real

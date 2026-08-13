@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Store, X } from 'lucide-react'
@@ -13,6 +14,7 @@ import {
   type ReviewStatus,
 } from './transaction-list'
 import { TransactionToasts } from './transaction-toasts'
+import { RememberTransactionScope } from './remember-scope'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
@@ -21,6 +23,11 @@ import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { Callout } from '@/components/callout'
 import { createClient } from '@/lib/supabase/server'
 import { getUiPreferences } from '@/lib/preferences/server'
+import {
+  TRANSACTION_SCOPE_COOKIE,
+  isTransactionScopeKey,
+  parseTransactionScope,
+} from '@/lib/filters/transaction-scope-memory'
 import {
   hasDefaultTransactionScope,
   type UiPreferences,
@@ -372,6 +379,23 @@ function transactionsPath(
 const CLEAR_FILTERS_HREF = `/dashboard/transactions?date_from=${ALL_TIME_FROM}&date_to=${ALL_TIME_TO}`
 
 /**
+ * One totals figure — a stacked label/amount tile on phones, and the original
+ * inline "Expenses $8,950.28" run of text from `sm` up.
+ */
+const totalCellCls = (accent: string) =>
+  cn(
+    'flex min-w-0 flex-col gap-0.5 font-semibold sm:flex-row sm:items-baseline sm:gap-1.5',
+    accent
+  )
+
+const totalLabelCls =
+  'text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:text-sm sm:font-semibold sm:normal-case sm:tracking-normal sm:text-current'
+
+// Slightly under `text-sm` on phones so a six-figure amount still fits its
+// third of the row; `tabular-nums` keeps the three tiles optically aligned.
+const totalValueCls = 'text-[13px] tabular-nums sm:text-sm'
+
+/**
  * BR-038 — every search param that means "the user (or a link) chose a view".
  * If any of these is present the URL is authoritative and the landing
  * preferences stay out of the way.
@@ -390,6 +414,37 @@ const FILTER_PARAM_KEYS = [
   'search',
   'page',
 ] as const
+
+/**
+ * The URL for the filters the user last applied, restored from the cookie the
+ * page writes on every filtered render.
+ *
+ * Takes precedence over the BR-038 landing preferences: those describe where to
+ * *start*, and a remembered scope means the user has already moved on from
+ * there. Returns null when nothing usable was remembered, which drops through
+ * to the preferences as before.
+ *
+ * Non-scope params (`created`, `edit`, `mode`…) ride along, so the toast or
+ * dialog a redirect asked for still shows after the restore.
+ */
+function rememberedScopeHref(
+  rawCookieValue: string,
+  currentParams: Record<string, string | string[] | undefined>
+) {
+  const scope = parseTransactionScope(rawCookieValue)
+  if ([...scope.keys()].length === 0) return null
+
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(currentParams)) {
+    if (value === undefined || isTransactionScopeKey(key)) continue
+    for (const entry of Array.isArray(value) ? value : [value]) {
+      params.append(key, entry)
+    }
+  }
+  for (const [key, value] of scope) params.append(key, value)
+
+  return `/dashboard/transactions?${params.toString()}`
+}
 
 /**
  * The explicit URL that represents this user's preferred landing view.
@@ -445,6 +500,17 @@ export default async function TransactionsPage({
   // carries real params and this branch is not re-entered.
   const preferences = await getUiPreferences()
   const hasAnyFilterParam = FILTER_PARAM_KEYS.some((key) => params[key] !== undefined)
+
+  // Filters the user applied earlier in the session win over the landing
+  // preferences: switching screens, or being redirected back here after
+  // creating a transaction, should return to the view they were working in.
+  if (!hasAnyFilterParam) {
+    const rememberedScope = (await cookies()).get(TRANSACTION_SCOPE_COOKIE)?.value
+    const restoredHref = rememberedScope
+      ? rememberedScopeHref(rememberedScope, params)
+      : null
+    if (restoredHref) redirect(restoredHref)
+  }
 
   if (!hasAnyFilterParam && !hasDefaultTransactionScope(preferences)) {
     redirect(preferredScopeHref(preferences, params))
@@ -523,6 +589,11 @@ export default async function TransactionsPage({
   const editTransactionId =
     typeof params.edit === 'string' ? params.edit : null
   const returnTo = transactionsPath(filters)
+
+  // What a bare `/dashboard/transactions` should be restored to. Only recorded
+  // once the user has actually narrowed something down — remembering the
+  // untouched default view would pin them to whichever month they first opened.
+  const rememberedScopeQuery = hasActiveFilters ? returnTo.split('?')[1] ?? '' : ''
 
   const supabase = await createClient()
   const {
@@ -941,6 +1012,12 @@ export default async function TransactionsPage({
   const filteredExpenseBase = totalExpenseBase
   const filteredNetBase = filteredIncomeBase - filteredExpenseBase
   const hasFilteredTotals = filteredIncomeBase > 0 || filteredExpenseBase > 0
+  // Net only exists when both sides do, so the mobile tiles split by however
+  // many figures are actually shown rather than always assuming three.
+  const filteredTotalsCount =
+    (filteredExpenseBase > 0 ? 1 : 0) +
+    (filteredIncomeBase > 0 ? 1 : 0) +
+    (filteredIncomeBase > 0 && filteredExpenseBase > 0 ? 1 : 0)
 
   const selectedEditRow = transactionRows.find(
     (row) => row.transaction.id === editTransactionId
@@ -1245,6 +1322,11 @@ export default async function TransactionsPage({
         }
       />
 
+      {/* Keeps these filters for the next bare landing on this screen. */}
+      {rememberedScopeQuery ? (
+        <RememberTransactionScope query={rememberedScopeQuery} />
+      ) : null}
+
       {/* ── Notifications ──────────────────────────────────────────────── */}
       <TransactionToasts />
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
@@ -1428,27 +1510,52 @@ export default async function TransactionsPage({
         </div>
 
         {/* ── Filtered totals (base currency) ─────────────────────────── */}
-        {/* One scrolling line on phones instead of a wrapping block. */}
+        {/* These three numbers are the answer to "how did this period go", so
+            they have to be readable at a glance. As one nowrap scrolling line
+            the last one was clipped at the screen edge and the currency note
+            sat entirely off-screen — you had to drag sideways to read a total.
+            Phones get evenly split tiles (label over amount) sized to however
+            many totals there are; `sm:` keeps the original inline row, which
+            has always had the room. */}
         {hasFilteredTotals ? (
-          <div className="-mx-1 flex items-center gap-x-3 gap-y-1 overflow-x-auto whitespace-nowrap px-1 text-sm sm:mx-0 sm:flex-wrap sm:whitespace-normal">
-            {filteredExpenseBase > 0 ? (
-              <span className="font-semibold text-red-600 dark:text-red-400">
-                {ui('Expenses')} {formatCurrency(filteredExpenseBase, household.base_currency, locale)}
+          <div className="rounded-xl border bg-card p-2.5 text-sm sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
+            <div
+              className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1 sm:px-1"
+              // Ignored once the container is a flex row from `sm` up.
+              style={{
+                gridTemplateColumns: `repeat(${filteredTotalsCount}, minmax(0, 1fr))`,
+              }}
+            >
+              {filteredExpenseBase > 0 ? (
+                <span className={totalCellCls('text-red-600 dark:text-red-400')}>
+                  <span className={totalLabelCls}>{ui('Expenses')}</span>
+                  <span className={totalValueCls}>
+                    {formatCurrency(filteredExpenseBase, household.base_currency, locale)}
+                  </span>
+                </span>
+              ) : null}
+              {filteredIncomeBase > 0 ? (
+                <span className={totalCellCls('text-emerald-600 dark:text-emerald-400')}>
+                  <span className={totalLabelCls}>{ui('Income')}</span>
+                  <span className={totalValueCls}>
+                    {formatCurrency(filteredIncomeBase, household.base_currency, locale)}
+                  </span>
+                </span>
+              ) : null}
+              {filteredIncomeBase > 0 && filteredExpenseBase > 0 ? (
+                <span className={totalCellCls('text-foreground')}>
+                  <span className={totalLabelCls}>{ui('Net')}</span>
+                  <span className={totalValueCls}>
+                    {formatCurrency(filteredNetBase, household.base_currency, locale)}
+                  </span>
+                </span>
+              ) : null}
+              {/* Which "$" these are — the households here hold both CAD and
+                  COP accounts, so the code is not decoration. */}
+              <span className="col-span-full text-right text-[11px] text-muted-foreground sm:col-auto sm:text-left sm:text-xs">
+                {ui('in')} {household.base_currency}
               </span>
-            ) : null}
-            {filteredIncomeBase > 0 ? (
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                {ui('Income')} {formatCurrency(filteredIncomeBase, household.base_currency, locale)}
-              </span>
-            ) : null}
-            {filteredIncomeBase > 0 && filteredExpenseBase > 0 ? (
-              <span className="font-semibold text-foreground">
-                {ui('Net')} {formatCurrency(filteredNetBase, household.base_currency, locale)}
-              </span>
-            ) : null}
-            <span className="text-xs text-muted-foreground">
-              {ui('in')} {household.base_currency}
-            </span>
+            </div>
           </div>
         ) : null}
 
