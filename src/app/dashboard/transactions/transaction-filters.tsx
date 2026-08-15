@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { buttonVariants } from '@/components/ui/button'
 import { MultiSelectChip, type MultiSelectOption } from '@/components/multi-select-chip'
 import { cn } from '@/lib/utils'
+import { useBackDismiss } from '@/lib/use-back-dismiss'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
 type AccountOption = {
@@ -165,6 +166,21 @@ export function TransactionFilters({
     return () => {
       document.body.style.overflow = previousOverflow
     }
+  }, [moreOpen])
+
+  // Android Back closes the sheet instead of leaving Transactions, matching the
+  // picker sheets in the transaction form. Without it the only way out was the
+  // X, and Back discarded the whole screen.
+  useBackDismiss(moreOpen, () => setMoreOpen(false))
+
+  // Escape is the desktop equivalent of the same escape hatch.
+  useEffect(() => {
+    if (!moreOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMoreOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
   }, [moreOpen])
 
   /**
@@ -417,6 +433,9 @@ export function TransactionFilters({
           `sm:contents` unwraps the phone-only structure so the desktop toolbar
           keeps its original flat rows. */}
       <div
+        {...(moreOpen
+          ? { role: 'dialog' as const, 'aria-modal': true, 'aria-label': ui('Filters') }
+          : {})}
         className={cn(
           'flex-col',
           moreOpen

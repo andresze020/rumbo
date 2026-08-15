@@ -170,8 +170,24 @@
     }
   }
 
+  /*
+   * `backwards`, never `forwards`/`both`. A filling animation stays "in effect"
+   * forever, and because these keyframes touch `transform` the wrapper then
+   * stays a transform containing block *and* a stacking context for the life of
+   * the screen. Every `position: fixed` overlay rendered inside a page —
+   * the transactions filter sheet, any bottom sheet, any pinned action bar —
+   * then anchors to the bottom of the scrolling document instead of the
+   * viewport (measured: bottom edge at 3000px on an 800px viewport) and paints
+   * *under* the bottom nav (z-40) and the FABs (z-50). That put "Apply filters"
+   * permanently off-screen with no way to reach it.
+   *
+   * The final keyframe is the element's natural state, so forwards fill buys
+   * nothing; `backwards` only fills before the animation starts. The wrapper is
+   * a plain block again the moment the 260ms transition ends, which is long
+   * before any overlay can be opened.
+   */
   .animate-screen-in {
-    animation: app-screen-in 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+    animation: app-screen-in 260ms cubic-bezier(0.32, 0.72, 0, 1) backwards;
   }
 
   @media (prefers-reduced-motion: reduce) {
