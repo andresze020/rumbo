@@ -2,6 +2,11 @@
 
 ## Status
 **Planned — not yet implemented.** Design and requirements only; no code exists.
+**Phase 0 is in progress and trending positive:** on the target Android device,
+both Google Wallet and the bank notify within seconds of a tap, carrying
+merchant, amount and card last four. No detection risk remains; one automation
+config defect and the repeat-fire runs are outstanding. See the
+[spike results](../alpha/tap-capture-phase-0-spike.md#results).
 Database impact when built: **three new tables** (`capture_tokens`,
 `capture_inbox`, `capture_card_map`), one new `SECURITY DEFINER` RPC, and one
 additive value (`tap_capture`) on the existing `transactions_source_chk`
@@ -167,6 +172,10 @@ and later a third time via CSV import when the charge settles.
   additionally computes a dedup key over
   `(household_id, occurred_at rounded to the minute, amount, last_four)` and
   rejects a second row with the same key as `status = 'duplicate'`.
+  Phase 0 measured **three POSTs from a single tap** — the wallet, the bank, and
+  a refresh of the wallet's own notification. A re-fire reproduces `external_id`
+  rather than changing it, so the computed `dedup_key` is the load-bearing
+  mechanism here and `external_id` only guards sender-side retries.
 - **Against CSV import**: an import row matching an existing `tap_capture`
   transaction on amount + merchant within a ±3-day window is flagged in the
   import preview as a probable duplicate. Because a tap posts on the *authorized*

@@ -177,17 +177,47 @@ names, no real card digits.
 - **Parser verdict** — the verdict line printed by `parse-capture-sample.mjs`.
 - **Locked screen?** — did it fire with the phone locked and pocketed?
 
+**Run 1 — 2026-08-15, Android (Google Wallet + CIBC Mastercard, Montreal/CAD).**
+Two columns are separated on purpose: what the **notification** contained, and
+what the **payload** actually delivered. They did not match, and conflating them
+would have recorded a false negative.
+
 | Track | Fired? | Latency | Merchant | Amount | Currency | Last four | Parser verdict | Locked screen? | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| A — iOS Shortcuts | | | | | | | | | |
-| B — Android automation | | | | | | | | | |
-| C — Bank alert | | | | | | | | | |
+| A — iOS Shortcuts | n/a | — | — | — | — | — | — | — | Device is Android. Track A not applicable. |
+| B — Android automation (MacroDroid 5.65.9, Google Wallet) | **Yes** | **~10 s** tap → POST | Present *(in notification)* | Present *(in notification)* | **Absent** — bare `$`, no ISO code | Present *(in notification)* | Not run — no real text reached the bin | Not recorded | **Transport works, payload empty.** Magic text was not substituted; the literal `[notification_title]` / `[notification_text]` strings were POSTed. Config bug, not a detection failure. |
+| C — Bank alert (CIBC push) | **Yes** | Same minute as Wallet | Present | Not confirmed — truncated in the shade | **Absent** — no ISO code | Present | Not run | Not recorded | Fires independently of Wallet. Viable as the redundant sender the design calls for. |
+
+### Findings
+
+1. **Detection is not the problem on this device.** Both senders fire within
+   seconds and the notification text carries merchant, amount and last four.
+   This is better than the design predicted for Path B, which assumed free-text
+   needing a parser as the likely Android outcome.
+2. **One tap produced three POSTs** (`13:23:13`, `:15`, `:16`) for a single
+   purchase — Wallet, the bank, and most likely a refresh of the Wallet
+   notification. The `dedup_key` is therefore mandatory, and it must tolerate
+   *the same* notification firing repeatedly, not merely two distinct sources.
+   `external_id` alone cannot cover this, since a re-fire reproduces it.
+3. **The `$` ambiguity is confirmed in the wild.** Wallet renders the amount
+   with a bare `$` and no ISO code, on a CAD card in Montreal. Currency must be
+   resolved from the account, exactly as the payload contract requires.
+4. **The `12.500` trap does not arise in this format.** Wallet uses a dot
+   decimal separator with two digits, which is unambiguous. This is a
+   locale-specific reprieve, not a general one.
+5. **Magic-text substitution is the one open defect.** Re-test with a *Display
+   Notification* action carrying the same tokens to isolate wrong variable names
+   from a body field that does not interpolate.
 
 ### Repeat-fire check
 
 One tap proves the trigger exists. It does not prove the trigger is reliable,
 which is what the feature actually depends on. Record three more ordinary taps
 over the following days before committing to Phase 1.
+
+Not started. Run 1 above proves the trigger exists; it says nothing about
+reliability. Do not start counting these until magic-text substitution is fixed
+— a tap that fires with an empty payload is not a successful capture.
 
 | # | Date | Track | Fired? | Latency | Notes |
 |---|---|---|---|---|---|
@@ -201,11 +231,29 @@ over the following days before committing to Phase 1.
 
 Complete after the tables are filled.
 
-- **Chosen primary path:** _____
-- **Chosen fallback path:** _____
-- **Outcome vs. exit criteria:** _____
-- **Phase 1 go / no-go:** _____
-- **Anything the design doc got wrong and must be corrected:** _____
+- **Chosen primary path:** Path B — Android automation reading the Google Wallet
+  notification. Its title/body split carries merchant, amount and last four.
+- **Chosen fallback path:** Path C — the CIBC push, which fires independently in
+  the same minute and is the redundant sender for the "automation silently
+  stopped" risk.
+- **Outcome vs. exit criteria:** **Pending, trending ✅.** The notifications
+  clear the "merchant + amount" bar, which is the criterion that actually gates
+  the feature. But no run has yet delivered those fields *through the payload*,
+  so the criterion is not formally met. Not the ⚠️ free-text branch either — the
+  data is better structured than that branch assumed.
+- **Phase 1 go / no-go:** **Not yet.** One config defect (magic-text
+  substitution) and the three repeat-fire taps stand between here and go. No
+  detection risk remains, so this is a matter of finishing the spike rather than
+  re-opening the feasibility question.
+- **Anything the design doc got wrong and must be corrected:**
+  - Path B's *Data quality* cell reads "notification text, needs parsing". On
+    this wallet it is better than that: merchant is isolated in the title and
+    amount + last four in the body, so extraction is field-splitting rather than
+    free-text parsing. Worth narrowing once a real payload confirms it.
+  - The dedup section treats `external_id` as the within-capture idempotency
+    key. Run 1 shows a single tap re-firing the same notification, which
+    reproduces `external_id` and defeats it. The computed `dedup_key` is the
+    load-bearing mechanism, not the backstop.
 
 Record the outcome in
 [../features/tap-payment-capture.md](../features/tap-payment-capture.md) —
