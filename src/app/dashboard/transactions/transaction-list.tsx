@@ -472,21 +472,34 @@ function DisplayRow({
       )}
     >
       {/* ── Compact summary line (single row on mobile) ───────────────── */}
-      <div className="flex items-center gap-3">
+      {/* The whole line toggles the details — the amount and the chevron are
+          part of the tap target, not just the title. The checkbox stops the
+          click/keydown from bubbling so selecting a row never expands it. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggleExpand}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            onToggleExpand()
+          }
+        }}
+        aria-expanded={expanded}
+        aria-label={ui(`Toggle details for ${row.title}`)}
+        className="flex cursor-pointer select-none items-center gap-3 text-left"
+      >
         <input
           type="checkbox"
           checked={selected}
           onChange={onToggle}
-          className="size-4 shrink-0 rounded border-input accent-primary"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+          className="size-4 shrink-0 cursor-pointer rounded border-input accent-primary"
           aria-label={ui(`Select ${row.title}`)}
         />
 
-        <button
-          type="button"
-          onClick={onToggleExpand}
-          aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-        >
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <RowTypeIcon
             transactionType={row.transactionType}
             className={cn('size-4 shrink-0', getAmountColorClass(row.transactionType))}
@@ -516,7 +529,7 @@ function DisplayRow({
               )}
             </span>
           </span>
-        </button>
+        </div>
 
         {row.amountFormatted ? (
           <p
