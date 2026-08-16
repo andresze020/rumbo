@@ -1,7 +1,17 @@
 # Credit-card statement cycle (BR-030)
 
-Shipped 2026-07-30, slice 1. Migration
-`20260730140000_br_030_card_statement_cycle.sql`.
+## Status
+
+**Implemented — slice 1, shipped 2026-07-30, merged to `main` 2026-08-12.**
+Migration `20260730140000_br_030_card_statement_cycle.sql` adds
+`accounts.statement_day`, `payment_day` and `billing_account_id` (all nullable,
+both days or neither, only on `credit_card`/`debt`) plus
+`get_card_cycle_summaries`. **Applied 2026-08-12.**
+
+Slice 2 — the **`Pay`** settlement action — is deliberately not part of this
+slice and is still open; see [../pending-work.md](../pending-work.md) §1.
+
+---
 
 ## The problem
 

@@ -23,6 +23,15 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Transaction row expand + fixed-overlay fix** (2026-08-15, PR #40, merged as
+  `92a7be4`). No schema changes. The expand toggle now covers the whole summary
+  line (tapping the amount or the chevron used to do nothing) and the selection
+  checkbox stops bubbling. `ScreenTransition` used `animation-fill-mode: both`,
+  which kept the transition in effect forever and left its wrapper a transform
+  containing block for the life of the screen — every in-page `fixed` overlay
+  anchored to the bottom of the scrolling document instead of the viewport, so
+  **Apply filters was off-screen and unreachable**. Now uses backwards fill;
+  the filter sheet also gained Back/Escape dismissal and dialog semantics.
 - **Sticky filters + native-feeling mobile navigation** (2026-08-10, branch
   `claude/filtros-ux-mobile-uqa5zt`, **merged into `main` 2026-08-12**). No
   schema changes.
@@ -465,8 +474,9 @@ The product is household-first. All financial data must belong to a household.
 - **Recurring transactions — Sprint A + Sprint B** are operational.
   `/dashboard/recurring` has template CRUD, manual posting, the dashboard due
   widget, opt-in auto-posting, per-template errors, run logging, and an
-  aggregate health alert. Only recurring transfers (UC-9) remain deferred;
-  see `docs/features/recurring-transactions.md`.
+  aggregate health alert. Recurring transfers (UC-9) shipped in Tier-4;
+  cross-currency ones post by hand only. See
+  `docs/features/recurring-transactions.md`.
 - See `docs/alpha/sprint-12-alpha-plan.md` for the live Alpha plan,
   `docs/alpha-readiness-checklist.md` for the readiness gate, and
   `docs/pending-work.md` for a single index of every open feature, BR
@@ -519,13 +529,20 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 ## Key areas of the app
 
 - `src/app/dashboard/` — accounts, categories, payees, tags, notes,
-  transactions, budgets, debts, net-worth, recurring, installments, goals,
-  export, settings, assistant (AI), plus the analysis/planning screens: reports,
-  trends, cash-flow, calendar, month-review, debt-planner.
+  transactions, budgets, plan, debts, net-worth, recurring, installments, goals,
+  rules (categorization), export, settings, assistant (AI), more (mobile), plus
+  the analysis/planning screens: reports, trends, cash-flow, calendar,
+  month-review, debt-planner.
 - `src/lib/supabase/{client,server,middleware}.ts` + `src/proxy.ts` — auth/SSR
   (renamed from `src/middleware.ts` in Sprint 13, per Next 16 convention).
-- `src/lib/` — `format.ts`, `fx.ts`, `account-display.ts`, `recurring/`, `imports/`,
-  `exports/`, `analysis/server.ts` (shared data helpers for the analysis screens),
+- `src/lib/` — `format.ts`, `fx.ts`, `calc.ts`, `account-display.ts`, `recurring/`,
+  `imports/`, `exports/`, `rules/`, `goals/`, `categories/`, `accounts-view/`,
+  `nav/`, `i18n/`, `ai/`, `health/score.ts` (the documented health score, shared
+  by dashboard + month-review), `preferences/` (BR-032/038 `ui_preferences`),
+  `filters/transaction-scope-memory.ts` (the `af_tx_scope` cookie),
+  `use-back-dismiss.ts` (overlay Back handling),
+  `analysis/server.ts` + `analysis/report-query.ts` (shared data helpers for the
+  analysis screens; Reports and Calendar read the same rows),
   `cards/cycle.ts` (BR-030 statement-cycle dates), `installments/shared.ts`
   (BR-035 split + dates), `periods/month.ts` (BR-036 — **the** period resolver;
   do not re-derive period boundaries anywhere else).

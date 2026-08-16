@@ -1,5 +1,15 @@
 # Navbar Redesign
 
+## Estado
+
+**Implementado — Opción D (sidebar colapsable).**
+No requiere cambios de esquema. En escritorio: `AppSidebar` agrupado y
+colapsable, con el estado guardado en `localStorage` y el bloque de usuario
+abajo enlazando a Settings. En móvil: `MobileNav` + `MobileBottomNav` +
+`/dashboard/more`.
+
+---
+
 ## Contexto
 
 El nav horizontal se saturó al agregar el toggle de dark mode. Actualmente tiene:

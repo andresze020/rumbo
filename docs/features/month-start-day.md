@@ -1,7 +1,18 @@
 # Configurable month start day (BR-036) — slice 1
 
-Shipped 2026-07-30. Migration `20260730170000_br_036_month_start_day.sql`.
-Resolver: `src/lib/periods/month.ts`. Sole consumer: `/dashboard/reports`.
+## Status
+
+**Implemented — slice 1 only, shipped 2026-07-30, merged to `main` 2026-08-12.**
+Migration `20260730170000_br_036_month_start_day.sql` adds
+`households.month_start_day` (default 1). **Applied 2026-08-12.** No RPC was
+touched. Resolver: `src/lib/periods/month.ts`. Sole consumer:
+`/dashboard/reports`.
+
+Slice 2 — budgets, month closures and the dashboard honouring the same period —
+is still open; see [../pending-work.md](../pending-work.md) §1 and "Notes for
+slice 2" below.
+
+---
 
 The BR-036 row calls this the highest-blast-radius item in the backlog and is
 explicit about the shape of the first slice:
