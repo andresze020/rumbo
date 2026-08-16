@@ -380,8 +380,13 @@ After Sprints 12.4–12.17:
 
 ## Recommended next phase — Beta Readiness (v0.13)
 
-**All P0/P1/P3 issues are now resolved.** ✅  
-**One P2 open:** BF-001 (multi-currency label UX) — low risk, can fix in a targeted sprint before Beta if real usage shows it remains a friction point.
+**All P0/P1/P2/P3 issues are now resolved.** ✅ BF-001 (multi-currency label UX)
+was closed in Sprint 12.16; this line previously still listed it as the one open
+P2, contradicting the table above.
+
+**The only open BF is BF-022** (P3, reconciliation / "cleared" flow), deliberately
+deferred to Beta v0.13 — it needs a schema migration. See
+[../pending-work.md](../pending-work.md) §3.
 
 **Validation phase:**
 

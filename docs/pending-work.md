@@ -1,177 +1,140 @@
 # Pending Work
 
 > Documentation only. Single index of everything still open across the
-> project: features not yet implemented, the BR/BF backlog, and Open
-> Decisions tables scattered across individual feature docs. Each row is a
-> pointer to its source of truth, not a duplicate — update the linked doc
+> project: feature slices not yet built, the remaining BR/BF backlog, the manual
+> QA gates, and the Open Decisions scattered across individual feature docs. Each
+> row is a pointer to its source of truth, not a duplicate — update the linked doc
 > first, then update this index to match. Kept in sync by the
 > `app-finanzas-state-sync` skill at sprint close.
 >
-> **Last refreshed 2026-07-28** — added BR-042…BR-047 from a screen recording
-> of App B, which also upgraded BR-030 (credit-card cycle) from
-> documentation-derived to confirmed-live. See
-> [benchmark-review-mobile-money-managers.md](./benchmark-review-mobile-money-managers.md).
-> Documentation only; no code or migrations changed.
+> **Last refreshed 2026-08-16** against `main` at `92a7be4`. This refresh
+> removed everything the mobile-capture-parity, Tier-3 and Tier-4 sprints closed
+> — the previous version was written on 2026-07-28, before those three merged
+> into `main` on 2026-08-12, and still listed shipped features as open. All 58
+> migrations are applied (`npx supabase migration list --linked` reported 58/58
+> on 2026-08-12); nothing is pending on the database side.
 >
-> **2026-07-27.** Added the original BR-030…BR-041 mobile-capture-parity block.
->
-> **2026-07-25.** PR #37 merged the hard backlog into `main`.
-> BR-007, BR-008, BR-010, BR-014, BR-023 and BR-024 are shipped; their
-> production migrations are applied. Recurring auto-post is operational with
-> `pg_cron`. Full English, Spanish, and Canadian French UI coverage is
-> implemented, and language preference persists in `profiles.locale`. The
-> remaining closure gates are authenticated QA of PR #37 and installed-PWA
-> verification.
-
-Authenticated QA progress is recorded in
-[alpha/pr-37-authenticated-qa.md](./alpha/pr-37-authenticated-qa.md):
-pagination and combined Reports filters passed; CSV-rule application,
-transaction-creating transfer/cost cases, and installed-PWA behavior still need
-fixture/device execution.
+> Everything shipped is recorded in `AGENTS.md` → Current status and
+> [SPRINT-LOG.md](./SPRINT-LOG.md); this file only lists what is **not** done.
 
 ---
 
-## Features blocked or not yet built
+## 1. Next slices of features already shipped
 
-| Feature | Status | Blocked by | Doc |
-|---|---|---|---|
-| ~~Navbar redesign~~ ✅ | **Shipped — Opción D (collapsible sidebar).** `AppSidebar` (desktop, grouped, collapsible w/ localStorage) + `MobileNav`/`MobileBottomNav`/`/dashboard/more` (mobile) + bottom user-avatar block → settings. | — | [features/navbar-redesign.md](./features/navbar-redesign.md) |
-| ~~User Settings page (`/dashboard/settings`)~~ ✅ | **Shipped.** Profile, email change + pending confirmation, password, household name/base-currency policy, theme, language and global sign-out. | — | [features/user-settings.md](./features/user-settings.md) |
-| ~~Recurring — Sprint B (auto-posting)~~ ✅ | **Operational.** `run_recurring_autopost()` + failure log/badges and aggregate health alert. Migration applied; `pg_cron` extension enabled; daily job scheduled and working. FX = last known ledger rate. | — | [features/recurring-transactions.md](./features/recurring-transactions.md) |
-| Recurring — Sprint C: recurring transfers (UC-9) | Pending — the "due soon" widget (UC-8) already shipped | Needs a `to_account_id` migration + transfer support in the form, manual post, and the auto-post job | [features/recurring-transactions.md](./features/recurring-transactions.md) |
-| Recurring transactions — inline create from the transaction form (UC-10) | 🟢 **Merged to `main`.** Frequency posts the first transaction and creates a template. The user can enable auto-post on that template; automation infrastructure is operational. | — | [features/recurring-transactions.md](./features/recurring-transactions.md) |
-| Tap payment capture (NFC / Wallet) — post-MVP | **Planned — design only, no code.** A tap cannot be detected by the PWA on any platform; detection has to come from the phone's automation layer (iOS Shortcuts / Android automation app) posting to a new ingest endpoint, which stages captures in a `capture_inbox` and auto-posts them only above a confidence threshold. | Phase 0 device spike is a hard gate — no code until a real tap is proven to emit a machine-readable event on the user's own phone and card. Run book ready to execute: [alpha/tap-capture-phase-0-spike.md](./alpha/tap-capture-phase-0-spike.md) | [features/tap-payment-capture.md](./features/tap-payment-capture.md) |
+These are all "slice 2" of something live in `main`. Each one was scoped out on
+purpose, not forgotten.
 
-## Open bugs / friction (Alpha real usage)
+| ID | Area | What is missing | Why it was deferred | Doc |
+|---|---|---|---|---|
+| BR-030 slice 2 | Accounts / credit cards | The **`Pay`** settlement action. The statement cycle itself is live: `accounts.statement_day` / `payment_day` / `billing_account_id` and `get_card_cycle_summaries` returning payable, outstanding, statement balance, paid-since-close and overdue state. | The backlog row prescribed the cycle as slice 1 and the settlement action separately; a payment is a real ledger write and deserves its own slice. | [features/card-statement-cycle.md](./features/card-statement-cycle.md) |
+| BR-036 slice 2 | Periods / budgets | Budgets, month closures and the dashboard still use the **calendar** month, so their figures for the same month name differ from Reports under a custom `month_start_day`. The inconsistency is deliberate and stated on screen. | Slice 1 proved the resolver (`src/lib/periods/month.ts`) on the one screen that already worked from an explicit `date_from`/`date_to` pair, so **no RPC was touched**. Slice 2 has to move the monthly RPCs, which is the high-blast-radius part. | [features/month-start-day.md](./features/month-start-day.md) |
+| BR-031 slice 2 | Multi-currency entry | The **edit** forms (`transaction-edit-form.tsx`, `transfer-edit-form.tsx`) have no FX plumbing at all — no base-currency preview, no paired transfer-amounts card. Only the create form (`transaction-form.tsx`) has them. | Called out as a separate slice when BR-031 shipped. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-042 slice 2 | Reports | **Months-within-a-year** rollup rows. Weeks-within-a-month ship today: `buildSubPeriods` in `lib/analysis/report-query.ts` emits ISO weeks clipped to any 28–31 day span, so they partition the period exactly. | Deliberately deferred when BR-042 shipped. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 
-Source of truth: [alpha/bug-friction-log.md](./alpha/bug-friction-log.md).
+## 2. Accepted limitations (documented, not bugs)
 
-| ID | Priority | Area | One-line |
-|---|---|---|---|
-| BF-022 | P3 | Transactions | Reconciliation flow (mark transactions "cleared") — deferred to Beta v0.13. |
+These look like gaps but are decisions. Do not "fix" one without reopening the
+decision first.
 
-> ✅ Merged to `main` (PR #17): **BF-024** (P1, date-filter Apply-reset) and
-> **BF-025** (P2, mobile nav Plan → Accounts).
-
-## BR backlog — near-term
-
-Full detail, "why soon," and acceptance criteria live in
-[alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md).
-
-| ID | Area | One-line |
+| Area | Limitation | Why |
 |---|---|---|
-| ~~BR-007~~ ✅ | Transfers / debts / FX | Shipped in PR #37: cross-currency transfers, transfer cost visibility and optional same-currency fees. |
-| ~~BR-008~~ ✅ | Transactions | Shipped in PR #37: server-side search/filtering with pagination. |
-| ~~BR-010~~ ✅ | Rules / automation | Shipped in PR #37: `categorization_rules` migration, CRUD and application flow. |
-| BR-011 | Review workflow | ✅ Core already shipped (Sprint 4 + PR #17): `review_status` column, filter chips, bulk "Mark reviewed"/categorize, per-row control, dashboard "N to review" pill. Polished on branch `feat/br-011-review-queue-polish` (no migration): activated the "Review queue" nav entry (was locked "coming soon") → `/dashboard/transactions?review=unreviewed`, added bulk **Flag** / **Mark unreviewed**, and an "all caught up" empty state |
+| Recurring transfers (UC-9) | **Cross-currency recurring transfers cannot auto-post.** The form disables the toggle, the server action refuses it, and the job flags-and-skips. Such a template still posts by hand. | The amount that arrives is a real value only the user knows, and it moves with the rate. Guessing it would fabricate money. |
+| Month closures (BR-021) | Close month is a **soft marker** (`month_closures` + snapshot, reopenable). It does not lock the ledger. | Product decision — a closed month must stay correctable during Alpha. |
+| Transfer-as-expense (BR-039) | Reaches KPIs, trend, week rows and calendar, but never the category breakdown. | The row is emitted from the inflow leg with no allocation, so balances, net worth and budgets stay untouched. Reports and Calendar both say so on screen. |
+| Installments (BR-035) | The plan holds no money and there is no parent transaction. | That is what makes double-counting impossible by construction; no report or budget had to change. |
 
-## BR backlog — mobile capture parity (BR-030…BR-048)
+## 3. Not started
 
-Added 2026-07-27 (BR-030…041) and 2026-07-28 (BR-042…047) from the mobile-app
-benchmark. Full rows (priority, first slice, DB impact, verification) live in
-[alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md);
-the observation record is
-[benchmark-review-mobile-money-managers.md](./benchmark-review-mobile-money-managers.md).
-Every row was verified absent from the codebase — that doc's §5.1 lists what
-we already ship, so nothing here is a duplicate. BR-030's credit-card cycle
-and BR-042…047 come from a 2026-07-28 screen recording of App B itself (the
-2026-07-27 pass only had App B's help-centre documentation to go on).
+| ID | Priority | Area | One-line | Doc |
+|---|---:|---|---|---|
+| BF-022 | P3 | Transactions | Reconciliation flow — mark transactions "cleared" against a bank statement. Needs a schema migration (`reconciled_at`). Deferred to Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
+| Tap payment capture | — | Capture / automation | Design only, **no code**. A tap cannot be detected by the PWA on any platform; detection has to come from the phone's automation layer posting to an ingest endpoint that stages captures in a `capture_inbox` and auto-posts only above a confidence threshold. | [features/tap-payment-capture.md](./features/tap-payment-capture.md) |
 
-Progress: BR-032/033/034/038/041/042/046/047/048 shipped in the
-mobile-capture-parity sprint (merged to `main`). BR-031/037/039/043/044 shipped
-on `sprint/tier3-medium` (2026-07-29). Still open: BR-030 (card statement
-cycle), BR-035 (installments), BR-036 (month start day), BR-040 (negative-amount
-refunds), BR-045 (time-of-day).
+> **Tap capture is gated.** The Phase 0 device spike is a hard gate — no code
+> until a real tap is proven to emit a machine-readable event on the user's own
+> phone and card. The run book is ready to execute:
+> [alpha/tap-capture-phase-0-spike.md](./alpha/tap-capture-phase-0-spike.md).
 
-| ID | Priority | Area | One-line |
-|---|---:|---|---|
-| BR-030 | P1 | Accounts / credit cards | Statement cycle (statement day, payment day, billing account) → Balance Payable vs Outstanding, then a `Pay` settlement action — **now confirmed live** |
-| ~~BR-031~~ ✅ | P1 | Multi-currency entry | **Built** on `sprint/tier3-medium` (no migration): base-currency equivalent as read-only text on an expense (the COP is the only real value), and the transfer's two real amounts paired with their accounts in one card. The row's "second linked input" was wrong for expenses — see the 2026-07-29 status note |
-| BR-032 | P2 | UX speed / settings | User-configurable transaction-form fields (which optional fields render) |
-| BR-033 | P2 | UX speed | Relative date chips (today / yesterday / two days ago) |
-| BR-034 | P2 | Transactions | Duplicate ("Copy") an existing transaction — preferred over a bookmark/template entity |
-| BR-035 | P2 | Transactions / cards | Installment purchases (fixed count + total, *n of N*) |
-| BR-036 | P3 | Periods / budgets | Configurable month start day (payday-aligned period) — high blast radius |
-| ~~BR-037~~ ✅ | P3 | Reports | **Built** on `sprint/tier3-medium` (no migration): `/dashboard/calendar` month grid over the same query Reports uses |
-| BR-038 | P3 | Settings / display | Default landing scope + period, compact list, hide balance adjustments |
-| ~~BR-039~~ ✅ | P3 | Accounts / reporting | **Built** on `sprint/tier3-medium` (migration `20260729130000`, pending `db push`): reporting-only flag on savings/investment/other; Reports + Calendar only, never the ledger |
-| BR-040 | P3 | Modelling | Refunds/rebates as a negative amount in the same category — decision first |
-| BR-041 | P3 | Export | `.xlsx` export alongside CSV |
-| BR-042 | P2 | Reports / transactions | Sub-period rollup rows (weeks inside a month, months inside a year) |
-| ~~BR-043~~ ✅ | P2 | Budgeting | **Built** on `sprint/tier3-medium` (migration `20260729140000`, pending `db push`): `get_budget_previous_actuals` + `get_budget_payment_split`, summary and per-line |
-| ~~BR-044~~ ✅ | P2 | New feature | **Built** on `sprint/tier3-medium` (migration `20260729150000`, pending `db push`): `notes` table + `/dashboard/notes` CRUD, archive+Undo, fully outside the ledger |
-| BR-045 | P3 | Transactions / schema | Optional time-of-day on transactions — schema change, scope narrowly |
-| BR-046 | P3 | Accounts / safety UX | Confirmation warning when changing an account's currency |
-| BR-047 | P3 | Categories | Promote a subcategory to a top-level category |
+## 4. Manual QA gates (no code required)
 
-> Attachments/receipts stayed **BR-D01 (deferred)** on purpose — see the
-> Deferred table below; the benchmark only added a reference implementation.
+The only remaining release gates. Everything here needs a real device, a real
+authenticated session, or a sanitized fixture — none of it can be closed from the
+codebase.
 
-## BR backlog — not started (P2/P3)
+### 4.1 PR #37 residuals
 
-| ID | Area | One-line |
+Source of truth: [alpha/pr-37-authenticated-qa.md](./alpha/pr-37-authenticated-qa.md).
+
+| Area | State | Exact remaining action |
 |---|---|---|
-| ~~BR-014~~ ✅ | Recurring | Operational auto-post scheduler, failure log and visible health state. |
-| BR-017 | Accounts | ✅ Built on branch `feat/br-017-balance-adjustment` (migration `20260716130000`): `create_balance_adjustment` RPC + "Adjust balance" action on the accounts edit dialog — posts a ledger-safe `adjustment` entry to reconcile the posted balance, no allocation (excluded from reports/budgets), history preserved |
-| BR-018 | Budgeting | ✅ Built on branch `feat/br-018-budget-rollover` (migration `20260716140000`): per-line `rollover_enabled` toggle + `get_budget_line_carryovers` RPC (accumulated planned−actual of prior rollover months). "Available = planned + carryover" folds into line remaining/progress and budget totals when enabled |
-| ~~BR-023~~ ✅ | Tags | Shipped and migration applied: tags CRUD, transaction assignment/chips and tag filtering. |
-| ~~BR-024~~ ✅ | CSV import | Shipped and migration applied: saved mapping presets and confirm-gated batch revert. |
-| ~~BR-029~~ ✅ | Transactions filters | **Merged to `main`** (PR #17) — broadened date presets + fixed the Apply-resets regression (BF-024) |
+| CSV categorization rules | Untested | Create one temporary test rule, apply a sanitized CSV fixture, confirm the rule hits in preview, then archive the rule. |
+| CSV import history / revert | Partial | Upload a sanitized fixture and verify active rule application in preview before confirming. |
+| Transfers | Partial | Submit same-currency and cross-currency fixtures, then reconcile both account balances. |
+| Transfer costs | Partial | Verify the spread/fee estimate, same-currency fee, over-cost advisory and saved transaction detail by hand — the automated browser could not drive the account selector. |
 
-## Partially resolved (shipped, with a known gap)
+### 4.2 Installed-PWA verification
 
-| ID / Feature | What shipped | What's still missing | Doc |
-|---|---|---|---|
-| BR-021 | `/dashboard/month-review` recap + (branch `feat/br-021-health-score-close-month`, migration `20260716150000`) a **real** documented health score (`lib/health/score.ts`: savings rate 65% + budget adherence 35%, shared by dashboard + month-review, "Demo" labels removed) and a **light Close month** (`month_closures` marker + snapshot; reopenable; does NOT lock the ledger) | Close month is a soft marker only — no month-locking of transactions (deliberate, per product decision) | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-009 | ✅ **Fully resolved.** Payee picker, CRUD, search, filtering and merge are shipped. This sprint adds multi-source bulk merge through atomic `merge_payees_bulk`; the migration is prepared locally. | Run `npx supabase db push`, then QA selection, survivor labels and archived sources. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-015 | Reusable `AlertDialog` now also adopted for account/category archive (previously fired with **zero** confirmation, not "no archive action" as this doc used to say — both actions already existed, just unguarded); toast+Undo added via the existing `ToastProvider` (PR #23, merged to `main`) | ✅ Void now has **Undo** (`unvoid_transaction` RPC, migration `20260720120000`); archive+undo generalized to goals and recurring templates (Tier-1). Nothing outstanding. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-025 | ✅ Full UI localization is implemented for `en`, `es`, and `fr`, including deep leaf components, UTC-safe daily dates/date ranges, dynamic dialogs, loading states, and accessible labels. Coverage is enforced by `npm run i18n:check`. | Nothing outstanding. | [features/localization.md](./features/localization.md) |
-| BR-028 | PWA manifest `shortcuts` (Quick add / Transactions / Recurring) added; Quick add deep-links via a new `quick_add` URL param the transaction dialog provider recognizes (PR #21, merged to `main`) | ✅ Manifest `share_target` added (Tier-1) — a PWA share opens the expense quick-add prefilled. Remaining: shortcut/share behavior not yet verified in a real installed PWA. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| Goals — linked-account progress | Manual `current_amount`, contribute/withdraw via atomic RPC | Could eventually derive progress from the linked account's real ledger balance instead of manual entry — deliberately deferred | [features/goals.md](./features/goals.md) (Open Decisions) |
+| Area | State | Exact remaining action |
+|---|---|---|
+| Manifest `shortcuts` | Untested | Run the installed-app checklist in [features/pwa.md](./features/pwa.md#installed-app-verification). A normal browser tab is not sufficient evidence. |
+| `share_target` | Untested | Share text + a URL from another installed app and confirm the expense quick-add prefills **without** auto-submitting. |
 
-## Open decisions across feature docs
+### 4.3 Tier-3 / Tier-4 real-data QA
+
+No authenticated QA record exists yet for the features merged on 2026-08-12.
+Their migrations are applied, so these are live against real data with no QA
+pass behind them: installments (BR-035), refunds (BR-040), the card statement
+cycle (BR-030), optional time-of-day (BR-045), recurring transfers (UC-9), notes
+(BR-044), the calendar (BR-037), transfer-as-expense (BR-039), the budget
+comparison/payment split (BR-043) and the custom month start day (BR-036).
+
+Record results in a new `docs/alpha/` QA doc following the shape of
+[alpha/pr-37-authenticated-qa.md](./alpha/pr-37-authenticated-qa.md).
+
+## 5. Open decisions across feature docs
 
 | Doc | Question |
 |---|---|
-| [features/recurring-transactions.md](./features/recurring-transactions.md) | UC-9 recurring-transfer schema and posting design; auto-post FX (`last known`) and cron infrastructure (`pg_cron`) are resolved. |
-| [features/goals.md](./features/goals.md) | Whether a linked goal should derive progress from the account's real ledger balance instead of a manually-tracked `current_amount` |
+| [features/goals.md](./features/goals.md) | Whether a goal linked to an account should derive its progress from that account's real ledger balance instead of the manually-tracked `current_amount`. |
+| [features/month-start-day.md](./features/month-start-day.md) | What a stored `budgets.budget_month` / `month_closures` month **means** once a period no longer coincides with a calendar month. That is a data-model question, not arithmetic, and it deserves its own written decision the way BR-040 got one — it is the hard part of slice 2. |
+| [features/beginner-friendly-ux.md](./features/beginner-friendly-ux.md) | Idea #6: the AI assistant as the primary interface rather than a supplementary drawer. Out of scope of that doc; revisit only if assistant usage data supports it. |
 
-## Deferred / parked (revisit only when triggered)
+## 6. Deferred / parked (revisit only when triggered)
 
 | ID | Area | Revisit when |
 |---|---|---|
-| BR-D01 | Attachments / receipts | Real usage proves receipt capture is needed, or OCR becomes a priority. Reference implementation recorded in the mobile benchmark (3 photo slots on entry + thumbnail on detail); still deferred, no BR-ID assigned |
-| BR-D02 | Investment performance | Core household cash/debt/budget flows are stable |
-| BR-D03 | Bill split / reimbursements | Multi-member household usage creates real split/reimbursement needs |
-| BR-D04 | Advisor / external access | Household invite/member management is shipped and used |
-| BR-D05 | Advanced charts (Sankey, saved reports) | Users ask for deeper analysis than the BR-022 reports hub gives |
-| BR-D06 | OCR / bank sync / billing | Explicit product decision; kept out of Alpha correctness work |
-| BF-022 (Sprint 12 alpha plan) | Reconciliation flow (mark transactions "cleared") | Deferred to Beta; candidate for v0.13 |
-| Beginner-friendly UX, idea #6 | AI assistant as the primary interface (vs. a supplementary drawer) | Out of scope of [features/beginner-friendly-ux.md](./features/beginner-friendly-ux.md); revisit if assistant usage data supports it |
+| BR-D01 | Attachments / receipts | Real usage proves receipt capture is needed, or OCR becomes a priority. A reference implementation is recorded in the mobile benchmark (3 photo slots on entry + thumbnail on detail); still deferred on purpose. |
+| BR-D02 | Investment performance | Core household cash/debt/budget flows are stable. |
+| BR-D03 | Bill split / reimbursements | Multi-member household usage creates real split/reimbursement needs. |
+| BR-D04 | Advisor / external access | Household invite/member management is shipped and used. |
+| BR-D05 | Advanced charts (Sankey, saved reports) | Users ask for deeper analysis than the BR-022 reports hub gives. |
+| BR-D06 | OCR / bank sync / billing | Explicit product decision; kept out of Alpha correctness work. |
 
 ---
 
 ## What's already done (so this list doesn't get re-proposed)
 
-Everything in [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md)'s
-"Resolved implementation issues" table, plus, shipped without a dedicated BR-ID:
-analysis & planning screens (`/dashboard/reports`, `/dashboard/trends`,
-`/dashboard/cash-flow`, `/dashboard/debt-planner`, and the non-mock parts of
-`/dashboard/month-review`), active nav highlighting (desktop + mobile), and
-the recurring "due soon" dashboard tile. Sprint 13 (quick wins) closed
-BR-026 (middleware → proxy rename), BR-027 (removed 5 duplicate root-level
-route stubs), and BR-012 (needs-review dashboard count); it also made partial
-progress on BR-009 (`payees` table + backfill, no autocomplete yet) and
-BR-015 (reusable `AlertDialog`, adopted for void only). PR #17 merged the
-add-transaction form redesign, the amount calculator, category/account icon
-fixes, and the transaction-filter/recurring/nav cluster (BF-024, BF-025,
-BR-029, UC-10 inline recurring); PR #18 merged the native-form-design rollout
-(shared `form-field.tsx` / `form-styles.ts` primitives) to every other entry
-form — see [features/native-form-design.md](./features/native-form-design.md).
-The **Tier-1 easy-wins** sprint (merged `3517c4b`) then landed BR-025 locale
-threading, BR-028 `share_target`, BR-015 void Undo + goals/recurring archive,
-and the BR-009 CSV/recurring payee residuals; and the **transaction-form
-mobile redesign** (PR #33 + the `transaction-form-mobile-rows` / `-dense-mobile`
-/ `-single-screen` merges) reworked the add/edit form into a mobile row-list +
-full-screen `SelectorSheet` with a desktop popover-combobox grid.
-See `AGENTS.md` → Current status for the up-to-date shipped-feature summary.
+The full BR backlog **BR-001 … BR-048 is closed** except for the four slice-2
+items in §1 above. Nothing else from
+[alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md)
+is open, and every BF except BF-022 is fixed.
+
+Recently closed, and previously listed here as open:
+
+- **Tier-4 (2026-07-30, merged 2026-08-12)** — BR-045 time-of-day, UC-9 recurring
+  transfers, BR-030 statement cycle slice 1, BR-035 installments, BR-040 refunds,
+  BR-036 month start day slice 1.
+- **Tier-3 (2026-07-29, merged 2026-08-12)** — BR-031 multi-currency entry,
+  BR-037 calendar, BR-039 transfer-as-expense, BR-043 budget comparison + payment
+  split, BR-044 notes.
+- **Mobile-capture parity (2026-07-28)** — BR-032, BR-033, BR-034, BR-038,
+  BR-041, BR-042 (weeks), BR-046, BR-047, BR-048, plus multi-value transaction
+  filters.
+- **Earlier** — BR-007/008/010/014/023/024/025/028/029 (PR #37 and the Tier-1
+  easy wins), BR-009 payees CRUD + bulk merge, BR-011 review queue and its
+  polish, BR-015 confirm + Undo, BR-017 balance adjustment, BR-018 budget
+  rollover, BR-021 health score + light Close month, BR-026/027, plus the
+  navbar redesign, the settings page and recurring Sprints A and B.
+
+See `AGENTS.md` → Current status for the shipped-feature summary and
+[SPRINT-LOG.md](./SPRINT-LOG.md) for the per-sprint detail.

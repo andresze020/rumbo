@@ -1,10 +1,21 @@
 # Refunds as negative amounts (BR-040) — modelling decision
 
+## Status
+
+**Decided and implemented — 2026-07-30, merged to `main` 2026-08-12.**
+Migration `20260730160000_br_040_refunds.sql` narrows the
+`transaction_allocations` amount constraints (negatives permitted only where
+`allocation_type = 'expense'`, zero still forbidden) and adds
+`create_refund_transaction`. **Applied 2026-08-12.** **Not one line of shared
+financial SQL was changed** — a refund is an ordinary expense allocation, so
+every reporting surface nets it. Invariants:
+`supabase/tests/br_040_refund_invariants.sql`.
+
+---
+
 The BR-040 row requires a written decision **before** any code, because the
 question is whether `transaction_allocations` tolerates negative amounts without
 breaking budget actuals, dashboard sums and the checks in `supabase/tests/`.
-
-Decision made 2026-07-30. Migration `20260730160000_br_040_refunds.sql`.
 
 ## The finding
 

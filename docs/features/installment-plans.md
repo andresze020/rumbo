@@ -1,7 +1,14 @@
 # Installment purchases (BR-035)
 
-Shipped 2026-07-30. Migration `20260730150000_br_035_installment_plans.sql`.
-Screen: `/dashboard/installments` (Planning nav group).
+## Status
+
+**Implemented — shipped 2026-07-30, merged to `main` 2026-08-12.**
+Migration `20260730150000_br_035_installment_plans.sql` adds the
+`installment_plans` table plus `create_installment_plan` and
+`cancel_installment_plan`. **Applied 2026-08-12.** No report, budget or monthly
+RPC changed. Screen: `/dashboard/installments` (Planning nav group).
+
+---
 
 Directly relevant to COP/LATAM card usage — *meses sin intereses*. Before this, a
 12-month plan had to be faked as a recurring template, which has no end-total and

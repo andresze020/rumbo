@@ -15,6 +15,184 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Transaction row expand + fixed-overlay fix (2026-08-15, PR #40)
+- Goal: two mobile defects found in real use on `/dashboard/transactions`.
+- Shipped: (1) the expand toggle covered only the title/subtitle block, so
+  tapping the amount or the chevron did nothing — the whole summary line is now
+  the toggle and the selection checkbox stops bubbling, so selecting never
+  expands (`transaction-list.tsx`). (2) `ScreenTransition` used
+  `animation-fill-mode: both`, which keeps the route transition in effect
+  forever, leaving its wrapper a transform containing block for the life of the
+  screen; every in-page `fixed` overlay then anchored to the bottom of the
+  scrolling document instead of the viewport and painted under the bottom nav
+  and the FABs — **Apply filters was off-screen and unreachable**. Switched to
+  backwards fill (equivalent given the final keyframe) and gave the filter sheet
+  Back/Escape dismissal plus dialog semantics (`globals.css`,
+  `transaction-filters.tsx`).
+- Migrations added: none.
+- Tables changed: none.
+- Follow-ups / known gaps: none.
+
+## Sticky filters + native-feeling mobile navigation (2026-08-10, merged 2026-08-12)
+- Goal: make the transactions screen remember where the user was and make
+  overlays behave like an installed app on Android.
+- Shipped: `af_tx_scope` cookie remembers the last *narrowed* filter scope for 12
+  hours (`lib/filters/transaction-scope-memory.ts`) and a bare landing redirects
+  to it; `TransactionDialogProvider` passes the full URL as `return_to` (creating
+  a transaction used to land on an unfiltered list); the filter bar applies via
+  `router.push` instead of a native GET submit, so the bar and `MultiSelectChip`
+  re-seed staged state from applied props; `useBackDismiss`
+  (`lib/use-back-dismiss.ts`) gives overlays a history entry so Android Back
+  closes only the top one; `CategoryPicker` chains into Subcategory;
+  `ScreenTransition` animates route changes. Faster capture: "Save & Add Next"
+  carries `next_category`/`next_payee`/`next_tags` alongside date/type/account/
+  status (amount, description and notes stay empty), and a new entry opened from
+  the transactions list seeds from filters that name exactly one value.
+  Prefilling from "the last transaction you saved" was deliberately rejected — a
+  carried-over category is a miscategorised transaction nobody chose. Keyboard
+  fix: the dialog header collapses to `sr-only` while the keyboard is up and
+  `useKeepFocusedFieldVisible` re-centres the focused field after the sheet
+  resizes.
+- Migrations added: none.
+- Tables changed: none.
+- Follow-ups / known gaps: the scope cookie lands ahead of BR-038's landing
+  preferences; reconcile the two when BR-038 grows.
+
+## Tier-4 large sprint (2026-07-30, merged 2026-08-12)
+- Goal: the six "grandes" benchmark items, each at the first slice its backlog
+  row prescribes. Branch `sprint/tier4-large`, based on `sprint/tier3-medium`
+  and merged carrying its commits.
+- Shipped:
+  - **BR-045 optional time-of-day** — nullable `transactions.transaction_time`
+    (a `time`, not a `timestamptz`: promoting the column would re-interpret every
+    existing date-only row against a timezone the database does not know).
+    Display and ordering only; every monthly RPC, budget, report and closure
+    still filters on `transaction_date`. Opt-in via BR-032 preferences and the
+    first such field that defaults to hidden. Written with a plain UPDATE after
+    `create_manual_transaction` returns, never a 13th parameter.
+    `search_household_transactions` is DROPped and recreated (its `RETURNS TABLE`
+    gains a column).
+  - **UC-9 recurring transfers** — `recurring_transactions.to_account_id` +
+    `recurring_transactions_shape_chk` (a transfer needs both accounts, differing,
+    and no category). Manual posting routes to `create_transfer_transaction`;
+    `run_recurring_autopost` gains a transfer branch writing two entries at the
+    source rate. **Cross-currency transfers cannot auto-post** — the arriving
+    amount is a real value only the user knows: the form disables the toggle, the
+    server action refuses it, and the job flags-and-skips.
+  - **BR-030 credit-card statement cycle (slice 1)** — `accounts.statement_day`,
+    `payment_day`, `billing_account_id`, both days or neither, only on
+    `credit_card`/`debt`. `get_card_cycle_summaries` returns `payable`,
+    `outstanding`, `statement_balance`, `paid_since_close`, `is_overdue`,
+    positive-as-owed; `payable` excludes `outstanding` and the two are never
+    added together on screen. Date math lives in SQL *and* `lib/cards/cycle.ts`
+    on purpose. The `Pay` settlement action is deliberately not bundled.
+  - **BR-035 installment purchases** — new `installment_plans` table plus
+    `/dashboard/installments`. **The plan holds no money**: no entries, no
+    allocation; all value lives in N child expenses of `total/N` linked by
+    `installment_plan_id`/`installment_number`. Double-counting is impossible by
+    construction — there is no parent transaction — and no report, budget or
+    monthly RPC changed. The last installment absorbs the rounding remainder.
+  - **BR-040 refunds as a negative amount** — decision doc first
+    (`docs/features/refunds-negative-amounts.md`). `transaction_allocations` did
+    not tolerate negatives (two `> 0` CHECKs); everything else already did.
+    Constraints were **narrowed**, not dropped: negatives only where
+    `allocation_type = 'expense'`, zero still forbidden. A refund is then an
+    ordinary expense allocation, so every reporting surface nets it with **no
+    change to shared financial SQL**. New `refund` type, positive entry, negative
+    allocation, `create_refund_transaction` refuses more than what is left.
+  - **BR-036 configurable month start day (slice 1)** —
+    `households.month_start_day` (default 1) plus **one** resolver,
+    `src/lib/periods/month.ts`, used by **one** screen, `/dashboard/reports`
+    (chosen because it already worked from an explicit `date_from`/`date_to`
+    pair, so no RPC was touched). A period labelled `YYYY-MM` starts on
+    `month_start_day` and ends the day before the next one starts.
+  - Also fixed here: BR-042's week rows gated on "exactly one calendar month",
+    never true under a custom start day, so they now gate on a 28–31 day span;
+    and `scripts/generate-legacy-translations.mjs` was destructive — it rebuilt
+    the catalog from `audit-i18n.mjs` findings alone and silently deleted every
+    entry it did not collect. It now seeds from the committed catalog and writes
+    sorted output. Coverage: 1,209 phrases × 2 locales.
+- Migrations added: `20260730120000_br_045_transaction_time.sql`,
+  `20260730130000_uc_009_recurring_transfers.sql`,
+  `20260730140000_br_030_card_statement_cycle.sql`,
+  `20260730150000_br_035_installment_plans.sql`,
+  `20260730160000_br_040_refunds.sql`,
+  `20260730170000_br_036_month_start_day.sql` — all **applied 2026-08-12**.
+- Tables changed: `transactions`, `recurring_transactions`, `accounts`,
+  `transaction_allocations`, `households`; new `installment_plans`.
+- Follow-ups / known gaps: BR-030 slice 2 (`Pay` settlement action); BR-036
+  slice 2 (budgets, closures and the dashboard still use the calendar month, so
+  their figures for the same month name differ — stated on screen on purpose).
+  New invariants in `supabase/tests/br_040_refund_invariants.sql`.
+
+## Tier-3 medium sprint (2026-07-29, merged 2026-08-12)
+- Goal: the five "medium" benchmark items — real features, several files each,
+  no big-bang schema. Branch `sprint/tier3-medium`.
+- Shipped:
+  - **BR-031 multi-currency entry** — the ticket conflated two problems, corrected
+    after QA. An expense/income in a foreign-currency account has exactly *one*
+    real value, so the base-currency figure is a **line of text** under the amount
+    (`transactionForm.amountInBasePreview`), not a second input (a linked editable
+    base field shipped first and was wrong: a prominent control for a derived
+    number). **Transfers** are where two real amounts exist, and they now sit in
+    one card (`transferAmountsCard`), each amount directly above its account.
+    What is submitted is unchanged. **Create form only.**
+  - **BR-037 calendar view** — `/dashboard/calendar`, a Monday-start month grid
+    with per-day income/expense/net. `getCalendarMonth` reuses the same
+    `fetchFilteredRows` Reports uses, so grid and report agree by construction.
+  - **BR-039 transfer-as-expense** — `accounts.treat_transfers_as_expense`,
+    constrained in the database to savings/investment/other. **Reporting only**:
+    the ledger keeps both entries, allocations are untouched, balances and net
+    worth do not move. `fetchTransferExpenseRows` reads the *inflow leg* directly
+    and emits it with no allocation, which is why it reaches KPIs, trend, week
+    rows and calendar but never the category breakdown.
+  - **BR-043 budget vs last month + payment split** — `get_budget_previous_actuals`
+    and `get_budget_payment_split` (cash/card/other, exhaustive, summing back to
+    Total spent). Both copy `get_monthly_budget_details`' actuals predicate
+    verbatim. An allocation has no account, so the split attributes each
+    transaction to the entry with the most negative amount — the paying account.
+  - **BR-044 standalone dated notes** — new `notes` table + `/dashboard/notes`
+    with month or all-months browsing, search, CRUD and archive-with-Undo.
+    Deliberately outside the ledger: `notes` references nothing in
+    transactions/entries/allocations and nothing references it.
+- Migrations added: `20260729130000_br_039_transfer_as_expense.sql`,
+  `20260729140000_br_043_budget_comparison_split.sql`,
+  `20260729150000_br_044_notes.sql` — all **applied 2026-08-12**.
+- Tables changed: `accounts`; new `notes`.
+- Follow-ups / known gaps: BR-031 has no FX plumbing in the **edit** forms
+  (`transaction-edit-form.tsx`, `transfer-edit-form.tsx`) — a separate slice.
+
+## Mobile-capture parity sprint (2026-07-28, merged as `ded206b`)
+- Goal: close the mobile-capture gaps from
+  `docs/benchmark-review-mobile-money-managers.md`.
+- Shipped: **BR-033** relative-date chips (today / yesterday / two days ago) on
+  both the desktop grid and the mobile row list, with `todayIsoDateLocal` in
+  `lib/format.ts` (the viewer's calendar day, not UTC) also seeding the dialog's
+  default date; **BR-034** `Copy` on a row, pre-filled and dated today (transfers
+  copy both legs, a split copies everything except the category, voided rows copy
+  as posted, opening balances / debt payments / archived-account rows are not
+  copyable); **BR-041** `.xlsx` export beside CSV, with a hand-rolled writer over
+  `node:zlib` rather than a dependency; **BR-042** ISO week rollup rows on
+  `/dashboard/reports` (months-within-year deferred); **BR-032 + BR-038 + BR-046
+  + BR-047** per-user UI preferences (`profiles.ui_preferences` jsonb) driving
+  which optional add-form fields render and how the transactions list opens and
+  renders, plus confirm-gated account-currency edits and subcategory promotion;
+  **BR-048** drag-and-drop category nesting (`projectDrop` reads the drag's
+  horizontal offset for the landing depth, clamped to the two levels the schema
+  allows; `moveCategoryAction` re-checks every `validateParentCategory` rule and
+  returns a message so a rejected drop springs back). `ArchiveConfirmButton` was
+  renamed to `ConfirmActionButton` — it was always a generic confirm-before-submit
+  button. Post-QA rework of the mobile transactions screen: one wrapping strip of
+  filter pills, secondary filters in a bottom sheet (one DOM node styled two ways,
+  kept inside the `<form>`), no card chrome on phones. **Multi-value filters**:
+  `search_household_transactions` swaps `p_type`/`p_status`/`p_payee_id` for array
+  parameters — the old signature is **DROPped first**, since `create or replace`
+  cannot change a parameter's name or type and would leave an ambiguous overload.
+- Migrations added: `20260728120000_br_032_038_ui_preferences.sql`,
+  `20260729120000_multi_value_transaction_filters.sql` — both **applied**.
+- Tables changed: `profiles` (`ui_preferences`).
+- Follow-ups / known gaps: BR-042 months-within-year rollups still open.
+
 ## Full UI localization + persisted language preference (2026-07-25)
 - Goal: remove residual English text from every authenticated view and make the
   selected language follow the user across browsers and devices.
