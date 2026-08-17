@@ -40,3 +40,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .claude/worktrees/
+
+# One-off AndroMoney migration working files — they contain real transaction
+# notes, payees and amounts. See docs/features/andromoney-import.md.
+/andromoney-map.json
+/andromoney-plan.json
+/andromoney-failures.json
+/AndroMoney*.csv
