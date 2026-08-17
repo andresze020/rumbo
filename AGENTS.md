@@ -23,6 +23,28 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **AndroMoney history importer** (2026-08-17, branch
+  `claude/andromoney-import-script-6u4fy1`). Tooling only — no migration, no
+  schema change, nothing in `src/`. Two scripts migrate a full AndroMoney export
+  into a household: `scripts/andromoney-parse.mjs` (decoding, classification and
+  planning, no network, so the rules can be checked against a real export on
+  their own) and `scripts/andromoney-import.mjs` (`plan` / `apply` / `revert`
+  against Supabase). The in-app CSV importer cannot do this — it is built for a
+  bank statement: one account per run, transfer rows rejected, accounts and
+  categories existing beforehand. Every transaction is posted through the same
+  RPCs the UI uses (`create_manual_transaction`, `create_transfer_transaction`,
+  `create_opening_balance`), signed in as the user against the anon key, so the
+  ledger invariants and RLS hold exactly as for manual entry — no service-role
+  bypass and nothing written straight into `transaction_entries`. Each run opens
+  an `import_batches` row and records every posted transaction in `import_rows`
+  keyed on AndroMoney's own `uid`, so a re-run **resumes** instead of
+  duplicating and the whole import is undoable from Import history via the
+  existing `revert_csv_import`. Cross-currency transfers are **gated, not
+  guessed**: AndroMoney exports one leg of two, and an estimated leg is a wrong
+  balance on a real account, so `plan` prints a paste-ready confirmation block;
+  FX rates start empty for the same reason. Measured on a real 4 737-row export:
+  4 625 import, and the 112 that do not are listed with a reason each. See
+  [docs/features/andromoney-import.md](./docs/features/andromoney-import.md).
 - **Transaction row expand + fixed-overlay fix** (2026-08-15, PR #40, merged as
   `92a7be4`). No schema changes. The expand toggle now covers the whole summary
   line (tapping the amount or the chevron used to do nothing) and the selection

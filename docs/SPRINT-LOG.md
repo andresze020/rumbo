@@ -15,6 +15,29 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## AndroMoney history importer (2026-08-17)
+- Goal: get four years of AndroMoney history into the app so it can replace it,
+  which the in-app CSV importer cannot do (one account per run, transfer rows
+  rejected, accounts/categories required to exist).
+- Shipped: `scripts/andromoney-parse.mjs` (pure parsing/planning — Big5-ish
+  decoding including the ~65 words whose accents AndroMoney wrote as literal
+  `?`, `yyyyMMdd` dates, `HHmm` times, and each subcategory's income/expense
+  direction derived from how the rows actually use it, splitting a parent used
+  in both directions) and `scripts/andromoney-import.mjs` (`plan` / `apply` /
+  `revert`). Posts through the existing RPCs as the signed-in user, so RLS and
+  the ledger invariants hold; batches into `import_batches`/`import_rows` keyed
+  on AndroMoney's `uid` for resume + one-click revert. Cross-currency transfer
+  legs must be confirmed rather than estimated, and FX rates start empty.
+  Documented in `docs/features/andromoney-import.md`.
+- Migrations added: none.
+- Tables changed: none.
+- Follow-ups / known gaps: not yet run against a live household — the session
+  that wrote it had no network route to Supabase. Non-base-currency rows are
+  valued from a per-year (or per-month) rate table, not the rate of the day, so
+  account balances in their own currency are exact but base-currency figures are
+  only as good as that table. AndroMoney's `Periodic` column is dropped;
+  recurring rules have to be rebuilt under `/dashboard/recurring`.
+
 ## Transaction row expand + fixed-overlay fix (2026-08-15, PR #40)
 - Goal: two mobile defects found in real use on `/dashboard/transactions`.
 - Shipped: (1) the expand toggle covered only the title/subtitle block, so
