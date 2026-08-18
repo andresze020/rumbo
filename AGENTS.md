@@ -23,6 +23,25 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Report month rows + FX on the edit forms** (2026-08-18, branch
+  `claude/revision-pendientes-evcmmy`). No migration. Closes **BR-042** and the
+  UI half of **BR-031**. `/dashboard/reports` now cuts a range longer than a
+  month into **month rows** (weeks still shown for a month-long range): the rows
+  are BR-036 household periods clipped to the range, so they partition it exactly
+  and sum back to the KPIs above them, and they stop at 12 so "All time" does not
+  emit a row per month since 2000. `ReportData.subPeriods` is now
+  `{ granularity, periods }`. The **transaction edit form** shows what a
+  foreign-currency amount is worth in the base currency — read-only, from the rate
+  stored on the entry, the same call the create form made — and warns when the
+  account is switched to a different currency, because
+  `update_manual_transaction` re-uses the stored rate and would write a wrong base
+  amount. The **transfer edit form** gains BR-031's paired-amounts card ("You
+  sent" above the source account, "You received" above the destination); it
+  already had the rate block and the transfer-cost card, contrary to what
+  `pending-work.md` claimed. `tsconfig.json` now excludes the design-handoff
+  export under `docs/design/`, which was making the documented `npx tsc --noEmit`
+  gate report 197 errors that `next build` never sees. See
+  [docs/pending-work.md](./docs/pending-work.md).
 - **AndroMoney history importer** (2026-08-17, branch
   `claude/andromoney-import-script-6u4fy1`). Tooling only — no migration, no
   schema change, nothing in `src/`. Two scripts migrate a full AndroMoney export

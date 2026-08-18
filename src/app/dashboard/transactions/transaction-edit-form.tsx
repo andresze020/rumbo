@@ -7,11 +7,14 @@ import { CategoryPicker } from './category-picker'
 import { PayeePicker, type PayeeOption } from './payee-picker'
 import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
 import { AmountInput } from '@/components/amount-input'
+import { Callout } from '@/components/callout'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
+import { roundToCents } from '@/lib/calc'
+import { formatCurrency } from '@/lib/format'
 import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
 
@@ -47,6 +50,14 @@ type TransactionEditFormProps = {
   merchantName: string
   notes: string
   status: string
+  /** Household base currency — what the reports and totals are denominated in. */
+  baseCurrency: string
+  /**
+   * BR-031 slice 2 — the rate this transaction was recorded at, as stored on its
+   * ledger entry (`amount_base_currency = amount_account_currency * rate`). 1 for
+   * a base-currency transaction.
+   */
+  exchangeRateToBase: number
   accounts: EditAccount[]
   categories: EditCategory[]
   payees: PayeeOption[]
@@ -79,6 +90,8 @@ export function TransactionEditForm({
   merchantName,
   notes,
   status,
+  baseCurrency,
+  exchangeRateToBase,
   accounts,
   categories,
   payees,
@@ -87,10 +100,41 @@ export function TransactionEditForm({
   returnTo,
 }: TransactionEditFormProps) {
   const [selectedAccountId, setSelectedAccountId] = useState(accountId)
+  const [amountInput, setAmountInput] = useState(amount.toFixed(2))
+  const originalCurrency = accounts.find((a) => a.id === accountId)?.currency_code
   const amountCurrency =
     accounts.find((a) => a.id === selectedAccountId)?.currency_code ??
-    accounts.find((a) => a.id === accountId)?.currency_code ??
+    originalCurrency ??
     'USD'
+
+  // BR-031 slice 2 — the create form shows what a foreign-currency amount is
+  // worth in the base currency as a line of text under the amount, because that
+  // figure is derived from the rate and never typed. The edit form showed
+  // nothing, so correcting a COP amount meant doing the CAD arithmetic in your
+  // head to know what the change did to your reports. Same treatment here, from
+  // the rate the transaction was actually recorded at.
+  const parsedAmount = Number(amountInput)
+  const amountIsValid =
+    amountInput.trim() !== '' && Number.isFinite(parsedAmount) && parsedAmount > 0
+  const rateIsUsable = Number.isFinite(exchangeRateToBase) && exchangeRateToBase > 0
+  const isMultiCurrency = amountCurrency !== baseCurrency
+
+  // Changing the account to one in a *different* currency is the case this
+  // preview cannot cover: `update_manual_transaction` re-uses the rate already on
+  // the ledger entry, so the saved base amount would be this amount converted at
+  // a rate that belongs to the old currency. The form does not block the edit —
+  // it says what will happen, which is the honest thing it can do without a new
+  // RPC parameter (see docs/pending-work.md).
+  const currencyChanged =
+    Boolean(originalCurrency) && amountCurrency !== originalCurrency
+
+  const baseEquivalent =
+    isMultiCurrency && !currencyChanged && rateIsUsable && amountIsValid
+      ? formatCurrency(
+          roundToCents(parsedAmount * exchangeRateToBase),
+          baseCurrency
+        )
+      : null
 
   return (
     <form action={updateManualTransactionAction} className="space-y-4">
@@ -159,12 +203,27 @@ export function TransactionEditForm({
             id={`edit_amount_${transactionId}`}
             name="amount"
             currencyCode={amountCurrency}
-            defaultValue={amount.toFixed(2)}
+            value={amountInput}
+            onValueChange={setAmountInput}
             withCalculator
             required
           />
+          {baseEquivalent ? (
+            <p className="text-xs text-muted-foreground">
+              ≈ <span className="font-medium text-foreground">{baseEquivalent}</span>{' '}
+              at the rate this transaction was recorded at.
+            </p>
+          ) : null}
         </div>
       </div>
+
+      {currencyChanged ? (
+        <Callout variant="warning">
+          {`This transaction was recorded in ${originalCurrency} and you are moving it to a ${amountCurrency} account. `}
+          {`The exchange rate saved with it does not change, so its ${baseCurrency} value in your reports will be wrong. `}
+          {`Void this transaction and record it again on the ${amountCurrency} account instead.`}
+        </Callout>
+      ) : null}
 
       <CategoryPicker
         categories={categories}

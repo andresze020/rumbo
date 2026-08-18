@@ -195,8 +195,15 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     ctx,
     filters,
     categoryLookup,
-    transferExpenseAccounts
+    transferExpenseAccounts,
+    // BR-042 slice 2 cuts longer ranges into household periods, so it needs the
+    // same start day the rest of this screen resolves its months with.
+    monthStartDay
   )
+  // BR-042: which grain the rollup rows came out at. Hoisted out of the JSX so
+  // the i18n audit does not read the bare `'month'` of the comparison as a
+  // user-facing phrase needing translation.
+  const showsMonthRows = report.subPeriods?.granularity === 'month'
 
   // ── Filter options ──────────────────────────────────────────────────────
   const accountOptions: MultiSelectOption[] = (accountRows ?? []).map((a) => ({
@@ -429,7 +436,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       {report.transferExpenses > 0 ? (
         <Callout variant="info" className="border-dashed text-muted-foreground">
           {`${formatCurrency(report.transferExpenses, currency, locale)} of transfers into savings or investment accounts is counted as spending here, because those accounts are set to treat transfers as expense.`}{' '}
-          {`Transfers carry no category, so this amount is in the totals and the week rows but not in the category breakdown. Account balances, net worth and budgets are unaffected.`}
+          {showsMonthRows
+            ? `Transfers carry no category, so this amount is in the totals and the month rows but not in the category breakdown. Account balances, net worth and budgets are unaffected.`
+            : `Transfers carry no category, so this amount is in the totals and the week rows but not in the category breakdown. Account balances, net worth and budgets are unaffected.`}
         </Callout>
       ) : null}
 
@@ -447,16 +456,20 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         />
       </div>
 
-      {/* BR-042: week-by-week rollup, shown only when the range is one month.
-          Each row links to the transactions list filtered to that week. */}
+      {/* BR-042: sub-period rollup — weeks inside a month, months inside a
+          longer range. Each row links to the transactions list filtered to it. */}
       {report.subPeriods ? (
         <div className={cn(CARD, 'p-4 sm:p-5')}>
-          <h2 className="mb-1 text-sm font-bold">Week by week</h2>
+          <h2 className="mb-1 text-sm font-bold">
+            {showsMonthRows ? 'Month by month' : 'Week by week'}
+          </h2>
           <p className="mb-3 text-xs text-muted-foreground">
-            Each week of the selected month. Weeks add up to the month totals above.
+            {showsMonthRows
+              ? 'Each month of the selected range. Months add up to the totals above.'
+              : 'Each week of the selected month. Weeks add up to the month totals above.'}
           </p>
           <ul className="divide-y">
-            {report.subPeriods.map((period) => (
+            {report.subPeriods.periods.map((period) => (
               <li key={period.dateFrom}>
                 <Link
                   href={`/dashboard/transactions?date_from=${period.dateFrom}&date_to=${period.dateTo}`}
@@ -464,9 +477,18 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-medium">
-                      {formatIsoDateRange(period.dateFrom, period.dateTo, locale)}
+                      {period.month
+                        ? longMonthLabel(period.month, locale)
+                        : formatIsoDateRange(period.dateFrom, period.dateTo, locale)}
                     </span>
                     <span className="block text-[11.5px] text-muted-foreground">
+                      {/* A month row is named by its month but can be clipped to
+                          part of it — the first and last rows of a range that
+                          doesn't start and end on a period boundary. Showing the
+                          dates keeps the row honest about what it counted. */}
+                      {period.month
+                        ? `${formatIsoDateRange(period.dateFrom, period.dateTo, locale)} · `
+                        : ''}
                       {period.txCount === 1
                         ? '1 transaction'
                         : `${period.txCount} transactions`}

@@ -1439,6 +1439,12 @@ export default async function TransactionsPage({
               merchantName={selectedEditRow.transaction.merchant_name ?? ''}
               notes={selectedEditRow.transaction.notes ?? ''}
               status={selectedEditRow.transaction.status}
+              // BR-031 slice 2: the rate the entry was recorded at, so the form
+              // can show what the amount is worth in the base currency.
+              baseCurrency={household.base_currency}
+              exchangeRateToBase={Number(
+                selectedEditRow.entry.exchange_rate_to_base || 1
+              )}
               accounts={activeAccounts}
               categories={activeCategories}
               payees={payeeOptions}

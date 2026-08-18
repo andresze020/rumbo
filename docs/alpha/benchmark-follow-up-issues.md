@@ -100,13 +100,14 @@
 > Observation evidence carries a `[m:ss]` video timestamp; the doc is
 > self-sufficient, so neither recording needs re-watching.
 >
-> **Status as of 2026-08-16.** This whole batch shipped across three sprints —
-> mobile-capture parity (2026-07-28) and Tier-3 / Tier-4, merged into `main` on
-> 2026-08-12. Four rows shipped only their first slice: **BR-030 🟡** (statement
-> cycle, no `Pay` action), **BR-031 🟡** (create form only, edit forms have no FX),
-> **BR-036 🟡** (`/dashboard/reports` only), **BR-042 🟡** (weeks in a month, no
-> months in a year). Those four are the entire open remainder — see
-> [../pending-work.md](../pending-work.md) §1.
+> **Status as of 2026-08-18.** This whole batch shipped across four sprints —
+> mobile-capture parity (2026-07-28), Tier-3 / Tier-4 (merged into `main` on
+> 2026-08-12), and the slice-2 pass of 2026-08-18. **BR-042 ✅** is now closed
+> (month rows shipped). Three rows are still on their first slice: **BR-030 🟡**
+> (statement cycle, no `Pay` action), **BR-031 🟡** (the edit forms now show and
+> pair the FX figures, but `update_manual_transaction` still has no rate
+> parameter), **BR-036 🟡** (`/dashboard/reports` only). Those three are the
+> entire open remainder — see [../pending-work.md](../pending-work.md) §1.
 
 | ID | Priority | Area | Issue | Why soon | First implementation slice | DB | Verify |
 |---|---:|---|---|---|---|:--:|---|
@@ -153,6 +154,49 @@ change back by hand if the reorder fails. Rejections return a message instead
 of redirecting, so the row springs back and the reason is shown.
 `reorderCategoriesAction` was removed — `moveCategoryAction` supersedes it.
 Still not built: multi-select drag.
+
+### Status — 2026-08-18 (slice-2 pass)
+
+Branch `claude/revision-pendientes-evcmmy`. Closed **BR-042** and the half of
+**BR-031** that needs no schema change. **No migration**; the validation gate
+(lint, `tsc --noEmit`, `next build`, `i18n:check`) passes.
+
+- **BR-042 is done.** `buildSubPeriods` now picks its grain from the length of
+  the range: 28–31 days → ISO week rows (unchanged), longer → month rows. The
+  month rows are BR-036 household periods from `lib/periods/month.ts`, not
+  `date_trunc` arithmetic, so the row boundaries are the same ones the KPIs above
+  them were computed with. Both grains clip to the range, which is what keeps the
+  rows summing back to the totals exactly.
+- **The month rows stop at 12.** BR-042's row asks for months *within a year*;
+  "All time" spans 2000–2099 and would emit a row per month. Past 12 the rollup
+  returns null, which is exactly today's behaviour for those ranges — no
+  regression, and no unreadable list.
+- **A month row can be partial and is labelled by its month anyway.** "Year to
+  date" ends mid-August; under a custom start day the first row can be labelled
+  `2025-12` while covering only January's opening days. The row therefore prints
+  the month name *and* the clipped date range, rather than picking one.
+- **BR-031 on the transaction edit form is a read-only line, matching the create
+  form's decision.** The base figure is derived from the rate, never typed. It is
+  computed from the rate stored on the entry, because that is the only rate the
+  RPC will ever write back.
+- **Changing the account currency on an edit is warned about, not blocked.**
+  `update_manual_transaction` re-uses `transaction_entries.exchange_rate_to_base`
+  verbatim, so moving a COP transaction onto a CAD account keeps a COP→CAD rate
+  and produces a wrong base amount. Fixing the write needs a `p_exchange_rate_to_base`
+  parameter and therefore a migration; wiring the client first would break every
+  transaction edit until it was applied. The form says what will happen and points
+  at void-and-recreate. Now tracked as its own row in `pending-work.md` §1.
+- **The transfer edit form was never missing FX plumbing** — `pending-work.md`
+  said it was. It has had the rate block, the received-amount field and the
+  transfer-cost card since BR-031. What it lacked was BR-031's *layout* decision:
+  the two amounts were in different parts of the form, which is precisely the
+  thing the create form was changed to fix. They are now paired, each above its
+  own account selector.
+- **Fixed along the way:** `npx tsc --noEmit` — the documented validation gate —
+  reported 197 errors out of the box, all from the design-handoff export under
+  `docs/design/handoff-2026-06/project`, which is a separate design artefact with
+  its own dependencies and is not compiled by `next build`. It is now excluded in
+  `tsconfig.json`, so the gate reports only real errors.
 
 ### Status — 2026-07-30 (Tier-4 large sprint)
 
@@ -206,7 +250,7 @@ Deferred later slices, all deliberate:
 | BR-035 | The *n of N* badge on the **transaction list** (the plan list has it). Needs two more columns on `search_household_transactions`, forcing another DROP-and-recreate. |
 | BR-036 | Everything except Reports. The hard part is `budgets.budget_month` and `month_closures`, which key rows *by month* — a data-model decision, not arithmetic, deserving its own written decision. |
 | BR-045 | Configurable sort order. |
-| BR-042 | Months-within-year (weeks-within-month shipped in the previous sprint). |
+| BR-042 | ~~Months-within-year~~ — shipped 2026-08-18, see the status entry above. |
 | BR-048 | Multi-select drag. |
 
 Two traps found here, both worth not rediscovering:

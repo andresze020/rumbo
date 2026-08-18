@@ -15,6 +15,39 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Slice-2 pass — report month rows + FX on the edit forms (2026-08-18)
+- Goal: work through `docs/pending-work.md` and close every open item that does
+  not need a database change.
+- Shipped:
+  - **BR-042 slice 2** — `/dashboard/reports` rolls a range longer than a month
+    up into **month rows**. `buildSubPeriods` (`lib/analysis/report-query.ts`)
+    now picks its grain from the span: 28–31 days → ISO week rows as before,
+    longer → BR-036 household periods from `lib/periods/month.ts`, clipped to
+    the range so the rows still partition it exactly and sum back to the KPIs.
+    Capped at 12 rows, which excludes "All time". Rows carry their `YYYY-MM`
+    label, so a clipped row prints its month name *and* the dates it covers.
+    `ReportData.subPeriods` is now `{ granularity, periods }`.
+  - **BR-031 slice 2, UI half** — `transaction-edit-form.tsx` shows the
+    base-currency equivalent of a foreign-currency amount (read-only line, the
+    same decision the create form made), and warns when the account is switched
+    to a different currency, because `update_manual_transaction` keeps the
+    stored rate. `transfer-edit-form.tsx` gets BR-031's paired-amounts card:
+    "You sent" above the source account, "You received" above the destination,
+    in one card — it already had the rate block and the cost card.
+  - **Validation gate fix** — `npx tsc --noEmit` reported 197 errors from the
+    design-handoff export under `docs/design/handoff-2026-06/project`, which
+    `next build` never compiles. Excluded in `tsconfig.json`.
+  - **i18n** — 7 phrases added to `legacy-ui-translations.ts` for `es`/`fr`
+    (6 new, plus the pre-existing "Toggle details for {1}" gap); `npm run
+    i18n:check` passes at 1216 phrases × 2 locales.
+- Migrations added: none.
+- Tables changed: none.
+- Follow-ups / known gaps: BR-031's remaining piece is a `p_exchange_rate_to_base`
+  parameter on `update_manual_transaction` — a 59th migration, deliberately not
+  started because wiring the client before it is applied would break every
+  transaction edit. Tracked in `docs/pending-work.md` §1. BR-030 slice 2 (`Pay`)
+  and BR-036 slice 2 remain open, both for the reasons already recorded there.
+
 ## AndroMoney history importer (2026-08-17)
 - Goal: get four years of AndroMoney history into the app so it can replace it,
   which the in-app CSV importer cannot do (one account per run, transfer rows

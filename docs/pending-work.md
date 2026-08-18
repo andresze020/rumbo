@@ -7,12 +7,14 @@
 > first, then update this index to match. Kept in sync by the
 > `app-finanzas-state-sync` skill at sprint close.
 >
-> **Last refreshed 2026-08-16** against `main` at `92a7be4`. This refresh
-> removed everything the mobile-capture-parity, Tier-3 and Tier-4 sprints closed
-> — the previous version was written on 2026-07-28, before those three merged
-> into `main` on 2026-08-12, and still listed shipped features as open. All 58
-> migrations are applied (`npx supabase migration list --linked` reported 58/58
-> on 2026-08-12); nothing is pending on the database side.
+> **Last refreshed 2026-08-18** against branch `claude/revision-pendientes-evcmmy`.
+> This refresh closes **BR-042 slice 2** (month rows) and the part of **BR-031
+> slice 2** that needed no schema change, and corrects a stale claim about the
+> transfer edit form (§1 said it had "no FX plumbing at all" — it has had the
+> full rate block, the received-amount field and the transfer-cost card since
+> BR-031 shipped; what it lacked was the paired *layout*). All 58 migrations are
+> applied (`npx supabase migration list --linked` reported 58/58 on 2026-08-12);
+> the one item below that needs a 59th is called out explicitly.
 >
 > Everything shipped is recorded in `AGENTS.md` → Current status and
 > [SPRINT-LOG.md](./SPRINT-LOG.md); this file only lists what is **not** done.
@@ -28,8 +30,7 @@ purpose, not forgotten.
 |---|---|---|---|---|
 | BR-030 slice 2 | Accounts / credit cards | The **`Pay`** settlement action. The statement cycle itself is live: `accounts.statement_day` / `payment_day` / `billing_account_id` and `get_card_cycle_summaries` returning payable, outstanding, statement balance, paid-since-close and overdue state. | The backlog row prescribed the cycle as slice 1 and the settlement action separately; a payment is a real ledger write and deserves its own slice. | [features/card-statement-cycle.md](./features/card-statement-cycle.md) |
 | BR-036 slice 2 | Periods / budgets | Budgets, month closures and the dashboard still use the **calendar** month, so their figures for the same month name differ from Reports under a custom `month_start_day`. The inconsistency is deliberate and stated on screen. | Slice 1 proved the resolver (`src/lib/periods/month.ts`) on the one screen that already worked from an explicit `date_from`/`date_to` pair, so **no RPC was touched**. Slice 2 has to move the monthly RPCs, which is the high-blast-radius part. | [features/month-start-day.md](./features/month-start-day.md) |
-| BR-031 slice 2 | Multi-currency entry | The **edit** forms (`transaction-edit-form.tsx`, `transfer-edit-form.tsx`) have no FX plumbing at all — no base-currency preview, no paired transfer-amounts card. Only the create form (`transaction-form.tsx`) has them. | Called out as a separate slice when BR-031 shipped. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-042 slice 2 | Reports | **Months-within-a-year** rollup rows. Weeks-within-a-month ship today: `buildSubPeriods` in `lib/analysis/report-query.ts` emits ISO weeks clipped to any 28–31 day span, so they partition the period exactly. | Deliberately deferred when BR-042 shipped. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-031 slice 2 · rate on edit | Multi-currency entry | **Correcting the exchange rate from the transaction edit form.** The base-currency preview shipped on 2026-08-18, but it can only ever show the rate already stored on the entry: `update_manual_transaction` has no `p_exchange_rate_to_base` parameter and re-uses `transaction_entries.exchange_rate_to_base` verbatim. So a wrong rate cannot be corrected without voiding, and moving a transaction to an account in a **different currency** silently keeps a rate that no longer applies. The form now warns on screen instead of pretending otherwise. | Needs a 59th migration (new RPC signature, dropping the old overload as `20260716120000` did). Wiring the client before that migration is applied would break every transaction edit, so it is a deliberate stop. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 
 ## 2. Accepted limitations (documented, not bugs)
 
@@ -40,7 +41,7 @@ decision first.
 |---|---|---|
 | Recurring transfers (UC-9) | **Cross-currency recurring transfers cannot auto-post.** The form disables the toggle, the server action refuses it, and the job flags-and-skips. Such a template still posts by hand. | The amount that arrives is a real value only the user knows, and it moves with the rate. Guessing it would fabricate money. |
 | Month closures (BR-021) | Close month is a **soft marker** (`month_closures` + snapshot, reopenable). It does not lock the ledger. | Product decision — a closed month must stay correctable during Alpha. |
-| Transfer-as-expense (BR-039) | Reaches KPIs, trend, week rows and calendar, but never the category breakdown. | The row is emitted from the inflow leg with no allocation, so balances, net worth and budgets stay untouched. Reports and Calendar both say so on screen. |
+| Transfer-as-expense (BR-039) | Reaches KPIs, trend, sub-period rows and calendar, but never the category breakdown. | The row is emitted from the inflow leg with no allocation, so balances, net worth and budgets stay untouched. Reports and Calendar both say so on screen. |
 | Installments (BR-035) | The plan holds no money and there is no parent transaction. | That is what makes double-counting impossible by construction; no report or budget had to change. |
 
 ## 3. Not started
@@ -114,13 +115,20 @@ Record results in a new `docs/alpha/` QA doc following the shape of
 
 ## What's already done (so this list doesn't get re-proposed)
 
-The full BR backlog **BR-001 … BR-048 is closed** except for the four slice-2
+The full BR backlog **BR-001 … BR-048 is closed** except for the three slice-2
 items in §1 above. Nothing else from
 [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md)
 is open, and every BF except BF-022 is fixed.
 
 Recently closed, and previously listed here as open:
 
+- **BR-042 slice 2 + BR-031 slice 2, UI half (2026-08-18)** — `/dashboard/reports`
+  now rolls a range longer than a month up into **month rows** (BR-036 household
+  periods, clipped to the range, capped at 12); the transaction edit form shows
+  the base-currency equivalent of a foreign-currency amount and warns when the
+  account currency changes; the transfer edit form pairs each amount with its own
+  account selector the way the create form does. No migration. What is still open
+  from BR-031 is the RPC rate parameter, now its own row in §1.
 - **Tier-4 (2026-07-30, merged 2026-08-12)** — BR-045 time-of-day, UC-9 recurring
   transfers, BR-030 statement cycle slice 1, BR-035 installments, BR-040 refunds,
   BR-036 month start day slice 1.

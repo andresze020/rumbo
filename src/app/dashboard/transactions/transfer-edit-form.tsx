@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { ArrowDown } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { updateTransferTransactionAction } from './actions'
 import { AdvancedFields } from '@/components/advanced-fields'
@@ -60,6 +61,11 @@ function formatAccountLabel(account: TransferAccount) {
 }
 
 const selectCls = nativeSelectCls
+
+const AMOUNT_LABEL_CLS =
+  'text-xs font-medium uppercase tracking-wider text-muted-foreground'
+const CURRENCY_CHIP_CLS =
+  'rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground'
 
 export function TransferEditForm({
   transactionId,
@@ -271,73 +277,25 @@ export function TransferEditForm({
             <option value="pending">Pending</option>
           </select>
         </div>
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`from_account_${transactionId}`}>From account</Label>
-          <select
-            id={`from_account_${transactionId}`}
-            name="from_account_id"
-            value={selectedFromAccountId}
-            onChange={(e) => {
-              const next = e.target.value
-              setSelectedFromAccountId(next)
-              setUserRate('')
-              setFxNote('')
-              setFxError('')
-              if (next === selectedToAccountId) setSelectedToAccountId('')
-            }}
-            className={selectCls}
-            required
-          >
-            <option value="" disabled>Select source</option>
-            {accounts.map((account) => (
-              <option
-                key={account.id}
-                value={account.id}
-                disabled={account.id === selectedToAccountId}
-              >
-                {formatAccountLabel(account)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor={`to_account_${transactionId}`}>To account</Label>
-          <select
-            id={`to_account_${transactionId}`}
-            name="to_account_id"
-            value={selectedToAccountId}
-            onChange={(e) => {
-              const next = e.target.value
-              setSelectedToAccountId(next)
-              if (next === selectedFromAccountId) setSelectedFromAccountId('')
-            }}
-            className={selectCls}
-            required
-          >
-            <option value="" disabled>Select destination</option>
-            {accounts.map((account) => (
-              <option
-                key={account.id}
-                value={account.id}
-                disabled={account.id === selectedFromAccountId}
-              >
-                {formatAccountLabel(account)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor={`transfer_amount_${transactionId}`}>
-            {isCrossCurrencyTransfer ? 'You sent' : 'Amount'}
-            {isCrossCurrencyTransfer ? (
-              <span className="font-normal text-muted-foreground">
-                {' '}(in {selectedFromAccount?.currency_code})
-              </span>
-            ) : null}
-          </Label>
+      {/* BR-031 slice 2 — the two amounts of a cross-currency transfer are both
+          real ledger values, and until now the edit form had them in different
+          places: "You sent" in the grid above, "You received" below it, with the
+          account selectors somewhere else again. The create form pairs each
+          amount with its own account in one card so both figures are on screen
+          together; the edit form now does the same, with its own native selects
+          rather than the create form's mobile sheet picker. */}
+      <div className="space-y-2.5 rounded-2xl border bg-muted/30 p-3">
+        <div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor={`transfer_amount_${transactionId}`} className={AMOUNT_LABEL_CLS}>
+              {isCrossCurrencyTransfer ? 'You sent' : 'Amount'}
+            </Label>
+            <span className={CURRENCY_CHIP_CLS}>
+              {selectedFromAccount?.currency_code ?? baseCurrency}
+            </span>
+          </div>
           <AmountInput
             id={`transfer_amount_${transactionId}`}
             name="amount"
@@ -347,38 +305,118 @@ export function TransferEditForm({
               setAmountInput(v)
               setCostTouched(false)
             }}
+            size="lg"
             withCalculator
             required
+            className="mt-1.5"
           />
+          <div className="mt-2 space-y-1.5">
+            <Label htmlFor={`from_account_${transactionId}`} className={AMOUNT_LABEL_CLS}>
+              From account
+            </Label>
+            <select
+              id={`from_account_${transactionId}`}
+              name="from_account_id"
+              value={selectedFromAccountId}
+              onChange={(e) => {
+                const next = e.target.value
+                setSelectedFromAccountId(next)
+                setUserRate('')
+                setFxNote('')
+                setFxError('')
+                if (next === selectedToAccountId) setSelectedToAccountId('')
+              }}
+              className={selectCls}
+              required
+            >
+              <option value="" disabled>Select source</option>
+              {accounts.map((account) => (
+                <option
+                  key={account.id}
+                  value={account.id}
+                  disabled={account.id === selectedToAccountId}
+                >
+                  {formatAccountLabel(account)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-      </div>
 
-      {isCrossCurrencyTransfer ? (
-        <div className="space-y-2">
-          <Label htmlFor={`transfer_to_amount_${transactionId}`}>
-            You received{' '}
-            <span className="font-normal text-muted-foreground">
-              (in {selectedToAccount?.currency_code})
-            </span>
-          </Label>
-          <AmountInput
-            id={`transfer_to_amount_${transactionId}`}
-            name="to_amount"
-            currencyCode={selectedToAccount?.currency_code ?? baseCurrency}
-            value={toAmountInput}
-            onValueChange={(v) => {
-              setToAmountInput(v)
-              setCostTouched(false)
-            }}
-            withCalculator
-            required
-          />
-          <p className="text-xs text-muted-foreground">
-            How much actually arrived in the destination account, in its own
-            currency.
+        <div className="flex items-center gap-2" aria-hidden="true">
+          <span className="h-px flex-1 bg-border" />
+          <ArrowDown className="size-3.5 text-muted-foreground" />
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
+        <div>
+          {/* Only a cross-currency transfer has a second amount to enter. When
+              both legs share a currency the same figure arrives, so the
+              destination block is just the account. */}
+          {isCrossCurrencyTransfer ? (
+            <>
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor={`transfer_to_amount_${transactionId}`}
+                  className={AMOUNT_LABEL_CLS}
+                >
+                  You received
+                </Label>
+                <span className={CURRENCY_CHIP_CLS}>
+                  {selectedToAccount?.currency_code}
+                </span>
+              </div>
+              <AmountInput
+                id={`transfer_to_amount_${transactionId}`}
+                name="to_amount"
+                currencyCode={selectedToAccount?.currency_code ?? baseCurrency}
+                value={toAmountInput}
+                onValueChange={(v) => {
+                  setToAmountInput(v)
+                  setCostTouched(false)
+                }}
+                size="lg"
+                withCalculator
+                required
+                className="mt-1.5"
+              />
+            </>
+          ) : null}
+          <div className={cn('space-y-1.5', isCrossCurrencyTransfer && 'mt-2')}>
+            <Label htmlFor={`to_account_${transactionId}`} className={AMOUNT_LABEL_CLS}>
+              To account
+            </Label>
+            <select
+              id={`to_account_${transactionId}`}
+              name="to_account_id"
+              value={selectedToAccountId}
+              onChange={(e) => {
+                const next = e.target.value
+                setSelectedToAccountId(next)
+                if (next === selectedFromAccountId) setSelectedFromAccountId('')
+              }}
+              className={selectCls}
+              required
+            >
+              <option value="" disabled>Select destination</option>
+              {accounts.map((account) => (
+                <option
+                  key={account.id}
+                  value={account.id}
+                  disabled={account.id === selectedFromAccountId}
+                >
+                  {formatAccountLabel(account)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {isCrossCurrencyTransfer
+              ? 'How much actually arrived in the destination account, in its own currency.'
+              : 'The same amount arrives in the destination account.'}
           </p>
         </div>
-      ) : null}
+      </div>
 
       {isCrossCurrencyTransfer ? (
         <div className="space-y-2 rounded-xl border bg-muted/30 p-3">

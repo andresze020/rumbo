@@ -7,6 +7,12 @@ import {
   type MerchantSlice,
   type MonthlyPoint,
 } from './server'
+import {
+  DEFAULT_MONTH_START_DAY,
+  periodLabelForDate,
+  resolvePeriod,
+  shiftPeriodLabel,
+} from '@/lib/periods/month'
 
 /**
  * Filter-aware reporting for /dashboard/reports.
@@ -32,15 +38,31 @@ export type ReportFilters = {
 /** BR-039: one account that has opted into "transfers in count as expense". */
 export type TransferExpenseAccount = { id: string; name: string }
 
-/** BR-042: one week inside the selected month. */
+/** BR-042: one week inside the selected month, or one month inside a longer range. */
 export type SubPeriod = {
-  /** ISO start/end of the week, already clipped to the selected month. */
+  /** ISO start/end of the sub-period, already clipped to the selected range. */
   dateFrom: string
   dateTo: string
+  /**
+   * `YYYY-MM` period label on month rows, `null` on week rows. Present so the
+   * screen can name the month even when the row is clipped to a partial one —
+   * "August 2026" reads better than the bare date range it actually covers.
+   */
+  month: string | null
   income: number
   expenses: number
   net: number
   txCount: number
+}
+
+/**
+ * BR-042: the sub-period rollup of the selected range, plus which grain it was
+ * cut at. The two travel together because the screen's wording depends on the
+ * grain, and a list of rows whose grain is unknown cannot be labelled honestly.
+ */
+export type SubPeriodBreakdown = {
+  granularity: 'week' | 'month'
+  periods: SubPeriod[]
 }
 
 export type ReportData = {
@@ -55,11 +77,11 @@ export type ReportData = {
   merchants: MerchantSlice[]
   trend: MonthlyPoint[]
   /**
-   * Week-by-week rollup of the selected range, or `null` when the range isn't a
-   * single month (BR-042's first slice is weeks-within-month only —
-   * months-within-year comes later).
+   * BR-042 rollup of the selected range: weeks when the range is about a month
+   * long, months when it is longer. `null` when the range is too short to split
+   * (under 4 weeks) or too long to read as a list (over 12 periods).
    */
-  subPeriods: SubPeriod[] | null
+  subPeriods: SubPeriodBreakdown | null
   /**
    * BR-039: how much of `expenses` came from transfers into accounts flagged
    * "count transfers in as expense". Already included in `expenses`, `net`,
@@ -374,55 +396,47 @@ function daysBetween(from: string, to: string) {
 }
 
 /**
- * BR-042 — splits a single-month range into ISO weeks (Monday-start) clipped to
- * the month, and totals each one. Clipping is what guarantees the invariant
- * that matters: the weeks partition the month exactly, so their totals always
- * sum back to the month totals shown above them. Weeks with no activity are
- * kept, rendering as zero rows rather than silently disappearing.
+ * BR-042 — cuts the selected range into sub-period rows and totals each one.
  *
- * Returns null unless the range is one calendar month — a multi-month range
- * would want month rows instead, which is a later slice.
+ * Two grains, picked from the length of the range:
+ *
+ * - **weeks**, when the range is about a month long (28–31 days, which covers a
+ *   calendar month and every BR-036 period). ISO weeks, Monday-start, clipped to
+ *   the range.
+ * - **months** (slice 2), when the range is longer. Household periods from the
+ *   BR-036 resolver, clipped to the range, so "month" here means the same thing
+ *   the rest of this screen means by it.
+ *
+ * Clipping is what guarantees the invariant that matters at either grain: the
+ * rows partition the range exactly, so their totals always sum back to the month
+ * or year totals shown above them. Sub-periods with no activity are kept,
+ * rendering as zero rows rather than silently disappearing.
+ *
+ * Returns null when the range is shorter than four weeks (nothing useful to cut)
+ * or longer than 12 periods — "all time" and multi-year ranges would produce a
+ * list nobody reads, and BR-042's row asks for months *within a year*.
  */
 function buildSubPeriods(
   rows: FilteredRow[],
   dateFrom: string,
-  dateTo: string
-): SubPeriod[] | null {
-  // BR-042 shipped this as "only when the range is exactly one calendar month".
-  // BR-036 lets a household's period start on any day, so that test would switch
-  // the week rows off for every such household — a silent regression rather than
-  // a decision. The rows only ever needed the range to be *about* a month long:
-  // the weeks below are ISO weeks clipped to the range, so they partition it
-  // exactly and sum to its totals whatever the boundaries are.
-  //
-  // 28–31 days covers a calendar month and every BR-036 period, and excludes the
-  // multi-month presets, which is the distinction that actually matters.
+  dateTo: string,
+  monthStartDay: number
+): SubPeriodBreakdown | null {
+  // BR-042 shipped the week rows as "only when the range is exactly one calendar
+  // month". BR-036 lets a household's period start on any day, so that test would
+  // switch the week rows off for every such household — a silent regression
+  // rather than a decision. The rows only ever needed the range to be *about* a
+  // month long, because the weeks are clipped to it either way.
   const spanDays = daysBetween(dateFrom, dateTo) + 1
-  if (spanDays < 28 || spanDays > 31) return null
+  if (spanDays < 28) return null
 
-  const monthStart = dateFrom
-  const monthEnd = dateTo
+  const granularity: 'week' | 'month' = spanDays <= 31 ? 'week' : 'month'
+  const periods =
+    granularity === 'week'
+      ? buildWeekRows(dateFrom, dateTo)
+      : buildMonthRows(dateFrom, dateTo, monthStartDay)
 
-  const periods: SubPeriod[] = []
-  let cursor = monthStart
-  while (cursor <= monthEnd) {
-    // 0 = Sunday … 6 = Saturday; shift so Monday is the start of the week.
-    const [y, m, d] = cursor.split('-').map(Number)
-    const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
-    const daysToSunday = (7 - ((weekday + 6) % 7)) - 1
-    const weekEnd = addDays(cursor, daysToSunday)
-    const periodEnd = weekEnd > monthEnd ? monthEnd : weekEnd
-
-    periods.push({
-      dateFrom: cursor,
-      dateTo: periodEnd,
-      income: 0,
-      expenses: 0,
-      net: 0,
-      txCount: 0,
-    })
-    cursor = addDays(periodEnd, 1)
-  }
+  if (periods === null) return null
 
   for (const row of rows) {
     const period = periods.find((p) => row.date >= p.dateFrom && row.date <= p.dateTo)
@@ -435,7 +449,66 @@ function buildSubPeriods(
     period.net = period.income - period.expenses
   }
 
+  return { granularity, periods }
+}
+
+/** An empty sub-period row, ready to accumulate. */
+function emptySubPeriod(dateFrom: string, dateTo: string, month: string | null): SubPeriod {
+  return { dateFrom, dateTo, month, income: 0, expenses: 0, net: 0, txCount: 0 }
+}
+
+/** ISO weeks (Monday-start) covering `[dateFrom, dateTo]`, clipped to it. */
+function buildWeekRows(dateFrom: string, dateTo: string): SubPeriod[] {
+  const periods: SubPeriod[] = []
+  let cursor = dateFrom
+  while (cursor <= dateTo) {
+    // 0 = Sunday … 6 = Saturday; shift so Monday is the start of the week.
+    const [y, m, d] = cursor.split('-').map(Number)
+    const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+    const daysToSunday = 7 - ((weekday + 6) % 7) - 1
+    const weekEnd = addDays(cursor, daysToSunday)
+    const periodEnd = weekEnd > dateTo ? dateTo : weekEnd
+
+    periods.push(emptySubPeriod(cursor, periodEnd, null))
+    cursor = addDays(periodEnd, 1)
+  }
   return periods
+}
+
+/**
+ * BR-042 slice 2 — household periods covering `[dateFrom, dateTo]`, clipped to
+ * it. Built from the BR-036 resolver rather than from `date_trunc`-style
+ * arithmetic, so a household on a custom start day gets the same month
+ * boundaries here that the KPIs above these rows were computed with.
+ *
+ * Returns null past 12 rows: BR-042 asks for months within a *year*, and the
+ * "all time" preset would otherwise emit a row per month since 2000.
+ */
+function buildMonthRows(
+  dateFrom: string,
+  dateTo: string,
+  monthStartDay: number
+): SubPeriod[] | null {
+  const lastLabel = periodLabelForDate(dateTo, monthStartDay)
+  const periods: SubPeriod[] = []
+
+  let label = periodLabelForDate(dateFrom, monthStartDay)
+  while (label <= lastLabel) {
+    if (periods.length >= 12) return null
+    const period = resolvePeriod(label, monthStartDay)
+    // The first and last rows are the only ones that can be partial: the range
+    // rarely starts and ends on a period boundary.
+    periods.push(
+      emptySubPeriod(
+        period.dateFrom < dateFrom ? dateFrom : period.dateFrom,
+        period.dateTo > dateTo ? dateTo : period.dateTo,
+        label
+      )
+    )
+    label = shiftPeriodLabel(label, 1)
+  }
+
+  return periods.length > 1 ? periods : null
 }
 
 /** BR-037: one calendar day of a month grid. */
@@ -545,7 +618,9 @@ export async function getReportData(
   filters: ReportFilters,
   categoryLookup: Map<string, CategoryLookup>,
   /** BR-039: id → name. Pass an empty map (the default) to report the pure ledger. */
-  transferExpenseAccounts: Map<string, string> = new Map()
+  transferExpenseAccounts: Map<string, string> = new Map(),
+  /** BR-036: the household's period start day, used for BR-042's month rows. */
+  monthStartDay: number = DEFAULT_MONTH_START_DAY
 ): Promise<ReportData> {
   const expandedCategoryIds = expandCategoryIds(filters.categoryIds, categoryLookup)
   const rowFilters = {
@@ -650,7 +725,12 @@ export async function getReportData(
     categories,
     merchants,
     trend,
-    subPeriods: buildSubPeriods(rangeRows, filters.dateFrom, filters.dateTo),
+    subPeriods: buildSubPeriods(
+      rangeRows,
+      filters.dateFrom,
+      filters.dateTo,
+      monthStartDay
+    ),
     transferExpenses: transferRangeRows.reduce(
       (sum, row) => sum + Math.abs(row.baseSigned),
       0
