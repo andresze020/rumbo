@@ -23,6 +23,25 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Development automation, first wave** (2026-08-19, branch
+  `claude/ai-agents-app-development-2po3qk`). Tooling only — no migration, no
+  schema change, nothing in `src/`. The repo now automates parts of its own
+  development: subagent `ledger-guard` (`.claude/agents/`, read-only) reviews a
+  diff against the ledger/RLS rules and reports 🔴/🟡/✅ without editing;
+  `/revisar-ledger` (`.claude/commands/`) invokes it. Two hooks in
+  `.claude/hooks/`: `SessionStart` prints branch and working-tree state, and
+  `Stop` runs `npx tsc --noEmit` and **exits 2** when it fails, so a turn that
+  leaves broken types cannot be closed — this turns the `app-finanzas-verify`
+  typecheck from a reminder into a guarantee. The Stop hook guards against the
+  infinite loop via `stop_hook_active`, skips silently on doc-only turns,
+  caches a passing tree fingerprint (~5 s cold, ~0.1 s cached), and degrades to
+  a warning when `node_modules` is absent. It also inspects commits against
+  `main`, so committing does not evade it. Escape hatches:
+  `APP_FINANZAS_SKIP_VERIFY=1` for one run, or delete the `"Stop"` block in
+  `.claude/settings.json`. That file's allowlist also lost three commands that
+  do not exist (`npm run typecheck`, `npm test`, `npm run test *`) and gained
+  the real ones. Rationale, decision tree and the deferred CI/Playwright work
+  are in `docs/ai-agents-workflow.md`.
 - **AndroMoney history importer** (2026-08-17, branch
   `claude/andromoney-import-script-6u4fy1`). Tooling only — no migration, no
   schema change, nothing in `src/`. Two scripts migrate a full AndroMoney export
