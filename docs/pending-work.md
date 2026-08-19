@@ -49,6 +49,8 @@ decision first.
 |---|---:|---|---|---|
 | BF-022 | P3 | Transactions | Reconciliation flow — mark transactions "cleared" against a bank statement. Needs a schema migration (`reconciled_at`). Deferred to Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
 | Tap payment capture | — | Capture / automation | Design only, **no code**. A tap cannot be detected by the PWA on any platform; detection has to come from the phone's automation layer posting to an ingest endpoint that stages captures in a `capture_inbox` and auto-posts only above a confidence threshold. | [features/tap-payment-capture.md](./features/tap-payment-capture.md) |
+| CI on pull requests | P3 | Dev automation | No `.github/` exists — PRs merge with zero automated validation. A workflow running `npm run lint`, `npx tsc --noEmit` and `npm run build` would be the biggest confidence jump available. Deferred because the local `Stop` hook already gates the same checks before code leaves the machine; needed once there is a second collaborator or merges happen from remote sessions where local hooks do not run. | [ai-agents-workflow.md](./ai-agents-workflow.md) |
+| Runnable ledger invariants | P3 | Testing | `supabase/tests/*.sql` holds three invariant files (money, goals, refunds) that **no script executes**. Making them runnable is the cheapest real test coverage available — they check the ledger rules against the database, where it matters. There is no JS/TS test framework in the repo at all. | [ai-agents-workflow.md](./ai-agents-workflow.md) |
 
 > **Tap capture is gated.** The Phase 0 device spike is a hard gate — no code
 > until a real tap is proven to emit a machine-readable event on the user's own

@@ -27,6 +27,21 @@ The product is an MVP Alpha. Keep scope small, usable, and aligned with the proj
 - For debts, use a liability account plus the debts extension table.
 - Transfers should be modeled as one transaction with at least two entries and should not count as income or expense.
 
+## Out-of-scope skills
+The `zoho-*` skills (`zoho-ds-review`, `zoho-deluge-scripts`, `zoho-csv-import`,
+`zoho-feature-blueprint`, `zoho-session-starter`) belong to a **completely separate
+Zoho Creator project**. They are account-level skills that happen to be visible in
+this session. Never invoke them for App Finanzas work, and never borrow their
+conventions, formats, or terminology into this repo.
+
+## Automation primitives
+This repo automates parts of its own development. See
+`docs/ai-agents-workflow.md` for what exists and why:
+- Subagent `ledger-guard` (`.claude/agents/`) — reviews a diff against the ledger rules.
+- Slash command `/revisar-ledger` (`.claude/commands/`) — invokes it.
+- Hooks `SessionStart` and `Stop` (`.claude/hooks/`) — checkout status, and a
+  blocking typecheck gate.
+
 ## Development workflow
 - Work from main only after completed sprint merges.
 - Create one branch per sprint or fix.

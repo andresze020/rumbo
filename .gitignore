@@ -47,3 +47,6 @@ next-env.d.ts
 /andromoney-plan.json
 /andromoney-failures.json
 /AndroMoney*.csv
+
+# Cache del hook Stop (.claude/hooks/verify-gate.mjs)
+.claude/hooks/.cache/

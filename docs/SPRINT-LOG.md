@@ -15,6 +15,33 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Development automation, first wave (2026-08-19)
+- Goal: stop relying on Claude *remembering* to run the validation gate and to
+  respect the ledger rules. A skill is memory and can be ignored; a hook is the
+  only primitive that guarantees anything.
+- Shipped: subagent `ledger-guard` (`.claude/agents/`, read-only, reports
+  🔴/🟡/✅ against the ledger + RLS + migration rules, never edits) and the
+  `/revisar-ledger` command that makes it discoverable. Hooks in
+  `.claude/hooks/`: `session-context.mjs` (SessionStart, informational — branch
+  and working-tree state, covering the "verify clean working tree" rule) and
+  `verify-gate.mjs` (Stop, blocking — runs `npx tsc --noEmit`, exits 2 with the
+  errors on failure). The gate guards `stop_hook_active` against an infinite
+  loop, skips doc-only turns, caches a passing tree fingerprint, checks commits
+  against `main` so committing does not evade it, and warns instead of blocking
+  when `node_modules` is missing. Written as `.mjs` because the canonical
+  checkout is Windows/PowerShell while remote sessions run Linux.
+  `docs/ai-agents-workflow.md` explains the four primitives, when to reach for
+  each, and measured costs.
+- Migrations added: none.
+- Tables changed: none. Nothing in `src/` was touched.
+- Follow-ups / known gaps: **no CI** — `.github/` still does not exist, so PRs
+  merge with zero automated validation; the local Stop hook only covers work
+  that leaves this machine. **No JS/TS test framework**; the three invariant
+  files in `supabase/tests/` are still not executable by any script, which is
+  the cheapest real coverage available. Manual localhost QA is unautomated
+  (needs Playwright — a sprint of its own). Both rows are indexed in
+  `docs/pending-work.md` §3.
+
 ## AndroMoney history importer (2026-08-17)
 - Goal: get four years of AndroMoney history into the app so it can replace it,
   which the in-app CSV importer cannot do (one account per run, transfer rows
