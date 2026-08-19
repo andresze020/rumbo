@@ -588,6 +588,11 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
   - `npm run lint`
   - `npx tsc --noEmit`  (there is no `typecheck` npm script)
   - `npm run build` when feasible
+- The typecheck above is also enforced by a `Stop` hook, so a turn that leaves
+  broken types cannot be closed. Subagents, slash commands and hooks are
+  documented in `docs/ai-agents-workflow.md`.
+- The `zoho-*` skills visible in some sessions belong to a different project.
+  Never use them here.
 
 ## Git rules
 
