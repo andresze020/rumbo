@@ -1,9 +1,14 @@
 'use client'
 
-import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronDown, Search } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
 export type MultiSelectOption = { id: string; label: string; isArchived?: boolean }
+
+/** Above this many options the panel grows a type-to-filter box. */
+const FILTER_THRESHOLD = 8
 
 /**
  * A compact `<details>` chip holding a checkbox list, used in the Transactions
@@ -33,8 +38,11 @@ export function MultiSelectChip({
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }) {
+  const ui = useUiTranslation()
   const isControlled = open !== undefined && onOpenChange !== undefined
+  const rootRef = useRef<HTMLDetailsElement>(null)
   const [checked, setChecked] = useState<Set<string>>(() => new Set(selectedIds))
+  const [query, setQuery] = useState('')
 
   // Re-seed the draft whenever the applied selection changes under us. The
   // transactions bar applies filters with a client-side navigation, so this
@@ -49,6 +57,57 @@ export function MultiSelectChip({
     setChecked(new Set(selectedIds))
   }
 
+  // A panel that only closes by clicking its own chip again is a trap: it hangs
+  // over the results the moment attention moves elsewhere. Listening for click
+  // rather than pointerdown leaves the element under the finger its own click
+  // first — on phones this panel sits in the layout flow, and collapsing it
+  // early would shift whatever was being tapped out from under the tap.
+  useEffect(() => {
+    // Closes in either mode: the native property when uncontrolled, the
+    // parent's state when controlled.
+    const close = () => {
+      const element = rootRef.current
+      if (!element?.open) return
+      if (isControlled) onOpenChange(false)
+      else element.open = false
+    }
+    const onClick = (event: MouseEvent) => {
+      const element = rootRef.current
+      if (!element?.open) return
+      const target = event.target instanceof Element ? event.target : null
+      if (!target) return
+      // The chip's own summary toggles itself; anything inside the panel is the
+      // user still working in it.
+      if (element.contains(target)) return
+      // A click on a *sibling* chip is a swap, and the parent handles it by
+      // moving its single open-chip state. Closing from here too would race
+      // that update and leave both panels shut.
+      if (target.closest('details')) return
+      close()
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !rootRef.current?.open) return
+      close()
+      // Leave focus where the panel can be re-opened, not adrift at the top of
+      // the document.
+      rootRef.current.querySelector('summary')?.focus()
+    }
+    document.addEventListener('click', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('click', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [isControlled, onOpenChange])
+
+  // A leftover query would hide most of the list the next time this opens.
+  // Cleared during render, like the draft above, rather than in an effect.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (!open) setQuery('')
+  }
+
   function toggle(id: string, isChecked: boolean) {
     setChecked((prev) => {
       const next = new Set(prev)
@@ -60,16 +119,23 @@ export function MultiSelectChip({
 
   const summary =
     checked.size === 0
-      ? 'All'
+      ? ui('All')
       : checked.size === 1
-        ? options.find((o) => o.id === [...checked][0])?.label ?? '1 selected'
-        : `${checked.size} selected`
+        ? options.find((o) => o.id === [...checked][0])?.label ??
+          ui('{1} selected', [1])
+        : ui('{1} selected', [checked.size])
+
+  const search = query.trim().toLowerCase()
+  const isMatch = (option: MultiSelectOption) =>
+    !search || option.label.toLowerCase().includes(search)
+  const matchCount = options.filter(isMatch).length
 
   return (
     // Full-width disclosure row on phones, compact chip from `sm` up: a row of
     // truncated chips is unusable on a narrow screen, and a floating panel has
     // nowhere to float inside a bottom sheet.
     <details
+      ref={rootRef}
       className="group relative w-full shrink-0 sm:w-auto"
       open={isControlled ? open : undefined}
     >
@@ -95,30 +161,79 @@ export function MultiSelectChip({
           aria-hidden="true"
         />
       </summary>
-      <div className="static mt-1.5 max-h-60 w-full overflow-auto rounded-xl border bg-popover p-1 sm:absolute sm:z-20 sm:mt-1 sm:w-56 sm:rounded-lg sm:shadow-md">
-        {options.length === 0 ? (
-          <p className="px-2 py-1.5 text-sm text-muted-foreground">No options</p>
-        ) : (
-          options.map((option) => (
-            <label
-              key={option.id}
-              className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2.5 text-sm hover:bg-accent sm:py-1.5"
+      {/* Header and list are separate boxes so only the list scrolls — a filter
+          field that scrolls out of reach helps nobody. */}
+      <div className="static mt-1.5 w-full rounded-xl border bg-popover p-1 sm:absolute sm:z-20 sm:mt-1 sm:w-56 sm:rounded-lg sm:shadow-md">
+        {options.length > FILTER_THRESHOLD ? (
+          <div className="relative p-1">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={ui('Search options')}
+              aria-label={ui('Search options')}
+              className="h-9 w-full rounded-lg border bg-background pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:h-8"
+            />
+          </div>
+        ) : null}
+
+        {checked.size > 0 ? (
+          <div className="flex items-center justify-between gap-2 px-2 py-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {ui('{1} selected', [checked.size])}
+            </span>
+            <button
+              type="button"
+              onClick={() => setChecked(new Set())}
+              className="rounded-md px-1.5 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-accent"
             >
-              <input
-                type="checkbox"
-                name={name}
-                value={option.id}
-                checked={checked.has(option.id)}
-                onChange={(e) => toggle(option.id, e.currentTarget.checked)}
-                className="size-4 shrink-0 accent-primary sm:size-3.5"
-              />
-              <span className="truncate">
-                {option.label}
-                {option.isArchived ? ' (archived)' : ''}
-              </span>
-            </label>
-          ))
-        )}
+              {ui('Clear')}
+            </button>
+          </div>
+        ) : null}
+
+        <div className="max-h-60 overflow-auto">
+          {options.length === 0 ? (
+            <p className="px-2 py-1.5 text-sm text-muted-foreground">{ui('No options')}</p>
+          ) : (
+            <>
+              {matchCount === 0 ? (
+                <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                  {ui('No matches')}
+                </p>
+              ) : null}
+              {options.map((option) => (
+                <label
+                  key={option.id}
+                  // Filtered-out rows are hidden, not unmounted: an unmounted
+                  // checkbox stops being submitted, so typing in the filter box
+                  // would quietly drop options the user had already ticked.
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2.5 text-sm hover:bg-accent sm:py-1.5',
+                    !isMatch(option) && 'hidden'
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    name={name}
+                    value={option.id}
+                    checked={checked.has(option.id)}
+                    onChange={(e) => toggle(option.id, e.currentTarget.checked)}
+                    className="size-4 shrink-0 accent-primary sm:size-3.5"
+                  />
+                  <span className="truncate">
+                    {option.label}
+                    {option.isArchived ? ' (archived)' : ''}
+                  </span>
+                </label>
+              ))}
+            </>
+          )}
+        </div>
       </div>
     </details>
   )

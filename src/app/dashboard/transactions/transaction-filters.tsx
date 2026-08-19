@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, useTransition, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
@@ -129,6 +129,13 @@ export function TransactionFilters({
   const [openChip, setOpenChip] = useState<
     null | 'account' | 'category' | 'tag' | 'payee' | 'status'
   >(null)
+  // Nothing here reaches the list until Apply, so an edit the user has made but
+  // not yet applied is invisible: the controls and the results below them
+  // disagree with no way to tell. `dirty` is what puts that on screen.
+  const [dirty, setDirty] = useState(false)
+  // Applying is a client-side navigation, which can take a moment on a slow
+  // connection. Without a pending state the click looks like it did nothing.
+  const [isApplying, startTransition] = useTransition()
 
   // Every control is staged locally and only reaches the server on submit, so
   // "Apply filters" means what it says. Presets used to be links that navigated
@@ -144,8 +151,18 @@ export function TransactionFilters({
   // otherwise removing a chip would leave its type still lit in the toggle.
   // Adjusted during render rather than in an effect, per
   // https://react.dev/learn/you-might-not-need-an-effect.
+  // Every applied filter is in the key, not just the staged ones: removing a
+  // chip or hitting Back is also a new applied state, and the "unapplied
+  // changes" mark has to clear when it lands.
   const appliedScope = [
     selectedTypes.join(','),
+    selectedStatuses.join(','),
+    selectedAccountIds.join(','),
+    selectedCategoryIds.join(','),
+    selectedTagIds.join(','),
+    selectedPayeeIds.join(','),
+    selectedReview,
+    searchText,
     resolvedDateFrom,
     resolvedDateTo,
   ].join('|')
@@ -155,6 +172,16 @@ export function TransactionFilters({
     setTypes(selectedTypes)
     setDateFrom(resolvedDateFrom)
     setDateTo(resolvedDateTo)
+    setDirty(false)
+  }
+
+  /**
+   * The sheet and any option list opened inside it close together — a panel
+   * left open would still be open the next time the sheet is pulled up.
+   */
+  function closeSheet() {
+    setMoreOpen(false)
+    setOpenChip(null)
   }
 
   // The sheet covers the screen; letting the list keep scrolling underneath it
@@ -171,17 +198,19 @@ export function TransactionFilters({
   // Android Back closes the sheet instead of leaving Transactions, matching the
   // picker sheets in the transaction form. Without it the only way out was the
   // X, and Back discarded the whole screen.
-  useBackDismiss(moreOpen, () => setMoreOpen(false))
+  useBackDismiss(moreOpen, closeSheet)
 
-  // Escape is the desktop equivalent of the same escape hatch.
+  // Escape is the desktop equivalent of the same escape hatch, and it unwinds
+  // one layer at a time: an open option list dismisses itself (the chip owns
+  // that), and only a second press closes the sheet around it.
   useEffect(() => {
     if (!moreOpen) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMoreOpen(false)
+      if (event.key === 'Escape' && !openChip) setMoreOpen(false)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [moreOpen])
+  }, [moreOpen, openChip])
 
   /**
    * Apply through the router instead of letting the browser submit the GET
@@ -199,12 +228,22 @@ export function TransactionFilters({
       if (entry) params.append(name, entry)
     }
 
+    // Collapse everything the bar can have open. Navigation is client-side,
+    // so none of this unmounts on its own — an option list left open would
+    // sit on top of the results the user just asked for.
     setMoreOpen(false)
     setSearchOpen(false)
-    router.push(`/dashboard/transactions?${params.toString()}`)
+    setOpenChip(null)
+    setDirty(false)
+    // Inside a transition so the button can stay pending until the new list has
+    // actually streamed in, rather than going quiet mid-navigation.
+    startTransition(() => {
+      router.push(`/dashboard/transactions?${params.toString()}`)
+    })
   }
 
   function toggleType(value: string) {
+    setDirty(true)
     setTypes((current) =>
       current.includes(value)
         ? current.filter((entry) => entry !== value)
@@ -267,7 +306,10 @@ export function TransactionFilters({
     >
       <button
         type="button"
-        onClick={() => setTypes([])}
+        onClick={() => {
+          setTypes([])
+          setDirty(true)
+        }}
         aria-pressed={types.length === 0}
         className={cn(typeButtonCls, types.length === 0 && typeButtonActiveCls)}
       >
@@ -328,6 +370,9 @@ export function TransactionFilters({
       method="get"
       action="/dashboard/transactions"
       onSubmit={applyFilters}
+      // Checkboxes, date fields and the search box all bubble `change`, so one
+      // handler here covers every control the bar does not drive by hand.
+      onChange={() => setDirty(true)}
       className="space-y-2.5"
     >
       {/* Staged type selection travels as one hidden input per value, so it
@@ -359,16 +404,24 @@ export function TransactionFilters({
 
         <button
           type="button"
-          onClick={() => setMoreOpen((v) => !v)}
+          onClick={() => (moreOpen ? closeSheet() : setMoreOpen(true))}
           aria-expanded={moreOpen}
-          className={cn(pillCls, moreFiltersCount > 0 && activePillCls)}
+          className={cn(pillCls, (moreFiltersCount > 0 || dirty) && activePillCls)}
         >
           <SlidersHorizontal className="size-3.5 shrink-0" aria-hidden="true" />
-          {ui('Filters')}
+          {isApplying ? ui('Applying…') : ui('Filters')}
           {moreFiltersCount > 0 ? (
             <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
               {moreFiltersCount}
             </span>
+          ) : null}
+          {/* The sheet can be dismissed with edits still staged in it — this is
+              the only thing left on screen that says so. */}
+          {dirty && !isApplying ? (
+            <>
+              <span aria-hidden="true" className="size-1.5 rounded-full bg-primary" />
+              <span className="sr-only">{ui('Unapplied changes')}</span>
+            </>
           ) : null}
         </button>
 
@@ -421,7 +474,7 @@ export function TransactionFilters({
       {moreOpen ? (
         <div
           aria-hidden="true"
-          onClick={() => setMoreOpen(false)}
+          onClick={closeSheet}
           className="fixed inset-0 z-[60] bg-black/50 duration-200 animate-in fade-in-0 sm:hidden"
         />
       ) : null}
@@ -456,7 +509,7 @@ export function TransactionFilters({
             </h2>
             <button
               type="button"
-              onClick={() => setMoreOpen(false)}
+              onClick={closeSheet}
               aria-label={ui('Close')}
               className="-mr-2 flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
             >
@@ -550,6 +603,7 @@ export function TransactionFilters({
                       onClick={() => {
                         setDateFrom(preset.dateFrom)
                         setDateTo(preset.dateTo)
+                        setDirty(true)
                       }}
                       aria-pressed={isActive}
                       className={cn(
@@ -611,6 +665,7 @@ export function TransactionFilters({
           {hasActiveFilters ? (
             <Link
               href={clearHref}
+              onClick={closeSheet}
               className={cn(
                 buttonVariants({ variant: 'ghost', size: 'sm' }),
                 'h-11 flex-1 rounded-xl sm:h-8 sm:flex-none sm:rounded-lg'
@@ -619,14 +674,29 @@ export function TransactionFilters({
               {ui('Clear all')}
             </Link>
           ) : null}
+          {/* Spelled out where there is room for it; the dot on the button
+              carries the same message on a phone. */}
+          {dirty && !isApplying ? (
+            <span role="status" className="hidden text-xs text-muted-foreground sm:inline">
+              {ui('Unapplied changes')}
+            </span>
+          ) : null}
           <button
             type="submit"
+            disabled={isApplying}
+            aria-disabled={isApplying}
             className={cn(
               buttonVariants({ size: 'sm' }),
-              'h-11 flex-1 rounded-xl text-sm font-semibold sm:h-8 sm:flex-none sm:rounded-lg sm:font-medium'
+              'relative h-11 flex-1 rounded-xl text-sm font-semibold sm:h-8 sm:flex-none sm:rounded-lg sm:font-medium'
             )}
           >
-            {ui('Apply filters')}
+            {isApplying ? ui('Applying…') : ui('Apply filters')}
+            {dirty && !isApplying ? (
+              <span
+                aria-hidden="true"
+                className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary-foreground sm:hidden"
+              />
+            ) : null}
           </button>
         </div>
       </div>
