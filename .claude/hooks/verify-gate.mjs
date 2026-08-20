@@ -89,7 +89,9 @@ try {
 }
 
 // --- 4. Typecheck -------------------------------------------------------
-if (!existsSync(join('node_modules', 'typescript'))) {
+const TSC_BIN = join('node_modules', 'typescript', 'bin', 'tsc');
+
+if (!existsSync(TSC_BIN)) {
   // Clon fresco sin `npm install`. Avisar, nunca bloquear.
   ok(
     'Hook verify-gate: se omitio el typecheck porque falta node_modules. ' +
@@ -98,7 +100,12 @@ if (!existsSync(join('node_modules', 'typescript'))) {
 }
 
 try {
-  execFileSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['tsc', '--noEmit'], {
+  // Se invoca el compilador local con el propio node en vez de `npx`: desde
+  // Node 18.20/20.12 spawnear un `.cmd` sin `shell: true` lanza EINVAL (sin
+  // stdout ni stderr), asi que en Windows este gate fallaba siempre y el
+  // mensaje era "salio con error y sin output". Ademas ahorra el arranque
+  // de npx en cada turno.
+  execFileSync(process.execPath, [TSC_BIN, '--noEmit'], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 300000,

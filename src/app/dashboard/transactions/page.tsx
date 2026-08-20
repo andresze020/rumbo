@@ -180,7 +180,10 @@ type TransactionRow = {
   canVoid: boolean
   categoryColor: string | null
   categoryIcon: string | null
+  /** Full path, e.g. "Investment / Time Deposit". Shown when a row expands. */
   categoryName: string
+  /** Just the leaf, e.g. "Time Deposit" — what the slim row can actually fit. */
+  categoryLeafName: string
   displayAmount?: number | string
   entry?: TransactionEntry
   entries: TransactionEntry[]
@@ -337,6 +340,27 @@ function getCategoryPath(
   return parentName ? `${parentName} / ${name}` : name
 }
 
+/**
+ * The category's own value for `pick`, or the nearest ancestor's. The depth
+ * guard is belt-and-braces: the schema forbids cycles, but a bad row must not
+ * hang a page render.
+ */
+function inheritCategoryVisual(
+  category: CategoryLookup,
+  categoriesById: Map<string, CategoryLookup>,
+  pick: (node: CategoryLookup) => string | null
+) {
+  let node: CategoryLookup | undefined = category
+  for (let depth = 0; node && depth < 5; depth += 1) {
+    const value = pick(node)
+    if (value) return value
+    node = node.parent_category_id
+      ? categoriesById.get(node.parent_category_id)
+      : undefined
+  }
+  return null
+}
+
 function transactionsPath(
   filters: TransactionFilters,
   panel?: { edit?: string; mode?: 'create'; refund?: string }
@@ -378,22 +402,16 @@ function transactionsPath(
  */
 const CLEAR_FILTERS_HREF = `/dashboard/transactions?date_from=${ALL_TIME_FROM}&date_to=${ALL_TIME_TO}`
 
-/**
- * One totals figure — a stacked label/amount tile on phones, and the original
- * inline "Expenses $8,950.28" run of text from `sm` up.
- */
-const totalCellCls = (accent: string) =>
-  cn(
-    'flex min-w-0 flex-col gap-0.5 font-semibold sm:flex-row sm:items-baseline sm:gap-1.5',
-    accent
-  )
+/** One totals figure: a quiet label over a loud, tabular amount. */
+const totalCellCls = 'flex min-w-0 flex-col gap-0.5 px-3 py-2.5 sm:px-4 sm:py-3'
 
 const totalLabelCls =
-  'text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:text-sm sm:font-semibold sm:normal-case sm:tracking-normal sm:text-current'
+  'truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]'
 
 // Slightly under `text-sm` on phones so a six-figure amount still fits its
 // third of the row; `tabular-nums` keeps the three tiles optically aligned.
-const totalValueCls = 'text-[13px] tabular-nums sm:text-sm'
+const totalValueCls = (accent: string) =>
+  cn('truncate text-[15px] font-semibold tabular-nums sm:text-lg', accent)
 
 /**
  * BR-038 — every search param that means "the user (or a link) chose a view".
@@ -874,11 +892,28 @@ export default async function TransactionsPage({
   const categoryNamesById = new Map(
     categoryLookupRows.map((c) => [c.id, getCategoryPath(c, categoryLookupRowsById, locale)])
   )
+  const categoryLeafNamesById = new Map(
+    categoryLookupRows.map((c) => [
+      c.id,
+      localizeSystemCategoryName(c.name, Boolean(c.is_system), locale),
+    ])
+  )
+  // System categories ship with an icon (migration 20260612180000 kept the
+  // icons and dropped the seeded colours). Sub-categories are the user's own
+  // and usually have neither, so a row for "Investments / Time Deposit" would
+  // fall back to a bare arrow. Walking up the tree gives the leaf whatever its
+  // nearest ancestor defines, which is what the emoji meant all along.
   const categoryIconsById = new Map(
-    categoryLookupRows.map((c) => [c.id, c.icon ?? null])
+    categoryLookupRows.map((c) => [
+      c.id,
+      inheritCategoryVisual(c, categoryLookupRowsById, (node) => node.icon ?? null),
+    ])
   )
   const categoryColorsById = new Map(
-    categoryLookupRows.map((c) => [c.id, c.color ?? null])
+    categoryLookupRows.map((c) => [
+      c.id,
+      inheritCategoryVisual(c, categoryLookupRowsById, (node) => node.color ?? null),
+    ])
   )
   const categoryOptionsById = new Map(allCategories.map((c) => [c.id, c]))
 
@@ -933,7 +968,7 @@ export default async function TransactionsPage({
         transaction.description || 'Transfer'
       : isDebtPayment
       ? transaction.description || `Debt payment: ${transferFromAccountName} -> ${transferToAccountName}`
-      : transaction.description || 'Transaction'
+      : transaction.description || ''
     const accountName = isBalanceMovement
       ? `${transferFromAccountName} -> ${transferToAccountName}`
       : entry
@@ -948,6 +983,16 @@ export default async function TransactionsPage({
       : allocation
       ? (categoryNamesById.get(allocation.category_id) ?? 'Unknown category')
       : 'Not categorized'
+    // A parent/child path is too long for one line at list density, so the row
+    // shows the leaf and the expanded panel shows where it hangs from.
+    const categoryLeafName = allocation && !isTransfer && !isOpeningBalance && !isDebtPayment
+      ? (categoryLeafNamesById.get(allocation.category_id) ?? categoryName)
+      : categoryName
+    // A row with no description used to read "Transaction", which says nothing
+    // when four rows in a row are called "Transaction". Fall back to who the
+    // money moved with, then to what it was for.
+    const resolvedTitle =
+      title || transaction.merchant_name?.trim() || categoryLeafName || 'Transaction'
     const categoryIcon =
       !isTransfer && !isOpeningBalance && !isDebtPayment && allocation
         ? (categoryIconsById.get(allocation.category_id) ?? null)
@@ -973,6 +1018,7 @@ export default async function TransactionsPage({
       categoryColor,
       categoryIcon,
       categoryName,
+      categoryLeafName,
       displayAmount,
       entry,
       entries,
@@ -982,7 +1028,7 @@ export default async function TransactionsPage({
       isOpeningBalance,
       isTransfer,
       isVoided,
-      title,
+      title: resolvedTitle,
       transaction,
       transferFromAccountName,
       transferInEntry,
@@ -1231,6 +1277,7 @@ export default async function TransactionsPage({
         : formatValue(row.transaction.transaction_type),
       accountName: row.accountName,
       categoryName: row.categoryName,
+      categoryLeafName: row.categoryLeafName,
       categoryIcon: row.categoryIcon,
       categoryColor: row.categoryColor,
       merchantName: row.transaction.merchant_name,
@@ -1477,7 +1524,9 @@ export default async function TransactionsPage({
       ) : null}
 
       {/* ── Transaction list ───────────────────────────────────────────── */}
-      <section className="space-y-1.5">
+      {/* The count line, the totals card, the view switch and the list are
+          four separate objects now, so they get room to read as four. */}
+      <section className="space-y-2.5">
         <div className="flex items-center justify-between px-1">
           <h2 className="flex flex-wrap items-center gap-x-1.5 text-sm font-medium text-muted-foreground">
             <span>
@@ -1511,72 +1560,85 @@ export default async function TransactionsPage({
 
         {/* ── Filtered totals (base currency) ─────────────────────────── */}
         {/* These three numbers are the answer to "how did this period go", so
-            they have to be readable at a glance. As one nowrap scrolling line
-            the last one was clipped at the screen edge and the currency note
-            sat entirely off-screen — you had to drag sideways to read a total.
-            Phones get evenly split tiles (label over amount) sized to however
-            many totals there are; `sm:` keeps the original inline row, which
-            has always had the room. */}
+            they get their own card instead of a run of inline text: one tile
+            per total, label over amount, divided and tabular so the figures
+            line up and can be compared at a glance. Same shape on phones and
+            desktop - the previous inline row clipped the last total at the
+            screen edge and pushed the currency note off-screen entirely. */}
         {hasFilteredTotals ? (
-          <div className="rounded-xl border bg-card p-2.5 text-sm sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
+          <div className="space-y-1">
             <div
-              className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1 sm:px-1"
-              // Ignored once the container is a flex row from `sm` up.
+              className="grid divide-x divide-border/70 overflow-hidden rounded-2xl border bg-card shadow-sm shadow-black/[0.03]"
               style={{
                 gridTemplateColumns: `repeat(${filteredTotalsCount}, minmax(0, 1fr))`,
               }}
             >
               {filteredExpenseBase > 0 ? (
-                <span className={totalCellCls('text-red-600 dark:text-red-400')}>
+                <span className={totalCellCls}>
                   <span className={totalLabelCls}>{ui('Expenses')}</span>
-                  <span className={totalValueCls}>
+                  <span
+                    className={totalValueCls('text-red-600 dark:text-red-400')}
+                  >
                     {formatCurrency(filteredExpenseBase, household.base_currency, locale)}
                   </span>
                 </span>
               ) : null}
               {filteredIncomeBase > 0 ? (
-                <span className={totalCellCls('text-emerald-600 dark:text-emerald-400')}>
+                <span className={totalCellCls}>
                   <span className={totalLabelCls}>{ui('Income')}</span>
-                  <span className={totalValueCls}>
+                  <span
+                    className={totalValueCls('text-emerald-600 dark:text-emerald-400')}
+                  >
                     {formatCurrency(filteredIncomeBase, household.base_currency, locale)}
                   </span>
                 </span>
               ) : null}
               {filteredIncomeBase > 0 && filteredExpenseBase > 0 ? (
-                <span className={totalCellCls('text-foreground')}>
+                <span className={totalCellCls}>
                   <span className={totalLabelCls}>{ui('Net')}</span>
-                  <span className={totalValueCls}>
+                  <span
+                    className={totalValueCls(
+                      filteredNetBase < 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-foreground'
+                    )}
+                  >
                     {formatCurrency(filteredNetBase, household.base_currency, locale)}
                   </span>
                 </span>
               ) : null}
-              {/* Which "$" these are — the households here hold both CAD and
-                  COP accounts, so the code is not decoration. */}
-              <span className="col-span-full text-right text-[11px] text-muted-foreground sm:col-auto sm:text-left sm:text-xs">
-                {ui('in')} {household.base_currency}
-              </span>
             </div>
+            {/* Which "$" these are — the households here hold both CAD and
+                COP accounts, so the code is not decoration. */}
+            <p className="px-1 text-right text-[11px] text-muted-foreground">
+              {ui('in')} {household.base_currency}
+            </p>
           </div>
         ) : null}
 
         {/* ── Review-status filter chips ──────────────────────────────── */}
-        {/* Scrolls as one line on phones rather than wrapping onto two. */}
-        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap">
-          {reviewChips.map((chip) => (
-            <Link
-              key={chip.value}
-              href={chip.href}
-              className={cn(
-                buttonVariants({
-                  variant: chip.isActive ? 'secondary' : 'outline',
-                  size: 'sm',
-                }),
-                'shrink-0'
-              )}
-            >
-              {chip.label}
-            </Link>
-          ))}
+        {/* One segmented control rather than four separate buttons: these are
+            mutually exclusive views of the same list, and the raised active
+            segment says which one you are in without shouting. Still scrolls
+            as one line on phones rather than wrapping onto two. */}
+        <div className="-mx-1 overflow-x-auto px-1 pb-1">
+          <div className="inline-flex gap-1 rounded-xl border bg-muted/40 p-1">
+            {reviewChips.map((chip) => (
+              <Link
+                key={chip.value}
+                href={chip.href}
+                aria-current={chip.isActive ? 'page' : undefined}
+                className={cn(
+                  'shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+                  chip.isActive
+                    ? 'bg-card text-foreground shadow-sm ring-1 ring-inset ring-black/[0.04] dark:ring-white/[0.06]'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {chip.label}
+              </Link>
+            ))}
+          </div>
         </div>
 
         {transactionDetailsError ? (

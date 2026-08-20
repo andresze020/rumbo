@@ -15,6 +15,69 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Transactions list — slim rows, premium polish (2026-08-19, merged 2026-08-20)
+- Goal: the transactions screen looked like a data-entry tool, not something
+  worth paying for. On desktop every row rendered its full detail block
+  inline, so a page of 4.633 transactions read as 4.633 toolbars; on phones
+  the row was so cramped that account names truncated mid-word.
+- Shipped:
+  - One slim line per row at every breakpoint. Badges, tags, notes and the
+    action buttons moved behind the row's own chevron. `compact` (BR-038) is
+    now density only (32px avatar, shorter padding), since the collapse is
+    universal.
+  - A rounded, tinted avatar per row — the category's emoji when there is
+    one, otherwise the direction arrow — in the same visual language as
+    `AccountAvatar`.
+  - A leaf category inherits icon and colour from its nearest ancestor
+    (`inheritCategoryVisual`). System categories ship with icons and no
+    colour (see 20260612180000), while sub-categories are user-made and have
+    neither, so "Investments / Time Deposit" used to fall back to a bare
+    arrow. Read-only: no data was written.
+  - Rows carry `categoryLeafName` ("Time Deposit"); the full path
+    ("Investment / Time Deposit") only appears in the expanded panel. The
+    emoji lives in the avatar and nowhere else.
+  - Column layout driven by `@container`, not `lg:`. Keyed to the viewport it
+    switched to columns exactly where the sidebar left the card ~740px wide
+    and every description truncated to "Trans…". **Tailwind v4 needs
+    `@min-[60rem]:`; the v3 form `@[60rem]:` silently compiles to nothing** —
+    verified by compiling the real class strings through
+    `@tailwindcss/postcss` rather than trusting a green build.
+  - Fixed-width columns so figures line up across rows. An `auto` amount
+    column had made every row size itself to its own number.
+  - Checkboxes on demand: hover on pointer devices, a "Select" toggle on
+    touch. Review state is a dot in a fixed-width slot, not a badge in the
+    text.
+  - Only inflows are tinted (income emerald, refund teal); outflows read in
+    the plain foreground, since the leading minus already says the direction.
+  - Filtered totals became one divided card on every breakpoint (Net turns
+    red when negative) and the review filters became a segmented control.
+  - An untitled row falls back to payee, then category, instead of reading
+    "Transaction" over and over.
+  - The row no longer shows the time of day (see follow-ups); the details
+    panel still does.
+  - Unrelated but blocking: the `Stop` verify-gate hook spawned `npx.cmd`
+    through `execFileSync`, which Node ≥18.20 refuses without `shell: true`.
+    It threw `EINVAL` with no output, so the gate failed every turn on
+    Windows and reported "salio con error y sin output". It now runs
+    `node_modules/typescript/bin/tsc` with `process.execPath`, the pattern
+    the repo's own scripts already use.
+- Migrations added: none.
+- Tables changed: none. `categoryLeafName` and the icon inheritance are
+  derived at read time from columns the page already selected.
+- Follow-ups / known gaps:
+  - The create form cannot record a time of day, so BR-045's
+    `transaction_time` is empty for everything entered by hand and only
+    imports carry one. Either add the input or retire the field.
+  - Categories imported from AndroMoney have no icon, and neither do their
+    parents, so those rows still show the direction arrow. Assigning an icon
+    to the parent covers every child through the new inheritance.
+  - Neutral (non-red) expense amounts are a deliberate call — one line in
+    `getAmountColorClass` if it reads wrong with real data.
+  - Per-day totals in the date headers were considered and skipped: rows are
+    multi-currency, so a correct total has to come from
+    `transaction_allocations` in base currency, which is a ledger change and
+    not a UI one.
+
 ## Development automation, second wave — context budget (2026-08-19)
 - Goal: the first wave made Claude *correct* (a Stop hook that blocks broken
   types). This one makes it *cheap*. Measured drains: `AGENTS.md` cost ~11k

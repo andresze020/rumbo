@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
 import {
   ArrowDownLeft,
@@ -82,7 +82,10 @@ export type TransactionListRow = {
   isDebtPayment: boolean
   typeBadgeLabel: string
   accountName: string
+  /** Full path, e.g. "Investment / Time Deposit" — details panel only. */
   categoryName: string
+  /** Just the leaf, e.g. "Time Deposit" — what the row itself shows. */
+  categoryLeafName: string
   categoryIcon: string | null
   categoryColor: string | null
   merchantName: string | null
@@ -145,33 +148,101 @@ const reviewStyles: Record<ReviewStatus, { label: string; className: string }> =
 
 const REVIEW_ORDER: ReviewStatus[] = ['unreviewed', 'reviewed', 'flagged']
 
+/**
+ * Only inflows are tinted. Painting every expense red turned an ordinary month
+ * into a wall of alarms; the leading minus sign already says which way the
+ * money went, so outflows read in the plain foreground.
+ */
 function getAmountColorClass(transactionType: string) {
   if (transactionType === 'income') return 'text-emerald-600 dark:text-emerald-400'
-  if (transactionType === 'expense') return 'text-red-600 dark:text-red-400'
   // BR-040: a refund is money coming back, so it reads green like an inflow —
   // but it is deliberately not the same green as income, because it did not
   // increase what the household earned, it reduced what it spent.
   if (transactionType === 'refund') return 'text-teal-600 dark:text-teal-400'
-  return ''
+  return 'text-foreground'
+}
+
+/** Softly tinted avatar surfaces, one per direction of money. */
+const typeTints: Record<string, { surface: string; icon: string }> = {
+  income: {
+    surface: 'bg-emerald-500/10',
+    icon: 'text-emerald-600 dark:text-emerald-400',
+  },
+  expense: {
+    surface: 'bg-rose-500/10',
+    icon: 'text-rose-600 dark:text-rose-400',
+  },
+  refund: {
+    surface: 'bg-teal-500/10',
+    icon: 'text-teal-600 dark:text-teal-400',
+  },
+  transfer: {
+    surface: 'bg-sky-500/10',
+    icon: 'text-sky-600 dark:text-sky-400',
+  },
+}
+
+function tintFor(transactionType: string) {
+  return typeTints[transactionType] ?? typeTints.transfer
 }
 
 function RowTypeIcon({
   transactionType,
   className,
+  style,
 }: {
   transactionType: string
   className?: string
+  style?: CSSProperties
 }) {
-  if (transactionType === 'income') {
-    return <ArrowDownLeft className={className} aria-hidden="true" />
-  }
-  if (transactionType === 'expense') {
-    return <ArrowUpRight className={className} aria-hidden="true" />
-  }
-  if (transactionType === 'refund') {
-    return <Undo2 className={className} aria-hidden="true" />
-  }
-  return <ArrowLeftRight className={className} aria-hidden="true" />
+  const props = { className, style, 'aria-hidden': true } as const
+  if (transactionType === 'income') return <ArrowDownLeft {...props} />
+  if (transactionType === 'expense') return <ArrowUpRight {...props} />
+  if (transactionType === 'refund') return <Undo2 {...props} />
+  return <ArrowLeftRight {...props} />
+}
+
+/**
+ * Leading tile for a row: the category's own emoji when it has one, otherwise
+ * the direction arrow. Same visual language as `AccountAvatar` so the list and
+ * the accounts screen feel like one app.
+ */
+function RowAvatar({ row, compact }: { row: TransactionListRow; compact: boolean }) {
+  const tint = tintFor(row.transactionType)
+  const showEmoji = Boolean(row.categoryIcon) && !row.isTransfer
+  // A category that carries its own colour tints its own tile, so a long list
+  // becomes scannable by category the way it already is by direction.
+  const accent = row.isVoided ? null : row.categoryColor
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'flex shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-black/[0.04] dark:ring-white/[0.06]',
+        compact ? 'size-8' : 'size-9',
+        row.isVoided ? 'bg-muted' : accent ? '' : tint.surface
+      )}
+      style={
+        accent
+          ? { backgroundColor: `color-mix(in oklab, ${accent} 14%, transparent)` }
+          : undefined
+      }
+    >
+      {showEmoji ? (
+        <span className={cn('leading-none', compact ? 'text-sm' : 'text-base')}>
+          {row.categoryIcon}
+        </span>
+      ) : (
+        <RowTypeIcon
+          transactionType={row.transactionType}
+          className={cn(
+            compact ? 'size-3.5' : 'size-4',
+            !accent && (row.isVoided ? 'text-muted-foreground' : tint.icon)
+          )}
+          style={accent ? { color: accent } : undefined}
+        />
+      )}
+    </span>
+  )
 }
 
 function categoryLabel(
@@ -205,9 +276,14 @@ export function TransactionList({
   const ui = useUiTranslation()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editingId, setEditingId] = useState<string | null>(null)
-  // On mobile each row collapses to a single compact line; tapping it expands
-  // the badges/details/actions. Desktop always shows the full row.
+  // Every row is one slim line on every breakpoint; the badges, tags and
+  // actions live behind the chevron. Showing them all inline turned a page of
+  // 4.000 transactions into a page of 4.000 toolbars.
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  // Checkboxes are chrome you only need while triaging, so they stay out of
+  // the way: hover reveals one per row on pointer devices, and "Select" pins
+  // them for touch. Anything already selected keeps its box visible.
+  const [selectionMode, setSelectionMode] = useState(false)
 
   const allRows = useMemo(() => groups.flatMap((g) => g.rows), [groups])
   const allIds = useMemo(() => allRows.map((r) => r.id), [allRows])
@@ -244,13 +320,18 @@ export function TransactionList({
     setSelected((prev) => (prev.size === allIds.length ? new Set() : new Set(allIds)))
   }
 
+  function exitSelectionMode() {
+    setSelectionMode(false)
+    setSelected(new Set())
+  }
+
   const selectedIds = Array.from(selected)
 
   return (
     <div className="space-y-2">
       {/* ── Bulk action bar ───────────────────────────────────────────── */}
       {selectedIds.length > 0 ? (
-        <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border bg-primary px-3 py-2 text-primary-foreground shadow-sm">
+        <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2 rounded-2xl bg-primary px-3 py-2 text-primary-foreground shadow-lg shadow-primary/25">
           <span className="text-sm font-semibold">
             {selectedIds.length} {ui('selected')}
           </span>
@@ -345,7 +426,7 @@ export function TransactionList({
 
           <button
             type="button"
-            onClick={() => setSelected(new Set())}
+            onClick={exitSelectionMode}
             className="ml-auto inline-flex items-center gap-1 text-xs font-semibold opacity-90 hover:opacity-100"
           >
             <X className="size-3.5" aria-hidden="true" />
@@ -354,29 +435,52 @@ export function TransactionList({
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
-        {/* ── Select-all toolbar ──────────────────────────────────────── */}
-        <label className="flex cursor-pointer items-center gap-2.5 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={allSelected}
-            onChange={toggleAll}
-            className="size-4 rounded border-input accent-primary"
-            aria-label={ui('Select all transactions')}
-          />
-          <span>
-            {allSelected
-              ? t('transactionsList.deselectAll')
-              : t('transactionsList.selectAll')}
-          </span>
-        </label>
+      {/* @container, not `lg:`: on a tablet the sidebar eats 256px, so a 1024px
+          viewport leaves the card about 740px wide. Keyed to the viewport the
+          rows switched to columns exactly where they no longer fitted, and
+          every description truncated to "Trans…". */}
+      <div className="@container overflow-hidden rounded-2xl border bg-card shadow-sm shadow-black/[0.03]">
+        {/* ── Toolbar ─────────────────────────────────────────────────── */}
+        {/* Deliberately not a column header: each row is its own grid, so
+            labels could never line up with the amounts underneath, and a
+            list this self-describing does not need them. */}
+        <div className="flex items-center gap-3 bg-muted/30 px-3 py-2 sm:px-4">
+          {selectionMode ? (
+            <label className="flex cursor-pointer items-center gap-2.5 text-xs font-medium text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                className="size-4 rounded border-input accent-primary"
+                aria-label={ui('Select all transactions')}
+              />
+              <span>
+                {allSelected
+                  ? t('transactionsList.deselectAll')
+                  : t('transactionsList.selectAll')}
+              </span>
+            </label>
+          ) : (
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              {ui('Activity')}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => (selectionMode ? exitSelectionMode() : setSelectionMode(true))}
+            className="ml-auto shrink-0 rounded-md px-1.5 py-0.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            {selectionMode ? ui('Done') : ui('Select')}
+          </button>
+        </div>
 
         {groups.map((group) => (
           <div key={group.date}>
-            <div className="border-b bg-muted/40 px-4 py-1.5 text-xs font-medium capitalize text-muted-foreground">
-              {group.label}
+            <div className="flex items-center gap-2 border-y bg-muted/20 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:px-4">
+              <span className="capitalize">{group.label}</span>
+              <span className="h-px flex-1 bg-border/70" aria-hidden="true" />
             </div>
-            <div className="divide-y">
+            <div className="divide-y divide-border/60">
               {group.rows.map((row) =>
                 editingId === row.id && row.canEdit ? (
                   <InlineEditRow
@@ -392,6 +496,7 @@ export function TransactionList({
                     key={row.id}
                     row={row}
                     selected={selected.has(row.id)}
+                    selectionMode={selectionMode}
                     expanded={expandedId === row.id}
                     compact={compact}
                     returnTo={returnTo}
@@ -441,6 +546,7 @@ function ReviewControl({ row, returnTo }: { row: TransactionListRow; returnTo: s
 function DisplayRow({
   row,
   selected,
+  selectionMode,
   expanded,
   compact,
   returnTo,
@@ -450,6 +556,7 @@ function DisplayRow({
 }: {
   row: TransactionListRow
   selected: boolean
+  selectionMode: boolean
   expanded: boolean
   compact: boolean
   returnTo: string
@@ -459,20 +566,42 @@ function DisplayRow({
 }) {
   const ui = useUiTranslation()
   const { openDialog } = useTransactionDialog()
+  const showCheckbox = selectionMode || selected
+  const amountClass = row.isVoided
+    ? 'text-muted-foreground line-through'
+    : getAmountColorClass(row.transactionType)
+  // Read out here, not inline in the JSX: these compare against stored codes,
+  // and the i18n audit treats a bare string inside a JSX expression as visible
+  // copy that needs translating.
+  const isPending = row.status === 'pending' && !row.isVoided
+  const needsReview = row.reviewStatus === 'unreviewed' && !row.isVoided
+  const isFlagged = row.reviewStatus === 'flagged'
+  // The payee is often all an untitled row has, in which case it is already
+  // the title and repeating it beside itself just looks like a bug.
+  const showPayee = Boolean(row.merchantName) && row.merchantName !== row.title
+
   return (
     <div
       className={cn(
-        'transition-colors',
-        compact ? 'px-3 py-2 sm:px-4' : 'p-3 sm:p-4',
+        'group/row relative transition-colors',
         row.isVoided
-          ? 'bg-muted/30 text-muted-foreground'
+          ? 'text-muted-foreground'
           : selected
-          ? 'bg-primary/5'
-          : 'hover:bg-muted/30'
+          ? 'bg-primary/[0.06]'
+          : expanded
+          ? 'bg-muted/30'
+          : 'hover:bg-muted/40'
       )}
     >
-      {/* ── Compact summary line (single row on mobile) ───────────────── */}
-      {/* The whole line toggles the details — the amount and the chevron are
+      {selected ? (
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-0 left-0 w-[3px] bg-primary"
+        />
+      ) : null}
+
+      {/* -- The row: one line, every breakpoint ----------------------- */}
+      {/* The whole line toggles the details - the amount and the chevron are
           part of the tap target, not just the title. The checkbox stops the
           click/keydown from bubbling so selecting a row never expands it. */}
       <div
@@ -487,83 +616,145 @@ function DisplayRow({
         }}
         aria-expanded={expanded}
         aria-label={ui(`Toggle details for ${row.title}`)}
-        className="flex cursor-pointer select-none items-center gap-3 text-left"
+        className={cn(
+          'grid cursor-pointer select-none items-center gap-x-3 px-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 sm:px-4',
+          // Every column is a fixed width except the description, which takes
+          // the slack. An `auto` amount column made each row size itself to
+          // its own figure, so "COP 122,342" pushed its category left and
+          // "$2.94" pushed it right - no two rows lined up.
+          'grid-cols-[auto_minmax(0,1fr)_auto_auto] @min-[60rem]:grid-cols-[auto_minmax(0,1fr)_8rem_9.5rem_10rem_auto]',
+          compact ? 'py-1.5' : 'py-2.5'
+        )}
       >
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={onToggle}
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-          className="size-4 shrink-0 cursor-pointer rounded border-input accent-primary"
-          aria-label={ui(`Select ${row.title}`)}
-        />
-
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <RowTypeIcon
-            transactionType={row.transactionType}
-            className={cn('size-4 shrink-0', getAmountColorClass(row.transactionType))}
-          />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-medium leading-snug">{row.title}</span>
-            <span className="block truncate text-xs text-muted-foreground">
-              {/* BR-045: the rows are already grouped under a date header, so
-                  the time is what actually distinguishes two entries on the
-                  same day — it leads the subtitle. Untimed rows render exactly
-                  as before. */}
-              {row.timeFormatted ? (
-                <>
-                  <span className="tabular-nums">{row.timeFormatted}</span>
-                  {' · '}
-                </>
-              ) : null}
-              {row.accountName}
-              {/* A transfer's "category" is the literal word Transfer, which the
-                  ⇄ icon and the "from → to" route already say. */}
-              {row.isTransfer ? null : (
-                <>
-                  {' · '}
-                  {row.categoryIcon ? `${row.categoryIcon} ` : ''}
-                  {row.categoryName}
-                </>
-              )}
-            </span>
-          </span>
-        </div>
-
-        {row.amountFormatted ? (
-          <p
-            className={cn(
-              'shrink-0 font-semibold tabular-nums leading-snug',
-              compact ? 'text-sm' : 'text-base',
-              getAmountColorClass(row.transactionType)
-            )}
-          >
-            {row.amountFormatted}
-          </p>
-        ) : null}
-
-        <ChevronDown
-          aria-hidden="true"
+        {/* Leading slot: the avatar, or a checkbox once you are selecting. */}
+        <span
           className={cn(
-            'size-4 shrink-0 text-muted-foreground transition-transform',
-            compact ? '' : 'sm:hidden',
-            expanded && 'rotate-180'
+            'relative flex shrink-0 items-center justify-center',
+            compact ? 'size-8' : 'size-9'
           )}
-        />
+        >
+          {showCheckbox ? null : (
+            <span className="transition-opacity @min-[60rem]:group-hover/row:opacity-0">
+              <RowAvatar row={row} compact={compact} />
+            </span>
+          )}
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggle}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            className={cn(
+              'size-4 cursor-pointer rounded border-input accent-primary',
+              showCheckbox
+                ? ''
+                : 'absolute inset-0 m-auto hidden opacity-0 transition-opacity focus-visible:opacity-100 group-hover/row:opacity-100 @min-[60rem]:block'
+            )}
+            aria-label={ui(`Select ${row.title}`)}
+          />
+        </span>
+
+        {/* Description (+ everything the narrow layout has no column for). */}
+        <span className="min-w-0">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span
+              className={cn(
+                'min-w-0 shrink-[1] truncate font-medium leading-snug',
+                row.isVoided && 'line-through'
+              )}
+            >
+              {row.title}
+            </span>
+            {/* Wide rows have space for the payee beside the title; narrow ones
+                already spend their second line on account + category. It gives
+                up room three times faster than the title, so a tight row
+                clips "Yenifer Murillo" long before it clips what happened. */}
+            {showPayee ? (
+              <span className="hidden min-w-0 shrink-[3] truncate text-xs text-muted-foreground @min-[60rem]:inline">
+                {row.merchantName}
+              </span>
+            ) : null}
+            {isPending ? (
+              <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                {ui('Pending')}
+              </span>
+            ) : null}
+          </span>
+          <span className="block truncate text-xs text-muted-foreground @min-[60rem]:hidden">
+            {/* BR-045 put the time here to tell two same-day entries apart. It
+                is gone from the row on purpose: the create form cannot record
+                one, so it is empty on everything the user enters by hand and
+                only imports carry it. It survives in the details panel. */}
+            {row.accountName}
+            {/* A transfer's "category" is the literal word Transfer, which the
+                arrow icon and the "from -> to" route already say. */}
+            {/* No emoji here: the avatar to the left already shows it. */}
+            {row.isTransfer ? null : <>{' · '}{row.categoryLeafName}</>}
+          </span>
+        </span>
+
+        {/* Category / Account / Time: their own columns from `lg` up. */}
+        <span className="hidden min-w-0 items-center gap-1.5 @min-[60rem]:flex">
+          {row.isTransfer ? (
+            <span className="truncate text-sm text-muted-foreground/70">
+              {ui('Transfer')}
+            </span>
+          ) : (
+            <span className="truncate text-sm text-muted-foreground">
+              {row.categoryLeafName}
+            </span>
+          )}
+        </span>
+        <span className="hidden truncate text-sm text-muted-foreground @min-[60rem]:block">
+          {row.accountName}
+        </span>
+        <span
+          className={cn(
+            'justify-self-end whitespace-nowrap text-right font-semibold tabular-nums leading-snug @min-[60rem]:w-full',
+            compact ? 'text-sm' : 'text-[0.9375rem]',
+            amountClass
+          )}
+        >
+          {row.amountFormatted}
+        </span>
+
+        {/* Review state as a dot rather than a badge in the text: on a page of
+            4.000 rows the badge was the loudest thing on screen and the amount
+            was not. The slot keeps its width either way so the amounts above
+            and below it stay in one column. */}
+        <span className="flex shrink-0 items-center gap-2">
+          <span className="flex w-1.5 justify-center">
+            {needsReview ? (
+              <span title={ui('To review')} className="size-1.5 rounded-full bg-amber-500">
+                <span className="sr-only">{ui('To review')}</span>
+              </span>
+            ) : null}
+            {isFlagged ? (
+              <span title={ui('Flagged')} className="size-1.5 rounded-full bg-red-500">
+                <span className="sr-only">{ui('Flagged')}</span>
+              </span>
+            ) : null}
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              'size-4 text-muted-foreground/50 transition-transform group-hover/row:text-muted-foreground',
+              expanded && 'rotate-180'
+            )}
+          />
+        </span>
       </div>
 
-      {/* ── Details: collapsed on mobile, always shown on desktop ─────── */}
-      {/* Compact mode keeps the details behind the row toggle on every
-          breakpoint — that collapse is where the vertical space comes from. */}
+      {/* -- Details: behind the chevron on every breakpoint ------------ */}
+      {/* Desktop used to render this inline for every row, which is what made
+          a long list read like a settings screen instead of a statement. */}
       <div
         className={cn(
-          'space-y-2 pl-7 pt-2',
-          compact ? '' : 'sm:block',
+          'space-y-2.5 px-3 pb-3 pl-15 sm:px-4 sm:pl-16',
           expanded ? 'block' : 'hidden'
         )}
       >
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border/60 pt-2.5 text-xs text-muted-foreground">
           <Badge variant="secondary" className="text-xs">
             {row.typeBadgeLabel}
           </Badge>
@@ -575,6 +766,12 @@ function DisplayRow({
           ) : null}
           {row.currencyCode ? <span>{row.currencyCode}</span> : null}
           {row.merchantName ? <span>· {row.merchantName}</span> : null}
+          {/* The row only had room for the leaf, so this is where you find out
+              which parent it hangs from. */}
+          {row.isTransfer ? null : <span>· {row.categoryName}</span>}
+          {row.timeFormatted ? (
+            <span className="tabular-nums">· {row.timeFormatted}</span>
+          ) : null}
           {row.transferCostFormatted ? (
             <span className="text-amber-600 dark:text-amber-400">
               {ui('· incl.')} {row.transferCostFormatted} {ui('cost')}
