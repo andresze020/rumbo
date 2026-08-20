@@ -95,6 +95,34 @@ const activePillCls = 'border-primary/40 bg-primary/10 text-primary'
 /** Repeated query params this bar owns. */
 type FilterParam = 'type' | 'status' | 'account_id' | 'category_id' | 'tag_id' | 'payee_id'
 
+/** The multi-selects the chips drive, in the order they reach the query. */
+const DRAFT_PARAMS = [
+  'account_id',
+  'category_id',
+  'payee_id',
+  'tag_id',
+  'status',
+] as const
+
+type DraftParam = (typeof DRAFT_PARAMS)[number]
+type Drafts = Record<DraftParam, string[]>
+
+/**
+ * The option list a summary chip reopens. `type` has none — it is the segmented
+ * toggle at the top of the sheet, which needs no panel to be visible.
+ */
+const CHIP_PANEL: Record<
+  FilterParam,
+  null | 'account' | 'category' | 'tag' | 'payee' | 'status'
+> = {
+  type: null,
+  status: 'status',
+  account_id: 'account',
+  category_id: 'category',
+  tag_id: 'tag',
+  payee_id: 'payee',
+}
+
 const typeButtonCls =
   'flex-1 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:flex-none sm:rounded-md sm:py-1.5'
 
@@ -129,6 +157,10 @@ export function TransactionFilters({
   const [openChip, setOpenChip] = useState<
     null | 'account' | 'category' | 'tag' | 'payee' | 'status'
   >(null)
+  // Nothing here reaches the list until Apply, so an edit the user has made but
+  // not yet applied is invisible: the controls and the results below them
+  // disagree with no way to tell. `dirty` is what puts that on screen.
+  const [dirty, setDirty] = useState(false)
 
   // Every control is staged locally and only reaches the server on submit, so
   // "Apply filters" means what it says. Presets used to be links that navigated
@@ -137,6 +169,19 @@ export function TransactionFilters({
   const [types, setTypes] = useState<string[]>(selectedTypes)
   const [dateFrom, setDateFrom] = useState(resolvedDateFrom)
   const [dateTo, setDateTo] = useState(resolvedDateTo)
+  const [search, setSearch] = useState(searchText)
+  // The chips' selections live here rather than inside each chip. They used to
+  // keep their own draft while this component read the checkboxes back out of
+  // the form on submit — two sources of truth for one selection, and they could
+  // disagree: a ticked option showed in the chip summary and never reached the
+  // query. Now the summary and the query read the same state.
+  const [drafts, setDrafts] = useState<Drafts>(() => ({
+    account_id: selectedAccountIds,
+    category_id: selectedCategoryIds,
+    payee_id: selectedPayeeIds,
+    tag_id: selectedTagIds,
+    status: selectedStatuses,
+  }))
 
   // Applying used to reload the document, which reset the staged values for
   // free. Now that navigation is client-side this component survives it, so the
@@ -144,8 +189,18 @@ export function TransactionFilters({
   // otherwise removing a chip would leave its type still lit in the toggle.
   // Adjusted during render rather than in an effect, per
   // https://react.dev/learn/you-might-not-need-an-effect.
+  // Every applied filter is in the key, not just the staged ones: removing a
+  // chip or hitting Back is also a new applied state, and the "unapplied
+  // changes" mark has to clear when it lands.
   const appliedScope = [
     selectedTypes.join(','),
+    selectedStatuses.join(','),
+    selectedAccountIds.join(','),
+    selectedCategoryIds.join(','),
+    selectedTagIds.join(','),
+    selectedPayeeIds.join(','),
+    selectedReview,
+    searchText,
     resolvedDateFrom,
     resolvedDateTo,
   ].join('|')
@@ -155,6 +210,90 @@ export function TransactionFilters({
     setTypes(selectedTypes)
     setDateFrom(resolvedDateFrom)
     setDateTo(resolvedDateTo)
+    setSearch(searchText)
+    setDrafts({
+      account_id: selectedAccountIds,
+      category_id: selectedCategoryIds,
+      payee_id: selectedPayeeIds,
+      tag_id: selectedTagIds,
+      status: selectedStatuses,
+    })
+    setDirty(false)
+  }
+
+  /**
+   * The query string for a set of filters. One builder for both sides so
+   * "what the server has" and "what Apply is about to send" are comparable as
+   * plain strings.
+   */
+  function buildQuery(source: {
+    types: string[]
+    drafts: Drafts
+    dateFrom: string
+    dateTo: string
+    search: string
+  }) {
+    const params = new URLSearchParams()
+    for (const value of source.types) params.append('type', value)
+    for (const param of DRAFT_PARAMS) {
+      for (const value of source.drafts[param]) params.append(param, value)
+    }
+    if (selectedReview !== 'all') params.set('review', selectedReview)
+    const trimmed = source.search.trim()
+    if (trimmed) params.set('search', trimmed)
+    if (source.dateFrom) params.set('date_from', source.dateFrom)
+    if (source.dateTo) params.set('date_to', source.dateTo)
+    return params.toString()
+  }
+
+  const appliedDrafts: Drafts = {
+    account_id: selectedAccountIds,
+    category_id: selectedCategoryIds,
+    payee_id: selectedPayeeIds,
+    tag_id: selectedTagIds,
+    status: selectedStatuses,
+  }
+  const appliedQuery = buildQuery({
+    types: selectedTypes,
+    drafts: appliedDrafts,
+    dateFrom: resolvedDateFrom,
+    dateTo: resolvedDateTo,
+    search: searchText,
+  })
+
+  // Applying is a round trip, and the chips and the badge are drawn from what
+  // the *server* says is applied — so they sat on the previous filters for as
+  // long as the query took, which reads as "Apply did nothing" all over again.
+  // While a set is in flight they show that set instead. Cleared during render
+  // the moment the server agrees, rather than in an effect.
+  const [pending, setPending] = useState<null | {
+    query: string
+    from: string
+    types: string[]
+    drafts: Drafts
+  }>(null)
+  // Any move by the server ends the optimism, not just the answer we were
+  // waiting for: removing a chip mid-flight is a different navigation, and
+  // holding our guess past it would show a set nobody asked for.
+  if (pending && appliedQuery !== pending.from) setPending(null)
+
+  /** What the user should read as applied: the server's answer, or ours. */
+  const shownTypes = pending?.types ?? selectedTypes
+  const shownDrafts = pending?.drafts ?? appliedDrafts
+
+  /** Every staged edit runs through here, so nothing can change unmarked. */
+  function stageDraft(param: DraftParam, values: string[]) {
+    setDrafts((current) => ({ ...current, [param]: values }))
+    setDirty(true)
+  }
+
+  /**
+   * The sheet and any option list opened inside it close together — a panel
+   * left open would still be open the next time the sheet is pulled up.
+   */
+  function closeSheet() {
+    setMoreOpen(false)
+    setOpenChip(null)
   }
 
   // The sheet covers the screen; letting the list keep scrolling underneath it
@@ -171,40 +310,76 @@ export function TransactionFilters({
   // Android Back closes the sheet instead of leaving Transactions, matching the
   // picker sheets in the transaction form. Without it the only way out was the
   // X, and Back discarded the whole screen.
-  useBackDismiss(moreOpen, () => setMoreOpen(false))
+  const releaseSheetEntry = useBackDismiss(moreOpen, closeSheet)
 
-  // Escape is the desktop equivalent of the same escape hatch.
+  // Escape is the desktop equivalent of the same escape hatch, and it unwinds
+  // one layer at a time: an open option list dismisses itself (the chip owns
+  // that), and only a second press closes the sheet around it.
   useEffect(() => {
     if (!moreOpen) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMoreOpen(false)
+      if (event.key === 'Escape' && !openChip) setMoreOpen(false)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [moreOpen])
+  }, [moreOpen, openChip])
 
   /**
-   * Apply through the router instead of letting the browser submit the GET
-   * form. A native form submit is a full document load — blank screen, fonts
-   * and layout repainted, scroll position lost — for what is only a change of
-   * query string. `router.push` keeps the shell mounted and streams the new
-   * list in.
+   * Everything Apply does, whatever triggered it.
+   *
+   * Navigation goes through the router rather than a native GET submit: a form
+   * submit is a full document load — blank screen, fonts and layout repainted,
+   * scroll position lost — for what is only a change of query string.
+   *
+   * The button calls this directly instead of submitting the form, because a
+   * submit is the browser's to grant and it withholds one silently: a date
+   * input the UA considers incomplete is enough, and Apply then looks inert
+   * with nothing in the console to say why. The sr-only submit still routes
+   * Enter through here.
    */
-  function applyFilters(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  function apply() {
+    // Built from this component's state, never read back out of the form. The
+    // controls all render from that state, so what the user sees staged and
+    // what reaches the URL cannot drift apart.
+    const query = buildQuery({ types, drafts, dateFrom, dateTo, search })
 
-    const params = new URLSearchParams()
-    for (const [name, value] of new FormData(event.currentTarget).entries()) {
-      const entry = String(value).trim()
-      if (entry) params.append(name, entry)
-    }
+    // Nothing to wait for when the staged set is already the applied one, and
+    // marking it pending would leave the bar waiting for a change that is
+    // never coming.
+    if (query !== appliedQuery) setPending({ query, from: appliedQuery, types, drafts })
 
+    // The mobile sheet owns a history entry so Android Back closes it, and it
+    // reclaims that entry with history.back() when it closes. Closing it here
+    // and navigating in the same breath fired that back() over the push below
+    // and snapped the URL to the previous filters — which is what made Apply
+    // look inert, or look like it had applied some older set. Hand the entry
+    // over first, and take it as the entry to navigate into.
+    const replacingSheetEntry = releaseSheetEntry()
+
+    // Collapse everything the bar can have open. Navigation is client-side,
+    // so none of this unmounts on its own — an option list left open would
+    // sit on top of the results the user just asked for.
     setMoreOpen(false)
     setSearchOpen(false)
-    router.push(`/dashboard/transactions?${params.toString()}`)
+    setOpenChip(null)
+    setDirty(false)
+    // Deliberately NOT wrapped in a transition. A transition keeps the current
+    // page on screen until the next one is fully ready, which suppresses this
+    // route's loading.tsx — Apply would close the sheet and leave the previous
+    // chips, counts and totals sitting there as if nothing had happened. The
+    // skeleton is the honest feedback here.
+    const href = `/dashboard/transactions?${query}`
+    if (replacingSheetEntry) router.replace(href)
+    else router.push(href)
+  }
+
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    apply()
   }
 
   function toggleType(value: string) {
+    setDirty(true)
     setTypes((current) =>
       current.includes(value)
         ? current.filter((entry) => entry !== value)
@@ -212,43 +387,31 @@ export function TransactionFilters({
     )
   }
 
-  const moreFiltersCount =
-    selectedAccountIds.length +
-    selectedCategoryIds.length +
-    selectedTagIds.length +
-    selectedPayeeIds.length +
-    selectedStatuses.length
+  const moreFiltersCount = DRAFT_PARAMS.reduce(
+    (total, param) => total + shownDrafts[param].length,
+    0
+  )
 
   /**
-   * The applied filter state as a URL, minus one value. Powers the mobile
-   * summary chips: on phones the secondary controls are behind a sheet, so
-   * without these you can see *that* something is filtered (the badge count)
+   * The applied filter state as a URL, minus one whole dimension. Powers the
+   * mobile summary chips: on phones the secondary controls are behind a sheet,
+   * so without these you can see *that* something is filtered (the badge count)
    * but not what — and undoing one would mean opening the sheet.
    *
-   * Built from the **applied** props, never the staged state: these are links,
-   * so they must describe a view the server already knows about.
+   * Built from the shown state, not the staged one: a chip is a link, so it
+   * has to describe the view being looked at — including the one still in
+   * flight, or removing a filter right after applying would resurrect the set
+   * from before.
    */
-  function hrefWithout(param: FilterParam, value?: string) {
-    const params = new URLSearchParams()
-    if (selectedReview !== 'all') params.set('review', selectedReview)
-    if (searchText) params.set('search', searchText)
-    params.set('date_from', resolvedDateFrom)
-    params.set('date_to', resolvedDateTo)
-
-    const keep = (name: FilterParam, values: string[]) => {
-      for (const entry of values) {
-        if (param === name && entry === value) continue
-        params.append(name, entry)
-      }
-    }
-    keep('type', selectedTypes)
-    keep('status', selectedStatuses)
-    keep('account_id', selectedAccountIds)
-    keep('category_id', selectedCategoryIds)
-    keep('tag_id', selectedTagIds)
-    keep('payee_id', selectedPayeeIds)
-
-    return `/dashboard/transactions?${params.toString()}`
+  function hrefWithout(param: FilterParam) {
+    const query = buildQuery({
+      types: param === 'type' ? [] : shownTypes,
+      drafts: { ...shownDrafts, ...(param === 'type' ? {} : { [param]: [] }) },
+      dateFrom: resolvedDateFrom,
+      dateTo: resolvedDateTo,
+      search: searchText,
+    })
+    return `/dashboard/transactions?${query}`
   }
 
   const labelOf = (options: MultiSelectOption[], id: string, fallback: string) =>
@@ -267,7 +430,10 @@ export function TransactionFilters({
     >
       <button
         type="button"
-        onClick={() => setTypes([])}
+        onClick={() => {
+          setTypes([])
+          setDirty(true)
+        }}
         aria-pressed={types.length === 0}
         className={cn(typeButtonCls, types.length === 0 && typeButtonActiveCls)}
       >
@@ -290,38 +456,50 @@ export function TransactionFilters({
     </div>
   )
 
-  const activeChips: { key: string; label: string; href: string }[] = [
-    ...selectedTypes.map((value) => ({
-      key: `type-${value}`,
-      label: ui(TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value),
-      href: hrefWithout('type', value),
-    })),
-    ...selectedAccountIds.map((id) => ({
-      key: `account-${id}`,
-      label: labelOf(accountOptions, id, ui('Account')),
-      href: hrefWithout('account_id', id),
-    })),
-    ...selectedCategoryIds.map((id) => ({
-      key: `category-${id}`,
-      label: labelOf(categoryOptions, id, ui('Category')),
-      href: hrefWithout('category_id', id),
-    })),
-    ...selectedPayeeIds.map((id) => ({
-      key: `payee-${id}`,
-      label: labelOf(payeeOptions, id, ui('Payee')),
-      href: hrefWithout('payee_id', id),
-    })),
-    ...selectedTagIds.map((id) => ({
-      key: `tag-${id}`,
-      label: labelOf(tagOptions, id, ui('Tags')),
-      href: hrefWithout('tag_id', id),
-    })),
-    ...selectedStatuses.map((value) => ({
-      key: `status-${value}`,
-      label: ui(labelOf(STATUS_OPTIONS, value, value)),
-      href: hrefWithout('status', value),
-    })),
-  ]
+  /**
+   * One chip per filter *dimension* rather than per value. Five ticked accounts
+   * used to be five chips wrapping over three lines, pushing the totals this
+   * screen exists for below the fold. A lone value still shows its own name —
+   * that is the case where the detail earns the space.
+   */
+  function chipFor(
+    param: FilterParam,
+    values: string[],
+    groupLabel: string,
+    labelFor: (value: string) => string
+  ) {
+    if (values.length === 0) return null
+    return {
+      key: param,
+      panel: CHIP_PANEL[param],
+      label:
+        values.length === 1
+          ? labelFor(values[0])
+          : `${groupLabel} · ${values.length}`,
+      href: hrefWithout(param),
+    }
+  }
+
+  const activeChips = [
+    chipFor('type', shownTypes, ui('Type'), (value) =>
+      ui(TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value)
+    ),
+    chipFor('account_id', shownDrafts.account_id, ui('Accounts'), (id) =>
+      labelOf(accountOptions, id, ui('Account'))
+    ),
+    chipFor('category_id', shownDrafts.category_id, ui('Categories'), (id) =>
+      labelOf(categoryOptions, id, ui('Category'))
+    ),
+    chipFor('payee_id', shownDrafts.payee_id, ui('Payees'), (id) =>
+      labelOf(payeeOptions, id, ui('Payee'))
+    ),
+    chipFor('tag_id', shownDrafts.tag_id, ui('Tags'), (id) =>
+      labelOf(tagOptions, id, ui('Tags'))
+    ),
+    chipFor('status', shownDrafts.status, ui('Status'), (value) =>
+      ui(labelOf(STATUS_OPTIONS, value, value))
+    ),
+  ].filter((chip) => chip !== null)
 
   return (
     <form
@@ -359,27 +537,51 @@ export function TransactionFilters({
 
         <button
           type="button"
-          onClick={() => setMoreOpen((v) => !v)}
+          onClick={() => (moreOpen ? closeSheet() : setMoreOpen(true))}
           aria-expanded={moreOpen}
-          className={cn(pillCls, moreFiltersCount > 0 && activePillCls)}
+          className={cn(pillCls, (moreFiltersCount > 0 || dirty) && activePillCls)}
         >
           <SlidersHorizontal className="size-3.5 shrink-0" aria-hidden="true" />
-          {ui('Filters')}
+          {pending ? ui('Applying…') : ui('Filters')}
           {moreFiltersCount > 0 ? (
             <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
               {moreFiltersCount}
             </span>
           ) : null}
+          {/* The sheet can be dismissed with edits still staged in it — this is
+              the only thing left on screen that says so. */}
+          {dirty ? (
+            <>
+              <span aria-hidden="true" className="size-1.5 rounded-full bg-primary" />
+              <span className="sr-only">{ui('Unapplied changes')}</span>
+            </>
+          ) : null}
         </button>
 
-        {/* Each chip drops just its own filter, so undoing one never means
-            opening the panel. */}
+        {/* Two targets per chip: the label reopens the sheet at the section
+            that set it, the × drops that dimension outright. Undoing or
+            adjusting a filter never means hunting for it. */}
         {activeChips.map((chip) => (
-          <Link key={chip.key} href={chip.href} className={cn(pillCls, activePillCls)}>
-            <span className="max-w-[130px] truncate">{chip.label}</span>
-            <X className="size-3 shrink-0" aria-hidden="true" />
-            <span className="sr-only">{ui('Remove filter')}</span>
-          </Link>
+          <span key={chip.key} className={cn(pillCls, activePillCls, 'gap-0 pr-1')}>
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(true)
+                setOpenChip(chip.panel)
+              }}
+              className="max-w-[150px] truncate pr-1.5"
+            >
+              {chip.label}
+            </button>
+            <Link
+              href={chip.href}
+              onClick={closeSheet}
+              aria-label={ui('Remove filter')}
+              className="flex size-5 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-primary/15"
+            >
+              <X className="size-3" aria-hidden="true" />
+            </Link>
+          </span>
         ))}
       </div>
 
@@ -401,12 +603,12 @@ export function TransactionFilters({
             aria-hidden="true"
           />
           <Input
-            // Uncontrolled, so re-key it on the applied query: a client-side
-            // apply keeps this input mounted, and it would otherwise hold text
-            // the list is no longer filtered by.
-            key={searchText}
             name="search"
-            defaultValue={searchText}
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value)
+              setDirty(true)
+            }}
             placeholder="Search transactions…"
             className="pl-9"
             aria-label="Search transactions"
@@ -421,7 +623,7 @@ export function TransactionFilters({
       {moreOpen ? (
         <div
           aria-hidden="true"
-          onClick={() => setMoreOpen(false)}
+          onClick={closeSheet}
           className="fixed inset-0 z-[60] bg-black/50 duration-200 animate-in fade-in-0 sm:hidden"
         />
       ) : null}
@@ -456,7 +658,7 @@ export function TransactionFilters({
             </h2>
             <button
               type="button"
-              onClick={() => setMoreOpen(false)}
+              onClick={closeSheet}
               aria-label={ui('Close')}
               className="-mr-2 flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
             >
@@ -479,7 +681,8 @@ export function TransactionFilters({
                 label={ui('Account')}
                 name="account_id"
                 options={accountOptions}
-                selectedIds={selectedAccountIds}
+                selected={drafts.account_id}
+                onSelectedChange={(next) => stageDraft('account_id', next)}
                 open={openChip === 'account'}
                 onOpenChange={(next) => setOpenChip(next ? 'account' : null)}
               />
@@ -488,7 +691,8 @@ export function TransactionFilters({
                 label={ui('Category')}
                 name="category_id"
                 options={categoryOptions}
-                selectedIds={selectedCategoryIds}
+                selected={drafts.category_id}
+                onSelectedChange={(next) => stageDraft('category_id', next)}
                 open={openChip === 'category'}
                 onOpenChange={(next) => setOpenChip(next ? 'category' : null)}
               />
@@ -498,7 +702,8 @@ export function TransactionFilters({
                   label={ui('Payee')}
                   name="payee_id"
                   options={payeeOptions}
-                  selectedIds={selectedPayeeIds}
+                  selected={drafts.payee_id}
+                  onSelectedChange={(next) => stageDraft('payee_id', next)}
                   open={openChip === 'payee'}
                   onOpenChange={(next) => setOpenChip(next ? 'payee' : null)}
                 />
@@ -509,7 +714,8 @@ export function TransactionFilters({
                   label={ui('Tags')}
                   name="tag_id"
                   options={tagOptions}
-                  selectedIds={selectedTagIds}
+                  selected={drafts.tag_id}
+                  onSelectedChange={(next) => stageDraft('tag_id', next)}
                   open={openChip === 'tag'}
                   onOpenChange={(next) => setOpenChip(next ? 'tag' : null)}
                 />
@@ -522,7 +728,8 @@ export function TransactionFilters({
                   ...option,
                   label: ui(option.label),
                 }))}
-                selectedIds={selectedStatuses}
+                selected={drafts.status}
+                onSelectedChange={(next) => stageDraft('status', next)}
                 open={openChip === 'status'}
                 onOpenChange={(next) => setOpenChip(next ? 'status' : null)}
               />
@@ -550,6 +757,7 @@ export function TransactionFilters({
                       onClick={() => {
                         setDateFrom(preset.dateFrom)
                         setDateTo(preset.dateTo)
+                        setDirty(true)
                       }}
                       aria-pressed={isActive}
                       className={cn(
@@ -580,7 +788,10 @@ export function TransactionFilters({
                     type="date"
                     name="date_from"
                     value={dateFrom}
-                    onChange={(event) => setDateFrom(event.target.value)}
+                    onChange={(event) => {
+                      setDateFrom(event.target.value)
+                      setDirty(true)
+                    }}
                     className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none sm:flex-none"
                     aria-label={ui('From date')}
                   />
@@ -594,7 +805,10 @@ export function TransactionFilters({
                     type="date"
                     name="date_to"
                     value={dateTo}
-                    onChange={(event) => setDateTo(event.target.value)}
+                    onChange={(event) => {
+                      setDateTo(event.target.value)
+                      setDirty(true)
+                    }}
                     className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none sm:flex-none"
                     aria-label={ui('To date')}
                   />
@@ -611,6 +825,7 @@ export function TransactionFilters({
           {hasActiveFilters ? (
             <Link
               href={clearHref}
+              onClick={closeSheet}
               className={cn(
                 buttonVariants({ variant: 'ghost', size: 'sm' }),
                 'h-11 flex-1 rounded-xl sm:h-8 sm:flex-none sm:rounded-lg'
@@ -619,14 +834,28 @@ export function TransactionFilters({
               {ui('Clear all')}
             </Link>
           ) : null}
+          {/* Spelled out where there is room for it; the dot on the button
+              carries the same message on a phone. */}
+          {dirty ? (
+            <span role="status" className="hidden text-xs text-muted-foreground sm:inline">
+              {ui('Unapplied changes')}
+            </span>
+          ) : null}
           <button
-            type="submit"
+            type="button"
+            onClick={apply}
             className={cn(
               buttonVariants({ size: 'sm' }),
-              'h-11 flex-1 rounded-xl text-sm font-semibold sm:h-8 sm:flex-none sm:rounded-lg sm:font-medium'
+              'relative h-11 flex-1 rounded-xl text-sm font-semibold sm:h-8 sm:flex-none sm:rounded-lg sm:font-medium'
             )}
           >
-            {ui('Apply filters')}
+            {pending ? ui('Applying…') : ui('Apply filters')}
+            {dirty ? (
+              <span
+                aria-hidden="true"
+                className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary-foreground sm:hidden"
+              />
+            ) : null}
           </button>
         </div>
       </div>
