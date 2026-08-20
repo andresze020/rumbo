@@ -95,6 +95,18 @@ const activePillCls = 'border-primary/40 bg-primary/10 text-primary'
 /** Repeated query params this bar owns. */
 type FilterParam = 'type' | 'status' | 'account_id' | 'category_id' | 'tag_id' | 'payee_id'
 
+/** The multi-selects the chips drive, in the order they reach the query. */
+const DRAFT_PARAMS = [
+  'account_id',
+  'category_id',
+  'payee_id',
+  'tag_id',
+  'status',
+] as const
+
+type DraftParam = (typeof DRAFT_PARAMS)[number]
+type Drafts = Record<DraftParam, string[]>
+
 /**
  * The option list a summary chip reopens. `type` has none — it is the segmented
  * toggle at the top of the sheet, which needs no panel to be visible.
@@ -157,6 +169,19 @@ export function TransactionFilters({
   const [types, setTypes] = useState<string[]>(selectedTypes)
   const [dateFrom, setDateFrom] = useState(resolvedDateFrom)
   const [dateTo, setDateTo] = useState(resolvedDateTo)
+  const [search, setSearch] = useState(searchText)
+  // The chips' selections live here rather than inside each chip. They used to
+  // keep their own draft while this component read the checkboxes back out of
+  // the form on submit — two sources of truth for one selection, and they could
+  // disagree: a ticked option showed in the chip summary and never reached the
+  // query. Now the summary and the query read the same state.
+  const [drafts, setDrafts] = useState<Drafts>(() => ({
+    account_id: selectedAccountIds,
+    category_id: selectedCategoryIds,
+    payee_id: selectedPayeeIds,
+    tag_id: selectedTagIds,
+    status: selectedStatuses,
+  }))
 
   // Applying used to reload the document, which reset the staged values for
   // free. Now that navigation is client-side this component survives it, so the
@@ -185,7 +210,21 @@ export function TransactionFilters({
     setTypes(selectedTypes)
     setDateFrom(resolvedDateFrom)
     setDateTo(resolvedDateTo)
+    setSearch(searchText)
+    setDrafts({
+      account_id: selectedAccountIds,
+      category_id: selectedCategoryIds,
+      payee_id: selectedPayeeIds,
+      tag_id: selectedTagIds,
+      status: selectedStatuses,
+    })
     setDirty(false)
+  }
+
+  /** Every staged edit runs through here, so nothing can change unmarked. */
+  function stageDraft(param: DraftParam, values: string[]) {
+    setDrafts((current) => ({ ...current, [param]: values }))
+    setDirty(true)
   }
 
   /**
@@ -235,11 +274,19 @@ export function TransactionFilters({
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
+    // Built from this component's state, never read back out of the form. The
+    // controls all render from that state, so what the user sees staged and
+    // what reaches the URL cannot drift apart.
     const params = new URLSearchParams()
-    for (const [name, value] of new FormData(event.currentTarget).entries()) {
-      const entry = String(value).trim()
-      if (entry) params.append(name, entry)
+    for (const value of types) params.append('type', value)
+    for (const param of DRAFT_PARAMS) {
+      for (const value of drafts[param]) params.append(param, value)
     }
+    if (selectedReview !== 'all') params.set('review', selectedReview)
+    const trimmedSearch = search.trim()
+    if (trimmedSearch) params.set('search', trimmedSearch)
+    if (dateFrom) params.set('date_from', dateFrom)
+    if (dateTo) params.set('date_to', dateTo)
 
     // Collapse everything the bar can have open. Navigation is client-side,
     // so none of this unmounts on its own — an option list left open would
@@ -394,9 +441,6 @@ export function TransactionFilters({
       method="get"
       action="/dashboard/transactions"
       onSubmit={applyFilters}
-      // Checkboxes, date fields and the search box all bubble `change`, so one
-      // handler here covers every control the bar does not drive by hand.
-      onChange={() => setDirty(true)}
       className="space-y-2.5"
     >
       {/* Staged type selection travels as one hidden input per value, so it
@@ -494,12 +538,12 @@ export function TransactionFilters({
             aria-hidden="true"
           />
           <Input
-            // Uncontrolled, so re-key it on the applied query: a client-side
-            // apply keeps this input mounted, and it would otherwise hold text
-            // the list is no longer filtered by.
-            key={searchText}
             name="search"
-            defaultValue={searchText}
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value)
+              setDirty(true)
+            }}
             placeholder="Search transactions…"
             className="pl-9"
             aria-label="Search transactions"
@@ -572,7 +616,8 @@ export function TransactionFilters({
                 label={ui('Account')}
                 name="account_id"
                 options={accountOptions}
-                selectedIds={selectedAccountIds}
+                selected={drafts.account_id}
+                onSelectedChange={(next) => stageDraft('account_id', next)}
                 open={openChip === 'account'}
                 onOpenChange={(next) => setOpenChip(next ? 'account' : null)}
               />
@@ -581,7 +626,8 @@ export function TransactionFilters({
                 label={ui('Category')}
                 name="category_id"
                 options={categoryOptions}
-                selectedIds={selectedCategoryIds}
+                selected={drafts.category_id}
+                onSelectedChange={(next) => stageDraft('category_id', next)}
                 open={openChip === 'category'}
                 onOpenChange={(next) => setOpenChip(next ? 'category' : null)}
               />
@@ -591,7 +637,8 @@ export function TransactionFilters({
                   label={ui('Payee')}
                   name="payee_id"
                   options={payeeOptions}
-                  selectedIds={selectedPayeeIds}
+                  selected={drafts.payee_id}
+                  onSelectedChange={(next) => stageDraft('payee_id', next)}
                   open={openChip === 'payee'}
                   onOpenChange={(next) => setOpenChip(next ? 'payee' : null)}
                 />
@@ -602,7 +649,8 @@ export function TransactionFilters({
                   label={ui('Tags')}
                   name="tag_id"
                   options={tagOptions}
-                  selectedIds={selectedTagIds}
+                  selected={drafts.tag_id}
+                  onSelectedChange={(next) => stageDraft('tag_id', next)}
                   open={openChip === 'tag'}
                   onOpenChange={(next) => setOpenChip(next ? 'tag' : null)}
                 />
@@ -615,7 +663,8 @@ export function TransactionFilters({
                   ...option,
                   label: ui(option.label),
                 }))}
-                selectedIds={selectedStatuses}
+                selected={drafts.status}
+                onSelectedChange={(next) => stageDraft('status', next)}
                 open={openChip === 'status'}
                 onOpenChange={(next) => setOpenChip(next ? 'status' : null)}
               />
@@ -674,7 +723,10 @@ export function TransactionFilters({
                     type="date"
                     name="date_from"
                     value={dateFrom}
-                    onChange={(event) => setDateFrom(event.target.value)}
+                    onChange={(event) => {
+                      setDateFrom(event.target.value)
+                      setDirty(true)
+                    }}
                     className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none sm:flex-none"
                     aria-label={ui('From date')}
                   />
@@ -688,7 +740,10 @@ export function TransactionFilters({
                     type="date"
                     name="date_to"
                     value={dateTo}
-                    onChange={(event) => setDateTo(event.target.value)}
+                    onChange={(event) => {
+                      setDateTo(event.target.value)
+                      setDirty(true)
+                    }}
                     className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none sm:flex-none"
                     aria-label={ui('To date')}
                   />

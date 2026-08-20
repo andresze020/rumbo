@@ -12,23 +12,30 @@ const FILTER_THRESHOLD = 8
 
 /**
  * A compact `<details>` chip holding a checkbox list, used in the Transactions
- * and Reports filter bars. Draft selections are tracked locally so several
- * options can be ticked before the parent form is submitted ("Apply filters").
- * Emits a checkbox per option under `name`, so it round-trips as repeated query
- * params in a plain GET form.
+ * and Reports filter bars.
+ *
+ * The selection is **controlled**: the parent owns the draft and builds the
+ * query from it. This component used to keep its own draft while the parent
+ * read the checkboxes back out of the form on submit, which gave one selection
+ * two sources of truth — a tick could show in the summary here and never reach
+ * the query, silently dropping the filter. The checkboxes still carry `name`,
+ * so the plain GET form stays a working no-JS fallback.
  */
 export function MultiSelectChip({
   label,
   name,
   options,
-  selectedIds,
+  selected,
+  onSelectedChange,
   open,
   onOpenChange,
 }: {
   label: string
   name: string
   options: MultiSelectOption[]
-  selectedIds: string[]
+  /** The draft selection, owned by the parent. */
+  selected: string[]
+  onSelectedChange: (selected: string[]) => void
   /**
    * Controlled open state. Pass it (with `onOpenChange`) when several chips
    * share a row: their panels are absolutely positioned, so two open at once
@@ -41,21 +48,7 @@ export function MultiSelectChip({
   const ui = useUiTranslation()
   const isControlled = open !== undefined && onOpenChange !== undefined
   const rootRef = useRef<HTMLDetailsElement>(null)
-  const [checked, setChecked] = useState<Set<string>>(() => new Set(selectedIds))
   const [query, setQuery] = useState('')
-
-  // Re-seed the draft whenever the applied selection changes under us. The
-  // transactions bar applies filters with a client-side navigation, so this
-  // component is no longer remounted on every apply, and a stale draft would
-  // silently re-add a filter the user had just removed. Adjusted during render
-  // rather than in an effect, per
-  // https://react.dev/learn/you-might-not-need-an-effect.
-  const appliedKey = selectedIds.join(',')
-  const [syncedKey, setSyncedKey] = useState(appliedKey)
-  if (appliedKey !== syncedKey) {
-    setSyncedKey(appliedKey)
-    setChecked(new Set(selectedIds))
-  }
 
   // A panel that only closes by clicking its own chip again is a trap: it hangs
   // over the results the moment attention moves elsewhere. Listening for click
@@ -101,7 +94,8 @@ export function MultiSelectChip({
   }, [isControlled, onOpenChange])
 
   // A leftover query would hide most of the list the next time this opens.
-  // Cleared during render, like the draft above, rather than in an effect.
+  // Cleared during render rather than in an effect, per
+  // https://react.dev/learn/you-might-not-need-an-effect.
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
@@ -109,21 +103,17 @@ export function MultiSelectChip({
   }
 
   function toggle(id: string, isChecked: boolean) {
-    setChecked((prev) => {
-      const next = new Set(prev)
-      if (isChecked) next.add(id)
-      else next.delete(id)
-      return next
-    })
+    onSelectedChange(
+      isChecked ? [...selected, id] : selected.filter((entry) => entry !== id)
+    )
   }
 
   const summary =
-    checked.size === 0
+    selected.length === 0
       ? ui('All')
-      : checked.size === 1
-        ? options.find((o) => o.id === [...checked][0])?.label ??
-          ui('{1} selected', [1])
-        : ui('{1} selected', [checked.size])
+      : selected.length === 1
+        ? options.find((o) => o.id === selected[0])?.label ?? ui('{1} selected', [1])
+        : ui('{1} selected', [selected.length])
 
   const search = query.trim().toLowerCase()
   const isMatch = (option: MultiSelectOption) =>
@@ -181,14 +171,14 @@ export function MultiSelectChip({
           </div>
         ) : null}
 
-        {checked.size > 0 ? (
+        {selected.length > 0 ? (
           <div className="flex items-center justify-between gap-2 px-2 py-1">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {ui('{1} selected', [checked.size])}
+              {ui('{1} selected', [selected.length])}
             </span>
             <button
               type="button"
-              onClick={() => setChecked(new Set())}
+              onClick={() => onSelectedChange([])}
               className="rounded-md px-1.5 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-accent"
             >
               {ui('Clear')}
@@ -209,9 +199,8 @@ export function MultiSelectChip({
               {options.map((option) => (
                 <label
                   key={option.id}
-                  // Filtered-out rows are hidden, not unmounted: an unmounted
-                  // checkbox stops being submitted, so typing in the filter box
-                  // would quietly drop options the user had already ticked.
+                  // Filtered-out rows are hidden, not unmounted, so the no-JS
+                  // fallback still submits a tick that a query scrolled past.
                   className={cn(
                     'flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2.5 text-sm hover:bg-accent sm:py-1.5',
                     !isMatch(option) && 'hidden'
@@ -221,7 +210,7 @@ export function MultiSelectChip({
                     type="checkbox"
                     name={name}
                     value={option.id}
-                    checked={checked.has(option.id)}
+                    checked={selected.includes(option.id)}
                     onChange={(e) => toggle(option.id, e.currentTarget.checked)}
                     className="size-4 shrink-0 accent-primary sm:size-3.5"
                   />
@@ -234,16 +223,6 @@ export function MultiSelectChip({
             </>
           )}
         </div>
-
-        {/* A selection whose option is not in the list — archived out of it, or
-            belonging to a record this household no longer returns — has no
-            checkbox to submit it. Without these it would silently disappear on
-            the next Apply while the chip above still counted it as selected. */}
-        {[...checked]
-          .filter((id) => !options.some((option) => option.id === id))
-          .map((id) => (
-            <input key={id} type="hidden" name={name} value={id} />
-          ))}
       </div>
     </details>
   )

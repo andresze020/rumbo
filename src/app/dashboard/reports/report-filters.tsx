@@ -55,6 +55,12 @@ export function ReportFilters({
   // Staged range: a preset writes here and only reaches the server on Apply.
   const [dateFrom, setDateFrom] = useState(resolvedDateFrom)
   const [dateTo, setDateTo] = useState(resolvedDateTo)
+  // The chips' selections, staged here so the summary a chip shows and the
+  // checkboxes it submits are the same value. This bar submits natively, so a
+  // full page load re-seeds them; there is nothing to sync mid-session.
+  const [accountDraft, setAccountDraft] = useState(selectedAccountIds)
+  const [categoryDraft, setCategoryDraft] = useState(selectedCategoryIds)
+  const [tagDraft, setTagDraft] = useState(selectedTagIds)
 
   function selectType(form: HTMLFormElement | null, value: string) {
     if (!form) return
@@ -129,7 +135,8 @@ export function ReportFilters({
             label="Account"
             name="account_id"
             options={accountOptions}
-            selectedIds={selectedAccountIds}
+            selected={accountDraft}
+            onSelectedChange={setAccountDraft}
             open={openChip === 'account'}
             onOpenChange={(next) => setOpenChip(next ? 'account' : null)}
           />
@@ -137,7 +144,8 @@ export function ReportFilters({
             label="Category"
             name="category_id"
             options={categoryOptions}
-            selectedIds={selectedCategoryIds}
+            selected={categoryDraft}
+            onSelectedChange={setCategoryDraft}
             open={openChip === 'category'}
             onOpenChange={(next) => setOpenChip(next ? 'category' : null)}
           />
@@ -146,7 +154,8 @@ export function ReportFilters({
               label="Tags"
               name="tag_id"
               options={tagOptions}
-              selectedIds={selectedTagIds}
+              selected={tagDraft}
+              onSelectedChange={setTagDraft}
               open={openChip === 'tag'}
               onOpenChange={(next) => setOpenChip(next ? 'tag' : null)}
             />
