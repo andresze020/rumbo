@@ -50,6 +50,7 @@
       "Bash(git log *)",
       "Bash(git diff *)",
       "Bash(git branch *)",
+      "Bash(gh pr merge *)",
       "Bash(git pull)"
     ],
     "ask": [
