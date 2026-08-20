@@ -23,6 +23,30 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Transactions list — slim rows, premium polish** (2026-08-19, merged
+  2026-08-20, branch
+  `claude/transactions-premium-list`). UI only — no migration, no schema
+  change, nothing written to the database. Every row in
+  `src/app/dashboard/transactions/transaction-list.tsx` is now one slim line
+  on every breakpoint, with badges, tags and actions behind its chevron;
+  desktop used to render that block inline for all 4.633 rows. Each row leads
+  with a tinted avatar (category emoji, else the direction arrow), and a leaf
+  category inherits icon/colour from its nearest ancestor via
+  `inheritCategoryVisual` in `page.tsx` — system categories carry icons and no
+  colour (20260612180000), sub-categories carry neither. The row shows
+  `categoryLeafName`; the full path is details-only. **The column layout is a
+  `@container` query, not `lg:`** — with a sidebar a 1024px viewport leaves the
+  card ~740px, so viewport breakpoints switched to columns exactly where they
+  stopped fitting. Note for anyone adding one: Tailwind v4 wants
+  `@min-[60rem]:`, and the v3 form `@[60rem]:` compiles to **nothing** without
+  erroring. Column widths are fixed so amounts line up across rows; checkboxes
+  appear on hover (or via "Select" on touch); review state is a dot, not a
+  badge; only inflows are tinted; an untitled row falls back to payee, then
+  category. The time of day left the row (the create form cannot record one)
+  and survives in the details panel. Also fixes the `Stop` verify-gate hook,
+  which spawned `npx.cmd` via `execFileSync` — `EINVAL` with no output on
+  Node ≥18.20, so the gate failed every turn on Windows.
+
 - **Development automation, second wave — context budget** (2026-08-19, branch
   `claude/token-optimization`). Tooling only — no migration, no schema change,
   nothing in `src/`. Attacks token cost the way the first wave attacked
@@ -43,27 +67,7 @@ The product is household-first. All financial data must belong to a household.
   you actually need the DB. See
   [docs/ai-agents-workflow.md](./docs/ai-agents-workflow.md) §Ola 2.
 
-- **Development automation, first wave** (2026-08-19, branch
-  `claude/ai-agents-app-development-2po3qk`). Tooling only — no migration, no
-  schema change, nothing in `src/`. The repo now automates parts of its own
-  development: subagent `ledger-guard` (`.claude/agents/`, read-only) reviews a
-  diff against the ledger/RLS rules and reports 🔴/🟡/✅ without editing;
-  `/revisar-ledger` (`.claude/commands/`) invokes it. Two hooks in
-  `.claude/hooks/`: `SessionStart` prints branch and working-tree state, and
-  `Stop` runs `npx tsc --noEmit` and **exits 2** when it fails, so a turn that
-  leaves broken types cannot be closed — this turns the `app-finanzas-verify`
-  typecheck from a reminder into a guarantee. The Stop hook guards against the
-  infinite loop via `stop_hook_active`, skips silently on doc-only turns,
-  caches a passing tree fingerprint (~5 s cold, ~0.1 s cached), and degrades to
-  a warning when `node_modules` is absent. It also inspects commits against
-  `main`, so committing does not evade it. Escape hatches:
-  `APP_FINANZAS_SKIP_VERIFY=1` for one run, or delete the `"Stop"` block in
-  `.claude/settings.json`. That file's allowlist also lost three commands that
-  do not exist (`npm run typecheck`, `npm test`, `npm run test *`) and gained
-  the real ones. Rationale, decision tree and the deferred CI/Playwright work
-  are in `docs/ai-agents-workflow.md`.
-
-> **Historia anterior:** las 25 entradas de sprint previas viven en
+> **Historia anterior:** las entradas de sprint previas viven en
 > `docs/SPRINT-LOG.md` (append-only, más reciente arriba). No se resumen aquí:
 > leerlas en cada sesión costaba ~9k tokens que casi nunca se usaban. Consulta
 > el log solo cuando necesites el porqué de una decisión pasada.
