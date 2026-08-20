@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 /**
  * Android's hardware Back (and the browser's back gesture) should close the
@@ -76,6 +76,13 @@ function stopListening() {
  * would pop this entry and push a new one. Return `true` to say the overlay is
  * still open (Back stepped up a level rather than closing it), which keeps it
  * armed for the next press.
+ *
+ * Returns `release()`, for the one case the rule above cannot cover: an overlay
+ * that closes *because* the app is navigating, like "Apply filters" on the
+ * transactions sheet. Call it immediately before navigating. It answers whether
+ * this overlay still owns the top history entry — navigate with `replace` when
+ * it does, so the entry becomes the new view instead of leaving a dead one
+ * behind — and stops the teardown from reclaiming that entry.
  */
 export function useBackDismiss(open: boolean, onDismiss: () => boolean | void) {
   // Kept in a ref so a new inline callback on every render doesn't tear down
@@ -84,6 +91,11 @@ export function useBackDismiss(open: boolean, onDismiss: () => boolean | void) {
   useEffect(() => {
     dismissRef.current = onDismiss
   })
+
+  // Set by `release`, read by the teardown below. The teardown's own check on
+  // `history.state` cannot catch a navigation: it runs on React's flush, which
+  // is before the router has touched history.
+  const releasedRef = useRef(false)
 
   useEffect(() => {
     if (!open || typeof window === 'undefined') return
@@ -95,6 +107,7 @@ export function useBackDismiss(open: boolean, onDismiss: () => boolean | void) {
     const routerState = window.history.state
     if (!routerState?.__NA) return
 
+    releasedRef.current = false
     const token = `overlay-${Math.random().toString(36).slice(2)}`
     const entry: OverlayEntry = {
       token,
@@ -113,6 +126,10 @@ export function useBackDismiss(open: boolean, onDismiss: () => boolean | void) {
       overlayStack.splice(index, 1)
       if (overlayStack.length === 0) stopListening()
 
+      // Handed to a navigation, which supersedes the entry. Reclaiming it here
+      // would fire history.back() over that navigation and undo it.
+      if (releasedRef.current) return
+
       // Closed from the UI instead: drop the history entry we added, but only
       // while it is still the current one. A navigation (a server action
       // redirect, "Apply filters") replaces it, and going back then would undo
@@ -125,4 +142,10 @@ export function useBackDismiss(open: boolean, onDismiss: () => boolean | void) {
       window.history.back()
     }
   }, [open])
+
+  return useCallback(() => {
+    releasedRef.current = true
+    if (typeof window === 'undefined') return false
+    return typeof window.history.state?.__overlay === 'string'
+  }, [])
 }

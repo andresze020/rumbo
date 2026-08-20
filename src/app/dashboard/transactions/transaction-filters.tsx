@@ -223,7 +223,6 @@ export function TransactionFilters({
 
   /** Every staged edit runs through here, so nothing can change unmarked. */
   function stageDraft(param: DraftParam, values: string[]) {
-    console.debug('[filters] stage', param, values)
     setDrafts((current) => ({ ...current, [param]: values }))
     setDirty(true)
   }
@@ -251,7 +250,7 @@ export function TransactionFilters({
   // Android Back closes the sheet instead of leaving Transactions, matching the
   // picker sheets in the transaction form. Without it the only way out was the
   // X, and Back discarded the whole screen.
-  useBackDismiss(moreOpen, closeSheet)
+  const releaseSheetEntry = useBackDismiss(moreOpen, closeSheet)
 
   // Escape is the desktop equivalent of the same escape hatch, and it unwinds
   // one layer at a time: an open option list dismisses itself (the chip owns
@@ -279,26 +278,6 @@ export function TransactionFilters({
    * Enter through here.
    */
   function apply() {
-    // TEMPORARY (remove once the dropped-filter report is closed): what the bar
-    // thinks is staged, next to what the DOM is actually carrying.
-    console.debug('[filters] apply', {
-      drafts,
-      types,
-      dateFrom,
-      dateTo,
-      search,
-      checkedInDom: Object.fromEntries(
-        DRAFT_PARAMS.map((param) => [
-          param,
-          [
-            ...document.querySelectorAll<HTMLInputElement>(
-              `input[name="${param}"]:checked`
-            ),
-          ].map((input) => input.value),
-        ])
-      ),
-    })
-
     // Built from this component's state, never read back out of the form. The
     // controls all render from that state, so what the user sees staged and
     // what reaches the URL cannot drift apart.
@@ -313,6 +292,14 @@ export function TransactionFilters({
     if (dateFrom) params.set('date_from', dateFrom)
     if (dateTo) params.set('date_to', dateTo)
 
+    // The mobile sheet owns a history entry so Android Back closes it, and it
+    // reclaims that entry with history.back() when it closes. Closing it here
+    // and navigating in the same breath fired that back() over the push below
+    // and snapped the URL to the previous filters — which is what made Apply
+    // look inert, or look like it had applied some older set. Hand the entry
+    // over first, and take it as the entry to navigate into.
+    const replacingSheetEntry = releaseSheetEntry()
+
     // Collapse everything the bar can have open. Navigation is client-side,
     // so none of this unmounts on its own — an option list left open would
     // sit on top of the results the user just asked for.
@@ -326,8 +313,8 @@ export function TransactionFilters({
     // chips, counts and totals sitting there as if nothing had happened. The
     // skeleton is the honest feedback here.
     const href = `/dashboard/transactions?${params.toString()}`
-    console.debug('[filters] pushing', href)
-    router.push(href)
+    if (replacingSheetEntry) router.replace(href)
+    else router.push(href)
   }
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
