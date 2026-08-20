@@ -37,10 +37,31 @@ conventions, formats, or terminology into this repo.
 ## Automation primitives
 This repo automates parts of its own development. See
 `docs/ai-agents-workflow.md` for what exists and why:
-- Subagent `ledger-guard` (`.claude/agents/`) — reviews a diff against the ledger rules.
-- Slash command `/revisar-ledger` (`.claude/commands/`) — invokes it.
-- Hooks `SessionStart` and `Stop` (`.claude/hooks/`) — checkout status, and a
-  blocking typecheck gate.
+- Subagents (`.claude/agents/`): `ledger-guard` (reviews a diff against the
+  ledger rules), `scout` (locates code, returns file:line), `i18n-scribe`
+  (translations), `migration-drafter` (SQL), `sprint-closer` (state docs).
+- Slash commands (`.claude/commands/`): `/revisar-ledger`, `/buscar`,
+  `/contexto`, `/i18n`, `/cerrar-sprint`, `/arreglar` (bugs: instrumenta antes
+  de adivinar).
+- Hooks (`.claude/hooks/`): `SessionStart` (checkout status + context budget),
+  `PreToolUse` (`context-guard`, blocks wasteful reads), `Stop` (blocking
+  typecheck gate).
+
+## Context budget
+Context is the scarcest resource here; treat it as a budget, not a bucket.
+- `AGENTS.md` is deliberately short. Sprint history lives in
+  `docs/SPRINT-LOG.md` — read it only when you need the *why* of a past
+  decision, never as routine startup reading.
+- Before opening code that already exists, delegate to `scout`. It explores in
+  its own context and returns `file:line`, so 2.000-line files never enter this
+  one.
+- Translations → `i18n-scribe`. Migrations → `migration-drafter`. Sprint close →
+  `sprint-closer`.
+- Never read a file over ~700 lines whole. Grep for the symbol, then Read with
+  `offset`/`limit` around the hit. The `context-guard` hook enforces this.
+- The Supabase MCP server is disabled by default (its tool schemas cost tokens
+  every session). Enable it with `/mcp` only when you are actually going to
+  query the database.
 
 ## Development workflow
 - Work from main only after completed sprint merges.

@@ -51,6 +51,20 @@ try {
     lineas.push('', 'Estás en `main` limpio: crea una rama antes de implementar (una por sprint o fix).');
   }
 
+  // Presupuesto de contexto. Barato de imprimir, caro de olvidar.
+  lineas.push(
+    '',
+    '### Presupuesto de contexto',
+    '- `AGENTS.md` es corto a propósito. La historia de sprints está en',
+    '  `docs/SPRINT-LOG.md`: no lo leas salvo que necesites el porqué de algo pasado.',
+    '- Antes de abrir código que ya existe, delega en `scout` (o `/buscar`): devuelve',
+    '  `archivo:línea` en vez de volcarte archivos de 2.000+ líneas.',
+    '- Traducciones → `i18n-scribe`. Migraciones → `migration-drafter`.',
+    '  Cierre de sprint → `sprint-closer`. Cada uno explora en su propio contexto.',
+    '- El hook `context-guard` bloquea lecturas completas de archivos enormes y de',
+    '  artefactos generados. Si te corta, usa Grep + Read con offset/limit.',
+  );
+
   process.stdout.write(lineas.join('\n') + '\n');
 } catch {
   // Un hook informativo jamás debe tumbar la sesión.
