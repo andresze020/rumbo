@@ -223,6 +223,7 @@ export function TransactionFilters({
 
   /** Every staged edit runs through here, so nothing can change unmarked. */
   function stageDraft(param: DraftParam, values: string[]) {
+    console.debug('[filters] stage', param, values)
     setDrafts((current) => ({ ...current, [param]: values }))
     setDirty(true)
   }
@@ -265,14 +266,38 @@ export function TransactionFilters({
   }, [moreOpen, openChip])
 
   /**
-   * Apply through the router instead of letting the browser submit the GET
-   * form. A native form submit is a full document load — blank screen, fonts
-   * and layout repainted, scroll position lost — for what is only a change of
-   * query string. `router.push` keeps the shell mounted and streams the new
-   * list in.
+   * Everything Apply does, whatever triggered it.
+   *
+   * Navigation goes through the router rather than a native GET submit: a form
+   * submit is a full document load — blank screen, fonts and layout repainted,
+   * scroll position lost — for what is only a change of query string.
+   *
+   * The button calls this directly instead of submitting the form, because a
+   * submit is the browser's to grant and it withholds one silently: a date
+   * input the UA considers incomplete is enough, and Apply then looks inert
+   * with nothing in the console to say why. The sr-only submit still routes
+   * Enter through here.
    */
-  function applyFilters(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  function apply() {
+    // TEMPORARY (remove once the dropped-filter report is closed): what the bar
+    // thinks is staged, next to what the DOM is actually carrying.
+    console.debug('[filters] apply', {
+      drafts,
+      types,
+      dateFrom,
+      dateTo,
+      search,
+      checkedInDom: Object.fromEntries(
+        DRAFT_PARAMS.map((param) => [
+          param,
+          [
+            ...document.querySelectorAll<HTMLInputElement>(
+              `input[name="${param}"]:checked`
+            ),
+          ].map((input) => input.value),
+        ])
+      ),
+    })
 
     // Built from this component's state, never read back out of the form. The
     // controls all render from that state, so what the user sees staged and
@@ -300,7 +325,14 @@ export function TransactionFilters({
     // route's loading.tsx — Apply would close the sheet and leave the previous
     // chips, counts and totals sitting there as if nothing had happened. The
     // skeleton is the honest feedback here.
-    router.push(`/dashboard/transactions?${params.toString()}`)
+    const href = `/dashboard/transactions?${params.toString()}`
+    console.debug('[filters] pushing', href)
+    router.push(href)
+  }
+
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    apply()
   }
 
   function toggleType(value: string) {
@@ -777,7 +809,8 @@ export function TransactionFilters({
             </span>
           ) : null}
           <button
-            type="submit"
+            type="button"
+            onClick={apply}
             className={cn(
               buttonVariants({ size: 'sm' }),
               'relative h-11 flex-1 rounded-xl text-sm font-semibold sm:h-8 sm:flex-none sm:rounded-lg sm:font-medium'
