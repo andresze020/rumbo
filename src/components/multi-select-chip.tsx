@@ -234,6 +234,16 @@ export function MultiSelectChip({
             </>
           )}
         </div>
+
+        {/* A selection whose option is not in the list — archived out of it, or
+            belonging to a record this household no longer returns — has no
+            checkbox to submit it. Without these it would silently disappear on
+            the next Apply while the chip above still counted it as selected. */}
+        {[...checked]
+          .filter((id) => !options.some((option) => option.id === id))
+          .map((id) => (
+            <input key={id} type="hidden" name={name} value={id} />
+          ))}
       </div>
     </details>
   )

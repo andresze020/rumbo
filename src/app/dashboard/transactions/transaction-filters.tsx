@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
@@ -95,6 +95,22 @@ const activePillCls = 'border-primary/40 bg-primary/10 text-primary'
 /** Repeated query params this bar owns. */
 type FilterParam = 'type' | 'status' | 'account_id' | 'category_id' | 'tag_id' | 'payee_id'
 
+/**
+ * The option list a summary chip reopens. `type` has none — it is the segmented
+ * toggle at the top of the sheet, which needs no panel to be visible.
+ */
+const CHIP_PANEL: Record<
+  FilterParam,
+  null | 'account' | 'category' | 'tag' | 'payee' | 'status'
+> = {
+  type: null,
+  status: 'status',
+  account_id: 'account',
+  category_id: 'category',
+  tag_id: 'tag',
+  payee_id: 'payee',
+}
+
 const typeButtonCls =
   'flex-1 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:flex-none sm:rounded-md sm:py-1.5'
 
@@ -133,9 +149,6 @@ export function TransactionFilters({
   // not yet applied is invisible: the controls and the results below them
   // disagree with no way to tell. `dirty` is what puts that on screen.
   const [dirty, setDirty] = useState(false)
-  // Applying is a client-side navigation, which can take a moment on a slow
-  // connection. Without a pending state the click looks like it did nothing.
-  const [isApplying, startTransition] = useTransition()
 
   // Every control is staged locally and only reaches the server on submit, so
   // "Apply filters" means what it says. Presets used to be links that navigated
@@ -235,11 +248,12 @@ export function TransactionFilters({
     setSearchOpen(false)
     setOpenChip(null)
     setDirty(false)
-    // Inside a transition so the button can stay pending until the new list has
-    // actually streamed in, rather than going quiet mid-navigation.
-    startTransition(() => {
-      router.push(`/dashboard/transactions?${params.toString()}`)
-    })
+    // Deliberately NOT wrapped in a transition. A transition keeps the current
+    // page on screen until the next one is fully ready, which suppresses this
+    // route's loading.tsx — Apply would close the sheet and leave the previous
+    // chips, counts and totals sitting there as if nothing had happened. The
+    // skeleton is the honest feedback here.
+    router.push(`/dashboard/transactions?${params.toString()}`)
   }
 
   function toggleType(value: string) {
@@ -259,15 +273,15 @@ export function TransactionFilters({
     selectedStatuses.length
 
   /**
-   * The applied filter state as a URL, minus one value. Powers the mobile
-   * summary chips: on phones the secondary controls are behind a sheet, so
-   * without these you can see *that* something is filtered (the badge count)
+   * The applied filter state as a URL, minus one whole dimension. Powers the
+   * mobile summary chips: on phones the secondary controls are behind a sheet,
+   * so without these you can see *that* something is filtered (the badge count)
    * but not what — and undoing one would mean opening the sheet.
    *
    * Built from the **applied** props, never the staged state: these are links,
    * so they must describe a view the server already knows about.
    */
-  function hrefWithout(param: FilterParam, value?: string) {
+  function hrefWithout(param: FilterParam) {
     const params = new URLSearchParams()
     if (selectedReview !== 'all') params.set('review', selectedReview)
     if (searchText) params.set('search', searchText)
@@ -275,10 +289,8 @@ export function TransactionFilters({
     params.set('date_to', resolvedDateTo)
 
     const keep = (name: FilterParam, values: string[]) => {
-      for (const entry of values) {
-        if (param === name && entry === value) continue
-        params.append(name, entry)
-      }
+      if (param === name) return
+      for (const entry of values) params.append(name, entry)
     }
     keep('type', selectedTypes)
     keep('status', selectedStatuses)
@@ -332,38 +344,50 @@ export function TransactionFilters({
     </div>
   )
 
-  const activeChips: { key: string; label: string; href: string }[] = [
-    ...selectedTypes.map((value) => ({
-      key: `type-${value}`,
-      label: ui(TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value),
-      href: hrefWithout('type', value),
-    })),
-    ...selectedAccountIds.map((id) => ({
-      key: `account-${id}`,
-      label: labelOf(accountOptions, id, ui('Account')),
-      href: hrefWithout('account_id', id),
-    })),
-    ...selectedCategoryIds.map((id) => ({
-      key: `category-${id}`,
-      label: labelOf(categoryOptions, id, ui('Category')),
-      href: hrefWithout('category_id', id),
-    })),
-    ...selectedPayeeIds.map((id) => ({
-      key: `payee-${id}`,
-      label: labelOf(payeeOptions, id, ui('Payee')),
-      href: hrefWithout('payee_id', id),
-    })),
-    ...selectedTagIds.map((id) => ({
-      key: `tag-${id}`,
-      label: labelOf(tagOptions, id, ui('Tags')),
-      href: hrefWithout('tag_id', id),
-    })),
-    ...selectedStatuses.map((value) => ({
-      key: `status-${value}`,
-      label: ui(labelOf(STATUS_OPTIONS, value, value)),
-      href: hrefWithout('status', value),
-    })),
-  ]
+  /**
+   * One chip per filter *dimension* rather than per value. Five ticked accounts
+   * used to be five chips wrapping over three lines, pushing the totals this
+   * screen exists for below the fold. A lone value still shows its own name —
+   * that is the case where the detail earns the space.
+   */
+  function chipFor(
+    param: FilterParam,
+    values: string[],
+    groupLabel: string,
+    labelFor: (value: string) => string
+  ) {
+    if (values.length === 0) return null
+    return {
+      key: param,
+      panel: CHIP_PANEL[param],
+      label:
+        values.length === 1
+          ? labelFor(values[0])
+          : `${groupLabel} · ${values.length}`,
+      href: hrefWithout(param),
+    }
+  }
+
+  const activeChips = [
+    chipFor('type', selectedTypes, ui('Type'), (value) =>
+      ui(TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value)
+    ),
+    chipFor('account_id', selectedAccountIds, ui('Accounts'), (id) =>
+      labelOf(accountOptions, id, ui('Account'))
+    ),
+    chipFor('category_id', selectedCategoryIds, ui('Categories'), (id) =>
+      labelOf(categoryOptions, id, ui('Category'))
+    ),
+    chipFor('payee_id', selectedPayeeIds, ui('Payees'), (id) =>
+      labelOf(payeeOptions, id, ui('Payee'))
+    ),
+    chipFor('tag_id', selectedTagIds, ui('Tags'), (id) =>
+      labelOf(tagOptions, id, ui('Tags'))
+    ),
+    chipFor('status', selectedStatuses, ui('Status'), (value) =>
+      ui(labelOf(STATUS_OPTIONS, value, value))
+    ),
+  ].filter((chip) => chip !== null)
 
   return (
     <form
@@ -409,7 +433,7 @@ export function TransactionFilters({
           className={cn(pillCls, (moreFiltersCount > 0 || dirty) && activePillCls)}
         >
           <SlidersHorizontal className="size-3.5 shrink-0" aria-hidden="true" />
-          {isApplying ? ui('Applying…') : ui('Filters')}
+          {ui('Filters')}
           {moreFiltersCount > 0 ? (
             <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
               {moreFiltersCount}
@@ -417,7 +441,7 @@ export function TransactionFilters({
           ) : null}
           {/* The sheet can be dismissed with edits still staged in it — this is
               the only thing left on screen that says so. */}
-          {dirty && !isApplying ? (
+          {dirty ? (
             <>
               <span aria-hidden="true" className="size-1.5 rounded-full bg-primary" />
               <span className="sr-only">{ui('Unapplied changes')}</span>
@@ -425,14 +449,30 @@ export function TransactionFilters({
           ) : null}
         </button>
 
-        {/* Each chip drops just its own filter, so undoing one never means
-            opening the panel. */}
+        {/* Two targets per chip: the label reopens the sheet at the section
+            that set it, the × drops that dimension outright. Undoing or
+            adjusting a filter never means hunting for it. */}
         {activeChips.map((chip) => (
-          <Link key={chip.key} href={chip.href} className={cn(pillCls, activePillCls)}>
-            <span className="max-w-[130px] truncate">{chip.label}</span>
-            <X className="size-3 shrink-0" aria-hidden="true" />
-            <span className="sr-only">{ui('Remove filter')}</span>
-          </Link>
+          <span key={chip.key} className={cn(pillCls, activePillCls, 'gap-0 pr-1')}>
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(true)
+                setOpenChip(chip.panel)
+              }}
+              className="max-w-[150px] truncate pr-1.5"
+            >
+              {chip.label}
+            </button>
+            <Link
+              href={chip.href}
+              onClick={closeSheet}
+              aria-label={ui('Remove filter')}
+              className="flex size-5 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-primary/15"
+            >
+              <X className="size-3" aria-hidden="true" />
+            </Link>
+          </span>
         ))}
       </div>
 
@@ -676,22 +716,20 @@ export function TransactionFilters({
           ) : null}
           {/* Spelled out where there is room for it; the dot on the button
               carries the same message on a phone. */}
-          {dirty && !isApplying ? (
+          {dirty ? (
             <span role="status" className="hidden text-xs text-muted-foreground sm:inline">
               {ui('Unapplied changes')}
             </span>
           ) : null}
           <button
             type="submit"
-            disabled={isApplying}
-            aria-disabled={isApplying}
             className={cn(
               buttonVariants({ size: 'sm' }),
               'relative h-11 flex-1 rounded-xl text-sm font-semibold sm:h-8 sm:flex-none sm:rounded-lg sm:font-medium'
             )}
           >
-            {isApplying ? ui('Applying…') : ui('Apply filters')}
-            {dirty && !isApplying ? (
+            {ui('Apply filters')}
+            {dirty ? (
               <span
                 aria-hidden="true"
                 className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary-foreground sm:hidden"
