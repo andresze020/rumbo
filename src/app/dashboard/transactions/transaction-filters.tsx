@@ -221,6 +221,66 @@ export function TransactionFilters({
     setDirty(false)
   }
 
+  /**
+   * The query string for a set of filters. One builder for both sides so
+   * "what the server has" and "what Apply is about to send" are comparable as
+   * plain strings.
+   */
+  function buildQuery(source: {
+    types: string[]
+    drafts: Drafts
+    dateFrom: string
+    dateTo: string
+    search: string
+  }) {
+    const params = new URLSearchParams()
+    for (const value of source.types) params.append('type', value)
+    for (const param of DRAFT_PARAMS) {
+      for (const value of source.drafts[param]) params.append(param, value)
+    }
+    if (selectedReview !== 'all') params.set('review', selectedReview)
+    const trimmed = source.search.trim()
+    if (trimmed) params.set('search', trimmed)
+    if (source.dateFrom) params.set('date_from', source.dateFrom)
+    if (source.dateTo) params.set('date_to', source.dateTo)
+    return params.toString()
+  }
+
+  const appliedDrafts: Drafts = {
+    account_id: selectedAccountIds,
+    category_id: selectedCategoryIds,
+    payee_id: selectedPayeeIds,
+    tag_id: selectedTagIds,
+    status: selectedStatuses,
+  }
+  const appliedQuery = buildQuery({
+    types: selectedTypes,
+    drafts: appliedDrafts,
+    dateFrom: resolvedDateFrom,
+    dateTo: resolvedDateTo,
+    search: searchText,
+  })
+
+  // Applying is a round trip, and the chips and the badge are drawn from what
+  // the *server* says is applied — so they sat on the previous filters for as
+  // long as the query took, which reads as "Apply did nothing" all over again.
+  // While a set is in flight they show that set instead. Cleared during render
+  // the moment the server agrees, rather than in an effect.
+  const [pending, setPending] = useState<null | {
+    query: string
+    from: string
+    types: string[]
+    drafts: Drafts
+  }>(null)
+  // Any move by the server ends the optimism, not just the answer we were
+  // waiting for: removing a chip mid-flight is a different navigation, and
+  // holding our guess past it would show a set nobody asked for.
+  if (pending && appliedQuery !== pending.from) setPending(null)
+
+  /** What the user should read as applied: the server's answer, or ours. */
+  const shownTypes = pending?.types ?? selectedTypes
+  const shownDrafts = pending?.drafts ?? appliedDrafts
+
   /** Every staged edit runs through here, so nothing can change unmarked. */
   function stageDraft(param: DraftParam, values: string[]) {
     setDrafts((current) => ({ ...current, [param]: values }))
@@ -281,16 +341,12 @@ export function TransactionFilters({
     // Built from this component's state, never read back out of the form. The
     // controls all render from that state, so what the user sees staged and
     // what reaches the URL cannot drift apart.
-    const params = new URLSearchParams()
-    for (const value of types) params.append('type', value)
-    for (const param of DRAFT_PARAMS) {
-      for (const value of drafts[param]) params.append(param, value)
-    }
-    if (selectedReview !== 'all') params.set('review', selectedReview)
-    const trimmedSearch = search.trim()
-    if (trimmedSearch) params.set('search', trimmedSearch)
-    if (dateFrom) params.set('date_from', dateFrom)
-    if (dateTo) params.set('date_to', dateTo)
+    const query = buildQuery({ types, drafts, dateFrom, dateTo, search })
+
+    // Nothing to wait for when the staged set is already the applied one, and
+    // marking it pending would leave the bar waiting for a change that is
+    // never coming.
+    if (query !== appliedQuery) setPending({ query, from: appliedQuery, types, drafts })
 
     // The mobile sheet owns a history entry so Android Back closes it, and it
     // reclaims that entry with history.back() when it closes. Closing it here
@@ -312,7 +368,7 @@ export function TransactionFilters({
     // route's loading.tsx — Apply would close the sheet and leave the previous
     // chips, counts and totals sitting there as if nothing had happened. The
     // skeleton is the honest feedback here.
-    const href = `/dashboard/transactions?${params.toString()}`
+    const href = `/dashboard/transactions?${query}`
     if (replacingSheetEntry) router.replace(href)
     else router.push(href)
   }
@@ -331,12 +387,10 @@ export function TransactionFilters({
     )
   }
 
-  const moreFiltersCount =
-    selectedAccountIds.length +
-    selectedCategoryIds.length +
-    selectedTagIds.length +
-    selectedPayeeIds.length +
-    selectedStatuses.length
+  const moreFiltersCount = DRAFT_PARAMS.reduce(
+    (total, param) => total + shownDrafts[param].length,
+    0
+  )
 
   /**
    * The applied filter state as a URL, minus one whole dimension. Powers the
@@ -344,28 +398,20 @@ export function TransactionFilters({
    * so without these you can see *that* something is filtered (the badge count)
    * but not what — and undoing one would mean opening the sheet.
    *
-   * Built from the **applied** props, never the staged state: these are links,
-   * so they must describe a view the server already knows about.
+   * Built from the shown state, not the staged one: a chip is a link, so it
+   * has to describe the view being looked at — including the one still in
+   * flight, or removing a filter right after applying would resurrect the set
+   * from before.
    */
   function hrefWithout(param: FilterParam) {
-    const params = new URLSearchParams()
-    if (selectedReview !== 'all') params.set('review', selectedReview)
-    if (searchText) params.set('search', searchText)
-    params.set('date_from', resolvedDateFrom)
-    params.set('date_to', resolvedDateTo)
-
-    const keep = (name: FilterParam, values: string[]) => {
-      if (param === name) return
-      for (const entry of values) params.append(name, entry)
-    }
-    keep('type', selectedTypes)
-    keep('status', selectedStatuses)
-    keep('account_id', selectedAccountIds)
-    keep('category_id', selectedCategoryIds)
-    keep('tag_id', selectedTagIds)
-    keep('payee_id', selectedPayeeIds)
-
-    return `/dashboard/transactions?${params.toString()}`
+    const query = buildQuery({
+      types: param === 'type' ? [] : shownTypes,
+      drafts: { ...shownDrafts, ...(param === 'type' ? {} : { [param]: [] }) },
+      dateFrom: resolvedDateFrom,
+      dateTo: resolvedDateTo,
+      search: searchText,
+    })
+    return `/dashboard/transactions?${query}`
   }
 
   const labelOf = (options: MultiSelectOption[], id: string, fallback: string) =>
@@ -435,22 +481,22 @@ export function TransactionFilters({
   }
 
   const activeChips = [
-    chipFor('type', selectedTypes, ui('Type'), (value) =>
+    chipFor('type', shownTypes, ui('Type'), (value) =>
       ui(TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value)
     ),
-    chipFor('account_id', selectedAccountIds, ui('Accounts'), (id) =>
+    chipFor('account_id', shownDrafts.account_id, ui('Accounts'), (id) =>
       labelOf(accountOptions, id, ui('Account'))
     ),
-    chipFor('category_id', selectedCategoryIds, ui('Categories'), (id) =>
+    chipFor('category_id', shownDrafts.category_id, ui('Categories'), (id) =>
       labelOf(categoryOptions, id, ui('Category'))
     ),
-    chipFor('payee_id', selectedPayeeIds, ui('Payees'), (id) =>
+    chipFor('payee_id', shownDrafts.payee_id, ui('Payees'), (id) =>
       labelOf(payeeOptions, id, ui('Payee'))
     ),
-    chipFor('tag_id', selectedTagIds, ui('Tags'), (id) =>
+    chipFor('tag_id', shownDrafts.tag_id, ui('Tags'), (id) =>
       labelOf(tagOptions, id, ui('Tags'))
     ),
-    chipFor('status', selectedStatuses, ui('Status'), (value) =>
+    chipFor('status', shownDrafts.status, ui('Status'), (value) =>
       ui(labelOf(STATUS_OPTIONS, value, value))
     ),
   ].filter((chip) => chip !== null)
@@ -496,7 +542,7 @@ export function TransactionFilters({
           className={cn(pillCls, (moreFiltersCount > 0 || dirty) && activePillCls)}
         >
           <SlidersHorizontal className="size-3.5 shrink-0" aria-hidden="true" />
-          {ui('Filters')}
+          {pending ? ui('Applying…') : ui('Filters')}
           {moreFiltersCount > 0 ? (
             <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
               {moreFiltersCount}
@@ -803,7 +849,7 @@ export function TransactionFilters({
               'relative h-11 flex-1 rounded-xl text-sm font-semibold sm:h-8 sm:flex-none sm:rounded-lg sm:font-medium'
             )}
           >
-            {ui('Apply filters')}
+            {pending ? ui('Applying…') : ui('Apply filters')}
             {dirty ? (
               <span
                 aria-hidden="true"
