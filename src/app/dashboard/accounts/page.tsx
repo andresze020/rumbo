@@ -956,6 +956,13 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       ?.code ??
     activeCurrencies[0]?.code ??
     'CAD'
+  // Hoisted out of the JSX: the i18n audit reads string literals inside a
+  // `description` attribute as user-visible copy, and `view === 'list'` is not.
+  const sectionDescription = showArchived
+    ? translate(locale, 'accounts.archivedSectionDesc')
+    : view === 'list'
+      ? translate(locale, 'accounts.sectionDesc')
+      : undefined
   const hasLoadError =
     accountBalancesError ||
     accountMetadataError ||
@@ -968,7 +975,6 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       <PageHeader
         eyebrow={household.name}
         title={translate(locale, 'nav.accounts')}
-        description={translate(locale, 'accounts.pageDescription')}
         actions={
           <>
             <Link
@@ -1117,7 +1123,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       <section className="space-y-3">
         <SectionHeading
           title={translate(locale, showArchived ? 'accounts.archivedSection' : 'accounts.activeSection')}
-          description={translate(locale, showArchived ? 'accounts.archivedSectionDesc' : 'accounts.sectionDesc')}
+          description={sectionDescription}
           action={<AccountsViewToggle view={view} />}
         />
 
