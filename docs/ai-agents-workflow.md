@@ -9,7 +9,7 @@ Ola 1 — *corrección*: subagente `ledger-guard`, comando `/revisar-ledger`, ho
 
 Ola 2 — *presupuesto de contexto* (2026-08-19): subagentes `scout`,
 `i18n-scribe`, `migration-drafter` y `sprint-closer`; comandos `/buscar`,
-`/contexto`, `/i18n` y `/cerrar-sprint`; hook `PreToolUse` `context-guard`;
+`/contexto`, `/i18n`, `/cerrar-sprint` y `/arreglar`; hook `PreToolUse` `context-guard`;
 `AGENTS.md` adelgazado de 42 KB a 9 KB; MCP de Supabase apagado por defecto.
 
 No hay CI en GitHub Actions ni tests automatizados de UI — ambos están descritos

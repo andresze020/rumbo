@@ -1,6 +1,6 @@
 ---
 name: scout
-description: Localiza dónde vive algo en App Finanzas y devuelve un mapa de archivo:línea, no el código. Solo lectura. Úsalo antes de implementar cualquier cambio en código que ya existe, o cuando la respuesta a "¿dónde está X?" requeriría abrir varios archivos grandes.
+description: Localiza dónde vive algo en App Finanzas y devuelve un mapa de archivo:línea, no el código. Solo lectura. Úsalo cuando el usuario reporte un bug ("arregla esto que pasa cuando X") o pida un cambio sobre código existente y no sepas ya en qué archivos vive — especialmente si averiguarlo obligaría a abrir varios archivos grandes.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

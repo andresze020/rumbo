@@ -41,7 +41,8 @@ This repo automates parts of its own development. See
   ledger rules), `scout` (locates code, returns file:line), `i18n-scribe`
   (translations), `migration-drafter` (SQL), `sprint-closer` (state docs).
 - Slash commands (`.claude/commands/`): `/revisar-ledger`, `/buscar`,
-  `/contexto`, `/i18n`, `/cerrar-sprint`.
+  `/contexto`, `/i18n`, `/cerrar-sprint`, `/arreglar` (bugs: instrumenta antes
+  de adivinar).
 - Hooks (`.claude/hooks/`): `SessionStart` (checkout status + context budget),
   `PreToolUse` (`context-guard`, blocks wasteful reads), `Stop` (blocking
   typecheck gate).
