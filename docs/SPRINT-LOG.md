@@ -15,6 +15,28 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Balance FX revaluation (2026-08-20)
+- Goal: an account's base-currency equivalent and net worth should say what the
+  money is worth now, not what it cost. Surfaced by the AndroMoney import, whose
+  four years of history made the gap impossible to miss (≈ 9.647 CAD shown for
+  pesos worth ≈ 13.278 CAD).
+- Shipped: `20260817120000_balance_fx_revaluation.sql` revalues both
+  `get_account_balances` overloads at the rate in effect on the date shown,
+  leaving flows (allocations, reports, budgets) on their own transaction-date
+  rate. New `get_exchange_rate_as_of` returns rate + rate_date;
+  `get_exchange_rate` keeps its contract as a wrapper. Falls back to the
+  historical sum when no rate is on file. Settings → Exchange rates editor,
+  accounts-screen notice for currencies that fell back, `settings.exchangeRates`
+  dictionary keys in en/es/fr. The AndroMoney importer merged earlier is what
+  made the problem visible.
+- Migrations added: `20260817120000_balance_fx_revaluation.sql` — **pending**,
+  run `npx supabase db push`.
+- Tables changed: none. Two functions gain columns (each dropped and recreated,
+  since `create or replace` cannot change a `returns table` shape).
+- Follow-ups / known gaps: with one rate on file the net-worth history steps at
+  the month that rate is dated — earlier months fall back to cost basis. Saving
+  a rate per month smooths it. Rates are entered by hand; no rate feed.
+
 ## Transactions list — slim rows, premium polish (2026-08-19, merged 2026-08-20)
 - Goal: the transactions screen looked like a data-entry tool, not something
   worth paying for. On desktop every row rendered its full detail block

@@ -198,9 +198,13 @@ From the reference export, 112 of 4 737 rows:
 
 - **FX rates are per-year at best.** Every non-base-currency transaction is
   valued at one rate for its year (or month, if configured), not the rate of the
-  day. Account balances in their own currency are exact; the base-currency
-  figures — net worth, cross-currency reports — are as good as the rate table.
-  Per-month keys are supported for the periods worth the effort.
+  day. Since `20260817120000_balance_fx_revaluation.sql` this no longer reaches
+  **balances** — an account's base-currency equivalent and net worth are
+  revalued at the rate on file for the day being shown (see
+  [exchange-rates.md](./exchange-rates.md)), so the import's rate table no
+  longer decides what your money is worth today. It still decides what each
+  income and expense was worth **on its own date**, which is what reports and
+  budgets read. Per-month keys are supported for the periods worth the effort.
 - **`Periodic` is dropped.** Recreating recurring rules from AndroMoney's
   encoding (`7|20260704|20260804|null|2|1`) would be guesswork about what is
   still active.

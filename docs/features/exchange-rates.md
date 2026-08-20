@@ -6,9 +6,18 @@
 Migration `20260613000100_br_001_csv_import_fx.sql` adds the household-scoped
 `exchange_rates` table and the `get_exchange_rate(...)` RPC.
 
-This is the BR-002 FX data-model foundation. BR-001 uses it immediately for CSV
-import FX correctness; future cross-currency transfers, debt payments, recurring
-auto-posting, and net-worth FX policy can build on the same lookup contract.
+**Balance revaluation — added 2026-08-17**, migration
+`20260817120000_balance_fx_revaluation.sql`. Both `get_account_balances`
+overloads now convert an account's balance into base currency at the rate on
+file for the date being shown, instead of summing each movement's frozen rate.
+`get_exchange_rate_as_of(...)` is the new lookup (rate **and** its date);
+`get_exchange_rate` keeps its exact signature and contract and delegates to it.
+A rates editor lives in Settings. **Not applied yet** — see Manual commands.
+
+This is the BR-002 FX data-model foundation. BR-001 uses it for CSV import FX
+correctness and account balances now use it too; future cross-currency
+transfers, debt payments and recurring auto-posting can build on the same
+lookup contract.
 
 ---
 
@@ -114,4 +123,78 @@ it with:
 
 ```powershell
 npx supabase db push
+```
+
+---
+
+## Balance revaluation: a stock is not a flow
+
+A foreign-currency account's balance in base currency used to be
+`sum(transaction_entries.amount_base_currency)` — every movement frozen at the
+rate it was booked at. That is a **cost basis**, and it drifts from reality
+without limit as rates move. A COP account holding 29 262 996 COP read as
+≈ 9 647 CAD (the blended rate of four years of history) on a morning those pesos
+were worth ≈ 13 278 CAD. Nothing was wrong with the arithmetic; the number just
+answered a different question than the one the screen appeared to ask.
+
+The rule the migration draws:
+
+| | Valued at | Why |
+|---|---|---|
+| **Stock** — an account balance at a point in time | the rate in effect on **that date** | It is what the money is worth then. |
+| **Flow** — income, an expense, a budget line | the rate of **its own transaction date** | Last year's groceries are not restated at today's rate. |
+
+So only `get_account_balances` changed. `transaction_entries` and
+`transaction_allocations` are untouched, which means every report, budget and
+month closure built on allocations reads exactly as it did before. Net worth,
+the accounts screen, the plan and debt screens all read balances, so they all
+move together.
+
+### Fallback
+
+When the household has no usable rate for a pair at or before the date, the
+base-currency columns fall back to the historical sum — the exact previous
+behaviour. A household that never enters a rate sees no change at all. The
+functions return `base_conversion_rate` / `base_conversion_rate_date` so the UI
+can tell the two apart; the accounts screen shows a notice naming the currencies
+that fell back.
+
+### Precision of the history
+
+`get_exchange_rate_as_of` returns the newest rate dated **on or before** the day
+asked about. With one rate on file, every month before it falls back to the
+historical sum and the net-worth line will step at the month that rate is dated.
+That step is real — it is the gap between cost basis and market — but it looks
+like an event. Saving a rate per month for the periods worth the effort smooths
+it into the actual currency movement.
+
+### Entering rates
+
+Settings → Exchange rates, one form per foreign currency the household holds
+accounts in. The stored `rate` is the direct multiplier (`1 from = rate to`),
+but that is the awkward direction to type for a currency like COP
+(`0.00045375`), so the form edits both directions and mirrors them; only the
+direct one is submitted. Saving twice on the same date corrects that date's rate
+rather than stacking a row — `exchange_rates_unique_household_pair_date` is the
+conflict target.
+
+---
+
+## Manual commands
+
+```powershell
+npx supabase db push
+```
+
+Then, as an authenticated member of the household:
+
+```sql
+-- Base-currency accounts convert at 1 and are never "missing a rate".
+select currency_code, base_conversion_rate, base_conversion_rate_date
+from public.get_account_balances('<household-id>'::uuid);
+
+-- After saving a COP rate in Settings, the equivalent should match the market.
+select account_name, posted_balance_account_currency, posted_balance_base_currency
+from public.get_account_balances('<household-id>'::uuid)
+where currency_code = 'COP';
 ```

@@ -82,6 +82,19 @@ export const en = {
     nextMonth: 'Next month',
   },
   settings: {
+    exchangeRates: {
+      title: 'Exchange rates',
+      description:
+        'What your foreign-currency accounts are worth in the household base currency today. Used for the equivalent shown under each balance, and for net worth.',
+      rateDate: 'Rate date',
+      help:
+        'A balance is converted at the newest rate dated on or before the day being shown, so saving past dates makes the net-worth history more accurate. Income and expenses keep the rate of their own date and never change.',
+      onFile: 'On file: 1 {currency} = {rate} {base}, dated {date}.',
+      none:
+        'No rate on file. Until one is saved, the equivalent stays at the rate each movement was booked at.',
+      save: 'Save rate',
+      saved: 'Exchange rate saved.',
+    },
     language: {
       title: 'Language',
       description: 'Choose your preferred language for the app interface.',
@@ -403,6 +416,9 @@ export const en = {
     accountArchived: 'Account archived.',
     accountRestored: 'Account restored.',
     openingBalanceSet: 'Opening balance set.',
+    missingRateNotice:
+      'No exchange rate on file for {currencies}. Those balances are shown in {base} at the rate each movement was booked at, not at today’s rate.',
+    missingRateAction: 'Set a rate in Settings',
     available: 'Available',
     owed: 'Owed',
     // BR-030 — statement cycle.
@@ -558,6 +574,19 @@ export const es: DeepStringify<typeof en> = {
     nextMonth: 'Mes siguiente',
   },
   settings: {
+    exchangeRates: {
+      title: 'Tipos de cambio',
+      description:
+        'Cuánto valen hoy tus cuentas en moneda extranjera en la moneda base del hogar. Se usa para el equivalente que aparece bajo cada saldo y para el patrimonio neto.',
+      rateDate: 'Fecha del cambio',
+      help:
+        'Un saldo se convierte con el cambio más reciente con fecha igual o anterior al día que se muestra, así que guardar fechas pasadas hace más preciso el histórico de patrimonio. Los ingresos y gastos conservan el cambio de su propia fecha y nunca cambian.',
+      onFile: 'Guardado: 1 {currency} = {rate} {base}, con fecha {date}.',
+      none:
+        'No hay ningún cambio guardado. Hasta que guardes uno, el equivalente se queda con el cambio con el que se registró cada movimiento.',
+      save: 'Guardar cambio',
+      saved: 'Tipo de cambio guardado.',
+    },
     language: {
       title: 'Idioma',
       description: 'Elige el idioma preferido para la interfaz de la aplicación.',
@@ -880,6 +909,9 @@ export const es: DeepStringify<typeof en> = {
     accountArchived: 'Cuenta archivada.',
     accountRestored: 'Cuenta restaurada.',
     openingBalanceSet: 'Balance inicial establecido.',
+    missingRateNotice:
+      'No hay tipo de cambio guardado para {currencies}. Esos saldos se muestran en {base} al cambio con el que se registró cada movimiento, no al de hoy.',
+    missingRateAction: 'Configurar el cambio en Ajustes',
     available: 'Disponible',
     owed: 'Adeudado',
     // BR-030 — ciclo de facturación.
@@ -1035,6 +1067,19 @@ export const fr: DeepStringify<typeof en> = {
     nextMonth: 'Mois suivant',
   },
   settings: {
+    exchangeRates: {
+      title: 'Taux de change',
+      description:
+        "Ce que valent aujourd’hui vos comptes en devise étrangère dans la devise de référence du foyer. Utilisé pour l’équivalent affiché sous chaque solde et pour la valeur nette.",
+      rateDate: 'Date du taux',
+      help:
+        "Un solde est converti au taux le plus récent daté du jour affiché ou d’avant : enregistrer des dates passées rend donc l’historique de la valeur nette plus juste. Les revenus et les dépenses conservent le taux de leur propre date et ne changent jamais.",
+      onFile: 'Enregistré : 1 {currency} = {rate} {base}, daté du {date}.',
+      none:
+        "Aucun taux enregistré. Tant qu’aucun n’est enregistré, l’équivalent reste au taux auquel chaque mouvement a été inscrit.",
+      save: 'Enregistrer le taux',
+      saved: 'Taux de change enregistré.',
+    },
     language: {
       title: 'Langue',
       description: 'Choisissez votre langue préférée pour l’interface de l’application.',
@@ -1357,6 +1402,9 @@ export const fr: DeepStringify<typeof en> = {
     accountArchived: 'Compte archivé.',
     accountRestored: 'Compte restauré.',
     openingBalanceSet: "Solde d’ouverture défini.",
+    missingRateNotice:
+      "Aucun taux de change enregistré pour {currencies}. Ces soldes sont affichés en {base} au taux auquel chaque mouvement a été inscrit, et non au taux du jour.",
+    missingRateAction: "Définir un taux dans les Réglages",
     available: 'Disponible',
     owed: 'Dû',
     // BR-030 — cycle de facturation.

@@ -23,6 +23,32 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Balance FX revaluation** (2026-08-20, branch
+  `claude/andromoney-import-script-6u4fy1`). Migration
+  `20260817120000_balance_fx_revaluation.sql` — **not applied yet**. A
+  foreign-currency account's base-currency balance was
+  `sum(transaction_entries.amount_base_currency)`, every movement frozen at the
+  rate it was booked at: a **cost basis** that drifts from reality without
+  limit. A COP account holding 29.262.996 COP read as ≈ 9.647 CAD (four years of
+  blended history) on a morning those pesos were worth ≈ 13.278 CAD. Both
+  `get_account_balances` overloads now revalue: a **stock** (a balance at a
+  point in time) converts at the rate in effect on that date, while a **flow**
+  (income, an expense, a budget line) keeps the rate of its own transaction
+  date, so `transaction_allocations` and every report and budget built on it are
+  untouched. Rates come from the BR-002 `exchange_rates` table, which was built
+  for exactly this and until now had no reader; new
+  `get_exchange_rate_as_of(...)` returns the rate **and its date**, and
+  `get_exchange_rate` keeps its signature and contract as a thin wrapper over
+  it. **Falls back to the historical sum** when no rate is on file, so a
+  household that never enters one sees no change. New
+  `base_conversion_rate`/`base_conversion_rate_date` columns let the UI tell the
+  two apart; the accounts screen names the currencies that fell back, and
+  Settings → Exchange rates is the editor (both rate directions, mirrored).
+  The one-off AndroMoney history importer (`scripts/andromoney-*.mjs`, merged
+  earlier) is what surfaced this. See
+  [docs/features/exchange-rates.md](./docs/features/exchange-rates.md) and
+  [docs/features/andromoney-import.md](./docs/features/andromoney-import.md).
+
 - **Transactions list — slim rows, premium polish** (2026-08-19, merged
   2026-08-20, branch
   `claude/transactions-premium-list`). UI only — no migration, no schema
@@ -46,26 +72,6 @@ The product is household-first. All financial data must belong to a household.
   and survives in the details panel. Also fixes the `Stop` verify-gate hook,
   which spawned `npx.cmd` via `execFileSync` — `EINVAL` with no output on
   Node ≥18.20, so the gate failed every turn on Windows.
-
-- **Development automation, second wave — context budget** (2026-08-19, branch
-  `claude/token-optimization`). Tooling only — no migration, no schema change,
-  nothing in `src/`. Attacks token cost the way the first wave attacked
-  correctness. `AGENTS.md` went 42.333 → ~9.500 bytes: its `Current status`
-  held 22 sprint entries already duplicated in `docs/SPRINT-LOG.md`, so only
-  the two newest stay here and the log grew 24 → 26 entries (two entries lived
-  *only* in `AGENTS.md` and were migrated before deleting). Four subagents now
-  isolate the context-heavy jobs: `scout` (locates code, returns `file:line`
-  instead of dumping 2.000-line files), `i18n-scribe` (`src/lib/i18n/`, ~4.100
-  lines), `migration-drafter` (`supabase/migrations/`, 626 KB — writes the
-  `.sql`, never touches the DB) and `sprint-closer` (rotates this very list).
-  Commands `/buscar`, `/contexto`, `/i18n`, `/cerrar-sprint`. New `PreToolUse`
-  hook `context-guard.mjs` exits 2 on generated artifacts (`.next`, lockfile,
-  `*.tsbuildinfo`) and on whole reads of files over 700 lines, via `Read` *and*
-  via `cat`/`type`/`Get-Content`; partial reads pass, `AGENTS.md`/`CLAUDE.md`
-  are exempt, and the denial message lists the cheaper alternatives. The
-  Supabase MCP server is now `disabledMcpjsonServers` — enable with `/mcp` when
-  you actually need the DB. See
-  [docs/ai-agents-workflow.md](./docs/ai-agents-workflow.md) §Ola 2.
 
 > **Historia anterior:** las entradas de sprint previas viven en
 > `docs/SPRINT-LOG.md` (append-only, más reciente arriba). No se resumen aquí:
