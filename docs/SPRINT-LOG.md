@@ -15,6 +15,38 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Development automation, second wave — context budget (2026-08-19)
+- Goal: the first wave made Claude *correct* (a Stop hook that blocks broken
+  types). This one makes it *cheap*. Measured drains: `AGENTS.md` cost ~11k
+  tokens on every session start, single source files cost 17k–32k when read
+  whole, and the Supabase MCP schemas cost 2k–4k whether or not the DB was
+  touched.
+- Shipped:
+  - `AGENTS.md` trimmed 42.333 → ~9.500 bytes by keeping only the two newest
+    sprint entries. *Hard-backlog integration PR #37* and *Analysis & planning
+    screens PR #12* existed only there and were migrated into this log first.
+  - Subagents `scout`, `i18n-scribe`, `migration-drafter`, `sprint-closer` —
+    each isolates a job whose exploration would otherwise flood the main
+    context. `migration-drafter` inherits the absolute ban on running anything
+    against the database.
+  - Commands `/buscar`, `/contexto`, `/i18n`, `/cerrar-sprint`.
+  - `PreToolUse` hook `context-guard.mjs`: blocks generated artifacts outright,
+    and blocks whole reads of files over 700 lines (`BIG_FILE_LINES`) unless
+    `offset`/`limit` is used. Covers the shell escape hatch (`cat`, `type`,
+    `Get-Content`) too; `cat X | head`, `sed -n` and `grep` pass. Paths are
+    normalised to `/` before matching — backslash patterns did not survive the
+    trip through heredocs and JSON, and a guard that fails silently is worse
+    than none.
+  - `disabledMcpjsonServers: ["supabase"]`; read-only shell commands added to
+    the permission allowlist so cheap calls stop costing a round trip.
+- Migrations added: none.
+- Tables changed: none.
+- Follow-ups / known gaps: the 700-line threshold is a guess, not a
+  measurement — tune `BIG_FILE_LINES` if it starts blocking legitimate full
+  reads. Delegating to a subagent costs its own tokens, so `scout` is a loss
+  for questions a single grep answers. The saving on `AGENTS.md` only holds if
+  `sprint-closer` keeps rotating the third entry out.
+
 ## Development automation, first wave (2026-08-19)
 - Goal: stop relying on Claude *remembering* to run the validation gate and to
   respect the ledger rules. A skill is memory and can be ignored; a hook is the
@@ -242,6 +274,18 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
   `20260729120000_multi_value_transaction_filters.sql` — both **applied**.
 - Tables changed: `profiles` (`ui_preferences`).
 - Follow-ups / known gaps: BR-042 months-within-year rollups still open.
+
+## Hard-backlog integration — PR #37 (2026-07-25)
+- Goal: land the accumulated hard-backlog branches (BR-007/008/010/014) as one
+  integrated PR instead of five divergent ones.
+- Shipped: BR-007 cross-currency transfers, BR-008 transaction pagination +
+  server-side filters, BR-010 categorization rules, BR-014 recurring auto-post,
+  Reports filters, and transfer-cost UX.
+- Migrations added: the production migrations for the above, plus the `pg_cron`
+  extension, the `run_recurring_autopost()` function, and the daily
+  `recurring-autopost` job — all applied and operational.
+- Follow-ups / known gaps: authenticated real-data QA remains a manual release
+  gate; see `docs/pending-work.md`.
 
 ## Full UI localization + persisted language preference (2026-07-25)
 - Goal: remove residual English text from every authenticated view and make the
@@ -486,6 +530,21 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps: no automation (e.g. recurring auto-contributions)
   — manual contribute/withdraw only, matching MVP scope. No i18n for the new
   page itself (English-hardcoded, consistent with `recurring`/`debts`).
+
+## Analysis & planning screens — PR #12 (2026-06-16)
+- Goal: turn the locked "coming soon" placeholders into real pages driven by
+  existing ledger data.
+- Shipped: `/dashboard/reports` (category/merchant tabs, distribution donut,
+  ranked list), `/dashboard/trends` (multi-month income/expense/savings/
+  net-worth/savings-rate charts), `/dashboard/cash-flow` (inflow/outflow bars
+  with a net line), `/dashboard/month-review` (vs-prev-month deltas, budget
+  performance, suggested actions), `/dashboard/debt-planner` (avalanche vs
+  snowball payoff with extra-payment recalculation). Shared code:
+  `src/lib/analysis/server.ts`, `src/components/analysis/charts.tsx`.
+- Migrations added: none.
+- Follow-ups / known gaps: the month-review health grade is an explicitly
+  labeled **mock/demo heuristic** (same one used on the dashboard); its
+  "Close month" button is disabled / not yet built.
 
 ## Sprint 4 — Transactions redesign: inline/bulk edit + review workflow (2026-06-15)
 - Goal: rebuild `/dashboard/transactions` per

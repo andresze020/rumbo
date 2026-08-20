@@ -25,6 +25,18 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/context-guard.mjs",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "permissions": {
@@ -51,7 +63,25 @@
       "Bash(git diff *)",
       "Bash(git branch *)",
       "Bash(gh pr merge *)",
-      "Bash(git pull)"
+      "Bash(git pull)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(sed -n *)",
+      "Bash(wc *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(node --check *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr list *)",
+      "Bash(gh pr create *)",
+      "Bash(git remote -v)",
+      "Bash(git fetch *)",
+      "Bash(git show *)",
+      "Bash(git stash *)",
+      "PowerShell(npm run *)"
     ],
     "ask": [
       "Bash(npx supabase *)",
@@ -79,7 +109,18 @@
       "PowerShell(npx supabase db remote*)",
       "Bash(rm -rf *)",
       "Bash(rmdir /s *)",
-      "PowerShell(Remove-Item * -Recurse *)"
+      "PowerShell(Remove-Item * -Recurse *)",
+      "Read(**/node_modules/**)",
+      "Read(**/.next/**)",
+      "Read(package-lock.json)",
+      "Read(**/package-lock.json)",
+      "Read(tsconfig.tsbuildinfo)",
+      "Read(**/*.tsbuildinfo)",
+      "Read(**/coverage/**)",
+      "Read(**/*.log)"
     ]
-  }
+  },
+  "disabledMcpjsonServers": [
+    "supabase"
+  ]
 }

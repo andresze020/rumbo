@@ -2,11 +2,18 @@
 
 ## Status
 
-**Implementado (primera ola).**
-Existen y funcionan: el subagente `ledger-guard`, el comando `/revisar-ledger`,
-y los hooks `SessionStart` y `Stop`. No hay CI en GitHub Actions ni tests
-automatizados de UI — ambos están descritos abajo en "Siguiente ola" con el
-criterio para decidir cuándo valen la pena.
+**Implementado (olas 1 y 2).**
+
+Ola 1 — *corrección*: subagente `ledger-guard`, comando `/revisar-ledger`, hooks
+`SessionStart` y `Stop`.
+
+Ola 2 — *presupuesto de contexto* (2026-08-19): subagentes `scout`,
+`i18n-scribe`, `migration-drafter` y `sprint-closer`; comandos `/buscar`,
+`/contexto`, `/i18n` y `/cerrar-sprint`; hook `PreToolUse` `context-guard`;
+`AGENTS.md` adelgazado de 42 KB a 9 KB; MCP de Supabase apagado por defecto.
+
+No hay CI en GitHub Actions ni tests automatizados de UI — ambos están descritos
+abajo en "Siguiente ola" con el criterio para decidir cuándo valen la pena.
 
 ---
 
@@ -151,6 +158,87 @@ ocurrió al menos dos veces?** Si no, no lo automatices todavía.
 
 ---
 
+## Ola 2 — el presupuesto de contexto (2026-08-19)
+
+La ola 1 atacaba la corrección: que Claude no cerrara un turno con tipos rotos.
+La ola 2 ataca el **costo**. El diagnóstico medido sobre este repo:
+
+| Fuga | Costo por sesión |
+|---|---|
+| `AGENTS.md` de 42 KB leído al arrancar | ~11.000 tokens |
+| Archivos de 1.400–2.700 líneas leídos enteros | ~17k–32k tokens cada uno |
+| Artefactos generados (`.next`, lockfile, tsbuildinfo) | variable, siempre inútil |
+| Esquemas del MCP de Supabase, se use o no | ~2k–4k tokens |
+
+### `AGENTS.md` adelgazado
+
+Su sección `## Current status` acumulaba 22 entradas de sprint, **ya duplicadas**
+en `docs/SPRINT-LOG.md`. Se dejaron las 2 más recientes y se apuntó al log:
+42.333 → 9.185 bytes (−78 %). Dos entradas que solo existían en `AGENTS.md`
+(*Hard-backlog integration PR #37* y *Analysis & planning screens PR #12*) se
+migraron al log antes de borrarlas — el log pasó de 24 a 26 entradas.
+
+La regla se mantiene sola: `sprint-closer` rota la tercera entrada al log cada
+vez que añade una nueva.
+
+### Subagentes como aislamiento de contexto
+
+El valor de un subagente no es que "sepa más": es que su exploración ocurre en
+**su** ventana y solo vuelve el resumen. Por eso los cuatro nuevos son
+precisamente los trabajos que más contexto queman:
+
+| Subagente | Qué aísla | Devuelve |
+|---|---|---|
+| `scout` | recorrer `src/` para saber dónde está algo | mapa `archivo:línea` |
+| `i18n-scribe` | `src/lib/i18n/` (~4.100 líneas) | claves tocadas + estado del check |
+| `migration-drafter` | `supabase/migrations/` (58 archivos, 626 KB) | el `.sql` + comandos manuales |
+| `sprint-closer` | diff completo + 3 docs de estado | qué se actualizó |
+
+`migration-drafter` hereda la prohibición absoluta de tocar la base: escribe el
+archivo y devuelve los comandos para que los corras a mano.
+
+### Hook `PreToolUse` — `context-guard`
+
+Un skill que dice "no leas archivos grandes" es un recordatorio. Un hook es una
+garantía — la misma lógica que justificó `verify-gate` en la ola 1.
+
+`context-guard.mjs` sale con código 2 (bloquea y le devuelve el motivo a Claude)
+cuando:
+
+1. La ruta es un artefacto generado — `.next/`, `node_modules/`, `.git/`,
+   `package-lock.json`, `*.tsbuildinfo`, `coverage/`, `*.log`.
+2. Se lee entero un archivo de más de **700 líneas** sin `offset`/`limit`.
+   No prohíbe el archivo: exige Grep primero, o lectura paginada, o delegar.
+3. Lo mismo vía shell — `cat`, `type`, `Get-Content` — que es la vía de escape
+   natural cuando `Read` está bloqueado. `cat X | head -20`, `sed -n`, `grep` y
+   `Get-Content -Tail` pasan sin ruido: ya son lectura parcial.
+
+`AGENTS.md` y `CLAUDE.md` están exentos: son cortos y se quieren enteros.
+
+El mensaje de bloqueo no dice solo "no"; enumera las tres alternativas. Un hook
+que rechaza sin enseñar el camino correcto solo produce reintentos, que también
+cuestan tokens.
+
+**Nota de implementación:** todas las rutas se normalizan a `/` antes de
+compararse. Escribir los patrones con backslashes para Windows es frágil — se
+pierden al pasar por heredocs y por JSON — y una guarda que falla en silencio es
+peor que ninguna.
+
+### MCP de Supabase apagado por defecto
+
+`"disabledMcpjsonServers": ["supabase"]` en `.claude/settings.json`. Sigue
+declarado en `.mcp.json`; se enciende con `/mcp` cuando de verdad vas a
+consultar la base. Ver `docs/supabase-mcp.md`.
+
+### Permisos más anchos para lo barato
+
+Cada prompt de permiso es una ida y vuelta con su costo. Se añadieron al
+`allow` los comandos de solo lectura (`ls`, `grep`, `sed -n`, `gh pr view`,
+`git show`…). Los `deny` destructivos no se tocaron, y se les sumaron `Read()`
+sobre artefactos generados como cinturón por si el hook fallara.
+
+---
+
 ## Costos y riesgos
 
 - **Subagentes**: consumen tokens propios. Una revisión de `ledger-guard` sobre
@@ -161,6 +249,15 @@ ocurrió al menos dos veces?** Si no, no lo automatices todavía.
 - **Hooks lentos**: `tsc --noEmit` sobre este proyecto tarda ~5 s en frío y ~0,1 s
   cuando la caché acierta (medido en 2026-08-19).
   De ahí las tres salidas tempranas antes de correrlo.
+- **`context-guard` puede estorbar**: si un archivo legítimamente hay que
+  leerlo entero (una reescritura completa, por ejemplo), el hook obliga a
+  paginar o a delegar. Es fricción deliberada, pero es fricción. El umbral de
+  700 líneas está en la constante `BIG_FILE_LINES`; las excepciones, en
+  `ALWAYS_FULL`.
+- **El ahorro no es gratis**: delegar en un subagente cuesta sus propios tokens.
+  Para una pregunta que se responde con un `grep`, delegar es más caro que no
+  hacerlo. `scout` gana cuando la respuesta está repartida en varios archivos
+  grandes; no para buscar un símbolo que ya sabes dónde está.
 - **Falsa sensación de cobertura**: un typecheck en verde no dice nada sobre si
   los números financieros son correctos. Eso sigue siendo el smoke test manual
   de [`app-finanzas-alpha-qa`](../.claude/skills/app-finanzas-alpha-qa/SKILL.md).
