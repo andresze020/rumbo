@@ -23,6 +23,28 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Balance FX revaluation** (2026-08-17, branch
+  `claude/andromoney-import-script-6u4fy1`). Migration
+  `20260817120000_balance_fx_revaluation.sql` — **not applied yet**. A
+  foreign-currency account's base-currency balance was
+  `sum(transaction_entries.amount_base_currency)`, every movement frozen at the
+  rate it was booked at: a **cost basis** that drifts from reality without
+  limit. A COP account holding 29 262 996 COP read as ≈ 9 647 CAD (four years of
+  blended history) on a morning those pesos were worth ≈ 13 278 CAD. Both
+  `get_account_balances` overloads now revalue: a **stock** (a balance at a
+  point in time) converts at the rate in effect on that date, while a **flow**
+  (income, an expense, a budget line) keeps the rate of its own transaction
+  date, so `transaction_allocations` and every report and budget built on it are
+  untouched. Rates come from the BR-002 `exchange_rates` table, which was built
+  for exactly this and until now had no reader; new
+  `get_exchange_rate_as_of(...)` returns the rate **and its date**, and
+  `get_exchange_rate` keeps its signature and contract as a thin wrapper over
+  it. **Falls back to the historical sum** when no rate is on file, so a
+  household that never enters one sees no change. New
+  `base_conversion_rate`/`base_conversion_rate_date` columns let the UI tell the
+  two apart; the accounts screen names the currencies that fell back, and
+  Settings → Exchange rates is the editor (both rate directions, mirrored).
+  See [docs/features/exchange-rates.md](./docs/features/exchange-rates.md).
 - **AndroMoney history importer** (2026-08-17, branch
   `claude/andromoney-import-script-6u4fy1`). Tooling only — no migration, no
   schema change, nothing in `src/`. Two scripts migrate a full AndroMoney export

@@ -15,6 +15,7 @@ import { SubmitButton } from '@/components/submit-button'
 import { AppearanceSection } from './appearance-section'
 import { LanguageSection } from './language-section'
 import { PreferencesSection } from './preferences-section'
+import { ExchangeRatesSection, type ExchangeRateRow } from './exchange-rates-section'
 import { getUiPreferences } from '@/lib/preferences/server'
 import {
   signOutAllAction,
@@ -25,6 +26,7 @@ import {
 } from './settings-actions'
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
+import { translate } from '@/lib/i18n/translate'
 
 
 type Props = {
@@ -70,6 +72,61 @@ export default async function SettingsPage({ searchParams }: Props) {
     .order('sort_order', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
 
+  // Exchange rates: one row per foreign currency the household actually holds
+  // accounts in — a rate for a currency nobody uses is noise. Archived accounts
+  // count, since their balance still shows on the accounts screen.
+  const baseCurrency = household?.base_currency ?? 'CAD'
+  const { data: currencyRows } = await supabase
+    .from('accounts')
+    .select('currency_code')
+    .eq('household_id', profile.default_household_id)
+    .is('deleted_at', null)
+
+  const accountsByCurrency = new Map<string, number>()
+  for (const row of (currencyRows ?? []) as { currency_code: string }[]) {
+    if (row.currency_code === baseCurrency) continue
+    accountsByCurrency.set(
+      row.currency_code,
+      (accountsByCurrency.get(row.currency_code) ?? 0) + 1
+    )
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: rateRows } = await supabase
+    .from('exchange_rates')
+    .select('from_currency_code, rate, rate_date')
+    .eq('household_id', profile.default_household_id)
+    .eq('to_currency_code', baseCurrency)
+    .in('from_currency_code', [...accountsByCurrency.keys()])
+    .order('rate_date', { ascending: false })
+
+  // Ordered newest-first above, so the first row seen per currency is the
+  // latest one on file.
+  const latestRateByCurrency = new Map<string, { rate: number; rate_date: string }>()
+  for (const row of (rateRows ?? []) as {
+    from_currency_code: string
+    rate: number | string
+    rate_date: string
+  }[]) {
+    if (latestRateByCurrency.has(row.from_currency_code)) continue
+    latestRateByCurrency.set(row.from_currency_code, {
+      rate: Number(row.rate),
+      rate_date: row.rate_date,
+    })
+  }
+
+  const exchangeRateRows: ExchangeRateRow[] = [...accountsByCurrency.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currencyCode]) => {
+      const latest = latestRateByCurrency.get(currencyCode) ?? null
+
+      return {
+        currencyCode,
+        rate: latest?.rate ?? null,
+        rateDate: latest?.rate_date ?? null,
+      }
+    })
+
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6">
       <PageHeader
@@ -89,6 +146,11 @@ export default async function SettingsPage({ searchParams }: Props) {
       )}
       {saved === 'household' && <Callout variant="success">{ui('Household updated.')}</Callout>}
       {saved === 'preferences' && <Callout variant="success">{ui('Preferences saved.')}</Callout>}
+      {saved === 'exchange-rate' && (
+        <Callout variant="success">
+          {translate(locale, 'settings.exchangeRates.saved')}
+        </Callout>
+      )}
 
       {/* ── Profile ─────────────────────────────────────────────────── */}
       <Card>
@@ -240,6 +302,13 @@ export default async function SettingsPage({ searchParams }: Props) {
       <PreferencesSection
         preferences={preferences}
         accounts={(accountRows ?? []) as { id: string; name: string }[]}
+      />
+
+      {/* ── Exchange rates ──────────────────────────────────────────── */}
+      <ExchangeRatesSection
+        baseCurrency={baseCurrency}
+        rows={exchangeRateRows}
+        today={today}
       />
 
       {/* ── Appearance ──────────────────────────────────────────────── */}

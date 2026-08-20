@@ -73,6 +73,13 @@ type AccountBalance = {
   posted_balance_base_currency: number | string
   pending_balance_base_currency: number | string
   projected_balance_base_currency: number | string
+  /**
+   * The rate the base-currency columns were converted at. Null means the
+   * household has no rate on file for this currency and the figures fell back
+   * to the historical sum — the rate each movement was booked at, blended.
+   */
+  base_conversion_rate: number | string | null
+  base_conversion_rate_date: string | null
 }
 
 type Currency = {
@@ -228,6 +235,8 @@ function emptyBalance(account: AccountMetadata): AccountBalance {
     posted_balance_base_currency: 0,
     pending_balance_base_currency: 0,
     projected_balance_base_currency: 0,
+    base_conversion_rate: null,
+    base_conversion_rate_date: null,
   }
 }
 
@@ -918,6 +927,20 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
         : null,
     }
   })
+  // A foreign-currency account with no rate on file still shows an equivalent,
+  // but it is the blended rate of everything ever posted to it, not what the
+  // money is worth now. Say so rather than letting the number quietly drift.
+  const currenciesMissingRate = [
+    ...new Set(
+      displayRows
+        .filter(
+          (row) =>
+            row.metadata.currency_code !== household.base_currency &&
+            row.balance.base_conversion_rate === null
+        )
+        .map((row) => row.metadata.currency_code)
+    ),
+  ].sort()
   const totalBalance = accountRowVMs.reduce((sum, row) => sum + row.baseAmount, 0)
   const prevMonthDelta =
     prevMonthBalance !== null && prevMonthBalance !== 0
@@ -1000,6 +1023,16 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       {created ? <Callout variant="success">{translate(locale, 'accounts.accountCreated')}</Callout> : null}
       {updated ? <Callout variant="success">{translate(locale, 'accounts.accountUpdated')}</Callout> : null}
       {infoMessage ? <Callout variant="info">{infoMessage}</Callout> : null}
+      {currenciesMissingRate.length ? (
+        <Callout variant="info">
+          {translate(locale, 'accounts.missingRateNotice')
+            .replace('{currencies}', currenciesMissingRate.join(', '))
+            .replace('{base}', household.base_currency)}{' '}
+          <Link href="/dashboard/settings" className="underline underline-offset-2">
+            {translate(locale, 'accounts.missingRateAction')}
+          </Link>
+        </Callout>
+      ) : null}
       {openingBalanceSet ? (
         <Callout variant="success">{translate(locale, 'accounts.openingBalanceSet')}</Callout>
       ) : null}

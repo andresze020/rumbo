@@ -135,6 +135,81 @@ export async function updateHouseholdAction(formData: FormData) {
  * than merged, which keeps the stored shape in step with the settings UI; the
  * parser tolerates anything missing.
  */
+/**
+ * Saves today's exchange rate for one currency pair.
+ *
+ * The rate is the direct multiplier the ledger uses everywhere else:
+ * `1 <from> = rate <base>`. It is written per (pair, date), so saving twice on
+ * the same day corrects that day's rate instead of stacking a second row —
+ * `exchange_rates_unique_household_pair_date` is the conflict target.
+ *
+ * This is what makes an account's base-currency equivalent a *current* value
+ * rather than the blended historical rate of everything ever posted to it.
+ */
+export async function saveExchangeRateAction(formData: FormData) {
+  const fromCurrency = String(formData.get('from_currency') ?? '').trim().toUpperCase()
+  const rateRaw = String(formData.get('rate') ?? '').trim()
+  const rateDateRaw = String(formData.get('rate_date') ?? '').trim()
+
+  if (fromCurrency.length !== 3) {
+    redirectWithError('Pick the currency to convert from.')
+  }
+
+  const rate = Number(rateRaw)
+
+  if (!rateRaw || !Number.isFinite(rate) || rate <= 0) {
+    redirectWithError('The exchange rate must be a number greater than 0.')
+  }
+
+  if (rateDateRaw && !/^\d{4}-\d{2}-\d{2}$/.test(rateDateRaw)) {
+    redirectWithError('The rate date must be a valid date.')
+  }
+
+  const { supabase, user, householdId } = await getAuthContext()
+
+  const { data: household } = await supabase
+    .from('households')
+    .select('base_currency')
+    .eq('id', householdId)
+    .maybeSingle()
+
+  const baseCurrency = household?.base_currency as string | undefined
+
+  if (!baseCurrency) redirectWithError('Could not read the household base currency.')
+
+  if (baseCurrency === fromCurrency) {
+    redirectWithError('The base currency does not need a rate against itself.')
+  }
+
+  const rateDate = rateDateRaw || new Date().toISOString().slice(0, 10)
+
+  const { error } = await supabase.from('exchange_rates').upsert(
+    {
+      household_id: householdId,
+      from_currency_code: fromCurrency,
+      to_currency_code: baseCurrency,
+      rate,
+      rate_date: rateDate,
+      source: 'manual',
+      created_by: user.id,
+      updated_by: user.id,
+    },
+    { onConflict: 'household_id,from_currency_code,to_currency_code,rate_date' }
+  )
+
+  if (error) redirectWithError('Could not save the exchange rate. Please try again.')
+
+  // Every screen that shows a base-currency figure reads it through
+  // get_account_balances, so they all move together.
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/accounts')
+  revalidatePath('/dashboard/net-worth')
+  revalidatePath('/dashboard/plan')
+  revalidatePath('/dashboard/debts')
+  revalidatePath('/dashboard/settings')
+  redirect('/dashboard/settings?saved=exchange-rate')
+}
+
 export async function updateUiPreferencesAction(formData: FormData) {
   const accountIds = [
     ...new Set(
