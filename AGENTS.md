@@ -23,6 +23,22 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Chrome pinned to the visual viewport** (2026-08-21, branch
+  `claude/zoom-scroll-header-footer-53n6iv`). UI only, no migration. A fast
+  scroll on a phone occasionally picks up a stray second finger and pinch-zooms
+  the page a few percent. `position: fixed` anchors to the *layout* viewport,
+  which is then larger than the screen, so the mobile header and the bottom tab
+  bar hung off its edges and read as cut off — you lost one or the other
+  depending on where the visual viewport had been panned to. `ViewportPin`
+  (`src/components/viewport-pin.tsx`, mounted in the root layout) publishes the
+  visual viewport's geometry as CSS variables while the scale deviates from 1,
+  and the `.vv-pin-*` utilities in `globals.css` translate the chrome onto it
+  and counter-scale it by `1/scale`, so the bars keep their on-screen size at
+  the screen edges and the zoom magnifies only the content. All of it is scoped
+  to `[data-vv-zoomed]`: at rest there is no transform, and therefore no
+  containing block for anything `fixed` rendered inside the bars. **Pinch zoom
+  stays enabled on purpose** — see `docs/pending-work.md` §2 before disabling
+  it.
 - **Exchange rates refresh themselves** (2026-08-21, branch
   `claude/andromoney-import-script-6u4fy1`). No migration — the
   `exchange_rates` table and the FX revaluation below already existed; what was
@@ -116,9 +132,12 @@ The product is household-first. All financial data must belong to a household.
 - notes (BR-044)
 - installment_plans (BR-035)
 
-All migrations are applied. `npx supabase migration list --linked`
-reported 58/58 on 2026-08-12, the day Tier-3 and Tier-4 were merged and
-pushed. Nothing is pending.
+`supabase/migrations/` holds 59 files. `npx supabase migration list --linked`
+reported 58/58 applied on 2026-08-12, the day Tier-3 and Tier-4 were merged and
+pushed. The 59th — `20260817120000_balance_fx_revaluation.sql` — is recorded as
+**still pending** by both Current status above and `docs/SPRINT-LOG.md`; no one
+has re-run the list since, so confirm with `npx supabase migration list
+--linked` before assuming either way. Nothing else is outstanding.
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
