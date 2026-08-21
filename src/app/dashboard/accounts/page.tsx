@@ -693,41 +693,56 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     redirect('/onboarding')
   }
 
-  const { data: currencies, error: currenciesError } = await supabase
-    .from('currencies')
-    .select('code, name')
-    .eq('is_active', true)
-    .order('code', { ascending: true })
+  const prevMonthEnd = (() => {
+    const d = new Date()
+    d.setDate(0)
+    return d.toISOString().slice(0, 10)
+  })()
 
-  if (currenciesError) {
-    throw new Error('Could not load active currencies.')
-  }
-
-  const { data: accountBalances, error: accountBalancesError } =
-    await supabase.rpc('get_account_balances', {
+  // Six independent reads, one round trip. They were sequential awaits, so the
+  // page paid the network latency six times over before it could render a
+  // single row; none of them depends on another's result.
+  const [
+    { data: currencies, error: currenciesError },
+    { data: accountBalances, error: accountBalancesError },
+    { data: prevBalanceRows },
+    { data: accountMetadata, error: accountMetadataError },
+    // BR-030: one call for every configured card, not one per card. A failure
+    // here is not fatal — the cycle is an extra reading of data the balances
+    // already show, so the page degrades to today's single-balance view.
+    { data: cardCycleRows },
+    { data: openingBalanceEntries, error: openingBalanceEntriesError },
+  ] = await Promise.all([
+    supabase
+      .from('currencies')
+      .select('code, name')
+      .eq('is_active', true)
+      .order('code', { ascending: true }),
+    supabase.rpc('get_account_balances', {
       p_household_id: household.id,
-    })
-
-  const { data: accountMetadata, error: accountMetadataError } = await supabase
-    .from('accounts')
-    .select(
-      'id, name, account_type, account_class, currency_code, institution_name, last_four, color, icon, opening_balance_date, is_archived, include_in_net_worth, treat_transfers_as_expense, statement_day, payment_day, billing_account_id, sort_order, notes'
-    )
-    .eq('household_id', household.id)
-    .is('deleted_at', null)
-    .order('is_archived', { ascending: true })
-    .order('sort_order', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: true })
-
-  // BR-030: one call for every configured card, not one per card. A failure here
-  // is not fatal — the cycle is an extra reading of data the balances already
-  // show, so the page degrades to today's single-balance view.
-  const { data: cardCycleRows } = await supabase.rpc('get_card_cycle_summaries', {
-    p_household_id: household.id,
-  })
-
-  const { data: openingBalanceEntries, error: openingBalanceEntriesError } =
-    await supabase
+    }),
+    // The "vs. previous month" figure used to pull every posted entry in the
+    // household's history over the wire and sum it in JS. The same function
+    // that already computes today's balances takes an as-of date and returns
+    // one row per account, so Postgres does the adding.
+    supabase.rpc('get_account_balances', {
+      p_household_id: household.id,
+      p_as_of_date: prevMonthEnd,
+    }),
+    supabase
+      .from('accounts')
+      .select(
+        'id, name, account_type, account_class, currency_code, institution_name, last_four, color, icon, opening_balance_date, is_archived, include_in_net_worth, treat_transfers_as_expense, statement_day, payment_day, billing_account_id, sort_order, notes'
+      )
+      .eq('household_id', household.id)
+      .is('deleted_at', null)
+      .order('is_archived', { ascending: true })
+      .order('sort_order', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true }),
+    supabase.rpc('get_card_cycle_summaries', {
+      p_household_id: household.id,
+    }),
+    supabase
       .from('transaction_entries')
       .select(
         'account_id, transactions!inner(transaction_type, deleted_at, status)'
@@ -735,21 +750,45 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       .eq('household_id', household.id)
       .eq('transactions.transaction_type', 'opening_balance')
       .is('transactions.deleted_at', null)
-      .in('transactions.status', ['pending', 'posted'])
+      .in('transactions.status', ['pending', 'posted']),
+  ])
+
+  if (currenciesError) {
+    throw new Error('Could not load active currencies.')
+  }
 
   const allAccounts = (accountMetadata ?? []) as AccountMetadata[]
-  const accountIds = allAccounts.map((account) => account.id)
+  const accountBalancesById = new Map(
+    ((accountBalances ?? []) as AccountBalance[]).map((balance) => [
+      balance.account_id,
+      balance,
+    ])
+  )
+
+  // get_account_balances only reports active accounts, so archived ones fall
+  // back to summing their entries here. That fallback used to fetch *every*
+  // entry in the household on every load — the whole ledger, to serve a view
+  // most visits never open. Only the accounts the RPC left out need it.
+  // Scoped to the accounts this view actually renders: in the default (active)
+  // view the RPC covers all of them, so the query is skipped outright.
+  const missingBalanceIds = allAccounts
+    .filter(
+      (account) =>
+        account.is_archived === showArchived &&
+        !accountBalancesById.has(account.id)
+    )
+    .map((account) => account.id)
   let accountEntries: TransactionEntryBalance[] = []
   let accountEntriesError = false
 
-  if (accountIds.length) {
+  if (missingBalanceIds.length) {
     const { data: entries, error: entriesError } = await supabase
       .from('transaction_entries')
       .select(
         'account_id, amount_account_currency, amount_base_currency, transactions!inner(status, deleted_at)'
       )
       .eq('household_id', household.id)
-      .in('account_id', accountIds)
+      .in('account_id', missingBalanceIds)
       .is('transactions.deleted_at', null)
       .in('transactions.status', ['posted', 'pending'])
 
@@ -757,36 +796,14 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     accountEntriesError = Boolean(entriesError)
   }
 
-  const activeAccountIds = allAccounts.filter((a) => !a.is_archived).map((a) => a.id)
-  let prevMonthBalance: number | null = null
+  const prevBalances = (prevBalanceRows ?? []) as AccountBalance[]
+  const prevMonthBalance = prevBalances.length
+    ? prevBalances.reduce(
+        (sum, balance) => sum + Number(balance.posted_balance_base_currency),
+        0
+      )
+    : null
 
-  if (activeAccountIds.length) {
-    const prevMonthEnd = (() => {
-      const d = new Date()
-      d.setDate(0)
-      return d.toISOString().slice(0, 10)
-    })()
-    const { data: prevEntries } = await supabase
-      .from('transaction_entries')
-      .select('amount_base_currency, transactions!inner(status, deleted_at, transaction_date)')
-      .eq('household_id', household.id)
-      .in('account_id', activeAccountIds)
-      .is('transactions.deleted_at', null)
-      .eq('transactions.status', 'posted')
-      .lte('transactions.transaction_date', prevMonthEnd)
-
-    if (prevEntries && prevEntries.length > 0) {
-      prevMonthBalance = (prevEntries as { amount_base_currency: number | string }[])
-        .reduce((sum, e) => sum + Number(e.amount_base_currency), 0)
-    }
-  }
-
-  const accountBalancesById = new Map(
-    ((accountBalances ?? []) as AccountBalance[]).map((balance) => [
-      balance.account_id,
-      balance,
-    ])
-  )
   const accountEntriesById = new Map<string, TransactionEntryBalance[]>()
 
   for (const entry of accountEntries) {

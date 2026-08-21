@@ -80,6 +80,8 @@ type Account = {
   institution_name: string | null
   is_archived: boolean
   icon: string | null
+  /** Soft-deleted accounts stay out of the pickers but still name their rows. */
+  deleted_at: string | null
 }
 
 type Category = {
@@ -91,6 +93,9 @@ type Category = {
   is_system: boolean
   is_archived: boolean
   icon: string | null
+  color: string | null
+  /** Same as accounts: hidden from pickers, still names its rows. */
+  deleted_at: string | null
 }
 
 type Transaction = {
@@ -633,33 +638,55 @@ export default async function TransactionsPage({
     .single()
   if (householdError || !household) redirect('/onboarding')
 
-  const { data: accounts, error: accountsError } = await supabase
-    .from('accounts')
-    .select('id, name, currency_code, institution_name, is_archived, icon')
-    .eq('household_id', household.id)
-    .is('deleted_at', null)
-    .order('sort_order', { ascending: true, nullsFirst: false })
-    .order('name', { ascending: true })
+  // Four independent lookups, one round trip. Accounts and categories come back
+  // unfiltered by `deleted_at`: the pickers drop the deleted ones in JS below,
+  // and keeping them here means the row-level name lookups further down need no
+  // queries of their own.
+  const [
+    { data: accountRows, error: accountsError },
+    { data: categoryRows, error: categoriesError },
+    { data: payeeRows },
+    { data: tagRows },
+  ] = await Promise.all([
+    supabase
+      .from('accounts')
+      .select(
+        'id, name, currency_code, institution_name, is_archived, icon, deleted_at'
+      )
+      .eq('household_id', household.id)
+      .order('sort_order', { ascending: true, nullsFirst: false })
+      .order('name', { ascending: true }),
+    supabase
+      .from('categories')
+      .select(
+        'id, name, category_type, reporting_type, parent_category_id, is_system, is_archived, icon, color, deleted_at'
+      )
+      .eq('household_id', household.id)
+      .order('parent_category_id', { ascending: true, nullsFirst: true })
+      .order('sort_order', { ascending: true, nullsFirst: false })
+      .order('name', { ascending: true }),
+    // BR-009: household payees power the transaction form's payee combobox.
+    supabase
+      .from('payees')
+      .select('id, name')
+      .eq('household_id', household.id)
+      .order('name', { ascending: true }),
+    // BR-023: household tags for the edit picker + list chips. Load all (incl.
+    // archived) so a transaction tagged with a since-archived tag still renders
+    // and isn't silently dropped when editing.
+    supabase
+      .from('tags')
+      .select('id, name, color, is_archived')
+      .eq('household_id', household.id)
+      .order('name', { ascending: true }),
+  ])
   if (accountsError) throw new Error('Could not load accounts.')
-
-  const { data: categories, error: categoriesError } = await supabase
-    .from('categories')
-    .select(
-      'id, name, category_type, reporting_type, parent_category_id, is_system, is_archived, icon'
-    )
-    .eq('household_id', household.id)
-    .is('deleted_at', null)
-    .order('parent_category_id', { ascending: true, nullsFirst: true })
-    .order('sort_order', { ascending: true, nullsFirst: false })
-    .order('name', { ascending: true })
   if (categoriesError) throw new Error('Could not load categories.')
 
-  // BR-009: household payees power the transaction form's payee combobox.
-  const { data: payeeRows } = await supabase
-    .from('payees')
-    .select('id, name')
-    .eq('household_id', household.id)
-    .order('name', { ascending: true })
+  const allAccountRows = (accountRows ?? []) as Account[]
+  const allCategoryRows = (categoryRows ?? []) as Category[]
+  const accounts = allAccountRows.filter((a) => a.deleted_at === null)
+  const categories = allCategoryRows.filter((c) => c.deleted_at === null)
   const payeeOptions = (payeeRows ?? []) as { id: string; name: string }[]
   // The focus banner only makes sense for a single payee — it's what the
   // Payees page's "View transactions" button produces. With several picked,
@@ -674,14 +701,6 @@ export default async function TransactionsPage({
     label: payee.name,
   }))
 
-  // BR-023: household tags for the edit picker + list chips. Load all (incl.
-  // archived) so a transaction tagged with a since-archived tag still renders
-  // and isn't silently dropped when editing.
-  const { data: tagRows } = await supabase
-    .from('tags')
-    .select('id, name, color, is_archived')
-    .eq('household_id', household.id)
-    .order('name', { ascending: true })
   const householdTags = (tagRows ?? []) as {
     id: string
     name: string
@@ -707,8 +726,8 @@ export default async function TransactionsPage({
   // filters used to be applied in JS after loading the entire date window; they
   // now live in SQL (search_household_transactions), which also returns the
   // whole-set aggregates so the header + totals stay correct across pages.
-  const allAccounts = (accounts ?? []) as Account[]
-  const allCategories = (categories ?? []) as Category[]
+  const allAccounts = accounts
+  const allCategories = categories
   const activeAccounts = allAccounts.filter((a) => !a.is_archived)
   const activeCategories = allCategories.filter(
     (c) =>
@@ -798,18 +817,6 @@ export default async function TransactionsPage({
   // BR-023: tag links for the loaded transactions → chips on each row + the
   // edit form's current selection.
   const tagIdsByTransaction = new Map<string, string[]>()
-  if (transactionIds.length) {
-    const { data: tagLinks } = await supabase
-      .from('transaction_tags')
-      .select('transaction_id, tag_id')
-      .eq('household_id', household.id)
-      .in('transaction_id', transactionIds)
-    for (const link of tagLinks ?? []) {
-      const list = tagIdsByTransaction.get(link.transaction_id) ?? []
-      list.push(link.tag_id as string)
-      tagIdsByTransaction.set(link.transaction_id, list)
-    }
-  }
 
   function tagsForTransaction(id: string) {
     return (tagIdsByTransaction.get(id) ?? [])
@@ -820,49 +827,49 @@ export default async function TransactionsPage({
 
   let transactionEntries: TransactionEntry[] = []
   let transactionAllocations: TransactionAllocation[] = []
-  let accountLookupRows: AccountLookup[] = []
-  let categoryLookupRows: CategoryLookup[] = []
   let transactionDetailsError = false
 
+  // Everything the loaded page of transactions needs, in one round trip. The
+  // account and category names used to be two more sequential queries; both
+  // re-read rows the household lookups above already carry.
   if (transactionIds.length) {
-    const { data: entries, error: entriesError } = await supabase
-      .from('transaction_entries')
-      .select('transaction_id, account_id, amount_account_currency, currency_code, exchange_rate_to_base')
-      .eq('household_id', household.id)
-      .in('transaction_id', transactionIds)
+    const [
+      { data: tagLinks },
+      { data: entries, error: entriesError },
+      { data: allocations, error: allocationsError },
+    ] = await Promise.all([
+      supabase
+        .from('transaction_tags')
+        .select('transaction_id, tag_id')
+        .eq('household_id', household.id)
+        .in('transaction_id', transactionIds),
+      supabase
+        .from('transaction_entries')
+        .select('transaction_id, account_id, amount_account_currency, currency_code, exchange_rate_to_base')
+        .eq('household_id', household.id)
+        .in('transaction_id', transactionIds),
+      supabase
+        .from('transaction_allocations')
+        .select('transaction_id, category_id, amount_base_currency')
+        .eq('household_id', household.id)
+        .in('transaction_id', transactionIds),
+    ])
 
-    const { data: allocations, error: allocationsError } = await supabase
-      .from('transaction_allocations')
-      .select('transaction_id, category_id, amount_base_currency')
-      .eq('household_id', household.id)
-      .in('transaction_id', transactionIds)
+    for (const link of tagLinks ?? []) {
+      const list = tagIdsByTransaction.get(link.transaction_id) ?? []
+      list.push(link.tag_id as string)
+      tagIdsByTransaction.set(link.transaction_id, list)
+    }
 
     transactionDetailsError = Boolean(entriesError || allocationsError)
     transactionEntries = (entries ?? []) as TransactionEntry[]
     transactionAllocations = (allocations ?? []) as TransactionAllocation[]
-
-    const accountIds = Array.from(new Set(transactionEntries.map((e) => e.account_id)))
-    const categoryIds = Array.from(new Set(transactionAllocations.map((a) => a.category_id)))
-
-    if (accountIds.length) {
-      const { data: accountRows, error: accountRowsError } = await supabase
-        .from('accounts')
-        .select('id, name')
-        .eq('household_id', household.id)
-        .in('id', accountIds)
-      transactionDetailsError = transactionDetailsError || Boolean(accountRowsError)
-      accountLookupRows = (accountRows ?? []) as AccountLookup[]
-    }
-
-    if (categoryIds.length) {
-      const { data: categoryRows, error: categoryRowsError } = await supabase
-        .from('categories')
-        .select('id, name, parent_category_id, icon, color, is_system')
-        .eq('household_id', household.id)
-      transactionDetailsError = transactionDetailsError || Boolean(categoryRowsError)
-      categoryLookupRows = (categoryRows ?? []) as CategoryLookup[]
-    }
   }
+
+  // Soft-deleted rows are included on purpose: a transaction on an account or
+  // category that was later deleted still has to render with its name.
+  const accountLookupRows: AccountLookup[] = allAccountRows
+  const categoryLookupRows: CategoryLookup[] = allCategoryRows
 
   const entriesByTransactionId = new Map<string, TransactionEntry[]>()
   for (const entry of transactionEntries) {
