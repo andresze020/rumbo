@@ -59,7 +59,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <GlobalAddTransactionButton
             aria-label={ui('Add transaction')}
             title={ui('Add transaction')}
-            className="fixed bottom-6 right-6 z-50 hidden size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:flex"
+            className="vv-pin-corner [--vv-pin-inset-x:1.5rem] [--vv-pin-inset-y:1.5rem] fixed bottom-6 right-6 z-50 hidden size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:flex"
           >
             <Plus className="size-6" aria-hidden="true" />
           </GlobalAddTransactionButton>

@@ -195,4 +195,56 @@
       animation: none;
     }
   }
+
+  /*
+   * Pinch-zoom chrome pinning.
+   *
+   * `position: fixed` anchors to the *layout* viewport. Zoom the page — a
+   * stray two-finger flick mid-scroll is enough — and the layout viewport is
+   * now larger than the screen, so the top bar and the bottom nav hang off its
+   * edges and get clipped: you scroll fast and lose either the header or the
+   * tab bar. `ViewportPin` publishes the visual viewport's geometry; these
+   * classes translate the chrome onto it and counter-scale it by 1/scale, so
+   * the bars keep their on-screen size and stay glued to the screen edges
+   * while the zoom magnifies the content underneath, the way native app chrome
+   * behaves.
+   *
+   * All of it is scoped to `[data-vv-zoomed]`, which only exists while the
+   * page is actually zoomed: at scale 1 there is no transform, and therefore
+   * no extra containing block for anything `fixed` rendered inside.
+   */
+  html[data-vv-zoomed] .vv-pin-top,
+  html[data-vv-zoomed] .vv-pin-bottom,
+  html[data-vv-zoomed] .vv-pin-corner {
+    will-change: transform;
+  }
+
+  /* `inset-x-0 top-0` — full-width bar hugging the top of the screen. */
+  html[data-vv-zoomed] .vv-pin-top {
+    transform-origin: 0 0;
+    transform: translate3d(var(--vv-left), var(--vv-top), 0) scale(var(--vv-inv-scale));
+  }
+
+  /* `inset-x-0 bottom-0` — full-width bar hugging the bottom of the screen. */
+  html[data-vv-zoomed] .vv-pin-bottom {
+    transform-origin: 0 100%;
+    transform: translate3d(var(--vv-left), var(--vv-bottom-delta), 0)
+      scale(var(--vv-inv-scale));
+  }
+
+  /*
+   * Bottom-right FAB. Its own `bottom`/`right` offsets are layout-viewport
+   * pixels, which the counter-scale would otherwise shrink on screen, so add
+   * back what the scale takes away. Set `--vv-pin-inset-x/y` to the element's
+   * own offsets (e.g. `bottom-24 right-6` -> 6rem / 1.5rem).
+   */
+  html[data-vv-zoomed] .vv-pin-corner {
+    transform-origin: 100% 100%;
+    transform: translate3d(
+        calc(var(--vv-right-delta) + var(--vv-pin-inset-x, 0px) * (1 - var(--vv-inv-scale))),
+        calc(var(--vv-bottom-delta) + var(--vv-pin-inset-y, 0px) * (1 - var(--vv-inv-scale))),
+        0
+      )
+      scale(var(--vv-inv-scale));
+  }
 }

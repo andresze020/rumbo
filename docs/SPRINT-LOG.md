@@ -15,6 +15,42 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Chrome pinned to the visual viewport (2026-08-21)
+- Goal: reported from a phone — "bajo ciertas condiciones hago scroll rápido y
+  como que se hace un poco de zoom y se corta o el encabezado o la barra de
+  abajo", with two screenshots showing one of each. Not a scroll bug: a stray
+  second finger during a fling pinch-zooms the page a few percent, and
+  `position: fixed` anchors to the *layout* viewport, which is then bigger than
+  the screen — so the fixed chrome sits partly outside it.
+- Shipped: `ViewportPin` (`src/components/viewport-pin.tsx`, mounted in the root
+  layout) publishes the visual viewport's geometry — `--vv-left`, `--vv-top`,
+  `--vv-right-delta`, `--vv-bottom-delta`, `--vv-scale`, `--vv-inv-scale` — plus
+  a `data-vv-zoomed` flag on `<html>`, rAF-throttled because the visual viewport
+  moves on the compositor and its events arrive in bursts. Three utilities in
+  `globals.css` consume them: `.vv-pin-top`, `.vv-pin-bottom` and
+  `.vv-pin-corner` translate the element onto the visual viewport and
+  counter-scale it by `1/scale`, so it keeps its on-screen size at the screen
+  edge while the zoom magnifies only the content underneath. Applied to the
+  mobile header, the bottom nav, the toast stack and both FABs.
+- Migrations added: none.
+- Tables changed: none.
+- Design notes: everything is scoped to `[data-vv-zoomed]`, which only exists
+  while `visualViewport.scale` deviates from 1 by more than 0.01 — at rest there
+  is no transform, no new containing block for anything `fixed` rendered inside
+  the bars (the trap `.animate-screen-in` documents), and no per-scroll work.
+  The soft keyboard shrinks the visual viewport *without* changing the scale, so
+  `useMobileKeyboardInset` in `transaction-dialog-provider.tsx` is untouched.
+  Verified in headless Chromium at scale 1.5 panned to (20, 100): top bar lands
+  at screen (0, 0) at full width and its natural 56px height, bottom bar flush
+  at the screen bottom, FABs 24px from both screen edges at natural size.
+- Follow-ups / known gaps: modal overlays (`fixed inset-0` dialogs and bottom
+  sheets) are **not** pinned — opened while zoomed they still anchor to the
+  layout viewport. Not reported, deliberately left alone. There is also no
+  reliable way to reset the zoom from code: the meta-viewport rewrite trick is
+  Chrome-Android-only and was rejected rather than shipped half-working. The
+  decision to keep pinch zoom enabled, and why disabling it would not work
+  anyway, is recorded in `docs/pending-work.md` §2.
+
 ## Exchange rates refresh themselves (2026-08-21)
 - Goal: the FX revaluation made balances read at a real rate, but only if
   someone typed one in every day. Nobody is going to do that.
