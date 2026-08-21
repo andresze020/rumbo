@@ -7,6 +7,7 @@ import {
   CalendarRange,
   CreditCard,
   Download,
+  HelpCircle,
   LayoutDashboard,
   LineChart,
   ListChecks,
@@ -234,6 +235,13 @@ export const navGroups: NavGroup[] = [
         hint: 'Preferences and household settings',
       },
       { href: '/dashboard/export', labelKey: 'nav.export', icon: Download, phase: 'alpha' },
+      {
+        href: '/dashboard/help',
+        labelKey: 'nav.help',
+        icon: HelpCircle,
+        phase: 'alpha',
+        hint: 'How the app works, and answers to the usual questions',
+      },
       {
         href: '/dashboard/coming-soon/household',
         labelKey: 'nav.household',

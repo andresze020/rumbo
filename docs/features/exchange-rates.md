@@ -168,15 +168,45 @@ That step is real — it is the gap between cost basis and market — but it loo
 like an event. Saving a rate per month for the periods worth the effort smooths
 it into the actual currency movement.
 
-### Entering rates
+### Where rates come from
+
+**Automatically, once a day.** `refreshExchangeRatesAction`
+(`src/app/dashboard/exchange-rate-actions.ts`) tops up any rate that is not
+dated today, from the same public feed the entry forms have always used
+(`@fawazahmed0/currency-api` on jsDelivr — free, no key, and it carries COP,
+which the ECB-backed feeds do not). `ExchangeRateAutoRefresh`, mounted in the
+dashboard layout, triggers it on the first render of a browser session and
+records the day in `sessionStorage` so navigation does not re-hit the provider.
+
+It runs **as the signed-in user**, so RLS applies exactly as everywhere else —
+no service-role key was introduced for this, and no cron infrastructure. The
+trade-off is that rates refresh when someone opens the app rather than on a
+server schedule; for a personal finance app that is the moment the number is
+being read. If you later want the daily series filled in on days nobody opens
+the app (which would make the net-worth history smoother), a Vercel Cron hitting
+the same action is the natural next step.
+
+Failure is never fatal: the provider being down leaves the previous rate on file
+and the balance keeps using it. The action is idempotent — it skips any currency
+already dated today, and the upsert is keyed on (household, pair, date), so two
+tabs racing write one row.
+
+Rates are stored under **the date the provider published**, not "today": on a
+weekend the newest figure is Friday's, and dating it today would invent a
+quotation that never existed. The as-of lookup takes the newest rate on or
+before the day being shown, so it is used either way.
+
+### Overriding a rate by hand
 
 Settings → Exchange rates, one form per foreign currency the household holds
-accounts in. The stored `rate` is the direct multiplier (`1 from = rate to`),
-but that is the awkward direction to type for a currency like COP
-(`0.00045375`), so the form edits both directions and mirrors them; only the
-direct one is submitted. Saving twice on the same date corrects that date's rate
-rather than stacking a row — `exchange_rates_unique_household_pair_date` is the
-conflict target.
+accounts in, plus an **Update now** button. Each row says whether the rate on
+file came from the feed (`source = 'auto'`) or was typed (`'manual'`).
+
+The stored `rate` is the direct multiplier (`1 from = rate to`), but that is the
+awkward direction to type for a currency like COP (`0.00045375`), so the form
+edits both directions and mirrors them; only the direct one is submitted. Saving
+twice on the same date corrects that date's rate rather than stacking a row —
+`exchange_rates_unique_household_pair_date` is the conflict target.
 
 ---
 

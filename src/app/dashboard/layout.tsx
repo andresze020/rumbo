@@ -7,6 +7,7 @@ import { GlobalAddTransactionButton } from '@/components/global-add-transaction-
 import { TransactionDialogProvider } from '@/components/transaction-dialog-provider'
 import { AssistantDrawer } from '@/components/assistant-drawer'
 import { InstallAppHint } from '@/components/install-app-hint'
+import { ExchangeRateAutoRefresh } from './exchange-rate-auto-refresh'
 import { LanguageProvider } from '@/components/language-provider'
 import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { ScreenTransition } from '@/components/screen-transition'
@@ -39,6 +40,11 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             <MobileNav className="lg:hidden" />
 
             <InstallAppHint />
+
+            {/* Tops up the household's FX rates once a day, so a
+                foreign-currency balance reads at today's rate without anyone
+                entering one. Renders nothing. */}
+            <ExchangeRateAutoRefresh />
 
             <main className="flex-1 pt-14 pb-24 lg:pt-0 lg:pb-24">
               <ScreenTransition>{children}</ScreenTransition>

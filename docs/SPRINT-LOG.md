@@ -15,6 +15,25 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Exchange rates refresh themselves (2026-08-21)
+- Goal: the FX revaluation made balances read at a real rate, but only if
+  someone typed one in every day. Nobody is going to do that.
+- Shipped: `refreshExchangeRatesAction` fetches any rate not dated today from
+  the public feed the entry forms already use, run as the signed-in user (RLS
+  applies; no service-role key, no cron). `ExchangeRateAutoRefresh` in the
+  dashboard layout triggers it once per browser session per day via
+  `sessionStorage`. `fetchDirectRate` reads the pair in the ledger's direction
+  with an inverse fallback. Rates carry the provider's publication date, not
+  today's. Settings shows auto vs manual and gains an Update now button.
+- Migrations added: none.
+- Tables changed: none.
+- Follow-ups / known gaps: rates only refresh when someone opens the app, so
+  days nobody visits leave a gap in the daily series (the as-of lookup covers
+  it by using the newest earlier rate; the net-worth curve is just coarser). A
+  Vercel Cron calling the same action would fill those in. The provider is a
+  free community feed with no SLA — verified by the four forms that already
+  depend on it, not by a contract.
+
 ## Balance FX revaluation (2026-08-20)
 - Goal: an account's base-currency equivalent and net worth should say what the
   money is worth now, not what it cost. Surfaced by the AndroMoney import, whose

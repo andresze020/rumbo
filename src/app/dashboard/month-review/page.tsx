@@ -348,8 +348,15 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       {monthReopened ? <Callout variant="info">Month reopened.</Callout> : null}
       {closeError ? <Callout variant="error">{closeError}</Callout> : null}
 
-      {/* Month status + health */}
-      <div className={cn(CARD, 'flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5')}>
+      {/* Month status + health. The id is the landing spot for the Control
+          center checklist's "close this month" row. */}
+      <div
+        id="close-month"
+        className={cn(
+          CARD,
+          'scroll-mt-20 flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5'
+        )}
+      >
         <div className="flex items-center gap-4">
           <div className="flex size-16 shrink-0 items-center justify-center rounded-full border-[3px] border-primary bg-primary/10">
             <span className="text-xl font-bold text-primary">{scoreGrade}</span>
