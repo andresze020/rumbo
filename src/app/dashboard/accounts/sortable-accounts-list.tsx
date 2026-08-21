@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useTransition, type ReactNode } from 'react'
-import Link from 'next/link'
-import { ArrowRight, GripVertical, Plus, Settings } from 'lucide-react'
+import { ChevronDown, GripVertical } from 'lucide-react'
 import {
   DndContext,
   KeyboardSensor,
@@ -23,9 +22,6 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { AccountAvatar } from '@/components/account-avatar'
 import { BalanceAmount } from '@/components/balance-amount'
-import { Badge } from '@/components/ui/badge'
-import { buttonVariants } from '@/components/ui/button'
-import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import { Callout } from '@/components/callout'
 import { useLanguage } from '@/components/language-provider'
 import { groupAccountsByType } from '@/lib/accounts-view/group'
@@ -33,7 +29,7 @@ import { formatCurrency } from '@/lib/format'
 import type { AccountsView } from '@/lib/accounts-view/server'
 import { cn } from '@/lib/utils'
 import { reorderAccountsAction } from './actions'
-import { AccountCardDetails, type CardCycleView } from './account-card-details'
+import { AccountDetailsPanel, type CardCycleView } from './account-card-details'
 
 export type AccountRowVM = {
   id: string
@@ -74,127 +70,155 @@ type SortableAccountsListProps = {
   baseCurrency: string
 }
 
-function AccountRowBody({
+/**
+ * One account, one line. The name and the balance are the only things a row
+ * shows at rest; the type badge, the liability badge and the "Available" caption
+ * that used to repeat under every figure are all things the avatar, the group
+ * header or the sign of the number already say. Everything else lives behind the
+ * chevron.
+ */
+function AccountRow({
   row,
-  showTypeBadge,
+  showType,
   dragHandle,
 }: {
   row: AccountRowVM
-  showTypeBadge: boolean
+  /** Flat list has no group header, so the row carries its own type label. */
+  showType: boolean
   dragHandle?: ReactNode
 }) {
+  const [open, setOpen] = useState(false)
   const { t } = useLanguage()
+  const cycle = row.cardCycle
+
+  const subtitle = [
+    showType ? row.accountTypeLabel : null,
+    row.institutionName,
+    row.lastFour ? `···· ${row.lastFour}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
-    <div className={cn('flex items-start gap-2 p-3', row.isArchived && 'bg-muted/30')}>
-      {dragHandle}
-      <div className="min-w-0 flex-1">
-        <AccountCardDetails
-          accountId={row.id}
-          summaryLeft={
-            <>
-              <AccountAvatar
-                accountType={row.accountType}
-                emoji={row.icon}
-                color={row.color}
-                className={row.isArchived ? 'opacity-60 grayscale' : undefined}
-              />
-              <div className="min-w-0">
-                <p
-                  className={cn(
-                    'truncate text-sm font-medium',
-                    row.isArchived && 'text-muted-foreground'
-                  )}
-                >
-                  {row.name}
-                </p>
-                {row.institutionName || row.lastFour ? (
-                  <p className="truncate text-xs text-muted-foreground">
-                    {row.institutionName}
-                    {row.institutionName && row.lastFour ? ' · ' : ''}
-                    {row.lastFour ? `···· ${row.lastFour}` : ''}
-                  </p>
-                ) : null}
-                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                  {showTypeBadge ? (
-                    <Badge variant="secondary" className="text-[11px]">
-                      {row.accountTypeLabel}
-                    </Badge>
-                  ) : null}
-                  {row.accountClass === 'liability' ? (
-                    <Badge
-                      variant="outline"
-                      className="border-rose-200 text-[11px] text-rose-600 dark:border-rose-900 dark:text-rose-400"
-                    >
-                      {t('accounts.classLiability')}
-                    </Badge>
-                  ) : null}
-                  {row.isArchived ? (
-                    <Badge variant="outline" className="text-[11px]">
-                      {t('common.archived')}
-                    </Badge>
-                  ) : null}
-                  {/* BR-039: the flag silently changes what Reports call
-                      "spent", so it has to be visible from the list. */}
-                  {row.treatTransfersAsExpense ? (
-                    <Badge
-                      variant="outline"
-                      className="border-sky-200 text-[11px] text-sky-700 dark:border-sky-900 dark:text-sky-400"
-                    >
-                      {t('accounts.transferAsExpenseBadge')}
-                    </Badge>
-                  ) : null}
-                </div>
-              </div>
-            </>
-          }
-          balanceLabel={row.balanceLabel}
-          balanceAmount={row.balanceAmount}
-          postedLabel={row.postedLabel}
-          pendingLabel={row.pendingLabel}
-          projectedLabel={row.projectedLabel}
-          balanceType={row.balanceType}
-          baseCurrencyLabel={row.baseCurrencyLabel}
-          cardCycle={row.cardCycle}
-        />
-        {/* Row action icons */}
-        <div className="-mx-2 mt-1 flex items-center justify-end gap-0.5 border-t pt-1">
-          {!row.isArchived ? (
-            <GlobalAddTransactionButton
-              className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7')}
-              defaultAccountId={row.id}
-              aria-label={`Add transaction for ${row.name}`}
+    // An open row tints, so its detail panel reads as part of that account and
+    // not as a section of the card it sits in.
+    <div className={cn(open && 'bg-muted/20')}>
+      <div className="flex items-center">
+        {dragHandle}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-3 text-left outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 sm:pr-4',
+            dragHandle ? 'pl-1' : 'pl-3 sm:pl-4'
+          )}
+        >
+          <AccountAvatar
+            accountType={row.accountType}
+            emoji={row.icon}
+            color={row.color}
+            size="sm"
+            className={cn('size-9', row.isArchived && 'opacity-60 grayscale')}
+          />
+
+          <span className="min-w-0 flex-1">
+            <span
+              className={cn(
+                'block truncate text-sm font-medium',
+                row.isArchived && 'text-muted-foreground'
+              )}
             >
-              <Plus className="size-3.5" aria-hidden="true" />
-            </GlobalAddTransactionButton>
-          ) : null}
-          <Link
-            href={`/dashboard/transactions?account_id=${row.id}`}
-            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7')}
-            aria-label={`View transactions for ${row.name}`}
-          >
-            <ArrowRight className="size-3.5" aria-hidden="true" />
-          </Link>
-          <Link
-            href={row.editHref}
-            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7')}
-            aria-label={`Edit ${row.name}`}
-          >
-            <Settings className="size-3.5" aria-hidden="true" />
-          </Link>
+              {row.name}
+            </span>
+            {subtitle || row.treatTransfersAsExpense ? (
+              <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                {subtitle ? (
+                  <span className="truncate text-xs text-muted-foreground">
+                    {subtitle}
+                  </span>
+                ) : null}
+                {/* BR-039: the flag silently changes what Reports call "spent",
+                    so it has to be visible from the list. */}
+                {row.treatTransfersAsExpense ? (
+                  <span className="shrink-0 rounded-full border border-sky-500/40 px-1.5 py-px text-[10px] font-medium text-sky-700 dark:text-sky-400">
+                    {t('accounts.transferAsExpenseBadge')}
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
+          </span>
+
+          <span className="flex shrink-0 flex-col items-end leading-tight">
+            <BalanceAmount
+              label={row.balanceLabel}
+              amount={row.balanceAmount}
+              className="text-sm sm:text-[15px]"
+            />
+            {row.baseCurrencyLabel ? (
+              <span className="text-[11px] text-muted-foreground">
+                ≈ {row.baseCurrencyLabel}
+              </span>
+            ) : null}
+            {/* BR-030: on a card with a cycle, the running balance alone cannot
+                answer "what do I owe next" — so the payable figure and its due
+                date stay on the row even though the plain balance caption went. */}
+            {cycle ? (
+              <span
+                className={cn(
+                  'text-[11px]',
+                  cycle.isOverdue
+                    ? 'font-semibold text-rose-600 dark:text-rose-400'
+                    : 'text-muted-foreground'
+                )}
+              >
+                <span className="font-medium text-foreground">
+                  {cycle.payableLabel}
+                </span>{' '}
+                {t('accounts.cyclePayableDueShort')} {cycle.closedDueLabel}
+                {cycle.isOverdue ? ` · ${t('accounts.cycleOverdue')}` : ''}
+              </span>
+            ) : null}
+          </span>
+
+          <ChevronDown
+            className={cn(
+              'size-4 shrink-0 text-muted-foreground/60 transition-transform duration-200',
+              open && 'rotate-180'
+            )}
+            aria-hidden="true"
+          />
+        </button>
+      </div>
+
+      <div
+        className={cn(
+          'grid transition-all duration-200 ease-in-out',
+          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+        )}
+      >
+        {/* `inert` while collapsed: the panel stays mounted for the animation,
+            and without it every row would leave three hidden buttons in the tab
+            order. */}
+        <div className="overflow-hidden" inert={!open}>
+          <AccountDetailsPanel
+            accountId={row.id}
+            accountName={row.name}
+            editHref={row.editHref}
+            isArchived={row.isArchived}
+            postedLabel={row.postedLabel}
+            pendingLabel={row.pendingLabel}
+            projectedLabel={row.projectedLabel}
+            balanceType={row.balanceType}
+            cardCycle={row.cardCycle}
+          />
         </div>
       </div>
     </div>
   )
 }
 
-function SortableRow({
-  row,
-  showTypeBadge,
-}: {
-  row: AccountRowVM
-  showTypeBadge: boolean
-}) {
+function SortableRow({ row }: { row: AccountRowVM }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
 
@@ -202,20 +226,22 @@ function SortableRow({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn('bg-card', isDragging && 'relative z-10 opacity-80 shadow-lg')}
+      className={cn('bg-card', isDragging && 'relative z-10 opacity-90 shadow-lg')}
     >
-      <AccountRowBody
+      <AccountRow
         row={row}
-        showTypeBadge={showTypeBadge}
+        showType
         dragHandle={
           <button
             type="button"
-            className="mt-0.5 cursor-grab touch-none rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+            // Faint at rest so a column of grips never competes with the
+            // balances, but still a full touch target for reordering.
+            className="flex h-9 w-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:text-foreground active:cursor-grabbing"
             aria-label={`Reorder ${row.name}`}
             {...attributes}
             {...listeners}
           >
-            <GripVertical className="size-4" aria-hidden="true" />
+            <GripVertical className="size-3.5" aria-hidden="true" />
           </button>
         }
       />
@@ -223,108 +249,8 @@ function SortableRow({
   )
 }
 
-function AccountCard({ row }: { row: AccountRowVM }) {
-  const { t } = useLanguage()
-  const isOwed = row.balanceType === 'owed'
-
-  return (
-    <div
-      className={cn(
-        'flex flex-col gap-2 rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]',
-        row.isArchived && 'opacity-80'
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <AccountAvatar
-          accountType={row.accountType}
-          emoji={row.icon}
-          color={row.color}
-          className={row.isArchived ? 'opacity-60 grayscale' : undefined}
-        />
-        <div className="min-w-0 flex-1">
-          <p className={cn('truncate text-sm font-medium', row.isArchived && 'text-muted-foreground')}>
-            {row.name}
-          </p>
-          {row.institutionName || row.lastFour ? (
-            <p className="truncate text-xs text-muted-foreground">
-              {row.institutionName}
-              {row.institutionName && row.lastFour ? ' · ' : ''}
-              {row.lastFour ? `···· ${row.lastFour}` : ''}
-            </p>
-          ) : null}
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            {row.accountClass === 'liability' ? (
-              <Badge
-                variant="outline"
-                className="border-rose-200 text-[11px] text-rose-600 dark:border-rose-900 dark:text-rose-400"
-              >
-                {t('accounts.classLiability')}
-              </Badge>
-            ) : null}
-            {row.isArchived ? (
-              <Badge variant="outline" className="text-[11px]">
-                {t('common.archived')}
-              </Badge>
-            ) : null}
-          </div>
-        </div>
-        <div className="shrink-0 text-right">
-          <BalanceAmount label={row.balanceLabel} amount={row.balanceAmount} className="text-sm font-semibold" />
-          {row.baseCurrencyLabel ? (
-            <p className="text-[11px] text-muted-foreground">≈ {row.baseCurrencyLabel}</p>
-          ) : null}
-          {/* BR-030: the grouped/card view gets the same payable figure as the
-              list view — App B shows both numbers per card, and a card whose
-              cycle is configured in one view but invisible in the other would
-              just look broken. */}
-          {row.cardCycle ? (
-            <>
-              <p className="text-[11px] text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  {row.cardCycle.payableLabel}
-                </span>{' '}
-                {t('accounts.cyclePayableDueShort')} {row.cardCycle.closedDueLabel}
-              </p>
-              {row.cardCycle.isOverdue ? (
-                <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
-                  {t('accounts.cycleOverdue')}
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <p className="text-[11px] text-muted-foreground">{isOwed ? t('accounts.owed') : t('accounts.available')}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="-mx-3 flex items-center justify-end gap-0.5 border-t px-2 pt-2">
-        {!row.isArchived ? (
-          <GlobalAddTransactionButton
-            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7')}
-            defaultAccountId={row.id}
-            aria-label={`Add transaction for ${row.name}`}
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-          </GlobalAddTransactionButton>
-        ) : null}
-        <Link
-          href={`/dashboard/transactions?account_id=${row.id}`}
-          className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7')}
-          aria-label={`View transactions for ${row.name}`}
-        >
-          <ArrowRight className="size-3.5" aria-hidden="true" />
-        </Link>
-        <Link
-          href={row.editHref}
-          className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7')}
-          aria-label={`Edit ${row.name}`}
-        >
-          <Settings className="size-3.5" aria-hidden="true" />
-        </Link>
-      </div>
-    </div>
-  )
-}
+const CARD_CLASS =
+  'overflow-hidden rounded-2xl border bg-card shadow-sm shadow-black/[0.03]'
 
 export function SortableAccountsList({
   rows,
@@ -335,7 +261,6 @@ export function SortableAccountsList({
   const [items, setItems] = useState(rows)
   const [, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const { t } = useLanguage()
 
   // Adopt a fresh server list when its set/order actually changes (archived
   // toggle, account created/archived) without an effect, so optimistic drag
@@ -380,7 +305,10 @@ export function SortableAccountsList({
     </Callout>
   ) : null
 
-  // ── Card-grid group view ─────────────────────────────────────────────────
+  // ── Grouped view ─────────────────────────────────────────────────────────
+  // Same rows as the flat list, one card per account type. The type label and
+  // its subtotal are stated once in the header instead of once per row, which
+  // is what makes a grouped row leaner than a flat one.
   if (view === 'group') {
     const groups = groupAccountsByType(items, {
       getType: (row) => row.accountType,
@@ -390,25 +318,26 @@ export function SortableAccountsList({
     return (
       <div>
         {errorCallout}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {groups.map((group) => (
-            <div key={group.type}>
-              <div className="mb-3 flex items-center justify-between px-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {group.label}{' '}
-                  <span className="font-normal">
-                    · {group.count} {group.count === 1 ? t('accounts.account') : t('accounts.accountsPlural')}
-                  </span>
+            <div key={group.type} className={CARD_CLASS}>
+              <div className="flex items-center gap-2 border-b bg-muted/30 px-3 py-2 sm:px-4">
+                <span className="truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  {/* Localized on the server, unlike the grouper's fallback. */}
+                  {group.rows[0]?.accountTypeLabel ?? group.label}
+                </span>
+                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/60">
+                  {group.count}
                 </span>
                 <BalanceAmount
                   label={formatCurrency(group.subtotalBase, baseCurrency)}
                   amount={group.subtotalBase}
-                  className="text-sm"
+                  className="ml-auto text-xs"
                 />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="divide-y divide-border/60">
                 {group.rows.map((row) => (
-                  <AccountCard key={row.id} row={row} />
+                  <AccountRow key={row.id} row={row} showType={false} />
                 ))}
               </div>
             </div>
@@ -418,27 +347,19 @@ export function SortableAccountsList({
     )
   }
 
-  // ── List view ────────────────────────────────────────────────────────────
+  // ── Flat list view ───────────────────────────────────────────────────────
   const listBody = items.map((row) =>
     sortable ? (
-      <SortableRow
-        key={row.id}
-        row={row}
-        showTypeBadge
-      />
+      <SortableRow key={row.id} row={row} />
     ) : (
-      <AccountRowBody
-        key={row.id}
-        row={row}
-        showTypeBadge
-      />
+      <AccountRow key={row.id} row={row} showType />
     )
   )
 
   return (
     <div>
       {errorCallout}
-      <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
+      <div className={cn(CARD_CLASS, 'divide-y divide-border/60')}>
         {sortable ? (
           <DndContext
             sensors={sensors}
