@@ -94,7 +94,7 @@ export default async function SettingsPage({ searchParams }: Props) {
   const today = new Date().toISOString().slice(0, 10)
   const { data: rateRows } = await supabase
     .from('exchange_rates')
-    .select('from_currency_code, rate, rate_date')
+    .select('from_currency_code, rate, rate_date, source')
     .eq('household_id', profile.default_household_id)
     .eq('to_currency_code', baseCurrency)
     .in('from_currency_code', [...accountsByCurrency.keys()])
@@ -102,16 +102,21 @@ export default async function SettingsPage({ searchParams }: Props) {
 
   // Ordered newest-first above, so the first row seen per currency is the
   // latest one on file.
-  const latestRateByCurrency = new Map<string, { rate: number; rate_date: string }>()
+  const latestRateByCurrency = new Map<
+    string,
+    { rate: number; rate_date: string; source: string | null }
+  >()
   for (const row of (rateRows ?? []) as {
     from_currency_code: string
     rate: number | string
     rate_date: string
+    source: string | null
   }[]) {
     if (latestRateByCurrency.has(row.from_currency_code)) continue
     latestRateByCurrency.set(row.from_currency_code, {
       rate: Number(row.rate),
       rate_date: row.rate_date,
+      source: row.source,
     })
   }
 
@@ -124,6 +129,7 @@ export default async function SettingsPage({ searchParams }: Props) {
         currencyCode,
         rate: latest?.rate ?? null,
         rateDate: latest?.rate_date ?? null,
+        source: latest?.source ?? null,
       }
     })
 
