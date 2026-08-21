@@ -186,6 +186,13 @@ conflict target.
 npx supabase db push
 ```
 
+The assertion suite in `supabase/tests/br_003_006_money_invariants.sql` covers
+this: `BR-006 official balances match posted/pending entries only` now checks
+the **account-currency** column (the currency-neutral truth — it was written
+against the base column, which is no longer a plain sum of entries), and a new
+`FX balances revalue at the rate on file, else fall back to the entry sum`
+states the conversion rule itself.
+
 Then, as an authenticated member of the household:
 
 ```sql

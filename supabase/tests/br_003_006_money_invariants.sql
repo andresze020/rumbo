@@ -132,19 +132,23 @@ select
       or entry_rate <> allocation_rate
   ) as passed;
 
+-- The account-currency balance is the currency-neutral truth: it must be the
+-- sum of this account's posted/pending, non-deleted entries and nothing else.
+-- (Until the FX revaluation this check was written against the base-currency
+-- column, which is no longer a plain sum of entries — see the next check.)
 with params as (
   select '__HOUSEHOLD_ID__'::uuid as household_id
 ),
 official_balances as (
   select
     b.account_id,
-    b.projected_balance_base_currency
+    b.projected_balance_account_currency
   from public.get_account_balances((select household_id from params)) b
 ),
 manual_balances as (
   select
     a.id as account_id,
-    coalesce(sum(te.amount_base_currency), 0)::numeric(18,4) as projected_balance_base_currency
+    coalesce(sum(te.amount_account_currency), 0)::numeric(18,4) as projected_balance_account_currency
   from public.accounts a
   left join public.transaction_entries te
     on te.account_id = a.id
@@ -165,7 +169,51 @@ select
     select 1
     from official_balances ob
     join manual_balances mb on mb.account_id = ob.account_id
-    where ob.projected_balance_base_currency <> mb.projected_balance_base_currency
+    where ob.projected_balance_account_currency <> mb.projected_balance_account_currency
+  ) as passed;
+
+-- FX revaluation: a balance is a stock, so its base-currency figure is the
+-- account-currency balance converted at the rate in effect on the date shown.
+-- With no rate on file it falls back to the historical sum of the entries.
+with params as (
+  select '__HOUSEHOLD_ID__'::uuid as household_id
+),
+official_balances as (
+  select
+    b.account_id,
+    b.projected_balance_account_currency,
+    b.projected_balance_base_currency,
+    b.base_conversion_rate
+  from public.get_account_balances((select household_id from params)) b
+),
+historical as (
+  select
+    a.id as account_id,
+    coalesce(sum(te.amount_base_currency), 0)::numeric(18,4) as projected_base_historical
+  from public.accounts a
+  left join public.transaction_entries te
+    on te.account_id = a.id
+    and te.household_id = a.household_id
+  left join public.transactions t
+    on t.id = te.transaction_id
+    and t.household_id = a.household_id
+    and t.deleted_at is null
+    and t.status in ('posted', 'pending')
+  where a.household_id = (select household_id from params)
+    and a.deleted_at is null
+    and a.is_archived = false
+  group by a.id
+)
+select
+  'FX balances revalue at the rate on file, else fall back to the entry sum' as check_name,
+  not exists (
+    select 1
+    from official_balances ob
+    join historical h on h.account_id = ob.account_id
+    where ob.projected_balance_base_currency <> case
+      when ob.base_conversion_rate is null then h.projected_base_historical
+      else (ob.projected_balance_account_currency * ob.base_conversion_rate)::numeric(18,4)
+    end
   ) as passed;
 
 with params as (
