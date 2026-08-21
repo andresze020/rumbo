@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/card'
 import { MetricCard } from '@/components/metric-card'
 import { InfoTooltip } from '@/components/info-tooltip'
-import { GettingStartedChecklist } from '@/components/getting-started-checklist'
+import { HomeChecklist } from '@/components/home-checklist'
 import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { Callout } from '@/components/callout'
 import { FinancialHeroCard } from '@/components/financial-hero-card'
@@ -37,6 +37,7 @@ import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { formatCurrency, formatMonthLabel, formatPercent, formatTransactionCount, localeToBcp47 } from '@/lib/format'
 import { computeHealthScore, healthGrade as computeHealthGrade } from '@/lib/health/score'
+import { getHomeChecklist } from '@/lib/home-checklist/server'
 import { cn } from '@/lib/utils'
 
 const ACCENT = {
@@ -262,7 +263,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const { data: household, error } = await supabase
     .from('households')
-    .select('id, name, base_currency')
+    .select('id, name, base_currency, created_at')
     .eq('id', profile.default_household_id)
     .single()
   if (error || !household) redirect('/onboarding')
@@ -391,6 +392,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const totalBudgetPercent = totalBudgetPlanned > 0 ? totalBudgetSpent / totalBudgetPlanned : 0
   const budgetCurrency = budgetDetails[0]?.currency_code ?? baseCurrency
   const hasBudget = budgetLines.length > 0 && totalBudgetPlanned > 0
+
+  // The Control center nudge: "Getting started" for a household's first two
+  // months, then a month-by-month checklist that is useful for as long as the
+  // account lives. `null` means there is nothing left to nudge about.
+  const homeChecklist = await getHomeChecklist({
+    supabase,
+    householdId: household.id,
+    householdCreatedAt: (household.created_at as string | null) ?? null,
+    month: selectedMonth,
+    hasAccounts: balances.length > 0,
+    hasTransactions: (nonOpeningTransactionCount ?? 0) > 0,
+    hasBudget,
+    previousMonthHasActivity:
+      Number(prevSummary?.monthly_income ?? 0) !== 0 ||
+      Number(prevSummary?.monthly_expenses ?? 0) !== 0,
+  })
 
   const dashboardCurrency = monthlySummary?.base_currency ?? baseCurrency
   const monthlyIncome = Number(monthlySummary?.monthly_income ?? 0)
@@ -716,11 +733,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         }
       />
 
-      <GettingStartedChecklist
-        hasAccounts={balances.length > 0}
-        hasTransactions={(nonOpeningTransactionCount ?? 0) > 0}
-        hasBudget={budgetLines.length > 0}
-      />
+      {homeChecklist ? <HomeChecklist checklist={homeChecklist} /> : null}
 
       {hasLoadError ? <Callout variant="error">{t('dashboard.loadError')}</Callout> : null}
 
