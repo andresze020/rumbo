@@ -15,6 +15,106 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Zoom overlays, dashboard activity, and sprint-closing cleanup (2026-08-22)
+- Goal: close the two mobile-UI gaps the viewport-pinning sprint (2026-08-21)
+  deliberately deferred — modal overlays under pinch zoom (P4) and dashboard
+  text truncation (P3) — ship the text-size setting that sprint also scoped
+  out, and clear three more P3 rows sitting in `docs/pending-work.md` §3: CI
+  on pull requests, runnable ledger invariants, and the Tier-3/4
+  authenticated-QA checklist. The assistant also moves to a cheaper model.
+  Seven commits on `fix/mobile-ui-zoom-overlays-and-activity`.
+- Shipped:
+  - **Modal overlays pinned to the visual viewport.** New `.vv-pin-screen`,
+    `.vv-pin-screen-center` and `.vv-pin-screen-edge` utilities in
+    `globals.css`, fed by new `--vv-width`/`--vv-height` published by
+    `ViewportPin`. Unlike the chrome (counter-scaled to keep its on-screen
+    size), an overlay is content and a zoom should magnify it, so these
+    rules restate the element's box in visual-viewport terms with no
+    transform and no wrapper — each overlay already owns its own transform
+    (`-translate-1/2` centring, `zoom-in-95`, vaul's drag offset), and a
+    wrapper would add a stacking context and containing block the overlay
+    does not expect. `.vv-pin-screen-edge` reads `data-side` /
+    `data-vaul-drawer-direction` so one class serves Base UI sheets and vaul
+    drawers alike. Applied to `dialog.tsx`, `alert-dialog.tsx`, `sheet.tsx`,
+    `drawer.tsx`, `selector-sheet.tsx`, and the transactions filter sheet —
+    a sheet on phones and a static toolbar from `sm:` up, so it disables the
+    pin above that breakpoint by shadowing the CSS variables locally
+    (`sm:[--vv-height:none] sm:[--vv-width:auto]`).
+  - **Recent Activity stops truncating.** The amount column goes from a
+    fixed 88px to `auto` (a six-figure COP amount didn't fit, and truncating
+    money is never the right answer); the title wraps to two lines on phone
+    instead of one ellipsis; the secondary line becomes a flex row with the
+    date `shrink-0`, so the old single `truncate` over `subtitle · date` no
+    longer loses the date to whichever text came first. The assistant FAB
+    (`assistant-drawer.tsx`) now fades out (opacity only — `vv-pin-corner`
+    already owns its transform) while the page scrolls down and returns on
+    scroll-up or a 1.2s pause, via a new `useScrollingDown` hook watching
+    `window.scrollY` with a 12px jitter threshold. Not hidden on phone: it
+    is the only assistant entry point there.
+  - **In-app text size.** New Settings control (`default`/`large`/`larger`)
+    stored in the existing `profiles.ui_preferences` jsonb — no migration.
+    Applied as a `%` root `font-size` (112.5% / 125%) via new
+    `TextSizeSync`, mounted in the dashboard layout rather than the root
+    layout so `/login` never pays for a profile read to learn a preference
+    it can't have; `revalidatePath` moved to `revalidatePath('/dashboard',
+    'layout')` for the same reason. Percentage, not px, so a reader's own
+    browser-level zoom stacks instead of being overridden; everything in the
+    UI is `rem`, so type/padding/control heights move together, and
+    Tailwind's breakpoints still resolve against the *initial* root size, so
+    a phone stays on the phone layout. Surfaced a pre-existing
+    `audit-i18n.mjs` gap: it does not see object values reached by computed
+    index, so the settings `<select>` option labels (including
+    `PERIOD_LABELS`) were never translated despite the coverage check
+    passing — fixed alongside (`legacy-ui-translations.ts`).
+  - **CI on pull requests.** New `.github/workflows/ci.yml` (`.github/` did
+    not exist before): lint → `tsc --noEmit` → `i18n:check` → build, on PRs
+    and pushes to `main`. Runs with placeholder Supabase env values —
+    verified the build reaches them safely, since every route is
+    server-rendered on demand and the Anthropic client is lazy, so no
+    secret is needed or referenced.
+  - **`npm run db:test`.** New `scripts/db-test.mjs` makes the three
+    `supabase/tests/*.sql` ledger-invariant files actually runnable over the
+    Management API instead of hand-pasted into the SQL editor. Shared
+    plumbing (`apiContext`, `fail`, `log`, `runSql`, `runScript`) extracted
+    into new `scripts/lib/supabase-api.mjs` and reused by `db-push.mjs`. The
+    splitter sends each statement alone so its result comes back, except an
+    explicit `begin;...rollback;` block (`br_019`'s throwaway-goal assert),
+    which is grouped and sent whole — splitting it would commit the body in
+    its own transaction and leave test data in production. Refuses to guess
+    the household when a project holds more than one, and lists only ids in
+    that case, never household names. Also fixes a latent Windows bug in
+    `db-push`: the old `process.exit()` while `fetch` still held a
+    keep-alive socket tripped a libuv assertion
+    (`!(handle->flags & UV_HANDLE_CLOSING)`) and crashed with `0xC0000409`
+    instead of exit code 1; `runScript` now lets the event loop drain via
+    `process.exitCode` instead.
+  - **Tier-3/4 authenticated-QA checklist.** New
+    `docs/alpha/tier-3-4-authenticated-qa.md`, eleven rows — the ten
+    features from `docs/pending-work.md` §4.3 plus BR-031, which that list
+    had missed even though it shipped in Tier-3 and is equally untested.
+    Each row states the observable invariant that closes it rather than a
+    click path. All eleven rows are `Untested` — this is the scaffolding,
+    not a completed pass.
+  - **Assistant moved to Claude Haiku 4.5.** `ASSISTANT_MODEL`
+    (`src/lib/ai/client.ts`) moves from `claude-sonnet-4-6` to
+    `claude-haiku-4-5` — Anthropic's cheapest tier, $1/$5 per million tokens
+    in/out against Sonnet 5's $3/$15. Capabilities checked against the
+    Models API rather than assumed: `image_input` is supported, so
+    receipt-photo extraction still works; the tier caps out at 200K context
+    / 64K output; and it does **not** support adaptive thinking or
+    `output_config.effort` — sending `effort` is an outright error, and
+    neither call site sends one. `max_tokens` also rises from 1024, which
+    silently truncated long answers mid-sentence since nothing checked
+    `stop_reason`: 16000 for the main assistant loop (`assistant/actions.ts`),
+    4096 for the smaller receipt-draft extraction call.
+- Migrations added: none.
+- Tables changed: none.
+- Follow-ups / known gaps: the Tier-3/4 QA checklist is scaffolding only —
+  all eleven rows are still `Untested`, no pass has been run against it yet.
+  Whether the CI workflow has actually run green on a real pull request, and
+  whether `npm run db:test` has been run against the live database, are not
+  established by this diff either way.
+
 ## Chrome pinned to the visual viewport (2026-08-21)
 - Goal: reported from a phone — "bajo ciertas condiciones hago scroll rápido y
   como que se hace un poco de zoom y se corta o el encabezado o la barra de
