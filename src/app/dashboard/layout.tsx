@@ -54,7 +54,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                 entering one. Renders nothing. */}
             <ExchangeRateAutoRefresh />
 
-            <main className="flex-1 pt-14 pb-24 lg:pt-0 lg:pb-24">
+            <main className="flex-1 pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pt-0">
               <ScreenTransition>{children}</ScreenTransition>
             </main>
           </div>

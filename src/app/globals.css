@@ -269,6 +269,43 @@
   }
 
   /*
+   * The same pinning at scale 1, minus the counter-scale.
+   *
+   * Chrome on Android sizes the layout viewport as if its toolbar were hidden.
+   * While the toolbar is *shown* — which is how every page starts, before the
+   * first scroll — the layout viewport's bottom edge is a toolbar's height
+   * below the screen, so `bottom: 0` leaves the bottom nav's lower half (its
+   * labels) off screen. Scroll down, the toolbar retracts, and the nav slides
+   * up into place: chrome that drifts while you read. `data-vv-offset`
+   * translates it onto the visual viewport for the whole of that transition,
+   * so it just stays on the screen edge. Nothing is scaled here: at scale 1
+   * the chrome is already the right size.
+   *
+   * `:not([data-vv-zoomed])` because the zoomed rules above translate *and*
+   * counter-scale; only one of the two may ever apply to an element.
+   * `ViewportPin` never sets the flag while the soft keyboard is what shrank
+   * the visual viewport — a nav pinned to the top of the keyboard would cover
+   * the field being typed into.
+   */
+  html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-top,
+  html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-bottom,
+  html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-corner {
+    will-change: transform;
+  }
+
+  html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-top {
+    transform: translate3d(var(--vv-left), var(--vv-top), 0);
+  }
+
+  html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-bottom {
+    transform: translate3d(var(--vv-left), var(--vv-bottom-delta), 0);
+  }
+
+  html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-corner {
+    transform: translate3d(var(--vv-right-delta), var(--vv-bottom-delta), 0);
+  }
+
+  /*
    * Pinch-zoom overlay pinning (dialogs, sheets, drawers).
    *
    * The chrome above is counter-scaled: a tab bar is furniture and should keep
