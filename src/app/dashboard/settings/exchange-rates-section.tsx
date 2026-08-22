@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import {
   Card,
   CardContent,
@@ -13,12 +13,17 @@ import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
 import { useLanguage } from '@/components/language-provider'
 import { saveExchangeRateAction } from './settings-actions'
+import { refreshExchangeRatesAction } from '../exchange-rate-actions'
+import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
 
 export type ExchangeRateRow = {
   currencyCode: string
   /** 1 currencyCode = rate baseCurrency. Null when nothing is on file yet. */
   rate: number | null
   rateDate: string | null
+  /** 'auto' when the rate came from the daily feed, 'manual' when typed here. */
+  source: string | null
 }
 
 /**
@@ -108,14 +113,36 @@ export function ExchangeRatesSection({
   today: string
 }) {
   const { t } = useLanguage()
+  const router = useRouter()
+  const [isRefreshing, startRefresh] = useTransition()
 
   if (!rows.length) return null
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('settings.exchangeRates.title')}</CardTitle>
-        <CardDescription>{t('settings.exchangeRates.description')}</CardDescription>
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1.5">
+            <CardTitle>{t('settings.exchangeRates.title')}</CardTitle>
+            <CardDescription>{t('settings.exchangeRates.description')}</CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isRefreshing}
+            onClick={() =>
+              startRefresh(async () => {
+                await refreshExchangeRatesAction()
+                router.refresh()
+              })
+            }
+          >
+            {isRefreshing
+              ? t('settings.exchangeRates.updating')
+              : t('settings.exchangeRates.updateNow')}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         {rows.map((row) => (
@@ -141,12 +168,17 @@ export function ExchangeRatesSection({
               />
               <p className="text-xs text-muted-foreground">
                 {row.rate
-                  ? t('settings.exchangeRates.onFile', {
-                      currency: row.currencyCode,
-                      rate: String(row.rate),
-                      base: baseCurrency,
-                      date: row.rateDate ?? '',
-                    })
+                  ? t(
+                      row.source === 'auto'
+                        ? 'settings.exchangeRates.onFileAuto'
+                        : 'settings.exchangeRates.onFile',
+                      {
+                        currency: row.currencyCode,
+                        rate: String(row.rate),
+                        base: baseCurrency,
+                        date: row.rateDate ?? '',
+                      }
+                    )
                   : t('settings.exchangeRates.none')}
               </p>
               <p className="text-xs text-muted-foreground">

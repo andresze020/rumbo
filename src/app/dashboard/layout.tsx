@@ -7,6 +7,7 @@ import { GlobalAddTransactionButton } from '@/components/global-add-transaction-
 import { TransactionDialogProvider } from '@/components/transaction-dialog-provider'
 import { AssistantDrawer } from '@/components/assistant-drawer'
 import { InstallAppHint } from '@/components/install-app-hint'
+import { ExchangeRateAutoRefresh } from './exchange-rate-auto-refresh'
 import { LanguageProvider } from '@/components/language-provider'
 import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { ScreenTransition } from '@/components/screen-transition'
@@ -40,6 +41,11 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
             <InstallAppHint />
 
+            {/* Tops up the household's FX rates once a day, so a
+                foreign-currency balance reads at today's rate without anyone
+                entering one. Renders nothing. */}
+            <ExchangeRateAutoRefresh />
+
             <main className="flex-1 pt-14 pb-24 lg:pt-0 lg:pb-24">
               <ScreenTransition>{children}</ScreenTransition>
             </main>
@@ -53,7 +59,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <GlobalAddTransactionButton
             aria-label={ui('Add transaction')}
             title={ui('Add transaction')}
-            className="fixed bottom-6 right-6 z-50 hidden size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:flex"
+            className="vv-pin-corner [--vv-pin-inset-x:1.5rem] [--vv-pin-inset-y:1.5rem] fixed bottom-6 right-6 z-50 hidden size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:flex"
           >
             <Plus className="size-6" aria-hidden="true" />
           </GlobalAddTransactionButton>

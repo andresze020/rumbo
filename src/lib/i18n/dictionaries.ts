@@ -86,13 +86,16 @@ export const en = {
     exchangeRates: {
       title: 'Exchange rates',
       description:
-        'What your foreign-currency accounts are worth in the household base currency today. Used for the equivalent shown under each balance, and for net worth.',
+        'What your foreign-currency accounts are worth in the household base currency today. Fetched automatically once a day; override any of them here.',
+      updateNow: 'Update now',
+      updating: 'Updating…',
+      onFileAuto: 'Automatic: 1 {currency} = {rate} {base}, dated {date}.',
       rateDate: 'Rate date',
       help:
         'A balance is converted at the newest rate dated on or before the day being shown, so saving past dates makes the net-worth history more accurate. Income and expenses keep the rate of their own date and never change.',
       onFile: 'On file: 1 {currency} = {rate} {base}, dated {date}.',
       none:
-        'No rate on file. Until one is saved, the equivalent stays at the rate each movement was booked at.',
+        'No rate yet — it is fetched the next time you open the app. Until then the equivalent stays at the rate each movement was booked at.',
       save: 'Save rate',
       saved: 'Exchange rate saved.',
     },
@@ -436,7 +439,6 @@ export const en = {
     due: 'Due',
   },
   accounts: {
-    pageDescription: 'Manage household accounts and balances.',
     createAccount: 'Create account',
     creatingAccount: 'Creating account',
     showArchived: 'Show archived',
@@ -448,7 +450,7 @@ export const en = {
     vsPrevMonth: 'vs. previous month',
     activeSection: 'Active accounts',
     archivedSection: 'Archived accounts',
-    sectionDesc: 'Switch between cards and list views. Drag to reorder in list view.',
+    sectionDesc: 'Drag to reorder.',
     archivedSectionDesc: 'Archived accounts remain available for history.',
     noActiveTitle: 'No active accounts yet',
     noArchivedTitle: 'No archived accounts yet',
@@ -486,7 +488,7 @@ export const en = {
     excludedNetWorth: 'Excluded from net worth',
     openingBalanceLabel: 'Opening balance',
     noOpeningBalanceLabel: 'No opening balance',
-    cardsView: 'Cards',
+    cardsView: 'Grouped',
     listView: 'List',
     editAccount: 'Edit account',
     name: 'Name',
@@ -622,13 +624,16 @@ export const es: DeepStringify<typeof en> = {
     exchangeRates: {
       title: 'Tipos de cambio',
       description:
-        'Cuánto valen hoy tus cuentas en moneda extranjera en la moneda base del hogar. Se usa para el equivalente que aparece bajo cada saldo y para el patrimonio neto.',
+        'Cuánto valen hoy tus cuentas en moneda extranjera en la moneda base del hogar. Se actualiza solo una vez al día; aquí puedes sobrescribir cualquiera.',
+      updateNow: 'Actualizar ahora',
+      updating: 'Actualizando…',
+      onFileAuto: 'Automático: 1 {currency} = {rate} {base}, con fecha {date}.',
       rateDate: 'Fecha del cambio',
       help:
         'Un saldo se convierte con el cambio más reciente con fecha igual o anterior al día que se muestra, así que guardar fechas pasadas hace más preciso el histórico de patrimonio. Los ingresos y gastos conservan el cambio de su propia fecha y nunca cambian.',
       onFile: 'Guardado: 1 {currency} = {rate} {base}, con fecha {date}.',
       none:
-        'No hay ningún cambio guardado. Hasta que guardes uno, el equivalente se queda con el cambio con el que se registró cada movimiento.',
+        'Todavía no hay cambio: se busca la próxima vez que abras la app. Hasta entonces el equivalente se queda con el cambio con el que se registró cada movimiento.',
       save: 'Guardar cambio',
       saved: 'Tipo de cambio guardado.',
     },
@@ -973,7 +978,6 @@ export const es: DeepStringify<typeof en> = {
     due: 'Vence',
   },
   accounts: {
-    pageDescription: 'Administra las cuentas y saldos del hogar.',
     createAccount: 'Crear cuenta',
     creatingAccount: 'Creando cuenta',
     showArchived: 'Ver archivadas',
@@ -985,7 +989,7 @@ export const es: DeepStringify<typeof en> = {
     vsPrevMonth: 'vs. mes anterior',
     activeSection: 'Cuentas activas',
     archivedSection: 'Cuentas archivadas',
-    sectionDesc: 'Alterna entre vista de tarjetas y lista. Arrastra para reordenar en la lista.',
+    sectionDesc: 'Arrastra para reordenar.',
     archivedSectionDesc: 'Las cuentas archivadas siguen disponibles para el historial.',
     noActiveTitle: 'Aún no hay cuentas activas',
     noArchivedTitle: 'Aún no hay cuentas archivadas',
@@ -1023,7 +1027,7 @@ export const es: DeepStringify<typeof en> = {
     excludedNetWorth: 'Excluido del patrimonio',
     openingBalanceLabel: 'Balance inicial',
     noOpeningBalanceLabel: 'Sin balance inicial',
-    cardsView: 'Tarjetas',
+    cardsView: 'Agrupado',
     listView: 'Lista',
     editAccount: 'Editar cuenta',
     name: 'Nombre',
@@ -1159,13 +1163,16 @@ export const fr: DeepStringify<typeof en> = {
     exchangeRates: {
       title: 'Taux de change',
       description:
-        "Ce que valent aujourd’hui vos comptes en devise étrangère dans la devise de référence du foyer. Utilisé pour l’équivalent affiché sous chaque solde et pour la valeur nette.",
+        "Ce que valent aujourd’hui vos comptes en devise étrangère dans la devise de référence du foyer. Mis à jour automatiquement une fois par jour ; vous pouvez remplacer n’importe lequel ici.",
+      updateNow: 'Mettre à jour',
+      updating: 'Mise à jour…',
+      onFileAuto: 'Automatique : 1 {currency} = {rate} {base}, daté du {date}.',
       rateDate: 'Date du taux',
       help:
         "Un solde est converti au taux le plus récent daté du jour affiché ou d’avant : enregistrer des dates passées rend donc l’historique de la valeur nette plus juste. Les revenus et les dépenses conservent le taux de leur propre date et ne changent jamais.",
       onFile: 'Enregistré : 1 {currency} = {rate} {base}, daté du {date}.',
       none:
-        "Aucun taux enregistré. Tant qu’aucun n’est enregistré, l’équivalent reste au taux auquel chaque mouvement a été inscrit.",
+        "Pas encore de taux : il sera récupéré à votre prochaine ouverture de l’app. D’ici là, l’équivalent reste au taux auquel chaque mouvement a été inscrit.",
       save: 'Enregistrer le taux',
       saved: 'Taux de change enregistré.',
     },
@@ -1510,7 +1517,6 @@ export const fr: DeepStringify<typeof en> = {
     due: 'Échéance',
   },
   accounts: {
-    pageDescription: 'Gérez les comptes et soldes du foyer.',
     createAccount: 'Créer un compte',
     creatingAccount: 'Création du compte',
     showArchived: 'Voir archivés',
@@ -1522,7 +1528,7 @@ export const fr: DeepStringify<typeof en> = {
     vsPrevMonth: 'vs. mois précédent',
     activeSection: 'Comptes actifs',
     archivedSection: 'Comptes archivés',
-    sectionDesc: "Basculez entre la vue cartes et la vue liste. Glissez pour réorganiser dans la liste.",
+    sectionDesc: 'Glissez pour réorganiser.',
     archivedSectionDesc: "Les comptes archivés restent disponibles pour l’historique.",
     noActiveTitle: "Aucun compte actif pour l’instant",
     noArchivedTitle: "Aucun compte archivé pour l’instant",
@@ -1560,7 +1566,7 @@ export const fr: DeepStringify<typeof en> = {
     excludedNetWorth: 'Exclu de la valeur nette',
     openingBalanceLabel: "Solde d’ouverture",
     noOpeningBalanceLabel: "Sans solde d’ouverture",
-    cardsView: 'Cartes',
+    cardsView: 'Groupé',
     listView: 'Liste',
     editAccount: 'Modifier le compte',
     name: 'Nom',

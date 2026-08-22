@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowRight, ChevronDown } from 'lucide-react'
-import { BalanceAmount } from '@/components/balance-amount'
+import { ArrowRight, Plus, Settings } from 'lucide-react'
+import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
+import { buttonVariants } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
+import { cn } from '@/lib/utils'
 
 /**
  * BR-030 — the card's statement cycle, already formatted. The strings are built
@@ -23,180 +24,149 @@ export type CardCycleView = {
   billingAccountName: string | null
 }
 
-type AccountCardDetailsProps = {
+type AccountDetailsPanelProps = {
   accountId: string
-  summaryLeft: ReactNode
-  balanceLabel: string
-  /** Signed numeric balance — drives green (positive) / red (negative) coloring. */
-  balanceAmount: number
+  accountName: string
+  editHref: string
+  isArchived: boolean
   postedLabel: string
   pendingLabel: string
   projectedLabel: string
   balanceType: 'posted' | 'owed'
-  baseCurrencyLabel?: string | null
   /** BR-030 — present only for a card with a configured cycle. */
   cardCycle?: CardCycleView | null
 }
 
-export function AccountCardDetails({
+/**
+ * Label on the left, figure on the right — one line each. The breakdown used to
+ * be three centred columns, which clipped any long figure ("COP 29,262,9…") on a
+ * phone; a statement-style list can never clip because the number owns its own
+ * line end.
+ */
+function DetailLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-right text-sm font-semibold tabular-nums">{value}</span>
+    </div>
+  )
+}
+
+/**
+ * Everything about an account that is not its name and its balance: the posted /
+ * pending / projected breakdown, the statement cycle, and the row's actions.
+ * Hidden behind the row's chevron so the list itself stays one line per account.
+ */
+export function AccountDetailsPanel({
   accountId,
-  summaryLeft,
-  balanceLabel,
-  balanceAmount,
+  accountName,
+  editHref,
+  isArchived,
   postedLabel,
   pendingLabel,
   projectedLabel,
   balanceType,
-  baseCurrencyLabel,
   cardCycle = null,
-}: AccountCardDetailsProps) {
-  const [open, setOpen] = useState(false)
+}: AccountDetailsPanelProps) {
   const { t } = useLanguage()
-
   const isOwed = balanceType === 'owed'
+  const actionClass = cn(
+    buttonVariants({ variant: 'outline', size: 'sm' }),
+    'h-8 gap-1.5 px-2.5 text-xs font-medium'
+  )
 
   return (
-    <div>
-      {/* Summary row — full row clickable */}
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="-mx-2 flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/60"
-        aria-expanded={open}
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          {summaryLeft}
-        </div>
+    <div className="space-y-3 px-3 pb-3 sm:px-4">
+      <div className="space-y-1.5 border-t border-border/60 pt-2.5">
+        <DetailLine
+          label={isOwed ? t('accounts.postedOwed') : t('accounts.posted')}
+          value={postedLabel}
+        />
+        <DetailLine
+          label={isOwed ? t('accounts.pendingOwed') : t('accounts.pending')}
+          value={pendingLabel}
+        />
+        <DetailLine
+          label={isOwed ? t('accounts.projectedOwed') : t('accounts.projected')}
+          value={projectedLabel}
+        />
+      </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <div className="text-right">
-            <BalanceAmount
-              label={balanceLabel}
-              amount={balanceAmount}
-              className="text-base leading-snug"
+      {/* BR-030: the two figures one under the other. They are never added
+          together — the first is billed on its due date, the second has not been
+          billed at all yet. */}
+      {cardCycle ? (
+        <div className="space-y-2.5 border-t border-border/60 pt-2.5">
+          <div className="space-y-0.5">
+            <DetailLine
+              label={t('accounts.cyclePayable')}
+              value={cardCycle.payableLabel}
             />
-            {baseCurrencyLabel ? (
-              <p className="text-[11px] text-muted-foreground">≈ {baseCurrencyLabel}</p>
-            ) : null}
-            {/* BR-030: on a card with a cycle, the running balance alone cannot
-                answer "what do I owe next" — so the payable figure and its due
-                date replace the bare "Owed" label right on the card. */}
-            {cardCycle ? (
+            <p className="text-[11px] text-muted-foreground">
+              {cardCycle.closedWindowLabel}
+            </p>
+            <p
+              className={cn(
+                'text-[11px]',
+                cardCycle.isOverdue
+                  ? 'font-semibold text-rose-600 dark:text-rose-400'
+                  : 'text-muted-foreground'
+              )}
+            >
+              {t('accounts.cycleDue')} {cardCycle.closedDueLabel}
+              {cardCycle.isOverdue ? ` · ${t('accounts.cycleOverdue')}` : ''}
+            </p>
+            {cardCycle.paidSinceCloseLabel ? (
               <p className="text-[11px] text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  {cardCycle.payableLabel}
-                </span>{' '}
-                {t('accounts.cyclePayableDueShort')} {cardCycle.closedDueLabel}
-              </p>
-            ) : (
-              <p className="text-[11px] text-muted-foreground">
-                {isOwed ? t('accounts.owed') : t('accounts.available')}
-              </p>
-            )}
-            {cardCycle?.isOverdue ? (
-              <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
-                {t('accounts.cycleOverdue')}
+                {t('accounts.cyclePaidSinceClose')} {cardCycle.paidSinceCloseLabel}
               </p>
             ) : null}
           </div>
-          <ChevronDown
-            className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-            aria-hidden="true"
-          />
-        </div>
-      </button>
-
-      {/* Expandable detail section */}
-      <div
-        className={`grid transition-all duration-200 ease-in-out ${
-          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-        }`}
-      >
-        <div className="overflow-hidden">
-          <div className="mt-2 rounded-lg bg-muted/40 p-3 space-y-3">
-
-            {/* Balance breakdown — 3 columns */}
-            <div className="grid grid-cols-3 divide-x divide-border text-center">
-              <div className="pr-3 space-y-0.5">
-                <p className="text-xs text-muted-foreground">{isOwed ? t('accounts.postedOwed') : t('accounts.posted')}</p>
-                <p className="text-sm font-semibold tabular-nums">{postedLabel}</p>
-              </div>
-              <div className="px-3 space-y-0.5">
-                <p className="text-xs text-muted-foreground">{isOwed ? t('accounts.pendingOwed') : t('accounts.pending')}</p>
-                <p className="text-sm font-semibold tabular-nums">{pendingLabel}</p>
-              </div>
-              <div className="pl-3 space-y-0.5">
-                <p className="text-xs text-muted-foreground">{isOwed ? t('accounts.projectedOwed') : t('accounts.projected')}</p>
-                <p className="text-sm font-semibold tabular-nums">{projectedLabel}</p>
-              </div>
-            </div>
-
-            {/* BR-030: the two figures side by side. They are never added
-                together — the left one is billed on its due date, the right one
-                has not been billed at all yet. */}
-            {cardCycle ? (
-              <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
-                <div className="space-y-0.5">
-                  <p className="text-xs text-muted-foreground">
-                    {t('accounts.cyclePayable')}
-                  </p>
-                  <p className="text-sm font-semibold tabular-nums">
-                    {cardCycle.payableLabel}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {cardCycle.closedWindowLabel}
-                  </p>
-                  <p
-                    className={`text-[11px] ${
-                      cardCycle.isOverdue
-                        ? 'font-semibold text-rose-600 dark:text-rose-400'
-                        : 'text-muted-foreground'
-                    }`}
-                  >
-                    {t('accounts.cycleDue')} {cardCycle.closedDueLabel}
-                  </p>
-                  {cardCycle.paidSinceCloseLabel ? (
-                    <p className="text-[11px] text-muted-foreground">
-                      {t('accounts.cyclePaidSinceClose')}{' '}
-                      {cardCycle.paidSinceCloseLabel}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-xs text-muted-foreground">
-                    {t('accounts.cycleOutstanding')}
-                  </p>
-                  <p className="text-sm font-semibold tabular-nums">
-                    {cardCycle.outstandingLabel}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {cardCycle.openWindowLabel}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {t('accounts.cycleDue')} {cardCycle.openDueLabel}
-                  </p>
-                  {cardCycle.billingAccountName ? (
-                    <p className="text-[11px] text-muted-foreground">
-                      {t('accounts.cyclePaidFrom')} {cardCycle.billingAccountName}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
+          <div className="space-y-0.5">
+            <DetailLine
+              label={t('accounts.cycleOutstanding')}
+              value={cardCycle.outstandingLabel}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {cardCycle.openWindowLabel}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {t('accounts.cycleDue')} {cardCycle.openDueLabel}
+            </p>
+            {cardCycle.billingAccountName ? (
+              <p className="text-[11px] text-muted-foreground">
+                {t('accounts.cyclePaidFrom')} {cardCycle.billingAccountName}
+              </p>
             ) : null}
-
-            {/* View transactions link */}
-            <div className="flex items-center">
-              <Link
-                href={`/dashboard/transactions?account_id=${accountId}`}
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-              >
-                <ArrowRight className="size-3" aria-hidden="true" />
-                {t('accounts.viewTransactions')}
-              </Link>
-            </div>
-
           </div>
         </div>
+      ) : null}
+
+      {/* The actions used to sit on their own permanent strip under every row —
+          three unlabelled icons per account. Behind the chevron they cost no
+          height at rest and can afford words. */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-2.5">
+        {!isArchived ? (
+          <GlobalAddTransactionButton
+            className={actionClass}
+            defaultAccountId={accountId}
+            title={`${t('common.addTransaction')} — ${accountName}`}
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            {t('common.addTransaction')}
+          </GlobalAddTransactionButton>
+        ) : null}
+        <Link
+          href={`/dashboard/transactions?account_id=${accountId}`}
+          className={actionClass}
+        >
+          <ArrowRight className="size-3.5" aria-hidden="true" />
+          {t('nav.transactions')}
+        </Link>
+        <Link href={editHref} className={actionClass}>
+          <Settings className="size-3.5" aria-hidden="true" />
+          {t('common.edit')}
+        </Link>
       </div>
     </div>
   )

@@ -23,6 +23,41 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Chrome pinned to the visual viewport** (2026-08-21, branch
+  `claude/zoom-scroll-header-footer-53n6iv`). UI only, no migration. A fast
+  scroll on a phone occasionally picks up a stray second finger and pinch-zooms
+  the page a few percent. `position: fixed` anchors to the *layout* viewport,
+  which is then larger than the screen, so the mobile header and the bottom tab
+  bar hung off its edges and read as cut off — you lost one or the other
+  depending on where the visual viewport had been panned to. `ViewportPin`
+  (`src/components/viewport-pin.tsx`, mounted in the root layout) publishes the
+  visual viewport's geometry as CSS variables while the scale deviates from 1,
+  and the `.vv-pin-*` utilities in `globals.css` translate the chrome onto it
+  and counter-scale it by `1/scale`, so the bars keep their on-screen size at
+  the screen edges and the zoom magnifies only the content. All of it is scoped
+  to `[data-vv-zoomed]`: at rest there is no transform, and therefore no
+  containing block for anything `fixed` rendered inside the bars. **Pinch zoom
+  stays enabled on purpose** — see `docs/pending-work.md` §2 before disabling
+  it.
+- **Exchange rates refresh themselves** (2026-08-21, branch
+  `claude/andromoney-import-script-6u4fy1`). No migration — the
+  `exchange_rates` table and the FX revaluation below already existed; what was
+  missing was anyone filling the table. `refreshExchangeRatesAction`
+  (`src/app/dashboard/exchange-rate-actions.ts`) tops up any rate not dated
+  today from the same public feed the four entry forms have used all along
+  (`@fawazahmed0/currency-api` on jsDelivr — no key, and it carries COP, which
+  the ECB-backed feeds do not). `ExchangeRateAutoRefresh`, mounted in the
+  dashboard layout, fires it on the first render of a browser session and
+  records the day in `sessionStorage`, so navigating does not re-hit the
+  provider. It runs **as the signed-in user** — RLS applies as everywhere else,
+  no service-role key and no cron were introduced. New `fetchDirectRate` in
+  `src/lib/fx.ts` reads the pair in the direction the ledger stores it
+  (`1 from = N to`, the inverse of what the forms ask for) and falls back to
+  reading the other currency's file and inverting. Rates are dated as the
+  provider published them, not "today", so a weekend does not invent a
+  quotation. A provider outage is a no-op: the previous rate stays and balances
+  keep using it. Settings gains an **Update now** button and shows whether each
+  rate is `auto` or `manual`.
 - **Balance FX revaluation** (2026-08-20, branch
   `claude/andromoney-import-script-6u4fy1`). Migration
   `20260817120000_balance_fx_revaluation.sql` — applied (confirmed
@@ -49,30 +84,6 @@ The product is household-first. All financial data must belong to a household.
   earlier) is what surfaced this. See
   [docs/features/exchange-rates.md](./docs/features/exchange-rates.md) and
   [docs/features/andromoney-import.md](./docs/features/andromoney-import.md).
-
-- **Transactions list — slim rows, premium polish** (2026-08-19, merged
-  2026-08-20, branch
-  `claude/transactions-premium-list`). UI only — no migration, no schema
-  change, nothing written to the database. Every row in
-  `src/app/dashboard/transactions/transaction-list.tsx` is now one slim line
-  on every breakpoint, with badges, tags and actions behind its chevron;
-  desktop used to render that block inline for all 4.633 rows. Each row leads
-  with a tinted avatar (category emoji, else the direction arrow), and a leaf
-  category inherits icon/colour from its nearest ancestor via
-  `inheritCategoryVisual` in `page.tsx` — system categories carry icons and no
-  colour (20260612180000), sub-categories carry neither. The row shows
-  `categoryLeafName`; the full path is details-only. **The column layout is a
-  `@container` query, not `lg:`** — with a sidebar a 1024px viewport leaves the
-  card ~740px, so viewport breakpoints switched to columns exactly where they
-  stopped fitting. Note for anyone adding one: Tailwind v4 wants
-  `@min-[60rem]:`, and the v3 form `@[60rem]:` compiles to **nothing** without
-  erroring. Column widths are fixed so amounts line up across rows; checkboxes
-  appear on hover (or via "Select" on touch); review state is a dot, not a
-  badge; only inflows are tinted; an untitled row falls back to payee, then
-  category. The time of day left the row (the create form cannot record one)
-  and survives in the details panel. Also fixes the `Stop` verify-gate hook,
-  which spawned `npx.cmd` via `execFileSync` — `EINVAL` with no output on
-  Node ≥18.20, so the gate failed every turn on Windows.
 
 > **Historia anterior:** las entradas de sprint previas viven en
 > `docs/SPRINT-LOG.md` (append-only, más reciente arriba). No se resumen aquí:

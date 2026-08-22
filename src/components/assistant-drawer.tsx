@@ -49,7 +49,7 @@ export function AssistantDrawer() {
         onClick={() => setOpen(true)}
         aria-label={ui('Open assistant')}
         title={ui('AI Assistant')}
-        className="fixed bottom-24 right-6 z-50 flex size-12 items-center justify-center rounded-full bg-secondary text-secondary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="vv-pin-corner [--vv-pin-inset-x:1.5rem] [--vv-pin-inset-y:6rem] fixed bottom-24 right-6 z-50 flex size-12 items-center justify-center rounded-full bg-secondary text-secondary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <Bot className="size-5" aria-hidden="true" />
       </button>
