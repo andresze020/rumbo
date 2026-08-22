@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
   DEFAULT_UI_PREFERENCES,
+  isTextSize,
   isTransactionPeriod,
   TRANSACTION_FORM_FIELDS,
   type UiPreferences,
@@ -220,8 +221,10 @@ export async function updateUiPreferencesAction(formData: FormData) {
     ),
   ]
   const period = String(formData.get('default_period') ?? '')
+  const textSize = String(formData.get('text_size') ?? '')
 
   const preferences: UiPreferences = {
+    textSize: isTextSize(textSize) ? textSize : DEFAULT_UI_PREFERENCES.textSize,
     formFields: Object.fromEntries(
       TRANSACTION_FORM_FIELDS.map((field) => [field, formData.get(`field_${field}`) !== null])
     ) as UiPreferences['formFields'],
@@ -260,8 +263,10 @@ export async function updateUiPreferencesAction(formData: FormData) {
 
   if (error) redirectWithError('Could not save your preferences. Please try again.')
 
-  revalidatePath('/dashboard/settings')
-  revalidatePath('/dashboard/transactions')
+  // Text size is read by the dashboard *layout*, not by a page, so a
+  // page-level revalidation would leave the new scale unapplied until the next
+  // hard reload. Revalidating the layout covers both pages below it too.
+  revalidatePath('/dashboard', 'layout')
   redirect('/dashboard/settings?saved=preferences')
 }
 

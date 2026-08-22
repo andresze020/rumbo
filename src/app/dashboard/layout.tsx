@@ -11,8 +11,10 @@ import { ExchangeRateAutoRefresh } from './exchange-rate-auto-refresh'
 import { LanguageProvider } from '@/components/language-provider'
 import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { ScreenTransition } from '@/components/screen-transition'
+import { TextSizeSync } from '@/components/text-size-sync'
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
+import { getUiPreferences } from '@/lib/preferences/server'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
@@ -26,10 +28,16 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   } = await supabase.auth.getUser()
   const userEmail = user?.email ?? null
 
+  // Read here rather than in the root layout: `<html>` lives up there, but so
+  // does `/login`, and an unauthenticated page should not pay for a profile
+  // query to learn a preference it cannot have.
+  const { textSize } = await getUiPreferences()
+
   return (
     <LanguageProvider locale={locale}>
       <TransactionDialogProvider>
         <LocalizedClientBoundary>
+          <TextSizeSync value={textSize} />
           <div className="flex min-h-screen">
           {/* Desktop sidebar */}
           <AppSidebar className="hidden lg:flex" userEmail={userEmail} />

@@ -24,7 +24,20 @@ export type TransactionFormField = (typeof TRANSACTION_FORM_FIELDS)[number]
 export const TRANSACTION_PERIODS = ['current_month', 'last_30_days', 'all_time'] as const
 export type TransactionPeriod = (typeof TRANSACTION_PERIODS)[number]
 
+/** App-wide type scale. */
+export const TEXT_SIZES = ['default', 'large', 'larger'] as const
+export type TextSize = (typeof TEXT_SIZES)[number]
+
 export type UiPreferences = {
+  /**
+   * How large the app's type is, applied as a root font size so every `rem` in
+   * the UI follows it. The durable answer to "the numbers are too small":
+   * unlike a pinch it survives a reload, and unlike a zoom it never pushes the
+   * layout off the screen. Tailwind's breakpoints are `rem` against the
+   * *initial* root size, not this one, so raising it scales the type without
+   * moving the phone into a different breakpoint.
+   */
+  textSize: TextSize
   /**
    * Which optional form fields render. Every field that existed before BR-045
    * defaults to visible; `time` defaults to **hidden**, because it is a brand
@@ -43,6 +56,7 @@ export type UiPreferences = {
 }
 
 export const DEFAULT_UI_PREFERENCES: UiPreferences = {
+  textSize: 'default',
   formFields: {
     payee: true,
     tags: true,
@@ -75,6 +89,10 @@ export function isTransactionPeriod(value: unknown): value is TransactionPeriod 
   return TRANSACTION_PERIODS.includes(value as TransactionPeriod)
 }
 
+export function isTextSize(value: unknown): value is TextSize {
+  return TEXT_SIZES.includes(value as TextSize)
+}
+
 export function parseUiPreferences(raw: unknown): UiPreferences {
   const root = asRecord(raw)
   const formFields = asRecord(root.formFields)
@@ -88,6 +106,7 @@ export function parseUiPreferences(raw: unknown): UiPreferences {
     : [transactions.defaultAccountId]
 
   return {
+    textSize: isTextSize(root.textSize) ? root.textSize : DEFAULT_UI_PREFERENCES.textSize,
     formFields: Object.fromEntries(
       TRANSACTION_FORM_FIELDS.map((field) => [
         field,

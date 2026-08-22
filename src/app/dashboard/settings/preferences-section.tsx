@@ -14,9 +14,9 @@ import type { TransactionFormField, UiPreferences } from '@/lib/preferences/shar
 type AccountOption = { id: string; name: string }
 
 /**
- * BR-032 (which optional fields the add-transaction form shows) and BR-038
- * (how the transaction list opens and renders), sharing one settings card
- * because they share one stored object.
+ * BR-032 (which optional fields the add-transaction form shows), BR-038 (how
+ * the transaction list opens and renders) and the app-wide text size, sharing
+ * one settings card because they share one stored object.
  *
  * Deliberately a plain server-rendered form: every control is a checkbox or a
  * select, so there is nothing here that needs client state.
@@ -48,6 +48,12 @@ const FORM_FIELD_LABELS: Record<TransactionFormField, { label: string; descripti
     description:
       'Orders same-day entries. Off by default, and it never changes which month a transaction belongs to.',
   },
+}
+
+const TEXT_SIZE_LABELS: Record<UiPreferences['textSize'], string> = {
+  default: 'Default',
+  large: 'Large',
+  larger: 'Larger',
 }
 
 const PERIOD_LABELS: Record<UiPreferences['transactions']['defaultPeriod'], string> = {
@@ -90,13 +96,40 @@ export function PreferencesSection({
       <CardHeader>
         <CardTitle>Preferences</CardTitle>
         <CardDescription>
-          How the transaction form and transaction list behave for you. These are
-          yours alone — they do not change anything for the rest of the household.
+          How the app reads, and how the transaction form and transaction list
+          behave for you. These are yours alone — they do not change anything for
+          the rest of the household.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form action={updateUiPreferencesAction} className="space-y-6">
           <fieldset className="space-y-3">
+            <legend className="text-sm font-medium">Display</legend>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="text_size">Text size</Label>
+              <select
+                id="text_size"
+                name="text_size"
+                defaultValue={preferences.textSize}
+                className={nativeSelectCls}
+              >
+                {(Object.keys(TEXT_SIZE_LABELS) as Array<keyof typeof TEXT_SIZE_LABELS>).map(
+                  (size) => (
+                    <option key={size} value={size}>
+                      {TEXT_SIZE_LABELS[size]}
+                    </option>
+                  )
+                )}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Scales every text and control in the app. Unlike pinch-zooming it
+                survives a reload, and it never pushes the layout off the screen.
+              </p>
+            </div>
+          </fieldset>
+
+          <fieldset className="space-y-3 border-t pt-6">
             <legend className="text-sm font-medium">Transaction form fields</legend>
             <p className="text-xs text-muted-foreground">
               Hidden fields are only hidden on the add form. Nothing already saved is

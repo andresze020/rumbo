@@ -135,6 +135,26 @@
        is delivered — both read as "web page" on a phone. */
     -webkit-tap-highlight-color: transparent;
   }
+  /*
+   * In-app text size. Percentages, not pixels, so a reader who has already
+   * raised their browser's default font size keeps that raise and this scales
+   * on top of it — a hard `18px` would silently *shrink* the app for them.
+   *
+   * Everything in the UI is sized in `rem`, so this moves type, padding and
+   * control heights together instead of cramming bigger text into boxes built
+   * for smaller text. Tailwind's breakpoints resolve `rem` against the initial
+   * root size rather than this one, so a phone stays on the phone layout.
+   *
+   * The attribute is written to `<html>` by `TextSizeSync`, mounted in the
+   * dashboard layout — see that file for why it lives there and not on `<html>`
+   * server-side.
+   */
+  html[data-text-size='large'] {
+    font-size: 112.5%;
+  }
+  html[data-text-size='larger'] {
+    font-size: 125%;
+  }
   a,
   button,
   summary,
