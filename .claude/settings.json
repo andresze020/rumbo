@@ -81,7 +81,9 @@
       "Bash(git fetch *)",
       "Bash(git show *)",
       "Bash(git stash *)",
-      "PowerShell(npm run *)"
+      "PowerShell(npm run *)",
+      "Bash(npm run db:status)",
+      "Bash(npm run db:push)"
     ],
     "ask": [
       "Bash(npx supabase *)",
