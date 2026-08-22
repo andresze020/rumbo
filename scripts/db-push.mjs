@@ -203,10 +203,15 @@ async function loadState(context) {
   const local = localMigrations()
   const applied = await appliedVersions(context)
   const appliedSet = new Set(applied)
+  // Read here rather than at apply time so a dry run — and `status`, even with
+  // nothing pending — exercises everything the write path needs except the
+  // INSERT itself.
+  const columns = await trackingColumns(context)
 
   return {
     local,
     applied,
+    columns,
     pending: local.filter((migration) => !appliedSet.has(migration.version)),
     // Applied remotely with no file here: the repo no longer describes the base.
     orphans: applied.filter((version) => !local.some((m) => m.version === version)),
@@ -214,12 +219,13 @@ async function loadState(context) {
 }
 
 async function status(context) {
-  const { local, applied, pending, orphans } = await loadState(context)
+  const { local, applied, pending, orphans, columns } = await loadState(context)
 
   log(`\nProject ${context.ref}`)
   log(`  local migrations : ${local.length}`)
   log(`  applied remotely : ${applied.length}`)
   log(`  pending          : ${pending.length}`)
+  log(`  records with     : ${[...columns].join(', ')}`)
 
   if (pending.length) {
     log('\nPending:')
@@ -235,7 +241,7 @@ async function status(context) {
 }
 
 async function push(context, flags) {
-  const { applied, pending } = await loadState(context)
+  const { applied, pending, columns } = await loadState(context)
 
   if (!pending.length) {
     log('\nNothing to push — the database is up to date.\n')
@@ -280,11 +286,10 @@ async function push(context, flags) {
   }
 
   if (!flags.has('apply')) {
-    log('\nDry run — nothing was applied. Re-run with --apply to push.\n')
+    log(`\nEach would be recorded in ${TRACKING_TABLE} (${[...columns].join(', ')}).`)
+    log('Dry run — nothing was applied. Re-run with --apply to push.\n')
     return
   }
-
-  const columns = await trackingColumns(context)
 
   for (const migration of plan) {
     process.stdout.write(`  → ${migration.file} … `)

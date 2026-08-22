@@ -41,7 +41,7 @@ ad hoc.
 
 | Command | Effect |
 | :-- | :-- |
-| `npm run db:status` | Applied / pending counts, pending filenames, and any version applied remotely with no local file |
+| `npm run db:status` | Applied / pending counts, pending filenames, the tracking-table columns a push would fill, and any version applied remotely with no local file |
 | `npm run db:push` | Dry run — prints the plan, writes nothing |
 | `node scripts/db-push.mjs push --apply` | Applies the pending migrations |
 
@@ -58,7 +58,9 @@ migration), `--force` (apply a file containing explicit `BEGIN`/`COMMIT`).
   which is why `--force` exists and why the script refuses without it.
 - **Ordering**: a pending file older than the newest applied migration is
   refused by default. It would run against a schema it was never written for.
-- **Dry run by default**: `push` writes only with `--apply`.
+- **Dry run by default**: `push` writes only with `--apply`. Both `status` and the
+  dry run read the tracking table's columns, so everything the write path needs
+  except the `INSERT` itself is exercised before anything is applied.
 - **No `db diff` / `db dump` equivalent.** Those need Docker and a direct
   connection. Schema inspection from a cloud session goes through the Supabase
   MCP server (`docs/supabase-mcp.md`).
