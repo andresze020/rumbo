@@ -84,7 +84,7 @@ export function SelectorSheet({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[60] flex flex-col justify-end sm:hidden"
+      className="vv-pin-screen fixed inset-0 z-[60] flex flex-col justify-end sm:hidden"
     >
       <div
         aria-hidden="true"
