@@ -99,8 +99,10 @@ cycle (BR-030), optional time-of-day (BR-045), recurring transfers (UC-9), notes
 (BR-044), the calendar (BR-037), transfer-as-expense (BR-039), the budget
 comparison/payment split (BR-043) and the custom month start day (BR-036).
 
-Record results in a new `docs/alpha/` QA doc following the shape of
-[alpha/pr-37-authenticated-qa.md](./alpha/pr-37-authenticated-qa.md).
+The checklist now exists —
+[alpha/tier-3-4-authenticated-qa.md](./alpha/tier-3-4-authenticated-qa.md), one
+row per feature with the exact invariant that closes it, all eleven still
+`Untested`. Record results there as a new `## Results — YYYY-MM-DD` section.
 
 ## 5. Open decisions across feature docs
 
