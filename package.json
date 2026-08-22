@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "i18n:check": "node scripts/check-i18n-coverage.mjs"
+    "i18n:check": "node scripts/check-i18n-coverage.mjs",
+    "db:status": "node scripts/db-push.mjs status",
+    "db:push": "node scripts/db-push.mjs push"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",

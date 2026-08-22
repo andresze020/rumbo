@@ -192,3 +192,8 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
 - Do not run `npx supabase db push` automatically.
 - Prepare migrations only and list the exact manual Supabase command for the user.
+- From a cloud session `npx supabase db push` cannot work at all: it needs TCP
+  5432, and cloud egress is HTTP/HTTPS only. Use `npm run db:status` /
+  `node scripts/db-push.mjs push --apply`, which applies the same migrations over
+  the Management API. See `docs/db-push-over-https.md`. Same rule as above — only
+  when the user asks.
