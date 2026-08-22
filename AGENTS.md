@@ -25,7 +25,8 @@ The product is household-first. All financial data must belong to a household.
 
 - **Balance FX revaluation** (2026-08-20, branch
   `claude/andromoney-import-script-6u4fy1`). Migration
-  `20260817120000_balance_fx_revaluation.sql` — **not applied yet**. A
+  `20260817120000_balance_fx_revaluation.sql` — applied (confirmed
+  2026-08-21 via `npx supabase migration list --linked`). A
   foreign-currency account's base-currency balance was
   `sum(transaction_entries.amount_base_currency)`, every movement frozen at the
   rate it was booked at: a **cost basis** that drifts from reality without
@@ -122,8 +123,9 @@ The product is household-first. All financial data must belong to a household.
 - installment_plans (BR-035)
 
 All migrations are applied. `npx supabase migration list --linked`
-reported 58/58 on 2026-08-12, the day Tier-3 and Tier-4 were merged and
-pushed. Nothing is pending.
+reported 59/59 on 2026-08-21 (58/58 on 2026-08-12, the day Tier-3 and
+Tier-4 were merged and pushed, plus `20260817120000_balance_fx_revaluation.sql`
+confirmed applied since). Nothing is pending.
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
