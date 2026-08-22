@@ -39,10 +39,9 @@
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
+import { apiContext, fail, log, runScript, runSql } from './lib/supabase-api.mjs'
 
 const MIGRATIONS_DIR = 'supabase/migrations'
-const API_ORIGIN = 'https://api.supabase.com'
-const REQUEST_TIMEOUT_MS = 120_000
 const TRACKING_TABLE = 'supabase_migrations.schema_migrations'
 
 // ── CLI plumbing ────────────────────────────────────────────────────────────
@@ -51,94 +50,6 @@ function parseArgs(argv) {
   const [command, ...rest] = argv
   const flags = new Set(rest.filter((token) => token.startsWith('--')).map((t) => t.slice(2)))
   return { command, flags }
-}
-
-function fail(message) {
-  console.error(`\n✖ ${message}\n`)
-  process.exit(1)
-}
-
-function log(message = '') {
-  console.log(message)
-}
-
-/** Node's --env-file is the happy path; this is the fallback when it is absent. */
-function loadEnvFallback() {
-  if (process.env.SUPABASE_ACCESS_TOKEN) return
-
-  for (const candidate of ['.env.local', '.env']) {
-    if (!existsSync(candidate)) continue
-    for (const line of readFileSync(candidate, 'utf8').split('\n')) {
-      const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/)
-      if (!match) continue
-      const value = match[2].replace(/^['"]|['"]$/g, '')
-      if (!process.env[match[1]]) process.env[match[1]] = value
-    }
-  }
-}
-
-// ── Management API ──────────────────────────────────────────────────────────
-
-function readProjectRef() {
-  if (process.env.SUPABASE_PROJECT_REF) return process.env.SUPABASE_PROJECT_REF
-
-  const linked = 'supabase/.temp/project-ref'
-  if (!existsSync(linked)) {
-    fail(
-      `No project ref. Expected ${linked} (written by \`npx supabase link\`) ` +
-        'or a SUPABASE_PROJECT_REF environment variable.'
-    )
-  }
-
-  return readFileSync(linked, 'utf8').trim()
-}
-
-/**
- * Runs SQL through the Management API. Every statement in `sql` travels in one
- * request, so PostgreSQL runs them in a single implicit transaction: a
- * migration and the row recording it either both land or neither does.
- */
-async function runSql(context, sql) {
-  let response
-
-  try {
-    response = await fetch(`${API_ORIGIN}/v1/projects/${context.ref}/database/query`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${context.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: sql }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    })
-  } catch (error) {
-    // The usual cause in a cloud session is the environment's network policy:
-    // api.supabase.com is not on the default allowlist, so the proxy answers
-    // 403 to CONNECT and fetch reports a transport failure.
-    fail(
-      `Could not reach ${API_ORIGIN}: ${error.message}\n` +
-        '  If this is a Claude Code cloud session, the environment needs Network access\n' +
-        '  set to Custom with *.supabase.com and *.supabase.co allowed.'
-    )
-  }
-
-  const body = await response.text()
-
-  if (!response.ok) {
-    let detail = body
-    try {
-      detail = JSON.parse(body).message ?? body
-    } catch {
-      // Not JSON — the raw body is the best detail available.
-    }
-    fail(`Supabase API returned ${response.status}: ${detail}`)
-  }
-
-  try {
-    return JSON.parse(body)
-  } catch {
-    return []
-  }
 }
 
 // ── Migration state ─────────────────────────────────────────────────────────
@@ -309,21 +220,10 @@ async function main() {
     fail('Usage: node scripts/db-push.mjs <status|push> [--apply] [--allow-out-of-order] [--force]')
   }
 
-  loadEnvFallback()
-
-  const token = process.env.SUPABASE_ACCESS_TOKEN
-  if (!token) {
-    fail(
-      'SUPABASE_ACCESS_TOKEN is missing. Create a personal access token at\n' +
-        '  https://supabase.com/dashboard/account/tokens\n' +
-        '  and set it in the environment this session runs in.'
-    )
-  }
-
-  const context = { ref: readProjectRef(), token }
+  const context = apiContext()
 
   if (command === 'status') await status(context)
   else await push(context, flags)
 }
 
-main()
+runScript(main)
