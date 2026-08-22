@@ -135,6 +135,26 @@
        is delivered — both read as "web page" on a phone. */
     -webkit-tap-highlight-color: transparent;
   }
+  /*
+   * In-app text size. Percentages, not pixels, so a reader who has already
+   * raised their browser's default font size keeps that raise and this scales
+   * on top of it — a hard `18px` would silently *shrink* the app for them.
+   *
+   * Everything in the UI is sized in `rem`, so this moves type, padding and
+   * control heights together instead of cramming bigger text into boxes built
+   * for smaller text. Tailwind's breakpoints resolve `rem` against the initial
+   * root size rather than this one, so a phone stays on the phone layout.
+   *
+   * The attribute is written to `<html>` by `TextSizeSync`, mounted in the
+   * dashboard layout — see that file for why it lives there and not on `<html>`
+   * server-side.
+   */
+  html[data-text-size='large'] {
+    font-size: 112.5%;
+  }
+  html[data-text-size='larger'] {
+    font-size: 125%;
+  }
   a,
   button,
   summary,
@@ -246,5 +266,101 @@
         0
       )
       scale(var(--vv-inv-scale));
+  }
+
+  /*
+   * Pinch-zoom overlay pinning (dialogs, sheets, drawers).
+   *
+   * The chrome above is counter-scaled: a tab bar is furniture and should keep
+   * its on-screen size while the page magnifies. An overlay is the opposite —
+   * it holds fields to fill and text to read, so a zoom should magnify it
+   * exactly like the content it covers. What it must *not* do is fall off the
+   * screen, which is what `fixed` alone does once the layout viewport is
+   * bigger than the visual one: a centred dialog centres on a box that is
+   * partly off-screen, an `inset-0` backdrop stops short of the visible edges,
+   * and a bottom sheet hugs an edge you cannot see.
+   *
+   * So these rules restate the element's *box* in visual-viewport terms and
+   * touch nothing else. Deliberately no transform: every one of these elements
+   * already owns its own (`-translate-1/2` centring, the `zoom-in-95` open
+   * animation, vaul's drag offset). And deliberately no wrapper element, which
+   * would add a stacking context and a `fixed` containing block that the
+   * overlays inside it do not expect.
+   *
+   * Escape hatch: an element that is only `fixed` at some breakpoints can
+   * neutralise the pin per breakpoint by shadowing the variables locally, e.g.
+   * `sm:[--vv-width:auto]` — see the transactions filter sheet.
+   */
+
+  /* `fixed inset-0` — a backdrop, or a full-screen overlay container. */
+  html[data-vv-zoomed] .vv-pin-screen {
+    top: var(--vv-top);
+    left: var(--vv-left);
+    right: auto;
+    bottom: auto;
+    width: var(--vv-width);
+    height: var(--vv-height);
+  }
+
+  /* `fixed top-1/2 left-1/2` + the element's own `-translate-1/2`: centre on
+     the screen, and never grow past it. */
+  html[data-vv-zoomed] .vv-pin-screen-center {
+    top: calc(var(--vv-top) + var(--vv-height) / 2);
+    left: calc(var(--vv-left) + var(--vv-width) / 2);
+    max-width: calc(var(--vv-width) - 2rem);
+    max-height: calc(var(--vv-height) - 2rem);
+    /* The clamp is only useful if what it cuts off is still reachable. Scoped
+       to the zoomed state on purpose: a scroll container at rest would clip
+       anything a dialog renders outside its own box. */
+    overflow-y: auto;
+  }
+
+  /*
+   * Edge-anchored panels. The side is read from the attribute the library
+   * already sets — `data-side` on a Base UI sheet, `data-vaul-drawer-direction`
+   * on a vaul drawer — so one class serves both. `bottom`/`right` are pinned by
+   * cancelling the gap between the two viewports' far edges, since `bottom: 0`
+   * means the *layout* viewport's bottom.
+   */
+  html[data-vv-zoomed] .vv-pin-screen-edge[data-side='top'],
+  html[data-vv-zoomed] .vv-pin-screen-edge[data-vaul-drawer-direction='top'] {
+    top: var(--vv-top);
+    left: var(--vv-left);
+    right: auto;
+    width: var(--vv-width);
+    max-height: var(--vv-height);
+  }
+
+  html[data-vv-zoomed] .vv-pin-screen-edge[data-side='bottom'],
+  html[data-vv-zoomed] .vv-pin-screen-edge[data-vaul-drawer-direction='bottom'] {
+    bottom: calc(-1 * var(--vv-bottom-delta));
+    left: var(--vv-left);
+    right: auto;
+    width: var(--vv-width);
+    max-height: var(--vv-height);
+  }
+
+  /* `max-width` as well as the height: a side panel is sized `w-3/4`, and three
+     quarters of the *layout* viewport is wider than the whole screen once the
+     page is zoomed past 1.33x — far enough for its close button to sit off it.
+     This outranks the panel's own `sm:max-w-sm`, so a zoomed desktop gets a
+     sheet as wide as the screen rather than 24rem. Fully visible and slightly
+     wide beats narrow and half off-screen. */
+  html[data-vv-zoomed] .vv-pin-screen-edge[data-side='left'],
+  html[data-vv-zoomed] .vv-pin-screen-edge[data-vaul-drawer-direction='left'] {
+    left: var(--vv-left);
+    top: var(--vv-top);
+    bottom: auto;
+    height: var(--vv-height);
+    max-width: var(--vv-width);
+  }
+
+  html[data-vv-zoomed] .vv-pin-screen-edge[data-side='right'],
+  html[data-vv-zoomed] .vv-pin-screen-edge[data-vaul-drawer-direction='right'] {
+    right: calc(-1 * var(--vv-right-delta));
+    top: var(--vv-top);
+    bottom: auto;
+    height: var(--vv-height);
+    max-width: var(--vv-width);
   }
 }

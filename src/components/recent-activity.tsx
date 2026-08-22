@@ -53,11 +53,15 @@ export function RecentActivity({
         const Icon = style.icon
         const tone =
           row.type === 'income' ? 'positive' : row.type === 'expense' ? 'negative' : 'muted'
+        // Phone layout: the amount column is `auto`, not a fixed 88px. A
+        // six-figure COP figure does not fit in 88px and truncating money is
+        // never the right answer, so it takes what it needs and the text — which
+        // can wrap — gives up the rest.
         return (
           <Link
             key={row.id}
             href={`/dashboard/transactions?edit=${row.id}`}
-            className="grid grid-cols-[34px_minmax(0,1fr)_88px] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/50 lg:grid-cols-[36px_minmax(0,1fr)_110px_70px_100px]"
+            className="grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/50 lg:grid-cols-[36px_minmax(0,1fr)_110px_70px_100px]"
           >
             <span
               className={cn(
@@ -69,12 +73,22 @@ export function RecentActivity({
               <Icon />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{row.title}</p>
-              <p className="truncate text-[11px] text-muted-foreground">
-                <span className="lg:hidden">
-                  {row.subtitle} · {row.dateLabel}
+              {/* Two lines on a phone, one on desktop: the phone row is the only
+                  place the description has to share a narrow column with the
+                  amount, and a description cut to `Descuadre tarjeta de cré…`
+                  is the reason people pinch-zoom the dashboard at all. */}
+              <p className="line-clamp-2 text-sm font-medium lg:line-clamp-1">
+                {row.title}
+              </p>
+              {/* The date is `shrink-0` so the subtitle is what gives way. The
+                  old single `truncate` over `subtitle · date` spent the width on
+                  whichever came first and lost the date too. */}
+              <p className="flex items-baseline gap-1 text-[11px] text-muted-foreground">
+                <span className="truncate">{row.subtitle}</span>
+                <span className="shrink-0 lg:hidden" aria-hidden="true">
+                  ·
                 </span>
-                <span className="hidden lg:inline">{row.subtitle}</span>
+                <span className="shrink-0 lg:hidden">{row.dateLabel}</span>
               </p>
             </div>
             <div className="hidden min-w-0 truncate text-xs text-muted-foreground lg:block">

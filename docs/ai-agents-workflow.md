@@ -12,8 +12,10 @@ Ola 2 — *presupuesto de contexto* (2026-08-19): subagentes `scout`,
 `/contexto`, `/i18n`, `/cerrar-sprint` y `/arreglar`; hook `PreToolUse` `context-guard`;
 `AGENTS.md` adelgazado de 42 KB a 9 KB; MCP de Supabase apagado por defecto.
 
-No hay CI en GitHub Actions ni tests automatizados de UI — ambos están descritos
-abajo en "Siguiente ola" con el criterio para decidir cuándo valen la pena.
+Desde el 2026-08-22 hay CI en GitHub Actions y los invariantes del ledger son
+ejecutables (`npm run db:test`). Lo que sigue sin existir son tests
+automatizados de UI, descritos abajo en "Siguiente ola" con el criterio para
+decidir cuándo valen la pena.
 
 ---
 
@@ -264,36 +266,52 @@ sobre artefactos generados como cinturón por si el hook fallara.
 
 ---
 
-## Siguiente ola (no implementada)
+## Validación automatizada
 
 ### CI en GitHub Actions
 
-Hoy no existe `.github/` en el repo: los PRs se mergean sin ninguna validación
-automática. Un workflow con `npm run lint`, `npx tsc --noEmit` y `npm run build`
-sobre cada PR sería el mayor salto de confianza disponible.
+`.github/workflows/ci.yml` (2026-08-22) corre lint → `tsc --noEmit` →
+`i18n:check` → build en cada pull request y en cada push a `main`. Es la misma
+puerta que aplica el hook `Stop` local, ejecutada donde el hook no llega: un PR
+abierto desde una sesión en la nube nunca pasa por esta máquina.
 
-**Por qué no ahora**: el flujo de release es manual y de un solo desarrollador,
-y los hooks locales ya cubren el mismo gate antes de que el código salga de la
-máquina. El CI se vuelve necesario cuando haya un segundo colaborador, o cuando
-empieces a mergear desde el móvil o desde sesiones remotas donde los hooks
-locales no corren.
+El build usa valores placeholder de Supabase, no secrets. Puede hacerlo porque
+todas las rutas son server-rendered on demand, así que el build nunca llega a
+la base, y el cliente de Anthropic es lazy.
 
-### Tests automatizados
+### Invariantes del ledger
 
-No hay framework de tests JS/TS. Lo único parecido son tres archivos de
-invariantes en `supabase/tests/` que ningún script ejecuta.
+`npm run db:test` (2026-08-22) ejecuta los tres `.sql` de `supabase/tests/`
+contra la base enlazada, vía la Management API. Es la única cobertura de tests
+real del repo: valida las reglas del ledger directamente contra la base, que es
+donde de verdad importan.
+
+Detalle que no conviene romper: el splitter de `scripts/db-test.mjs` manda cada
+statement por separado —la API solo devuelve las filas del último de cada
+request— **excepto** el bloque `begin; do $$ … $$; rollback;` de
+`br_019_goals_invariants.sql`, que viaja entero. Partirlo mandaría el cuerpo en
+su propia transacción confirmada y dejaría datos de prueba escritos en
+producción.
+
+Se niega a adivinar el hogar cuando el proyecto tiene más de uno; pásalo con
+`--household=<uuid>`.
+
+---
+
+## Siguiente ola (no implementada)
+
+### Tests automatizados de UI
+
+No hay framework de tests JS/TS.
 
 **Por qué no ahora**: automatizar el QA de localhost requiere Playwright más una
 suite que hoy no existe; es un sprint entero, no un accesorio. El paso
-intermedio barato y de mayor retorno es **hacer ejecutables los tres `.sql` de
-invariantes** que ya escribiste — validan las reglas del ledger directamente
-contra la base, que es donde de verdad importa.
+intermedio barato ya se dio — los invariantes SQL de arriba.
 
 ### Claude revisando PRs
 
 Posible vía GitHub Actions con la API. Implica secrets, presupuesto de API y
-cambiar el flujo de merge manual que define `app-finanzas-sprint-flow`. Sin
-sentido antes de tener CI básico.
+cambiar el flujo de merge manual que define `app-finanzas-sprint-flow`.
 
 ---
 

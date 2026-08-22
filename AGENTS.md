@@ -23,6 +23,62 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Modal overlays, dashboard legibility, and a cheaper assistant**
+  (2026-08-22, branch `fix/mobile-ui-zoom-overlays-and-activity`). Closes the
+  P4/P3 mobile-UI gaps the viewport-pinning sprint (2026-08-21) deliberately
+  deferred, ships the text-size setting that sprint also scoped out, and
+  clears three more P3 rows from `docs/pending-work.md` §3 picked up in the
+  same branch. No migrations in any of it.
+  - **Overlays pinned to the visual viewport.** New `.vv-pin-screen`,
+    `.vv-pin-screen-center` and `.vv-pin-screen-edge` utilities in
+    `globals.css`, fed by new `--vv-width`/`--vv-height` on `ViewportPin`.
+    Unlike the chrome, an overlay is content — a zoom should magnify a
+    dialog, not shrink it back to size — so these are **not** counter-scaled
+    and get no transform or wrapper of their own, since every dialog, sheet
+    and drawer already owns one. Applied to `dialog`, `alert-dialog`,
+    `sheet`, `drawer`, `selector-sheet.tsx`, and the transactions filter
+    sheet, which shadows the pin variables off at `sm:` since it is a static
+    toolbar there, not a sheet.
+  - **Dashboard legibility.** Recent Activity's amount column is `auto`
+    instead of a fixed 88px — a six-figure COP amount didn't fit, and
+    truncating money is never right; the title wraps to two lines on phone;
+    the date is `shrink-0` on the secondary line so it survives instead of
+    losing to the subtitle. The assistant FAB now fades (opacity only —
+    `vv-pin-corner` already owns its transform) while the page scrolls down
+    and returns on scroll-up or a 1.2s pause. Not hidden on phone: it's the
+    only entry point to the assistant there.
+  - **In-app text size.** Settings gains `default`/`large`/`larger`, stored
+    in the existing `profiles.ui_preferences` jsonb (no migration), applied
+    as a `%` root `font-size` by new `TextSizeSync` — mounted in the
+    dashboard layout, not the root layout, so `/login` never pays for a
+    profile read to learn a preference it can't have. `%` and not `px` so a
+    reader's own browser zoom stacks instead of getting overridden. Also
+    fixed a real `audit-i18n.mjs` gap: it misses object values reached by
+    computed index, so `<select>` option labels (`PERIOD_LABELS` included)
+    were shipping untranslated despite a green i18n check.
+  - **CI on pull requests.** New `.github/workflows/ci.yml` — lint →
+    `tsc --noEmit` → `i18n:check` → build — since no `.github/` existed and
+    PRs merged with zero automated validation.
+  - **`npm run db:test`.** The three `supabase/tests/*.sql` ledger-invariant
+    files are runnable for the first time (`scripts/db-test.mjs` + shared
+    `scripts/lib/supabase-api.mjs`, also used by `db-push.mjs` now). Nothing
+    it runs writes, except `br_019`'s self-rolling-back transaction, which is
+    sent as one request on purpose so it can never half-commit into
+    production. Also fixed a latent Windows crash in `db-push`
+    (`process.exit()` with an open fetch socket died with `0xC0000409`
+    instead of exit code 1).
+  - **Assistant moved to Claude Haiku 4.5**, Anthropic's cheapest tier ($1/$5
+    per million tokens in/out vs Sonnet 5's $3/$15). Verified against the
+    Models API rather than assumed: `image_input` still works (receipts are
+    fine), but this tier has a 64K output cap and **no `output_config.effort`
+    — sending it is an outright error**, and neither call site sends one.
+    `max_tokens` also rose from 1024 (16000 for the assistant loop, 4096 for
+    receipt-draft extraction), which was silently truncating long replies
+    mid-sentence.
+  - **QA checklist scaffolding**: `docs/alpha/tier-3-4-authenticated-qa.md`,
+    eleven rows (the ten Tier-3/4 features plus BR-031, missing from the
+    original list despite shipping in Tier-3), all still `Untested` — the
+    doc exists, the pass has not been run.
 - **Chrome pinned to the visual viewport** (2026-08-21, branch
   `claude/zoom-scroll-header-footer-53n6iv`). UI only, no migration. A fast
   scroll on a phone occasionally picks up a stray second finger and pinch-zooms
@@ -39,51 +95,6 @@ The product is household-first. All financial data must belong to a household.
   containing block for anything `fixed` rendered inside the bars. **Pinch zoom
   stays enabled on purpose** — see `docs/pending-work.md` §2 before disabling
   it.
-- **Exchange rates refresh themselves** (2026-08-21, branch
-  `claude/andromoney-import-script-6u4fy1`). No migration — the
-  `exchange_rates` table and the FX revaluation below already existed; what was
-  missing was anyone filling the table. `refreshExchangeRatesAction`
-  (`src/app/dashboard/exchange-rate-actions.ts`) tops up any rate not dated
-  today from the same public feed the four entry forms have used all along
-  (`@fawazahmed0/currency-api` on jsDelivr — no key, and it carries COP, which
-  the ECB-backed feeds do not). `ExchangeRateAutoRefresh`, mounted in the
-  dashboard layout, fires it on the first render of a browser session and
-  records the day in `sessionStorage`, so navigating does not re-hit the
-  provider. It runs **as the signed-in user** — RLS applies as everywhere else,
-  no service-role key and no cron were introduced. New `fetchDirectRate` in
-  `src/lib/fx.ts` reads the pair in the direction the ledger stores it
-  (`1 from = N to`, the inverse of what the forms ask for) and falls back to
-  reading the other currency's file and inverting. Rates are dated as the
-  provider published them, not "today", so a weekend does not invent a
-  quotation. A provider outage is a no-op: the previous rate stays and balances
-  keep using it. Settings gains an **Update now** button and shows whether each
-  rate is `auto` or `manual`.
-- **Balance FX revaluation** (2026-08-20, branch
-  `claude/andromoney-import-script-6u4fy1`). Migration
-  `20260817120000_balance_fx_revaluation.sql` — applied (confirmed
-  2026-08-21 via `npx supabase migration list --linked`). A
-  foreign-currency account's base-currency balance was
-  `sum(transaction_entries.amount_base_currency)`, every movement frozen at the
-  rate it was booked at: a **cost basis** that drifts from reality without
-  limit. A COP account holding 29.262.996 COP read as ≈ 9.647 CAD (four years of
-  blended history) on a morning those pesos were worth ≈ 13.278 CAD. Both
-  `get_account_balances` overloads now revalue: a **stock** (a balance at a
-  point in time) converts at the rate in effect on that date, while a **flow**
-  (income, an expense, a budget line) keeps the rate of its own transaction
-  date, so `transaction_allocations` and every report and budget built on it are
-  untouched. Rates come from the BR-002 `exchange_rates` table, which was built
-  for exactly this and until now had no reader; new
-  `get_exchange_rate_as_of(...)` returns the rate **and its date**, and
-  `get_exchange_rate` keeps its signature and contract as a thin wrapper over
-  it. **Falls back to the historical sum** when no rate is on file, so a
-  household that never enters one sees no change. New
-  `base_conversion_rate`/`base_conversion_rate_date` columns let the UI tell the
-  two apart; the accounts screen names the currencies that fell back, and
-  Settings → Exchange rates is the editor (both rate directions, mirrored).
-  The one-off AndroMoney history importer (`scripts/andromoney-*.mjs`, merged
-  earlier) is what surfaced this. See
-  [docs/features/exchange-rates.md](./docs/features/exchange-rates.md) and
-  [docs/features/andromoney-import.md](./docs/features/andromoney-import.md).
 
 > **Historia anterior:** las entradas de sprint previas viven en
 > `docs/SPRINT-LOG.md` (append-only, más reciente arriba). No se resumen aquí:

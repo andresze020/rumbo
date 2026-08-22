@@ -624,7 +624,7 @@ export function TransactionFilters({
         <div
           aria-hidden="true"
           onClick={closeSheet}
-          className="fixed inset-0 z-[60] bg-black/50 duration-200 animate-in fade-in-0 sm:hidden"
+          className="vv-pin-screen fixed inset-0 z-[60] bg-black/50 duration-200 animate-in fade-in-0 sm:hidden"
         />
       ) : null}
 
@@ -636,14 +636,25 @@ export function TransactionFilters({
           keeps its original flat rows. */}
       <div
         {...(moreOpen
-          ? { role: 'dialog' as const, 'aria-modal': true, 'aria-label': ui('Filters') }
+          ? {
+              role: 'dialog' as const,
+              'aria-modal': true,
+              'aria-label': ui('Filters'),
+              // Which edge `vv-pin-screen-edge` should pin to while the page is
+              // pinch-zoomed. Same contract as a Base UI sheet.
+              'data-side': 'bottom' as const,
+            }
           : {})}
         className={cn(
           'flex-col',
           moreOpen
-            ? 'fixed inset-x-0 bottom-0 z-[61] flex max-h-[88dvh] rounded-t-2xl border-t bg-background shadow-2xl duration-300 animate-in slide-in-from-bottom-8'
+            ? 'vv-pin-screen-edge fixed inset-x-0 bottom-0 z-[61] flex max-h-[88dvh] rounded-t-2xl border-t bg-background shadow-2xl duration-300 animate-in slide-in-from-bottom-8'
             : 'hidden',
-          'sm:static sm:z-auto sm:flex sm:max-h-none sm:gap-2.5 sm:rounded-none sm:border-0 sm:bg-transparent sm:shadow-none sm:animate-none'
+          // This node is a sheet on phones and a plain static toolbar row from
+          // `sm:` up, so the zoom pin has to be switched off there — the width
+          // and max-height it sets would otherwise still apply to the static
+          // box. Shadowing the variables locally is the documented escape hatch.
+          'sm:static sm:z-auto sm:flex sm:max-h-none sm:gap-2.5 sm:rounded-none sm:border-0 sm:bg-transparent sm:shadow-none sm:animate-none sm:[--vv-height:none] sm:[--vv-width:auto]'
         )}
       >
         {/* Grab handle + title: the affordance that says "this is a sheet". */}

@@ -19,6 +19,11 @@
 > re-audit — the last full pass over every row is still the 2026-08-16 one
 > described above.
 >
+> **Touched 2026-08-22** to close the five §3 rows the
+> `fix/mobile-ui-zoom-overlays-and-activity` sprint shipped: modal overlays
+> under zoom, dashboard text truncation, in-app text size, CI on pull
+> requests, and runnable ledger invariants. Additive again, not a re-audit.
+>
 > Everything shipped is recorded in `AGENTS.md` → Current status and
 > [SPRINT-LOG.md](./SPRINT-LOG.md); this file only lists what is **not** done.
 
@@ -55,11 +60,6 @@ decision first.
 |---|---:|---|---|---|
 | BF-022 | P3 | Transactions | Reconciliation flow — mark transactions "cleared" against a bank statement. Needs a schema migration (`reconciled_at`). Deferred to Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
 | Tap payment capture | — | Capture / automation | Design only, **no code**. A tap cannot be detected by the PWA on any platform; detection has to come from the phone's automation layer posting to an ingest endpoint that stages captures in a `capture_inbox` and auto-posts only above a confidence threshold. | [features/tap-payment-capture.md](./features/tap-payment-capture.md) |
-| Text truncation on the dashboard | P3 | Mobile UI | Recent activity truncates the description and the account (`Descuadre tarjeta de cré…`, `Tarjeta cuota manejo · Bancolom…`), and the assistant FAB floats over the list, so it can land on top of a row's amount as it scrolls under. Observed on a real phone while diagnosing the zoom clipping. Worth fixing on its own terms: needing to pinch-zoom to read a row is the reason the zoom gets used at all. | [SPRINT-LOG.md](./SPRINT-LOG.md) |
-| In-app text size | P3 | Settings / accessibility | A text-size or density setting in Settings, persisted per user (`ui_preferences`, as BR-032/038 already do). The robust answer to "the numbers are too small" — unlike browser pinch it survives a reload and does not move the layout. Scoped out of the viewport-pinning sprint on purpose. | [SPRINT-LOG.md](./SPRINT-LOG.md) |
-| Modal overlays under zoom | P4 | Mobile UI | Dialogs and bottom sheets (`fixed inset-0`) are not visual-viewport pinned, so one opened while the page is zoomed still anchors to the layout viewport and can sit partly off screen. The `.vv-pin-*` utilities exist and would extend to them; nobody has reported hitting it. | [SPRINT-LOG.md](./SPRINT-LOG.md) |
-| CI on pull requests | P3 | Dev automation | No `.github/` exists — PRs merge with zero automated validation. A workflow running `npm run lint`, `npx tsc --noEmit` and `npm run build` would be the biggest confidence jump available. Deferred because the local `Stop` hook already gates the same checks before code leaves the machine; needed once there is a second collaborator or merges happen from remote sessions where local hooks do not run. | [ai-agents-workflow.md](./ai-agents-workflow.md) |
-| Runnable ledger invariants | P3 | Testing | `supabase/tests/*.sql` holds three invariant files (money, goals, refunds) that **no script executes**. Making them runnable is the cheapest real test coverage available — they check the ledger rules against the database, where it matters. There is no JS/TS test framework in the repo at all. | [ai-agents-workflow.md](./ai-agents-workflow.md) |
 
 > **Tap capture is gated.** The Phase 0 device spike is a hard gate — no code
 > until a real tap is proven to emit a machine-readable event on the user's own
@@ -99,8 +99,10 @@ cycle (BR-030), optional time-of-day (BR-045), recurring transfers (UC-9), notes
 (BR-044), the calendar (BR-037), transfer-as-expense (BR-039), the budget
 comparison/payment split (BR-043) and the custom month start day (BR-036).
 
-Record results in a new `docs/alpha/` QA doc following the shape of
-[alpha/pr-37-authenticated-qa.md](./alpha/pr-37-authenticated-qa.md).
+The checklist now exists —
+[alpha/tier-3-4-authenticated-qa.md](./alpha/tier-3-4-authenticated-qa.md), one
+row per feature with the exact invariant that closes it, all eleven still
+`Untested`. Record results there as a new `## Results — YYYY-MM-DD` section.
 
 ## 5. Open decisions across feature docs
 

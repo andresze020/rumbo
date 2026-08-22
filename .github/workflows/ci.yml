@@ -1,0 +1,54 @@
+# The same gate the local `Stop` hook enforces, run where the hook cannot: a
+# pull request opened from a cloud session, or any merge that did not pass
+# through this machine. Keep the steps in sync with the `app-finanzas-verify`
+# skill — that skill is the source of truth for "is this ready?", this file is
+# only its unattended copy.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A force-push or a quick second commit should cancel the run it supersedes;
+# nobody reads a result for a SHA that is no longer the branch tip.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: lint · typecheck · i18n · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Cheapest first, so an obvious failure does not wait on a build.
+      - name: Lint
+        run: npm run lint
+
+      # There is no `typecheck` npm script — this is the real command.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: i18n coverage
+        run: npm run i18n:check
+
+      # Every route is server-rendered on demand, so the build never reaches
+      # Supabase; these values exist only so the client factory has something
+      # well-formed to read. Nothing here authenticates against anything, and
+      # no secret belongs in this file.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-publishable-key

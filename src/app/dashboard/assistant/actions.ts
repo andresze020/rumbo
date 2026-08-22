@@ -175,7 +175,12 @@ export async function sendAssistantMessageAction(
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
       const response = await anthropic.messages.create({
         model: ASSISTANT_MODEL,
-        max_tokens: 1024,
+        // A detailed answer about a month of spending runs past 1024 tokens,
+        // and hitting the cap truncates it mid-sentence — which nothing below
+        // checks for, so the reply would be returned as if it were complete.
+        // Billing is per token produced, not per ceiling, so raising it costs
+        // nothing. Well under the model's own 64K output limit.
+        max_tokens: 16000,
         system,
         tools: ASSISTANT_TOOLS,
         messages,
@@ -300,7 +305,10 @@ async function extractTransactionDraft(
     const anthropic = getAnthropicClient()
     const response = await anthropic.messages.create({
       model: ASSISTANT_MODEL,
-      max_tokens: 1024,
+      // Smaller than the analysis loop above: this returns one tool call with
+      // eight short fields. Still clear of 1024 so a long receipt cannot
+      // truncate the extraction.
+      max_tokens: 4096,
       system,
       tools: [RECORD_DRAFT_TOOL],
       tool_choice: { type: 'tool', name: 'record_transaction_draft' },

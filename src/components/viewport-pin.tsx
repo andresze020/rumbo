@@ -12,7 +12,9 @@ import { useEffect } from 'react'
  * bar and the bottom nav sit partly outside it and read as "cut off". The
  * `.vv-pin-*` utilities in `globals.css` consume these variables to move the
  * chrome back onto the visual viewport and counter-scale it, so a zoom
- * magnifies the content only.
+ * magnifies the content only. The `.vv-pin-screen*` utilities use the same
+ * variables for modal overlays, which are re-boxed onto the screen but *not*
+ * counter-scaled — see the comment beside them.
  *
  * Nothing is published at scale 1 (the normal case, and the soft keyboard,
  * which shrinks the visual viewport without zooming): no attribute, no
@@ -40,6 +42,11 @@ export function ViewportPin() {
       root.style.setProperty('--vv-inv-scale', String(1 / scale))
       root.style.setProperty('--vv-left', `${vv.offsetLeft}px`)
       root.style.setProperty('--vv-top', `${vv.offsetTop}px`)
+      // The screen's own size, for overlays that are re-boxed onto it rather
+      // than counter-scaled (`.vv-pin-screen*`): a `fixed inset-0` backdrop or
+      // an `h-full` side sheet is otherwise as tall as the *layout* viewport.
+      root.style.setProperty('--vv-width', `${vv.width}px`)
+      root.style.setProperty('--vv-height', `${vv.height}px`)
       // How far the visual viewport's right/bottom edges sit from the layout
       // viewport's, which is what `right: 0` / `bottom: 0` are pinned to.
       root.style.setProperty(
