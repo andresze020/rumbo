@@ -17,7 +17,7 @@ export function MobileNav({ className }: { className?: string }) {
   return (
     <header
       className={cn(
-        'fixed inset-x-0 top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70',
+        'fixed inset-x-0 top-0 z-40 flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b bg-background/85 px-4 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:bg-background/70',
         // Stay on the *visual* viewport when the page is pinch-zoomed, instead
         // of sliding off the top of the screen with the layout viewport.
         'vv-pin-top',

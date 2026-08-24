@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/toast-provider";
@@ -25,6 +25,16 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "Finanzas",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Without `viewport-fit=cover` every `env(safe-area-inset-*)` in the app
+  // resolves to 0, so the bottom nav's own bottom padding is dead code and its
+  // labels end up under the Android gesture bar / iOS home indicator. Zoom is
+  // deliberately left enabled (see docs/pending-work.md §2).
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({
