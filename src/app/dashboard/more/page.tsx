@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/page-header'
 import { SectionHeading } from '@/components/section-heading'
 import { PhaseBadge } from '@/components/phase-badge'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { ViewportDebugToggle } from '@/lib/debug/viewport-debug'
 import { SubmitButton } from '@/components/submit-button'
 import { signOutAction } from '@/app/dashboard/session-actions'
 import { useLanguage } from '@/components/language-provider'
@@ -81,6 +82,10 @@ export default function MorePage() {
               <ThemeToggle />
             </div>
           </div>
+
+          {/* Temporary: on-device viewport readout for the "dashboard loads
+              zoomed" report. Remove with the component. */}
+          <ViewportDebugToggle />
 
           {/* Sign out */}
           <form action={signOutAction}>
