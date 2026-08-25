@@ -42,19 +42,31 @@ function read(): Line[] {
   const navRect = nav?.getBoundingClientRect()
 
   // Anything sticking out past the layout viewport is what would make the page
-  // pannable/zoomable sideways. Name the widest offenders.
-  const wide: string[] = []
+  // wider than the screen. Fixed elements are skipped: they resolve against the
+  // initial containing block rather than the layout viewport, so `inset-x-0`
+  // chrome always reads as overflowing without being able to cause any — and it
+  // was crowding the real culprit out of the list.
+  const offenders: { label: string; over: number }[] = []
   const all = Array.from(document.body.querySelectorAll<HTMLElement>('*')).slice(0, 4000)
   for (const el of all) {
     if (el.closest('[data-vv-debug]')) continue
+    const style = getComputedStyle(el)
+    if (style.position === 'fixed' || style.position === 'sticky') continue
     const rect = el.getBoundingClientRect()
     if (rect.width === 0) continue
     const over = Math.max(rect.right - root.clientWidth, -rect.left)
     if (over > 1) {
       const cls = el.className?.toString().split(/\s+/).slice(0, 2).join('.')
-      wide.push(`${el.tagName.toLowerCase()}${cls ? '.' + cls : ''} +${Math.round(over)}`)
+      offenders.push({
+        label: `${el.tagName.toLowerCase()}${cls ? '.' + cls : ''} w${Math.round(
+          rect.width
+        )} +${Math.round(over)}`,
+        over,
+      })
     }
   }
+  offenders.sort((a, b) => b.over - a.over)
+  const wide = offenders.map((item) => item.label)
 
   return [
     { label: 'win', value: `${window.innerWidth}x${window.innerHeight}` },
@@ -67,6 +79,14 @@ function read(): Line[] {
             vv.offsetLeft
           )},${Math.round(vv.offsetTop)}`
         : 'n/a',
+    },
+    {
+      label: 'gutter',
+      value: `x${window.innerWidth - root.clientWidth} y${window.innerHeight - root.clientHeight}`,
+    },
+    {
+      label: 'overflow',
+      value: `${getComputedStyle(root).overflowX}/${getComputedStyle(document.body).overflowX}`,
     },
     { label: 'dpr', value: String(window.devicePixelRatio) },
     {
