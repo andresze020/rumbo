@@ -38,6 +38,16 @@ function read(): Line[] {
   )} r${parseFloat(inset.paddingRight)}`
   probe.remove()
 
+  // Where `bottom: 0` / `right: 0` actually land, measured the same way
+  // `ViewportPin` measures it. If this disagrees with the layout viewport, the
+  // fixed chrome is anchored outside the visible box.
+  const edge = document.createElement('div')
+  edge.style.cssText =
+    'position:fixed;left:0;right:0;bottom:0;height:1px;visibility:hidden;pointer-events:none'
+  document.body.appendChild(edge)
+  const edgeRect = edge.getBoundingClientRect()
+  edge.remove()
+
   const nav = document.querySelector('nav.vv-pin-bottom') as HTMLElement | null
   const navRect = nav?.getBoundingClientRect()
 
@@ -96,6 +106,10 @@ function read(): Line[] {
     { label: 'safe', value: safe },
     { label: 'root px', value: getComputedStyle(root).fontSize },
     { label: 'vv attr', value: root.getAttribute('data-vv-offset') ? 'offset' : root.getAttribute('data-vv-zoomed') ? 'zoomed' : 'none' },
+    {
+      label: 'fixed',
+      value: `bottom ${Math.round(edgeRect.bottom)} right ${Math.round(edgeRect.right)}`,
+    },
     {
       label: 'nav',
       value: navRect
