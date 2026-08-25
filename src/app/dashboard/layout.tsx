@@ -12,6 +12,7 @@ import { LanguageProvider } from '@/components/language-provider'
 import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { ScreenTransition } from '@/components/screen-transition'
 import { TextSizeSync } from '@/components/text-size-sync'
+import { ViewportDebug } from '@/lib/debug/viewport-debug'
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { getUiPreferences } from '@/lib/preferences/server'
@@ -38,6 +39,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       <TransactionDialogProvider>
         <LocalizedClientBoundary>
           <TextSizeSync value={textSize} />
+          <ViewportDebug />
           <div className="flex min-h-screen">
           {/* Desktop sidebar */}
           <AppSidebar className="hidden lg:flex" userEmail={userEmail} />
