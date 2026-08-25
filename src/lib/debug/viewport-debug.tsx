@@ -67,10 +67,18 @@ function read(): Line[] {
     const over = Math.max(rect.right - root.clientWidth, -rect.left)
     if (over > 1) {
       const cls = el.className?.toString().split(/\s+/).slice(0, 2).join('.')
+      // The parent's width is what turns "this is wide" into "this refuses to
+      // fit": a child wider than its parent is content that will not shrink,
+      // a child the same width as an over-wide parent is just inheriting it.
+      const parent = el.parentElement
+      const parentRect = parent?.getBoundingClientRect()
+      const parentCls = parent?.className?.toString().split(/\s+/).slice(0, 1).join('')
       offenders.push({
-        label: `${el.tagName.toLowerCase()}${cls ? '.' + cls : ''} w${Math.round(
-          rect.width
-        )} +${Math.round(over)}`,
+        label: `${el.tagName.toLowerCase()}${cls ? '.' + cls : ''} w${Math.round(rect.width)} +${Math.round(
+          over
+        )} in ${parent ? parent.tagName.toLowerCase() : '?'}${
+          parentCls ? '.' + parentCls : ''
+        } w${parentRect ? Math.round(parentRect.width) : '?'}`,
         over,
       })
     }
@@ -104,6 +112,12 @@ function read(): Line[] {
       value: window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser',
     },
     { label: 'safe', value: safe },
+    {
+      label: 'boxes',
+      value: `html ${Math.round(root.getBoundingClientRect().width)} body ${Math.round(
+        document.body.getBoundingClientRect().width
+      )}`,
+    },
     { label: 'root px', value: getComputedStyle(root).fontSize },
     { label: 'vv attr', value: root.getAttribute('data-vv-offset') ? 'offset' : root.getAttribute('data-vv-zoomed') ? 'zoomed' : 'none' },
     {

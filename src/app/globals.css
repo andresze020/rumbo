@@ -307,14 +307,30 @@
   }
 
   /*
-   * The page itself, for the same reason. `body` resolves its width against
-   * the fixed box too — 401px against 384 visible — so the cards run 17px past
-   * the right edge and the browser hands you those 17px as a sideways drag.
-   * Nothing is being clipped that was not already off screen; this stops the
-   * layout claiming width it does not have. It also takes the horizontal
-   * scrollbar with it, and that scrollbar is what was costing 31px of height.
+   * The document, for the same reason — and the root element is where it has
+   * to happen. `html` fills the fixed box, so it is 401px wide against 384
+   * visible; that is the whole of `scroll 401x2411` in the readout, and it
+   * holds no matter what `body` is told, because `body` is inside it. Clamping
+   * `body` alone left the cards laying out against 401 and the page still 17px
+   * wider than the screen, which is the sideways drag.
+   *
+   * So size the root to the visible width and clip there. `overflow-x` on the
+   * root is the viewport's own overflow, which is why `body`'s `hidden` never
+   * stopped this: it propagates to the viewport only while the root is
+   * `visible`, and propagated or not, neither clips a box that is genuinely
+   * wider than the screen. Nothing is hidden that was not already off screen.
+   *
+   * With the document at the visible width there is no horizontal scrollbar
+   * left to reserve, and that scrollbar is what was costing 31px of height.
    */
+  html[data-vv-offset]:not([data-vv-zoomed]) {
+    width: var(--vv-width);
+    max-width: var(--vv-width);
+    overflow-x: clip;
+  }
+
   html[data-vv-offset]:not([data-vv-zoomed]) body {
+    width: var(--vv-width);
     max-width: var(--vv-width);
     overflow-x: clip;
   }
