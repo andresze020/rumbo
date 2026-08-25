@@ -27,6 +27,11 @@ const KEYBOARD_MIN_RATIO = 0.25
  * - Pinch zoom: a stray two-finger flick during a fast scroll zooms the page a
  *   few percent, and from that moment the top bar and the bottom nav sit partly
  *   outside the screen and read as "cut off".
+ * - Classic scrollbars: on some pages the root scroller reserves real space for
+ *   scrollbars, so the layout viewport (384x679 on the phone this was measured
+ *   on) is smaller than the box a fixed element resolves against (401x710).
+ *   `bottom: 0` then lands ~31px below the screen and takes the bottom nav's
+ *   labels with it.
  * - The browser toolbar: Chrome on Android sizes the layout viewport as if the
  *   toolbar were hidden. While it is *shown* — which is how every page starts,
  *   before the first scroll — the layout viewport's bottom edge sits a toolbar's
@@ -55,27 +60,48 @@ export function ViewportPin() {
     const root = document.documentElement
     let frame = 0
 
+    // Where `position: fixed` actually lands. Deriving that from viewport
+    // metrics is what got this wrong before: on a page whose root scroller
+    // shows classic scrollbars, `documentElement.client*` is the layout
+    // viewport *minus* the scrollbars while a fixed element still resolves
+    // against the full initial containing block — measured on a phone at
+    // 384x679 vs 401x710, so the bottom nav sat 31px below the visible area
+    // and the maths said 2. An empty `fixed inset-0` probe reports the real
+    // box, whatever the browser is doing with scrollbars, toolbars or zoom.
+    const probe = document.createElement('div')
+    probe.setAttribute('aria-hidden', 'true')
+    probe.style.cssText =
+      'position:fixed;inset:0;visibility:hidden;pointer-events:none;contain:strict'
+    document.body.appendChild(probe)
+
     const apply = () => {
       frame = 0
-      // `position: fixed` resolves against the layout viewport, which is the
-      // documentElement's client box — *not* `window.inner*`, which on Chrome
-      // Android tracks the visible area while the toolbar slides and would
-      // therefore report no offset exactly when there is one.
-      const layoutWidth = root.clientWidth
-      const layoutHeight = root.clientHeight
+      const icb = probe.getBoundingClientRect()
       const scale = vv.scale || 1
 
       // Chrome reports tiny scale drift (1.0000001) at rest; don't pay for a
       // counter-scale over that.
       const zoomed = Math.abs(scale - 1) >= ZOOM_EPSILON
 
-      const bottomGap = layoutHeight - (vv.offsetTop + vv.height)
-      const keyboard = bottomGap > layoutHeight * KEYBOARD_MIN_RATIO
+      // Each delta moves an edge of the fixed box onto the same edge of the
+      // visual viewport, in the layout coordinates `getBoundingClientRect`
+      // already speaks.
+      const left = vv.offsetLeft - icb.left
+      const top = vv.offsetTop - icb.top
+      const rightDelta = vv.offsetLeft + vv.width - icb.right
+      const bottomDelta = vv.offsetTop + vv.height - icb.bottom
+
+      // The soft keyboard shrinks the visual viewport the same way a browser
+      // toolbar does, but it takes a far bigger bite. Pinning the bottom nav
+      // to the top of the keyboard would park it over the field being typed
+      // into.
+      const keyboard = -bottomDelta > icb.height * KEYBOARD_MIN_RATIO
       const offset =
         !keyboard &&
-        (bottomGap > OFFSET_EPSILON ||
-          vv.offsetTop > OFFSET_EPSILON ||
-          vv.offsetLeft > OFFSET_EPSILON)
+        (Math.abs(bottomDelta) > OFFSET_EPSILON ||
+          Math.abs(rightDelta) > OFFSET_EPSILON ||
+          Math.abs(top) > OFFSET_EPSILON ||
+          Math.abs(left) > OFFSET_EPSILON)
 
       if (!zoomed && !offset) {
         root.removeAttribute('data-vv-zoomed')
@@ -85,20 +111,15 @@ export function ViewportPin() {
 
       root.style.setProperty('--vv-scale', String(scale))
       root.style.setProperty('--vv-inv-scale', String(1 / scale))
-      root.style.setProperty('--vv-left', `${vv.offsetLeft}px`)
-      root.style.setProperty('--vv-top', `${vv.offsetTop}px`)
+      root.style.setProperty('--vv-left', `${left}px`)
+      root.style.setProperty('--vv-top', `${top}px`)
       // The screen's own size, for overlays that are re-boxed onto it rather
       // than counter-scaled (`.vv-pin-screen*`): a `fixed inset-0` backdrop or
       // an `h-full` side sheet is otherwise as tall as the *layout* viewport.
       root.style.setProperty('--vv-width', `${vv.width}px`)
       root.style.setProperty('--vv-height', `${vv.height}px`)
-      // How far the visual viewport's right/bottom edges sit from the layout
-      // viewport's, which is what `right: 0` / `bottom: 0` are pinned to.
-      root.style.setProperty(
-        '--vv-right-delta',
-        `${vv.offsetLeft + vv.width - layoutWidth}px`
-      )
-      root.style.setProperty('--vv-bottom-delta', `${-bottomGap}px`)
+      root.style.setProperty('--vv-right-delta', `${rightDelta}px`)
+      root.style.setProperty('--vv-bottom-delta', `${bottomDelta}px`)
 
       // Zoom wins: its rules translate *and* counter-scale, so the two must
       // never both apply to the same element.
@@ -127,6 +148,7 @@ export function ViewportPin() {
 
     return () => {
       if (frame) window.cancelAnimationFrame(frame)
+      probe.remove()
       vv.removeEventListener('resize', schedule)
       vv.removeEventListener('scroll', schedule)
       window.removeEventListener('resize', schedule)
