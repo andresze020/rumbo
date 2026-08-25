@@ -61,22 +61,33 @@ export function ViewportPin() {
     let frame = 0
 
     // Where `position: fixed` actually lands. Deriving that from viewport
-    // metrics is what got this wrong before: on a page whose root scroller
-    // shows classic scrollbars, `documentElement.client*` is the layout
-    // viewport *minus* the scrollbars while a fixed element still resolves
-    // against the full initial containing block — measured on a phone at
-    // 384x679 vs 401x710, so the bottom nav sat 31px below the visible area
-    // and the maths said 2. An empty `fixed inset-0` probe reports the real
-    // box, whatever the browser is doing with scrollbars, toolbars or zoom.
-    const probe = document.createElement('div')
-    probe.setAttribute('aria-hidden', 'true')
-    probe.style.cssText =
-      'position:fixed;inset:0;visibility:hidden;pointer-events:none;contain:strict'
-    document.body.appendChild(probe)
+    // metrics got this wrong once already: on a page whose root scroller
+    // reserves scrollbar space, `documentElement.client*` is the layout
+    // viewport *minus* that gutter while the chrome still resolves against the
+    // full box — measured on a phone at 384x679 against 401x710, so the nav sat
+    // 31px below the screen and the maths said 2.
+    //
+    // Measuring it needs care too: a `fixed inset-0` probe with `contain:
+    // strict` reported 384x679 on that same phone while the nav's own bottom
+    // edge was at 710 — size containment resolves the auto height as if the box
+    // were empty, so `bottom: 0` stopped constraining it. These probes carry no
+    // containment and are positioned exactly like the chrome they stand in for:
+    // one hugging the top edge, one the bottom, both full width. Their rects are
+    // then the real answer for `top: 0`, `bottom: 0`, `left: 0` and `right: 0`.
+    const probeStyle =
+      'position:fixed;left:0;right:0;height:1px;visibility:hidden;pointer-events:none'
+    const topProbe = document.createElement('div')
+    topProbe.setAttribute('aria-hidden', 'true')
+    topProbe.style.cssText = `${probeStyle};top:0`
+    const bottomProbe = document.createElement('div')
+    bottomProbe.setAttribute('aria-hidden', 'true')
+    bottomProbe.style.cssText = `${probeStyle};bottom:0`
+    document.body.append(topProbe, bottomProbe)
 
     const apply = () => {
       frame = 0
-      const icb = probe.getBoundingClientRect()
+      const top0 = topProbe.getBoundingClientRect()
+      const bottom0 = bottomProbe.getBoundingClientRect()
       const scale = vv.scale || 1
 
       // Chrome reports tiny scale drift (1.0000001) at rest; don't pay for a
@@ -86,16 +97,16 @@ export function ViewportPin() {
       // Each delta moves an edge of the fixed box onto the same edge of the
       // visual viewport, in the layout coordinates `getBoundingClientRect`
       // already speaks.
-      const left = vv.offsetLeft - icb.left
-      const top = vv.offsetTop - icb.top
-      const rightDelta = vv.offsetLeft + vv.width - icb.right
-      const bottomDelta = vv.offsetTop + vv.height - icb.bottom
+      const left = vv.offsetLeft - top0.left
+      const top = vv.offsetTop - top0.top
+      const rightDelta = vv.offsetLeft + vv.width - bottom0.right
+      const bottomDelta = vv.offsetTop + vv.height - bottom0.bottom
 
       // The soft keyboard shrinks the visual viewport the same way a browser
       // toolbar does, but it takes a far bigger bite. Pinning the bottom nav
       // to the top of the keyboard would park it over the field being typed
       // into.
-      const keyboard = -bottomDelta > icb.height * KEYBOARD_MIN_RATIO
+      const keyboard = -bottomDelta > (bottom0.bottom - top0.top) * KEYBOARD_MIN_RATIO
       const offset =
         !keyboard &&
         (Math.abs(bottomDelta) > OFFSET_EPSILON ||
@@ -140,6 +151,18 @@ export function ViewportPin() {
       frame = window.requestAnimationFrame(apply)
     }
 
+    // The geometry that matters here is not only the viewport's. On the
+    // dashboard the scrollbar gutter appears *after* the first paint, once the
+    // screen's content has rendered and the page is long enough for the root
+    // scroller to reserve space — and a plain page scroll fires no visual
+    // viewport event, so a mount-time measurement stayed stale for the life of
+    // the screen. That is what left the nav 31px low with the flag unset:
+    // measured once, before the box it measures had changed. Watching the root
+    // and body boxes catches it whenever it happens.
+    const observer = new ResizeObserver(schedule)
+    observer.observe(root)
+    observer.observe(document.body)
+
     apply()
     vv.addEventListener('resize', schedule)
     vv.addEventListener('scroll', schedule)
@@ -148,7 +171,9 @@ export function ViewportPin() {
 
     return () => {
       if (frame) window.cancelAnimationFrame(frame)
-      probe.remove()
+      observer.disconnect()
+      topProbe.remove()
+      bottomProbe.remove()
       vv.removeEventListener('resize', schedule)
       vv.removeEventListener('scroll', schedule)
       window.removeEventListener('resize', schedule)
