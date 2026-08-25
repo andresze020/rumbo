@@ -783,7 +783,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 {t('dashboard.viewTrends')} →
               </Link>
             </div>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 [&>*]:min-w-0">
               {monthlyCards.map((c) => (
                 <MetricCard
                   key={c.label}
@@ -821,7 +821,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           ) : null}
 
           {/* Main + right rail */}
-          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_304px]">
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_304px] [&>*]:min-w-0">
             {/* Main column */}
             <div className="flex min-w-0 flex-col gap-4">
               {/* Budget vs actual */}
@@ -883,7 +883,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ) : null}
 
               {/* Donut + upcoming */}
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 [&>*]:min-w-0">
                 {/* Donut */}
                 {!expenseCategoriesError ? (
                   <div className={cn(cardClass, 'p-4')}>

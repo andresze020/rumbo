@@ -114,7 +114,16 @@ export function ViewportPin() {
           Math.abs(top) > OFFSET_EPSILON ||
           Math.abs(left) > OFFSET_EPSILON)
 
+      // Published on every pass, flag or no flag. Returning early used to leave
+      // the last non-zero deltas standing, so anything still reading them was
+      // acting on geometry that no longer existed.
+      root.style.setProperty('--vv-doc-width', `${root.clientWidth}px`)
+
       if (!zoomed && !offset) {
+        root.style.setProperty('--vv-left', '0px')
+        root.style.setProperty('--vv-top', '0px')
+        root.style.setProperty('--vv-right-delta', '0px')
+        root.style.setProperty('--vv-bottom-delta', '0px')
         root.removeAttribute('data-vv-zoomed')
         root.removeAttribute('data-vv-offset')
         return
