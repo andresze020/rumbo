@@ -386,7 +386,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 [&>*]:min-w-0">
         {kpis.map((kpi) => (
           <div key={kpi.label} className={cn(CARD, 'p-4')}>
             <div className="flex items-center gap-2.5">
@@ -520,7 +520,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       </div>
 
       {/* Distribution + ranked list */}
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <div className={cn(CARD, 'p-4 sm:p-5')}>
           <h2 className="mb-3 text-sm font-bold">
             Distribution · {view === 'merchant' ? 'by merchant' : 'by category'}
@@ -548,7 +548,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       </div>
 
       {/* Cross-links */}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 [&>*]:min-w-0">
         <Link href={`/dashboard/cash-flow?month=${dateTo.slice(0, 7)}`} className={cn(CARD, 'flex items-center gap-3 p-4 transition-colors hover:bg-muted/40')}>
           <span className="flex size-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400" aria-hidden="true">
             <Waves className="size-4" />

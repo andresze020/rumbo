@@ -307,32 +307,31 @@
   }
 
   /*
-   * The document, for the same reason — and the root element is where it has
-   * to happen. `html` fills the fixed box, so it is 401px wide against 384
-   * visible; that is the whole of `scroll 401x2411` in the readout, and it
-   * holds no matter what `body` is told, because `body` is inside it. Clamping
-   * `body` alone left the cards laying out against 401 and the page still 17px
-   * wider than the screen, which is the sideways drag.
+   * The document, kept to the width that is actually on screen.
    *
-   * So size the root to the visible width and clip there. `overflow-x` on the
-   * root is the viewport's own overflow, which is why `body`'s `hidden` never
-   * stopped this: it propagates to the viewport only while the root is
-   * `visible`, and propagated or not, neither clips a box that is genuinely
-   * wider than the screen. Nothing is hidden that was not already off screen.
+   * This is deliberately *not* gated on `data-vv-offset`, and that was a real
+   * bug: the flag is raised by the very geometry this rule removes, so gating
+   * it made the correction switch itself off — flag on, clamp applies, gutter
+   * gone, flag off, clamp gone, gutter back — and the bottom bar was left
+   * carrying a stale 31px lift, sitting that far above the screen edge.
    *
-   * With the document at the visible width there is no horizontal scrollbar
-   * left to reserve, and that scrollbar is what was costing 31px of height.
+   * `--vv-doc-width` is `documentElement.clientWidth`, published on every
+   * measurement: the viewport minus whatever the browser reserved for
+   * scrollbars. At rest it is the natural width and this changes nothing.
+   * Under pinch zoom it does not move, so a zoomed page is not reflowed.
+   *
+   * `overflow-x` on the root *is* the viewport's overflow, which is why the
+   * long-standing `overflow-x: hidden` on `body` never stopped a page wider
+   * than the screen: it propagates to the viewport only while the root is
+   * `visible`, and neither one clips a box that genuinely overflows.
    */
-  html[data-vv-offset]:not([data-vv-zoomed]) {
-    width: var(--vv-width);
-    max-width: var(--vv-width);
+  html {
+    max-width: var(--vv-doc-width, none);
     overflow-x: clip;
   }
 
-  html[data-vv-offset]:not([data-vv-zoomed]) body {
-    width: var(--vv-width);
-    max-width: var(--vv-width);
-    overflow-x: clip;
+  body {
+    max-width: var(--vv-doc-width, none);
   }
 
   html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-top {
