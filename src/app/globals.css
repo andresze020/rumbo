@@ -310,11 +310,23 @@
    * The page itself, for the same reason. `body` resolves its width against
    * the fixed box too — 401px against 384 visible — so the cards run 17px past
    * the right edge and the browser hands you those 17px as a sideways drag.
-   * Nothing is being clipped that was not already off screen; this stops the
-   * layout claiming width it does not have. It also takes the horizontal
-   * scrollbar with it, and that scrollbar is what was costing 31px of height.
+   *
+   * Clipping `body` alone is not enough here. Overflow normally propagates
+   * from `body` to the viewport while `html` stays `visible`, but Brave still
+   * left the root viewport horizontally pannable in this classic-scrollbar
+   * state. Put the clip on the root explicitly, and give `body` an exact used
+   * width: the earlier `max-width` was present on the failing device while its
+   * cards still laid out against the 401px box.
+   *
+   * Nothing is clipped that was not already outside the visual viewport.
+   * Zoom and the soft keyboard never enter this selector.
    */
+  html[data-vv-offset]:not([data-vv-zoomed]) {
+    overflow-x: clip;
+  }
+
   html[data-vv-offset]:not([data-vv-zoomed]) body {
+    width: var(--vv-width);
     max-width: var(--vv-width);
     overflow-x: clip;
   }
