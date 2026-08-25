@@ -293,6 +293,19 @@
     will-change: transform;
   }
 
+  /*
+   * Width, not just position. These bars are `inset-x-0`, so they span the
+   * fixed box — 401px on the phone this was measured on — while only 384px of
+   * it is on screen. Translating alone left the tab row centred on 401 and the
+   * last tab under the scrollbar gutter. `width` wins over `right` on an
+   * over-constrained box, so this trims them to what is actually visible and
+   * their contents centre where the eye expects.
+   */
+  html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-top,
+  html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-bottom {
+    width: var(--vv-width);
+  }
+
   html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-top {
     transform: translate3d(var(--vv-left), var(--vv-top), 0);
   }
