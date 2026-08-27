@@ -320,14 +320,15 @@
    * scrollbars. At rest it is the natural width and this changes nothing.
    * Under pinch zoom it does not move, so a zoomed page is not reflowed.
    *
-   * `overflow-x` on the root *is* the viewport's overflow, which is why the
-   * long-standing `overflow-x: hidden` on `body` never stopped a page wider
-   * than the screen: it propagates to the viewport only while the root is
-   * `visible`, and neither one clips a box that genuinely overflows.
+   * Width only. Clipping here was a patch for content that overflowed, and
+   * that is fixed at the source now — but `overflow-x` on the root *is* the
+   * viewport's own overflow, and setting it took one-finger scrolling with it:
+   * the page could only be moved by pinch-panning with two fingers. `body`
+   * keeps its own `overflow-x: hidden`, which is what has always kept stray
+   * width from being draggable.
    */
   html {
     max-width: var(--vv-doc-width, none);
-    overflow-x: clip;
   }
 
   body {
