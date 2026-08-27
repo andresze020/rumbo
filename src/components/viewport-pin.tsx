@@ -92,7 +92,16 @@ export function ViewportPin() {
 
       // Chrome reports tiny scale drift (1.0000001) at rest; don't pay for a
       // counter-scale over that.
-      const zoomed = Math.abs(scale - 1) >= ZOOM_EPSILON
+      //
+      // Only zooming *in* is handled. The counter-scale exists to hold the
+      // chrome at its real size while the content magnifies; below scale 1 it
+      // does the opposite and multiplies it — "Request desktop site" renders
+      // around scale 0.4, and the bottom bar came back two and a half times
+      // its size, running off the screen. Zoomed out the visual viewport is
+      // larger than the layout viewport anyway, so `bottom: 0` is already in
+      // view and there is nothing to correct.
+      const zoomed = scale - 1 >= ZOOM_EPSILON
+      const zoomedOut = 1 - scale >= ZOOM_EPSILON
 
       // Each delta moves an edge of the fixed box onto the same edge of the
       // visual viewport, in the layout coordinates `getBoundingClientRect`
@@ -119,7 +128,7 @@ export function ViewportPin() {
       // acting on geometry that no longer existed.
       root.style.setProperty('--vv-doc-width', `${root.clientWidth}px`)
 
-      if (!zoomed && !offset) {
+      if (zoomedOut || (!zoomed && !offset)) {
         root.style.setProperty('--vv-left', '0px')
         root.style.setProperty('--vv-top', '0px')
         root.style.setProperty('--vv-right-delta', '0px')
