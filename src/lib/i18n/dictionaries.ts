@@ -8,7 +8,7 @@ type DeepStringify<T> = {
 
 export const en = {
   nav: {
-    appName: 'App Finanzas',
+    appName: 'Rumbo',
     dashboard: 'Dashboard',
     home: 'Home',
     movements: 'Movements',
@@ -228,13 +228,13 @@ export const en = {
   },
   help: {
     title: 'Help & FAQ',
-    description: 'How App Finanzas works, and how to do the things you do most.',
+    description: 'How Rumbo works, and how to do the things you do most.',
     rhythmTitle: 'The monthly rhythm',
     rhythmBody:
       'For your first couple of months the Control center shows Getting started. After that it retires and a monthly checklist takes its place: close last month, set this month’s budget, post what is due, clear the review queue. Every row takes you straight to the action, and hiding it only hides it until the month turns.',
     faqTitle: 'Frequently asked',
     q1: 'How do I record an expense or income?',
-    a1: 'Use the + button in the bottom bar, or Movements → New. Pick the account the money left or entered, the amount, the date and a category. That is the whole flow — App Finanzas does not connect to your bank, you record what happened.',
+    a1: 'Use the + button in the bottom bar, or Movements → New. Pick the account the money left or entered, the amount, the date and a category. That is the whole flow — Rumbo does not connect to your bank, you record what happened.',
     q2: 'How do I move money between my own accounts?',
     a2: 'Record it as a transfer, never as an expense plus an income. A transfer is one movement touching two accounts, and it never counts as income or spending in your reports.',
     q3: 'Why does my balance not match my bank?',
@@ -330,7 +330,7 @@ export const en = {
     dialogDescription: 'Record an income, expense, or transfer.',
   },
   installPrompt: {
-    title: 'Install App Finanzas',
+    title: 'Install Rumbo',
     androidDescription: 'Add this app to your home screen for quick access.',
     iosDescription: 'Tap the Share icon, then "Add to Home Screen".',
     install: 'Install',
@@ -546,7 +546,7 @@ export const en = {
 
 export const es: DeepStringify<typeof en> = {
   nav: {
-    appName: 'App Finanzas',
+    appName: 'Rumbo',
     dashboard: 'Panel',
     home: 'Inicio',
     movements: 'Movimientos',
@@ -766,13 +766,13 @@ export const es: DeepStringify<typeof en> = {
   },
   help: {
     title: 'Ayuda y preguntas frecuentes',
-    description: 'Cómo funciona App Finanzas y cómo hacer lo que haces todos los días.',
+    description: 'Cómo funciona Rumbo y cómo hacer lo que haces todos los días.',
     rhythmTitle: 'El ritmo mensual',
     rhythmBody:
       'Durante tus primeros meses el panel muestra Primeros pasos. Después se retira y aparece un checklist mensual: cierra el mes pasado, define el presupuesto de este mes, registra lo que vence y limpia la cola de revisión. Cada fila te lleva directo a la acción, y si lo ocultas vuelve cuando cambie el mes.',
     faqTitle: 'Preguntas frecuentes',
     q1: '¿Cómo registro un gasto o un ingreso?',
-    a1: 'Usa el botón + de la barra inferior, o Movimientos → Nuevo. Elige la cuenta de donde salió o entró el dinero, el monto, la fecha y una categoría. Eso es todo: App Finanzas no se conecta a tu banco, tú registras lo que pasó.',
+    a1: 'Usa el botón + de la barra inferior, o Movimientos → Nuevo. Elige la cuenta de donde salió o entró el dinero, el monto, la fecha y una categoría. Eso es todo: Rumbo no se conecta a tu banco, tú registras lo que pasó.',
     q2: '¿Cómo muevo dinero entre mis propias cuentas?',
     a2: 'Regístralo como una transferencia, nunca como un gasto más un ingreso. Una transferencia es un solo movimiento que toca dos cuentas y jamás cuenta como ingreso ni como gasto en tus reportes.',
     q3: '¿Por qué mi saldo no coincide con el del banco?',
@@ -869,7 +869,7 @@ export const es: DeepStringify<typeof en> = {
     dialogDescription: 'Registra un ingreso, gasto o transferencia.',
   },
   installPrompt: {
-    title: 'Instala App Finanzas',
+    title: 'Instala Rumbo',
     androidDescription: 'Agrega esta app a tu pantalla de inicio para acceder más rápido.',
     iosDescription: 'Toca el ícono de compartir y luego "Agregar a pantalla de inicio".',
     install: 'Instalar',
@@ -1085,7 +1085,7 @@ export const es: DeepStringify<typeof en> = {
 
 export const fr: DeepStringify<typeof en> = {
   nav: {
-    appName: 'App Finanzas',
+    appName: 'Rumbo',
     dashboard: 'Tableau de bord',
     home: 'Accueil',
     movements: 'Mouvements',
@@ -1305,13 +1305,13 @@ export const fr: DeepStringify<typeof en> = {
   },
   help: {
     title: 'Aide et FAQ',
-    description: 'Comment fonctionne App Finanzas, et comment faire ce que vous faites le plus souvent.',
+    description: 'Comment fonctionne Rumbo, et comment faire ce que vous faites le plus souvent.',
     rhythmTitle: 'Le rythme mensuel',
     rhythmBody:
       "Pendant vos premiers mois, le tableau de bord affiche Premiers pas. Ensuite, cette carte se retire et une checklist mensuelle prend sa place : clôturer le mois dernier, définir le budget du mois, enregistrer ce qui est échu, vider la file de vérification. Chaque ligne mène directement à l'action, et la masquer ne la masque que jusqu'au mois suivant.",
     faqTitle: 'Questions fréquentes',
     q1: 'Comment enregistrer une dépense ou un revenu ?',
-    a1: "Utilisez le bouton + de la barre du bas, ou Mouvements → Nouveau. Choisissez le compte d'où l'argent est sorti ou entré, le montant, la date et une catégorie. C'est tout : App Finanzas ne se connecte pas à votre banque, vous enregistrez ce qui s'est passé.",
+    a1: "Utilisez le bouton + de la barre du bas, ou Mouvements → Nouveau. Choisissez le compte d'où l'argent est sorti ou entré, le montant, la date et une catégorie. C'est tout : Rumbo ne se connecte pas à votre banque, vous enregistrez ce qui s'est passé.",
     q2: 'Comment transférer de l’argent entre mes propres comptes ?',
     a2: "Enregistrez-le comme un virement, jamais comme une dépense plus un revenu. Un virement est un seul mouvement qui touche deux comptes, et il ne compte jamais comme revenu ni comme dépense dans vos rapports.",
     q3: 'Pourquoi mon solde ne correspond-il pas à celui de ma banque ?',
@@ -1408,7 +1408,7 @@ export const fr: DeepStringify<typeof en> = {
     dialogDescription: 'Enregistrez un revenu, une dépense ou un virement.',
   },
   installPrompt: {
-    title: 'Installez App Finanzas',
+    title: 'Installez Rumbo',
     androidDescription: 'Ajoutez cette application à votre écran d’accueil pour un accès rapide.',
     iosDescription: 'Touchez l’icône Partager, puis « Ajouter à l’écran d’accueil ».',
     install: 'Installer',

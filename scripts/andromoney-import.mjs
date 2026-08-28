@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================
-// App Finanzas — andromoney-import.mjs
+// Rumbo — andromoney-import.mjs
 // One-off migration of a full AndroMoney history into a household.
 //
 // The in-app CSV importer (/dashboard/transactions/import) deliberately does
@@ -113,7 +113,7 @@ async function connect() {
     )
   }
 
-  const email = process.env.APP_FINANZAS_EMAIL ?? (await ask('App Finanzas email: '))
+  const email = process.env.APP_FINANZAS_EMAIL ?? (await ask('Rumbo email: '))
   const password = process.env.APP_FINANZAS_PASSWORD ?? (await ask('Password: '))
 
   const supabase = createClient(url, key, {
@@ -243,7 +243,7 @@ function buildStarterMap({ rows, baseCurrency }) {
   return {
     _README: [
       'Edit this file, re-run `plan`, repeat until the report is clean, then `apply`.',
-      'accounts: the name/type/class/currency each AndroMoney account becomes in App Finanzas.',
+      'accounts: the name/type/class/currency each AndroMoney account becomes in Rumbo.',
       'fxRates: value of 1 unit of that currency in the household base currency ' +
         `(${baseCurrency}). Per-year ("2024") and per-month ("2024-03") keys override "default".`,
       'crossCurrencyTransfers: AndroMoney stores one amount for a two-currency transfer. ' +
@@ -337,7 +337,7 @@ async function commandPlan(options) {
 function printPlan({ plan, household, existing, imported, mapPath }) {
   const { summary } = plan
 
-  log(`\n═══ AndroMoney → App Finanzas · plan ═══`)
+  log(`\n═══ AndroMoney → Rumbo · plan ═══`)
   log(`Household        : ${household.name} (base ${household.base_currency})`)
   log(`Already imported : ${imported.size} AndroMoney rows (they will be skipped)`)
   log(`\nCSV rows         : ${summary.csvRows}`)
@@ -872,7 +872,7 @@ switch (command) {
     break
   default:
     log(`
-AndroMoney → App Finanzas
+AndroMoney → Rumbo
 
   plan    --csv <file> [--map andromoney-map.json] [--out andromoney-plan.json]
   apply   --csv <file> [--map andromoney-map.json] [--limit N] [--concurrency 5] [--yes]

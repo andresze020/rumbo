@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================
-// App Finanzas — db-push.mjs
+// Rumbo — db-push.mjs
 // Applies pending migrations over HTTPS, from anywhere.
 //
 // `npx supabase db push` speaks the PostgreSQL wire protocol on TCP 5432.

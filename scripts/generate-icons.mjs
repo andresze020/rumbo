@@ -1,4 +1,4 @@
-// Generates PWA icons for App Finanzas using sharp.
+// Generates PWA icons for Rumbo using sharp.
 // Run once: node scripts/generate-icons.mjs
 import sharp from 'sharp'
 import { mkdirSync } from 'fs'

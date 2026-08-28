@@ -1,7 +1,7 @@
-# App Finanzas — Claude Code Project Context
+# Rumbo — Claude Code Project Context
 
 ## Product context
-App Finanzas is a personal/family finance PWA built with Next.js, TypeScript, Tailwind, shadcn/ui, Supabase Auth, Supabase/PostgreSQL, GitHub, Vercel, Recharts, and Zod.
+Rumbo is a personal/family finance PWA built with Next.js, TypeScript, Tailwind, shadcn/ui, Supabase Auth, Supabase/PostgreSQL, GitHub, Vercel, Recharts, and Zod.
 
 The product is an MVP Alpha. Keep scope small, usable, and aligned with the project documents: Product Brief, Roadmap, PRD, and Data Model.
 
@@ -31,7 +31,7 @@ The product is an MVP Alpha. Keep scope small, usable, and aligned with the proj
 The `zoho-*` skills (`zoho-ds-review`, `zoho-deluge-scripts`, `zoho-csv-import`,
 `zoho-feature-blueprint`, `zoho-session-starter`) belong to a **completely separate
 Zoho Creator project**. They are account-level skills that happen to be visible in
-this session. Never invoke them for App Finanzas work, and never borrow their
+this session. Never invoke them for Rumbo work, and never borrow their
 conventions, formats, or terminology into this repo.
 
 ## Automation primitives

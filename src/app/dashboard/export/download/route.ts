@@ -615,7 +615,7 @@ export async function GET(request: NextRequest) {
           ? await buildAccountsTable({ household, supabase })
           : await buildCategoriesTable({ household, supabase })
 
-    const filename = `app-finanzas-${exportType}-${todayDateStamp()}.${format}`
+    const filename = `rumbo-${exportType}-${todayDateStamp()}.${format}`
 
     return format === 'xlsx'
       ? xlsxResponse(buildXlsx(table), filename)

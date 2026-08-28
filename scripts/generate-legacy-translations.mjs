@@ -173,7 +173,7 @@ Rules:
 - Call submit_translations with one payload string containing translations in
   exactly the same order as the source array, separated by the exact delimiter
   <|TRANSLATION|>. Do not use that delimiter inside a translation.
-- Preserve placeholders like {1}, {name}, {amount}, punctuation, arrows, emoji, currency codes, and product name "App Finanzas".
+- Preserve placeholders like {1}, {name}, {amount}, punctuation, arrows, emoji, currency codes, and product name "Rumbo".
 - Use concise, natural product UI language.
 - "Posted" means contabilizada/comptabilisée, "void" means anular/annuler without deleting history, and "payee" means beneficiario/bénéficiaire.
 - Do not omit any key.

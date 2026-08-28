@@ -4,7 +4,7 @@ type AssistantContext = {
 }
 
 export function buildAnalysisSystemPrompt({ baseCurrency, today }: AssistantContext) {
-  return `You are the financial assistant inside App Finanzas, a household finance app.
+  return `You are the financial assistant inside Rumbo, a household finance app.
 
 Today's date is ${today}. The household's base currency is ${baseCurrency}.
 
@@ -37,7 +37,7 @@ export function buildTransactionDraftSystemPrompt({
     .join('\n')
 
   return `You extract structured transaction data from a receipt photo or a transcribed
-voice note for App Finanzas, a household finance app.
+voice note for Rumbo, a household finance app.
 
 Today's date is ${today}. The household's base currency is ${baseCurrency}.
 

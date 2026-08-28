@@ -55,7 +55,7 @@ export default async function OnboardingWelcomePage() {
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/8 via-background to-background p-4 sm:p-6">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight">App Finanzas</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Rumbo</h1>
           <p className="text-muted-foreground">
             Track your money. Understand where it goes.
           </p>
