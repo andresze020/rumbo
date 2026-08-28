@@ -1,6 +1,6 @@
 {
-  "name": "App Finanzas",
-  "short_name": "Finanzas",
+  "name": "Rumbo",
+  "short_name": "Rumbo",
   "description": "Household finance tracker — accounts, budgets, debts, net worth.",
   "start_url": "/dashboard",
   "display": "standalone",

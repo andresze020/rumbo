@@ -48,7 +48,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <Wallet className="size-7" aria-hidden="true" />
         </span>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">App Finanzas</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Rumbo</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Your household finances, organized.
           </p>

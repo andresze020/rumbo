@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================
-// App Finanzas — db-test.mjs
+// Rumbo — db-test.mjs
 // Runs the ledger invariants in supabase/tests/ against the linked database.
 //
 // Those files existed for a year with nothing to execute them: they were

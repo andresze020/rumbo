@@ -1,5 +1,5 @@
 // ============================================================
-// App Finanzas — andromoney-parse.mjs
+// Rumbo — andromoney-parse.mjs
 // Pure (no network, no Supabase) parsing + planning for an AndroMoney CSV
 // export. Consumed by scripts/andromoney-import.mjs; kept separate so the
 // decoding and classification rules can be reasoned about — and eyeballed

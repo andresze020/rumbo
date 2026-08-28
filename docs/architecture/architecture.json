@@ -1,6 +1,6 @@
 {
   "meta": {
-    "name": "App Finanzas",
+    "name": "Rumbo",
     "description": "PWA de finanzas personales/familiares. Next.js App Router + React 19 sobre Supabase/PostgreSQL, con un libro mayor de partida doble (transactions / transaction_entries / transaction_allocations) y toda la lógica de dinero encapsulada en funciones SQL.",
     "repository": "app-finanzas",
     "generatedAt": "2026-08-04",

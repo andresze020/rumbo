@@ -14,7 +14,7 @@ export const GLOSSARY = {
   exchangeRate:
     "How many units of this currency equal 1 unit of your household's main currency.",
   openingBalance:
-    "The balance of this account on the day you started tracking it in App Finanzas.",
+    "The balance of this account on the day you started tracking it in Rumbo.",
   allocations:
     "How your spending is grouped for budgets and reports.",
   transfer:

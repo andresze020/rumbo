@@ -17,13 +17,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "App Finanzas",
+  title: "Rumbo",
   description: "Personal household finance tracker.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Finanzas",
+    title: "Rumbo",
   },
 };
 

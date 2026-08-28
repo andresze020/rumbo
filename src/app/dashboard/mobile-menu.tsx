@@ -41,7 +41,7 @@ export function MobileMenu() {
           <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <Wallet className="size-3.5" aria-hidden="true" />
           </span>
-          App Finanzas
+          Rumbo
         </span>
       </summary>
 

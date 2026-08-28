@@ -1,5 +1,5 @@
 // ============================================================
-// App Finanzas — Supabase Management API plumbing
+// Rumbo — Supabase Management API plumbing
 //
 // Shared by `db-push.mjs` (applies migrations) and `db-test.mjs` (runs the
 // ledger invariants). Both need the same three things: find a personal access

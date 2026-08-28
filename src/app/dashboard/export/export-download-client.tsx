@@ -65,7 +65,7 @@ function getFilename(response: Response, exportType: ExportKind, format: ExportF
   const disposition = response.headers.get('content-disposition') ?? ''
   const match = disposition.match(/filename="([^"]+)"/)
 
-  return match?.[1] ?? `app-finanzas-${exportType}.${format}`
+  return match?.[1] ?? `rumbo-${exportType}.${format}`
 }
 
 async function getErrorMessage(response: Response) {

@@ -1,4 +1,4 @@
-# AGENTS.md — App Finanzas
+# AGENTS.md — Rumbo
 
 > Canonical project-state document. Keep this in sync at every sprint close
 > (see the `app-finanzas-state-sync` skill). If this file and the code disagree,
@@ -6,7 +6,7 @@
 
 ## Project context
 
-This is App Finanzas, a personal/family finance PWA.
+This is Rumbo, a personal/family finance PWA.
 
 Stack:
 - Next.js (App Router) + React 19
