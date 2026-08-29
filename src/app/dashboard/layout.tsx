@@ -49,14 +49,21 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             {/* Mobile top bar */}
             <MobileNav className="lg:hidden" />
 
-            <InstallAppHint />
-
             {/* Tops up the household's FX rates once a day, so a
                 foreign-currency balance reads at today's rate without anyone
                 entering one. Renders nothing. */}
             <ExchangeRateAutoRefresh />
 
             <main className="flex-1 pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pt-0">
+              {/* Inside `main`, not a sibling above it. The top bar is
+                  `fixed`, so it takes no space, and the padding that clears it
+                  lives on `main` alone — a sibling starts at y=0 and wears the
+                  bar. That is what cropped the hint on the phone: its icon,
+                  its title and its dismiss button sat behind the bar and only
+                  the tail of the instructions showed, which read as a
+                  half-drawn card. Kept outside `ScreenTransition` so it does
+                  not replay the arrival animation on every route change. */}
+              <InstallAppHint />
               <ScreenTransition>{children}</ScreenTransition>
             </main>
           </div>
