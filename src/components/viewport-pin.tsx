@@ -50,7 +50,10 @@ const KEYBOARD_MIN_RATIO = 0.25
  * Nothing is published while the visual viewport matches the layout viewport
  * (no attribute, no transform, no extra containing block), nor while the soft
  * keyboard is what shrank it — pinning the nav to the top of the keyboard would
- * park it over the field being typed into. Renders nothing.
+ * park it over the field being typed into. At scale 1 the corrections are
+ * clamped inward, which is what keeps this off on iOS: Safari pins `fixed` to
+ * the visual viewport itself, so its offsets need no correcting and following
+ * them walked the chrome off the screen. Renders nothing.
  */
 export function ViewportPin() {
   useEffect(() => {
@@ -106,10 +109,37 @@ export function ViewportPin() {
       // Each delta moves an edge of the fixed box onto the same edge of the
       // visual viewport, in the layout coordinates `getBoundingClientRect`
       // already speaks.
-      const left = vv.offsetLeft - top0.left
-      const top = vv.offsetTop - top0.top
-      const rightDelta = vv.offsetLeft + vv.width - bottom0.right
-      const bottomDelta = vv.offsetTop + vv.height - bottom0.bottom
+      //
+      // At scale 1 they are clamped inward: a correction may pull the chrome
+      // onto the screen, never push it off. A positive delta claims the layout
+      // viewport's edge sits *outside* the visible box, and the two engines
+      // disagree about whether that is ever true.
+      //
+      // Chrome on Android never reports it. When its toolbar retracts it
+      // resizes the layout viewport and leaves `offsetTop` at 0, so the
+      // mismatch this whole mechanism exists for arrives as a negative
+      // `bottomDelta` — the layout viewport hanging below the screen — and
+      // clamping leaves that untouched.
+      //
+      // iOS Safari reports it constantly, and wrongly. Safari pins `position:
+      // fixed` to the *visual* viewport, while `getBoundingClientRect` keeps
+      // answering with the layout position, so the probes read 0 for chrome
+      // that Safari has already placed on the screen edge. Through a toolbar
+      // collapse and a rubber-band overscroll `offsetTop` goes positive, and
+      // following it double-corrected: the top bar walked down into the
+      // transaction list and the bottom nav was pushed off the bottom edge.
+      // Safari does not reliably fire the settling event either, so the last
+      // value stayed after the scroll stopped rather than snapping back. That
+      // is the whole of the iPhone-only report; Android was always clean.
+      //
+      // Zoom is left alone. Panning a pinch-zoomed page genuinely needs to
+      // follow the visual viewport in both directions, and those rules
+      // counter-scale rather than translate on their own.
+      const inward = (delta: number) => (zoomed ? delta : Math.min(delta, 0))
+      const left = inward(vv.offsetLeft - top0.left)
+      const top = inward(vv.offsetTop - top0.top)
+      const rightDelta = inward(vv.offsetLeft + vv.width - bottom0.right)
+      const bottomDelta = inward(vv.offsetTop + vv.height - bottom0.bottom)
 
       // The soft keyboard shrinks the visual viewport the same way a browser
       // toolbar does, but it takes a far bigger bite. Pinning the bottom nav
