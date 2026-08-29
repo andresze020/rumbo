@@ -1,7 +1,8 @@
 'use client'
 
-import { type ReactNode } from 'react'
+import { type ReactNode, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
+import { getAppScroller } from '@/lib/app-scroll'
 
 /**
  * Animates each dashboard screen in on arrival.
@@ -15,6 +16,14 @@ import { usePathname } from 'next/navigation'
  */
 export function ScreenTransition({ children }: { children: ReactNode }) {
   const pathname = usePathname()
+
+  // Arriving on a screen half-way down it is disorienting, and the router no
+  // longer does this for us: its scroll restoration drives the document, and
+  // the document does not scroll any more — the shell's middle row does. So
+  // the new screen would inherit the last one's scroll position.
+  useEffect(() => {
+    getAppScroller()?.scrollTo({ top: 0 })
+  }, [pathname])
 
   return (
     <div key={pathname} className="animate-screen-in">

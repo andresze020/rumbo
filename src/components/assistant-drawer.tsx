@@ -17,6 +17,7 @@ import type {
   TransactionFormCategory,
 } from '@/app/dashboard/transactions/transaction-form'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
+import { getAppScroller } from '@/lib/app-scroll'
 
 type AssistantContext = {
   baseCurrency: string
@@ -32,20 +33,26 @@ type AssistantContext = {
  * same right edge every amount in a list is aligned to — so a row scrolls
  * underneath it and loses its figure. The standard answer, and the cheapest
  * one here: get out of the way while the page moves down, come back the moment
- * it moves up or stops. The document is the scroller (dashboard `<main>` is a
- * plain flex child, not a scroll container), so this listens on the window.
+ * it moves up or stops.
+ *
+ * The scroller is the app shell's middle row, not the document — the document
+ * does not scroll at all any more — so this listens on that element. On the
+ * window it would hear nothing and the button would never move.
  */
 function useScrollingDown() {
   const [scrollingDown, setScrollingDown] = useState(false)
 
   useEffect(() => {
-    let last = window.scrollY
+    const scroller = getAppScroller()
+    if (!scroller) return
+
+    let last = scroller.scrollTop
     let frame = 0
     let idle: ReturnType<typeof setTimeout> | undefined
 
     const apply = () => {
       frame = 0
-      const y = Math.max(0, window.scrollY)
+      const y = Math.max(0, scroller.scrollTop)
       const delta = y - last
       // Under the threshold this is finger jitter or iOS rubber-banding, both
       // of which report a direction the user did not intend.
@@ -64,12 +71,12 @@ function useScrollingDown() {
       frame = window.requestAnimationFrame(apply)
     }
 
-    window.addEventListener('scroll', schedule, { passive: true })
+    scroller.addEventListener('scroll', schedule, { passive: true })
 
     return () => {
       if (frame) window.cancelAnimationFrame(frame)
       if (idle) clearTimeout(idle)
-      window.removeEventListener('scroll', schedule)
+      scroller.removeEventListener('scroll', schedule)
     }
   }, [])
 
