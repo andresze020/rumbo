@@ -118,11 +118,12 @@ export function MobileBottomNav({ className }: { className?: string }) {
       <nav
         aria-label={t('nav.navigation')}
         className={cn(
-          'fixed inset-x-0 bottom-0 z-40 border-t bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75',
+          // A plain flex row in the app shell, not `fixed` over the page. The
+          // shell does not scroll, so this cannot be scrolled away from, and
+          // there is no viewport geometry to track to keep it in place — see
+          // the comment on the shell in `app/dashboard/layout.tsx`.
+          'z-10 shrink-0 border-t bg-background',
           'pb-[env(safe-area-inset-bottom)]',
-          // Stay on the *visual* viewport when the page is pinch-zoomed, instead
-          // of hanging off the bottom of the screen with the layout viewport.
-          'vv-pin-bottom',
           className
         )}
       >

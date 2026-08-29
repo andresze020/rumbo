@@ -48,7 +48,7 @@ function read(): Line[] {
   const edgeRect = edge.getBoundingClientRect()
   edge.remove()
 
-  const nav = document.querySelector('nav.vv-pin-bottom') as HTMLElement | null
+  const nav = document.querySelector('nav[aria-label]') as HTMLElement | null
   const navRect = nav?.getBoundingClientRect()
 
   // Anything sticking out past the layout viewport is what would make the page

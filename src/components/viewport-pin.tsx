@@ -21,6 +21,14 @@ const KEYBOARD_MIN_RATIO = 0.25
  * (pinch-zoomed) and `data-vv-offset` (the visual viewport is smaller than, or
  * shifted inside, the layout viewport at scale 1).
  *
+ * Scope note: the dashboard's top bar and bottom nav no longer go through any
+ * of this. They are ordinary flex rows in a shell that does not scroll (see
+ * `app/dashboard/layout.tsx`), which is what finally held them still on iOS —
+ * three rounds of correcting their geometry from here each failed in a new
+ * direction. What is left are the genuinely floating boxes: dialogs, sheets and
+ * drawers via `.vv-pin-screen*`, the FABs via `.vv-pin-corner`, and the toast
+ * stack via `.vv-pin-bottom`.
+ *
  * Why: `position: fixed` anchors to the *layout* viewport, and on a phone the
  * layout viewport is regularly bigger than what's on screen.
  *

@@ -13,6 +13,7 @@ import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { ScreenTransition } from '@/components/screen-transition'
 import { TextSizeSync } from '@/components/text-size-sync'
 import { ViewportDebug } from '@/lib/debug/viewport-debug'
+import { APP_SCROLL_ID } from '@/lib/app-scroll'
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { getUiPreferences } from '@/lib/preferences/server'
@@ -40,7 +41,33 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         <LocalizedClientBoundary>
           <TextSizeSync value={textSize} />
           <ViewportDebug />
-          <div className="flex min-h-screen">
+          {/*
+            The app shell: a box exactly the height of the viewport that does
+            not scroll. The chrome is *in* it, and only the middle row moves.
+
+            This replaces `position: fixed` chrome over a scrolling document,
+            which never held still on iOS. Fixed anchors to the layout
+            viewport, and on a phone that box is regularly not the box you can
+            see — a collapsing browser toolbar, a rubber-band overscroll and a
+            pinch zoom each move one and not the other. Correcting for that
+            from JS meant tracking `visualViewport` and translating the bars to
+            match, and the corrections kept being wrong in a new direction:
+            first the bars sat low, then they walked *down* the screen
+            mid-scroll, then they rode *up* off it. Every one of those was the
+            same mistake — chasing what an engine reports instead of stepping
+            out of the way.
+
+            A bar that is not inside the scrolling box cannot be moved by the
+            scrolling box, on any engine, with no measurement and nothing to
+            keep in sync. `dvh` (not `vh`) so the shell tracks a browser
+            toolbar opening and closing rather than hanging a bar's height off
+            the bottom.
+
+            `ViewportPin` stays: dialogs, sheets and the FABs are still
+            `fixed`, and still want re-boxing onto the screen under pinch zoom.
+            It is the two bars that stop needing it.
+          */}
+          <div className="flex h-dvh overflow-hidden">
           {/* Desktop sidebar */}
           <AppSidebar className="hidden lg:flex" userEmail={userEmail} />
 
@@ -54,22 +81,24 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                 entering one. Renders nothing. */}
             <ExchangeRateAutoRefresh />
 
-            <main className="flex-1 pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pt-0">
-              {/* Inside `main`, not a sibling above it. The top bar is
-                  `fixed`, so it takes no space, and the padding that clears it
-                  lives on `main` alone — a sibling starts at y=0 and wears the
-                  bar. That is what cropped the hint on the phone: its icon,
-                  its title and its dismiss button sat behind the bar and only
-                  the tail of the instructions showed, which read as a
-                  half-drawn card. Kept outside `ScreenTransition` so it does
-                  not replay the arrival animation on every route change. */}
+            {/* The only scrolling box in the dashboard — see `lib/app-scroll`.
+                `overscroll-contain` keeps a bounce at either end from handing
+                the gesture to the document behind it. */}
+            <main
+              id={APP_SCROLL_ID}
+              className="flex-1 overflow-y-auto overscroll-contain pb-6"
+            >
+              {/* Above `ScreenTransition` so it does not replay the arrival
+                  animation on every route change. */}
               <InstallAppHint />
               <ScreenTransition>{children}</ScreenTransition>
             </main>
-          </div>
 
-          {/* Mobile bottom nav (replaces the desktop add FAB on small screens) */}
-          <MobileBottomNav className="lg:hidden" />
+            {/* Mobile bottom nav (replaces the desktop add FAB on small
+                screens). A real flex row under the scroller now, so content
+                ends above it instead of behind it. */}
+            <MobileBottomNav className="lg:hidden" />
+          </div>
 
           {/* FABs — assistant + add transaction (desktop only for add) */}
           <AssistantDrawer />
