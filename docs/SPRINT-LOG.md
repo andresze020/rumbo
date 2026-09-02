@@ -1,4 +1,4 @@
-# Sprint Log — App Finanzas
+# Sprint Log — Rumbo
 
 Append-only record of closed sprints. One entry per sprint, newest at the top.
 Maintained at sprint close by the `app-finanzas-state-sync` skill.
@@ -14,6 +14,66 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Tables changed:
 - Follow-ups / known gaps:
 -->
+
+## Mobile chrome: from chasing the viewport to an app shell (2026-08-24 → 2026-08-29)
+- Goal: make the mobile top bar and bottom nav hold still on a real phone.
+  Twenty-one commits, PRs #48-#61, merged straight onto `main` rather than
+  through one sprint branch — each one was a fix shipped to a device to be
+  re-tested, not a planned slice. Recorded here as a single entry because they
+  are one investigation.
+- Shipped:
+  - **The app shell (#61)** — the fix that actually held. The dashboard is a
+    box exactly one viewport tall (`h-dvh overflow-hidden`) that does not
+    scroll; `MobileNav` and `MobileBottomNav` are ordinary flex rows inside it
+    and `<main id="app-scroll">` is the only scrolling box. A bar that is not
+    inside the scroller cannot be moved by the scroller, on any engine, with
+    nothing measured and nothing to keep in sync. `dvh` so the shell tracks a
+    browser toolbar opening and closing; `overscroll-contain` so a bounce at
+    either end is not handed to the document behind it. Verified in headless
+    Chromium against the real compiled Tailwind: across the whole scroll range
+    the top bar holds 0..56 and the nav holds 635..700 flush with the viewport
+    bottom while the scroller moves 0 -> 2445, and `window.scrollY` stays 0.
+  - **`src/lib/app-scroll.ts`** — the document no longer scrolls, so
+    `window.scrollY` and a `scroll` listener on `window` are both dead in the
+    dashboard. Two things had to be repointed at the new scroller: the
+    assistant FAB's hide-while-scrolling, which would have heard nothing, and
+    the reset-to-top on route change, since the router's scroll restoration
+    drives the document and every screen would have inherited the last one's
+    position.
+  - **Install hint inside `main` (#60)** — it was a sibling *above* `main`, so
+    it started at y=0 and wore the fixed top bar; on a notched phone the bar is
+    ~59px taller and the card was covered almost entirely. Kept above
+    `ScreenTransition` so it does not replay the arrival animation on every
+    route change.
+  - **Inward clamp at scale 1 (#59)** — Safari pins `fixed` to the visual
+    viewport while `getBoundingClientRect` keeps answering with the layout
+    position, so the probes read 0 for chrome Safari had already placed
+    correctly, and a toolbar collapse then translated both bars *down* by the
+    offset. A correction may now pull chrome onto the screen, never push it
+    off. Zoom untouched: panning a pinch-zoomed page genuinely has to follow
+    the visual viewport both ways.
+  - **The rename to Rumbo (#58)** — `package.json`, `public/manifest.json`,
+    README, AGENTS.md, `.claude/CLAUDE.md`, the scripts, the AI prompts, the
+    glossary and the i18n dictionaries.
+  - **#48-#57, the attempts that did not hold** — keeping the nav on the screen
+    edge while the toolbar moves (#48), an on-device viewport readout (#49),
+    pinning to the real containing block (#50), re-measuring on layout changes
+    (#51), trimming the pinned bars to the visible width (#52), clamping the
+    page shell (#53), then the document (#55), letting the dashboard cards
+    shrink (#56), and restoring one-finger scrolling after `overflow-x` on the
+    root took it away (#57). The width clamps and the card fixes stand; the bar
+    pinning they were built around does not.
+- Migrations added: none.
+- Tables changed: none.
+- Follow-ups / known gaps:
+  - **None of it has been checked on a real iPhone.** The device report that
+    started this was an iPhone; the fix is verified only in headless Chromium.
+    Recorded in `docs/pending-work.md` §4.
+  - PR #54 was left open and conflicted, superseded by #55-#57 and then by #61.
+  - `.vv-pin-top` was left with no consumers, and the temporary on-device
+    readout from #49 was left mounted in production. Both cleaned up on
+    2026-09-02 along with this entry, which is the sprint close these PRs never
+    got.
 
 ## Zoom overlays, dashboard activity, and sprint-closing cleanup (2026-08-22)
 - Goal: close the two mobile-UI gaps the viewport-pinning sprint (2026-08-21)

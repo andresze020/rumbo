@@ -3,7 +3,7 @@
 > Documentation only. Authenticated real-data QA record for the Tier-3 and
 > Tier-4 features merged to `main` on 2026-08-12. Their migrations are applied,
 > so every row below is **live against real data with no QA pass behind it** —
-> this doc exists to close that gap, and it is the open item tracked as §4.3 of
+> this doc exists to close that gap, and it is the open item tracked as §4.4 of
 > [../pending-work.md](../pending-work.md). Follows the shape of
 > [pr-37-authenticated-qa.md](./pr-37-authenticated-qa.md). No real amounts,
 > account numbers, balances, or transaction details are recorded here.
