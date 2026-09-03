@@ -24,6 +24,12 @@
 > under zoom, dashboard text truncation, in-app text size, CI on pull
 > requests, and runnable ledger invariants. Additive again, not a re-audit.
 >
+> **Touched 2026-09-02** to record what PRs #48–#61 (2026-08-24 → 08-29) left
+> open: the iPhone verification of the app shell (§4.3), the stale PR #54 (§7),
+> and the half-finished rename to Rumbo (§7). Those PRs went onto `main` one at
+> a time without a sprint close, so nothing about them had reached this file.
+> Additive again — the last full pass over every row is still 2026-08-16.
+>
 > Everything shipped is recorded in `AGENTS.md` → Current status and
 > [SPRINT-LOG.md](./SPRINT-LOG.md); this file only lists what is **not** done.
 
@@ -51,7 +57,8 @@ decision first.
 | Recurring transfers (UC-9) | **Cross-currency recurring transfers cannot auto-post.** The form disables the toggle, the server action refuses it, and the job flags-and-skips. Such a template still posts by hand. | The amount that arrives is a real value only the user knows, and it moves with the rate. Guessing it would fabricate money. |
 | Month closures (BR-021) | Close month is a **soft marker** (`month_closures` + snapshot, reopenable). It does not lock the ledger. | Product decision — a closed month must stay correctable during Alpha. |
 | Transfer-as-expense (BR-039) | Reaches KPIs, trend, week rows and calendar, but never the category breakdown. | The row is emitted from the inflow leg with no allocation, so balances, net worth and budgets stay untouched. Reports and Calendar both say so on screen. |
-| Mobile pinch zoom | **Pinch zoom stays enabled.** The app never sets a `viewport` export, so Next.js' `width=device-width, initial-scale=1` default applies and the page zooms. | Disabling it would not even work consistently: iOS Safari has ignored `user-scalable=no` / `maximum-scale=1` since iOS 10, so iPhones would keep zooming while Android stopped. It is also a WCAG 2.1 SC 1.4.4 failure, and on a screen full of dense figures the pinch is a real reading aid. The reason it used to hurt — losing the header or the tab bar — was fixed by the visual-viewport pinning (2026-08-21), not by taking zoom away. |
+| Mobile pinch zoom | **Pinch zoom stays enabled.** The app never sets a `viewport` export, so Next.js' `width=device-width, initial-scale=1` default applies and the page zooms. | Disabling it would not even work consistently: iOS Safari has ignored `user-scalable=no` / `maximum-scale=1` since iOS 10, so iPhones would keep zooming while Android stopped. It is also a WCAG 2.1 SC 1.4.4 failure, and on a screen full of dense figures the pinch is a real reading aid. The reason it used to hurt — losing the header or the tab bar — is gone: the bars are flex rows of a non-scrolling app shell (#61, 2026-08-29), not `fixed` chrome that has to be corrected. |
+| Mobile chrome is not `fixed` | The dashboard top bar and bottom nav are **flex rows of a shell one viewport tall**, not `position: fixed`. `window.scrollY` therefore does nothing in the dashboard. | Three rounds of correcting `fixed` chrome onto the visual viewport failed in three different directions. Full rationale in [features/mobile-app-shell.md](./features/mobile-app-shell.md) — **read it before making either bar `fixed` again**, and route any scroll read/write through `src/lib/app-scroll.ts`. |
 | Installments (BR-035) | The plan holds no money and there is no parent transaction. | That is what makes double-counting impossible by construction; no report or budget had to change. |
 
 ## 3. Not started
@@ -90,7 +97,26 @@ Source of truth: [alpha/pr-37-authenticated-qa.md](./alpha/pr-37-authenticated-q
 | Manifest `shortcuts` | Untested | Run the installed-app checklist in [features/pwa.md](./features/pwa.md#installed-app-verification). A normal browser tab is not sufficient evidence. |
 | `share_target` | Untested | Share text + a URL from another installed app and confirm the expense quick-add prefills **without** auto-submitting. |
 
-### 4.3 Tier-3 / Tier-4 real-data QA
+### 4.3 Mobile chrome on a real iPhone
+
+PRs #48–#61 spent six days on mobile chrome that would not hold still, and the
+report that started it came from an iPhone. The fix that shipped (#61, the app
+shell) is verified **only in headless Chromium** — driving the real compiled
+Tailwind and the real class strings, but not on the device that showed the bug.
+No round of this saga has been signed off on real hardware.
+
+| Area | State | Exact remaining action |
+|---|---|---|
+| Top bar + bottom nav, iPhone Safari | Untested on device | Scroll a long transactions list to both ends. The bars must not move at all — not on the rubber-band overscroll at either end, not while the browser toolbar collapses. |
+| Top bar + bottom nav, installed PWA | Untested on device | Same, in the installed app, where there is no browser toolbar to collapse. |
+| Pinch zoom | Untested on device | Zoom in, pan to a corner, open a dialog and a bottom sheet. The overlay must be fully on screen and magnified; the FAB and toasts must stay on the screen edge at their normal size. |
+| Install hint (#60) | Untested on device | On a notched iPhone the bar is ~59px taller than headless. The "Add to Home Screen" card must render fully below it, icon and dismiss button included. |
+
+If any of these still fails, do **not** reach for `position: fixed` plus a
+correction — that is the loop this came out of. See
+[features/mobile-app-shell.md](./features/mobile-app-shell.md).
+
+### 4.4 Tier-3 / Tier-4 real-data QA
 
 No authenticated QA record exists yet for the features merged on 2026-08-12.
 Their migrations are applied, so these are live against real data with no QA
@@ -122,6 +148,16 @@ row per feature with the exact invariant that closes it, all eleven still
 | BR-D04 | Advisor / external access | Household invite/member management is shipped and used. |
 | BR-D05 | Advanced charts (Sankey, saved reports) | Users ask for deeper analysis than the BR-022 reports hub gives. |
 | BR-D06 | OCR / bank sync / billing | Explicit product decision; kept out of Alpha correctness work. |
+
+## 7. Repository hygiene
+
+Not features — housekeeping that has a real cost if it keeps sliding.
+
+| Item | State | What closes it |
+|---|---|---|
+| **PR #54** — "Stop lateral dashboard scrolling in offset viewports" | Open since 2026-08-25, `mergeable_state: dirty`, based on the now-ancient `b8b7734` | **Close it, do not rebase.** The lateral-scroll clamp it carried was superseded by #55/#56/#57, and #61 removed the whole `fixed`-chrome mechanism it was correcting. Its one useful line (`width: var(--vv-width)` on `body`) is already on `main` in a different form. |
+| **Rename to Rumbo is half done** | Code, README, AGENTS.md and the manifest say Rumbo (#58). `docs/` still says "App Finanzas" in ~40 files, and the ten `.claude/skills/app-finanzas-*` are still named that way. | Rename the skill directories and their `name:` frontmatter, and sweep the *live* docs (feature docs, alpha process docs, `ai-agents-workflow.md`). **Leave the historical record alone** — `docs/design/handoff-2026-06/`, the two benchmark reviews and past `SPRINT-LOG.md` entries said "App Finanzas" at the time and should keep saying it. |
+| **Sprints that merge straight to `main` skip their close** | PRs #48–#61 all went onto `main` individually. Nothing about them reached `AGENTS.md`, `SPRINT-LOG.md` or this file until 2026-09-02, eleven days later, and in the meantime `AGENTS.md` actively described a mechanism the code had replaced. | Either run `/cerrar-sprint` on the range when a burst of one-off PRs settles, or accept a standing drift and re-audit on a fixed cadence. The failure mode is not missing history — it is state docs that are *wrong*, which is worse than silent. |
 
 ---
 

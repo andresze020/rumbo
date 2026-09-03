@@ -217,35 +217,34 @@
   }
 
   /*
-   * Pinch-zoom chrome pinning.
+   * Pinch-zoom pinning for the floating furniture.
    *
    * `position: fixed` anchors to the *layout* viewport. Zoom the page — a
    * stray two-finger flick mid-scroll is enough — and the layout viewport is
-   * now larger than the screen, so the top bar and the bottom nav hang off its
-   * edges and get clipped: you scroll fast and lose either the header or the
-   * tab bar. `ViewportPin` publishes the visual viewport's geometry; these
-   * classes translate the chrome onto it and counter-scale it by 1/scale, so
-   * the bars keep their on-screen size and stay glued to the screen edges
+   * now larger than the screen, so anything `fixed` hangs off its edges and
+   * gets clipped. `ViewportPin` publishes the visual viewport's geometry;
+   * these classes translate the element onto it and counter-scale it by
+   * 1/scale, so it keeps its on-screen size and stays glued to the screen edge
    * while the zoom magnifies the content underneath, the way native app chrome
    * behaves.
+   *
+   * Furniture only: the toast stack and the assistant FAB. The top bar and the
+   * bottom nav used to be pinned here too, and are not `fixed` at all any more
+   * — they are flex rows of the app shell, which does not scroll, so nothing
+   * can move them and there is nothing to correct. See the comment in
+   * `app/dashboard/layout.tsx`. Overlays get the separate, uncounter-scaled
+   * `.vv-pin-screen*` treatment further down.
    *
    * All of it is scoped to `[data-vv-zoomed]`, which only exists while the
    * page is actually zoomed: at scale 1 there is no transform, and therefore
    * no extra containing block for anything `fixed` rendered inside.
    */
-  html[data-vv-zoomed] .vv-pin-top,
   html[data-vv-zoomed] .vv-pin-bottom,
   html[data-vv-zoomed] .vv-pin-corner {
     will-change: transform;
   }
 
-  /* `inset-x-0 top-0` — full-width bar hugging the top of the screen. */
-  html[data-vv-zoomed] .vv-pin-top {
-    transform-origin: 0 0;
-    transform: translate3d(var(--vv-left), var(--vv-top), 0) scale(var(--vv-inv-scale));
-  }
-
-  /* `inset-x-0 bottom-0` — full-width bar hugging the bottom of the screen. */
+  /* `inset-x-0 bottom-0` — full-width stack hugging the bottom of the screen. */
   html[data-vv-zoomed] .vv-pin-bottom {
     transform-origin: 0 100%;
     transform: translate3d(var(--vv-left), var(--vv-bottom-delta), 0)
@@ -274,12 +273,12 @@
    * Chrome on Android sizes the layout viewport as if its toolbar were hidden.
    * While the toolbar is *shown* — which is how every page starts, before the
    * first scroll — the layout viewport's bottom edge is a toolbar's height
-   * below the screen, so `bottom: 0` leaves the bottom nav's lower half (its
-   * labels) off screen. Scroll down, the toolbar retracts, and the nav slides
-   * up into place: chrome that drifts while you read. `data-vv-offset`
-   * translates it onto the visual viewport for the whole of that transition,
-   * so it just stays on the screen edge. Nothing is scaled here: at scale 1
-   * the chrome is already the right size.
+   * below the screen, so `bottom: 0` leaves a toast or the FAB partly off
+   * screen. Scroll down, the toolbar retracts, and it slides up into place:
+   * furniture that drifts while you read. `data-vv-offset` translates it onto
+   * the visual viewport for the whole of that transition, so it just stays on
+   * the screen edge. Nothing is scaled here: at scale 1 it is already the
+   * right size.
    *
    * `:not([data-vv-zoomed])` because the zoomed rules above translate *and*
    * counter-scale; only one of the two may ever apply to an element.
@@ -287,21 +286,19 @@
    * the visual viewport — a nav pinned to the top of the keyboard would cover
    * the field being typed into.
    */
-  html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-top,
   html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-bottom,
   html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-corner {
     will-change: transform;
   }
 
   /*
-   * Width, not just position. These bars are `inset-x-0`, so they span the
+   * Width, not just position. The toast stack is `inset-x-0`, so it spans the
    * fixed box — 401px on the phone this was measured on — while only 384px of
-   * it is on screen. Translating alone left the tab row centred on 401 and the
-   * last tab under the scrollbar gutter. `width` wins over `right` on an
-   * over-constrained box, so this trims them to what is actually visible and
-   * their contents centre where the eye expects.
+   * it is on screen. Translating alone left its contents centred on 401, the
+   * right edge under the scrollbar gutter. `width` wins over `right` on an
+   * over-constrained box, so this trims it to what is actually visible and its
+   * contents centre where the eye expects.
    */
-  html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-top,
   html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-bottom {
     width: var(--vv-width);
   }
@@ -333,10 +330,6 @@
 
   body {
     max-width: var(--vv-doc-width, none);
-  }
-
-  html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-top {
-    transform: translate3d(var(--vv-left), var(--vv-top), 0);
   }
 
   html[data-vv-offset]:not([data-vv-zoomed]) .vv-pin-bottom {

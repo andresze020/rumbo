@@ -23,6 +23,43 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **The mobile chrome stopped being `fixed`, and the project became Rumbo**
+  (2026-08-24 → 2026-08-29, PRs #48–#61 straight onto `main`). UI and naming
+  only, no migrations. Twenty-one commits, most of them one long fight with
+  the same bug.
+  - **The app shell (#61) — read `docs/features/mobile-app-shell.md` before
+    touching the mobile chrome.** The dashboard is now a box exactly one
+    viewport tall (`h-dvh overflow-hidden`) that does not scroll; the top bar
+    and the bottom nav are ordinary flex rows in it, and `<main
+    id="app-scroll">` is the only scroller. This **replaces** the
+    `ViewportPin`-corrects-`fixed`-chrome approach described in the 2026-08-21
+    entry below, which failed in three different directions across #48–#59:
+    the bars sat low, then walked down the screen mid-scroll, then rode up off
+    it. Measuring the gap between the layout and visual viewports and
+    translating the bars to close it was the wrong shape of fix; the bars now
+    step out of the scrolling box instead.
+  - **`window.scrollY` is dead in the dashboard.** The document never scrolls.
+    Anything reading or resetting scroll position goes through
+    `src/lib/app-scroll.ts` (`APP_SCROLL_ID`, `getAppScroller()`). The
+    assistant FAB's hide-while-scrolling and the reset-to-top on route change
+    were both repointed at the new scroller; a `scroll` listener on `window`
+    now hears nothing.
+  - **`ViewportPin` survives, narrowed.** It still re-boxes the things that
+    really are `fixed` under pinch zoom: dialogs/sheets/drawers
+    (`.vv-pin-screen*`, not counter-scaled), the FABs (`.vv-pin-corner`) and
+    the toast stack (`.vv-pin-bottom`). `.vv-pin-top` had no consumers left
+    after #61 and was removed.
+  - **Renamed to Rumbo (#58).** `package.json`, `public/manifest.json`,
+    README, AGENTS.md, the scripts and the user-facing strings. `docs/` is
+    still largely "App Finanzas" — see `docs/pending-work.md` §7.
+  - **Install hint moved inside `main` (#60).** It was a sibling above it, so
+    it started at y=0 and rendered under the mobile top bar. Page content
+    belongs inside the scroller.
+  - **Also #59:** at scale 1 the pin's four deltas are clamped inward — a
+    correction may pull chrome onto the screen, never push it off. Safari pins
+    `fixed` to the visual viewport while `getBoundingClientRect` keeps
+    answering with the layout position, so the probes were correcting geometry
+    that was already right.
 - **Modal overlays, dashboard legibility, and a cheaper assistant**
   (2026-08-22, branch `fix/mobile-ui-zoom-overlays-and-activity`). Closes the
   P4/P3 mobile-UI gaps the viewport-pinning sprint (2026-08-21) deliberately
@@ -80,7 +117,10 @@ The product is household-first. All financial data must belong to a household.
     original list despite shipping in Tier-3), all still `Untested` — the
     doc exists, the pass has not been run.
 - **Chrome pinned to the visual viewport** (2026-08-21, branch
-  `claude/zoom-scroll-header-footer-53n6iv`). UI only, no migration. A fast
+  `claude/zoom-scroll-header-footer-53n6iv`). **⚠️ Superseded by the app shell
+  (#61, 2026-08-29) — the top bar and the bottom nav are no longer `fixed` and
+  are no longer pinned. Kept here for the history of why; the surviving parts
+  are listed in the entry above.** UI only, no migration. A fast
   scroll on a phone occasionally picks up a stray second finger and pinch-zooms
   the page a few percent. `position: fixed` anchors to the *layout* viewport,
   which is then larger than the screen, so the mobile header and the bottom tab
@@ -165,6 +205,8 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
   `nav/`, `i18n/`, `ai/`, `health/score.ts` (the documented health score, shared
   by dashboard + month-review), `preferences/` (BR-032/038 `ui_preferences`),
   `filters/transaction-scope-memory.ts` (the `af_tx_scope` cookie),
+  `app-scroll.ts` (**the** dashboard scroll container — `window.scrollY` does
+  not work there; see `docs/features/mobile-app-shell.md`),
   `use-back-dismiss.ts` (overlay Back handling),
   `analysis/server.ts` + `analysis/report-query.ts` (shared data helpers for the
   analysis screens; Reports and Calendar read the same rows),
