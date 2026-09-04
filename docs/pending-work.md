@@ -134,10 +134,26 @@ cycle (BR-030), optional time-of-day (BR-045), recurring transfers (UC-9), notes
 (BR-044), the calendar (BR-037), transfer-as-expense (BR-039), the budget
 comparison/payment split (BR-043) and the custom month start day (BR-036).
 
-The checklist now exists —
-[alpha/tier-3-4-authenticated-qa.md](./alpha/tier-3-4-authenticated-qa.md), one
-row per feature with the exact invariant that closes it, all eleven still
-`Untested`. Record results there as a new `## Results — YYYY-MM-DD` section.
+The checklist —
+[alpha/tier-3-4-authenticated-qa.md](./alpha/tier-3-4-authenticated-qa.md) — has
+one row per feature with the exact invariant that closes it. Record results
+there as a new `## Results — YYYY-MM-DD` section.
+
+**A desk audit on 2026-09-04 shrank this gate.** Every row was read against the
+code first, which found one row stating an invariant the code does not have
+(BR-035 claimed instalments post lazily; they all post at creation) and three
+rows already covered by invariants nobody had cross-linked. Four rows now run
+automatically under `npm run db:test` against real data — BR-040 and BR-039 on
+tests that already existed, BR-035 and UC-9 on two added that day — and BR-044's
+financial half is structural (`public.notes` has no amount column and no foreign
+key into the ledger), so it needs no pass at all.
+
+What is left genuinely needs a human in an authenticated session: **BR-030** and
+**BR-043** first, since both aggregate across a window and neither is cheap to
+express in SQL without reimplementing the report query; then **BR-037**,
+**BR-036**, **BR-045** and **BR-031**; then the on-screen halves of the
+automated rows. BR-044's RLS half needs a second household member and is better
+folded into a general RLS pass.
 
 ## 5. Open decisions across feature docs
 
