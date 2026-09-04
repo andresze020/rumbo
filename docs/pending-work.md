@@ -5,7 +5,7 @@
 > QA gates, and the Open Decisions scattered across individual feature docs. Each
 > row is a pointer to its source of truth, not a duplicate — update the linked doc
 > first, then update this index to match. Kept in sync by the
-> `app-finanzas-state-sync` skill at sprint close.
+> `rumbo-state-sync` skill at sprint close.
 >
 > **Last refreshed 2026-08-16** against `main` at `92a7be4`. This refresh
 > removed everything the mobile-capture-parity, Tier-3 and Tier-4 sprints closed
@@ -29,6 +29,15 @@
 > and the half-finished rename to Rumbo (§7). Those PRs went onto `main` one at
 > a time without a sprint close, so nothing about them had reached this file.
 > Additive again — the last full pass over every row is still 2026-08-16.
+>
+> **Touched 2026-09-03** to drop the two §7 rows that closed: PR #54 (closed as
+> superseded) and the rename, now finished — the ten skills are `rumbo-*` and
+> the live docs say Rumbo. The frozen record keeps the old name on purpose:
+> `docs/design/handoff-2026-06/`, the two benchmark reviews and past
+> `SPRINT-LOG.md` entries describe what was delivered and reviewed under
+> "App Finanzas", so changing their prose would misreport history. Skill
+> *identifiers* were updated even there, since a `rumbo-ledger-rules` path that
+> no longer resolves helps nobody.
 >
 > Everything shipped is recorded in `AGENTS.md` → Current status and
 > [SPRINT-LOG.md](./SPRINT-LOG.md); this file only lists what is **not** done.
@@ -155,8 +164,6 @@ Not features — housekeeping that has a real cost if it keeps sliding.
 
 | Item | State | What closes it |
 |---|---|---|
-| **PR #54** — "Stop lateral dashboard scrolling in offset viewports" | Open since 2026-08-25, `mergeable_state: dirty`, based on the now-ancient `b8b7734` | **Close it, do not rebase.** The lateral-scroll clamp it carried was superseded by #55/#56/#57, and #61 removed the whole `fixed`-chrome mechanism it was correcting. Its one useful line (`width: var(--vv-width)` on `body`) is already on `main` in a different form. |
-| **Rename to Rumbo is half done** | Code, README, AGENTS.md and the manifest say Rumbo (#58). `docs/` still says "App Finanzas" in ~40 files, and the ten `.claude/skills/app-finanzas-*` are still named that way. | Rename the skill directories and their `name:` frontmatter, and sweep the *live* docs (feature docs, alpha process docs, `ai-agents-workflow.md`). **Leave the historical record alone** — `docs/design/handoff-2026-06/`, the two benchmark reviews and past `SPRINT-LOG.md` entries said "App Finanzas" at the time and should keep saying it. |
 | **Sprints that merge straight to `main` skip their close** | PRs #48–#61 all went onto `main` individually. Nothing about them reached `AGENTS.md`, `SPRINT-LOG.md` or this file until 2026-09-02, eleven days later, and in the meantime `AGENTS.md` actively described a mechanism the code had replaced. | Either run `/cerrar-sprint` on the range when a burst of one-off PRs settles, or accept a standing drift and re-audit on a fixed cadence. The failure mode is not missing history — it is state docs that are *wrong*, which is worse than silent. |
 
 ---

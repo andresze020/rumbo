@@ -1,9 +1,9 @@
 ---
-name: app-finanzas-ui-polish
-description: Use when editing App Finanzas UI, forms, validation messages, responsive layout, shadcn components, filters, empty states, tables, cards, or mobile behavior.
+name: rumbo-ui-polish
+description: Use when editing Rumbo UI, forms, validation messages, responsive layout, shadcn components, filters, empty states, tables, cards, or mobile behavior.
 ---
 
-# App Finanzas UI Polish
+# Rumbo UI Polish
 
 Use this skill for frontend/UI changes.
 

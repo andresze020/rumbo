@@ -12,7 +12,7 @@ constraint. No change to the ledger model.
 ## Context
 
 The user pays at a shop by tapping their phone (Google Wallet / Apple Pay) and
-wants the expense to appear in App Finanzas automatically, already filed under
+wants the expense to appear in Rumbo automatically, already filed under
 the right category, without opening the app.
 
 Today this is a fully manual flow: open the PWA (or its **Quick add** shortcut),
@@ -23,11 +23,11 @@ forgotten and to silently break the month's numbers.
 
 Two things have to be true for the feature to work, and they are independent:
 
-1. **Detection** — something must observe the tap and tell App Finanzas.
+1. **Detection** — something must observe the tap and tell Rumbo.
 2. **Classification** — the resulting transaction must land in the right
    category often enough that the user trusts it and stops reviewing every row.
 
-The second is where App Finanzas is already strong (`categorization_rules`,
+The second is where Rumbo is already strong (`categorization_rules`,
 `payees`, `review_status`). The first is where the platform fights back.
 
 ---
@@ -37,7 +37,7 @@ The second is where App Finanzas is already strong (`categorization_rules`,
 | Question | Answer |
 |---|---|
 | Can the PWA itself detect an NFC tap payment? | **No.** Not on any platform, not with any web API. |
-| Can a tap reach App Finanzas within seconds anyway? | **Yes** — via the phone's automation layer plus an inbound ingest endpoint. |
+| Can a tap reach Rumbo within seconds anyway? | **Yes** — via the phone's automation layer plus an inbound ingest endpoint. |
 | Is high-confidence auto-categorization realistic? | **Yes** — most of the machinery already ships. |
 | Is any of this MVP-Alpha scope? | **No.** This is a post-MVP feature and should be scheduled as such. |
 
@@ -59,7 +59,7 @@ The second is where App Finanzas is already strong (`categorization_rules`,
   originate a payment event.
 
 The conclusion is architectural, not a limitation to engineer around:
-**detection lives outside App Finanzas, on the phone. App Finanzas owns
+**detection lives outside Rumbo, on the phone. Rumbo owns
 ingestion, classification, and the ledger.**
 
 ---
@@ -175,7 +175,7 @@ and later a third time via CSV import when the charge settles.
 
 ### Account resolution
 
-The notification names the card, not an App Finanzas account. Resolution order:
+The notification names the card, not a Rumbo account. Resolution order:
 
 1. `last_four` from the payload matched against `accounts.last_four` (the column
    already exists, with a `^[0-9]{1,4}$` check).
@@ -428,7 +428,7 @@ both are worthless if Phase 0 fails. Do not merge them.
 - Capture tokens are stored hashed. The plaintext exists only in the
   notification shown at creation and in the user's own automation config.
 - No third party is introduced by Paths A–C: the automation posts directly from
-  the user's phone to the user's own App Finanzas deployment. Nothing transits a
+  the user's phone to the user's own Rumbo deployment. Nothing transits a
   vendor. Path D would break this, which is part of why it is excluded.
 - The ingest endpoint must not echo household or account data in its response —
   only the inbox id.

@@ -1,4 +1,4 @@
-# AI Agents en el desarrollo de App Finanzas
+# AI Agents en el desarrollo de Rumbo
 
 ## Status
 
@@ -21,13 +21,13 @@ decidir cuándo valen la pena.
 
 ## Contexto
 
-Hasta ahora el desarrollo de App Finanzas es **conversacional**: se abre una
+Hasta ahora el desarrollo de Rumbo es **conversacional**: se abre una
 sesión de Claude Code, se describe una feature, Claude la implementa. El
 conocimiento del proyecto está bien capturado (`AGENTS.md`, 10 skills en
 `.claude/skills/`), pero **nada se ejecutaba solo**.
 
 El síntoma concreto: el gate de validación vive en la skill
-[`app-finanzas-verify`](../.claude/skills/app-finanzas-verify/SKILL.md), o sea
+[`rumbo-verify`](../.claude/skills/rumbo-verify/SKILL.md), o sea
 en un documento que Claude **debe acordarse de leer**. Si se le olvida, nadie lo
 detiene. Lo mismo con las reglas del ledger.
 
@@ -80,7 +80,7 @@ restricción es deliberada: un revisor que además arregla tiende a arreglar
 inventando, y a ocultar el hallazgo en el proceso.
 
 Las reglas completas siguen viviendo en la skill
-[`app-finanzas-ledger-rules`](../.claude/skills/app-finanzas-ledger-rules/SKILL.md).
+[`rumbo-ledger-rules`](../.claude/skills/rumbo-ledger-rules/SKILL.md).
 El subagente **las aplica**, no las redefine.
 
 ### 2. Comando `/revisar-ledger`
@@ -109,7 +109,7 @@ depender de que alguien la recuerde. **Nunca bloquea.**
 
 Archivo: [`.claude/hooks/verify-gate.mjs`](../.claude/hooks/verify-gate.mjs)
 
-Esta es la pieza que convierte `app-finanzas-verify` de sugerencia en garantía.
+Esta es la pieza que convierte `rumbo-verify` de sugerencia en garantía.
 Cuando Claude intenta terminar un turno:
 
 1. Si `stop_hook_active` es `true` → sale 0. **Sin esta guarda hay bucle
@@ -262,7 +262,7 @@ sobre artefactos generados como cinturón por si el hook fallara.
   grandes; no para buscar un símbolo que ya sabes dónde está.
 - **Falsa sensación de cobertura**: un typecheck en verde no dice nada sobre si
   los números financieros son correctos. Eso sigue siendo el smoke test manual
-  de [`app-finanzas-alpha-qa`](../.claude/skills/app-finanzas-alpha-qa/SKILL.md).
+  de [`rumbo-alpha-qa`](../.claude/skills/rumbo-alpha-qa/SKILL.md).
 
 ---
 
@@ -311,7 +311,7 @@ intermedio barato ya se dio — los invariantes SQL de arriba.
 ### Claude revisando PRs
 
 Posible vía GitHub Actions con la API. Implica secrets, presupuesto de API y
-cambiar el flujo de merge manual que define `app-finanzas-sprint-flow`.
+cambiar el flujo de merge manual que define `rumbo-sprint-flow`.
 
 ---
 

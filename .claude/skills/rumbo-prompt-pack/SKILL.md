@@ -1,9 +1,9 @@
 ---
-name: app-finanzas-prompt-pack
-description: Use when the user asks for a prompt for Claude Code, Codex, ChatGPT, a new chat, or a continuation prompt for an App Finanzas sprint.
+name: rumbo-prompt-pack
+description: Use when the user asks for a prompt for Claude Code, Codex, ChatGPT, a new chat, or a continuation prompt for a Rumbo sprint.
 ---
 
-# App Finanzas Prompt Pack
+# Rumbo Prompt Pack
 
 Use this skill to produce reusable prompts for Claude Code, Codex, or ChatGPT.
 
@@ -28,7 +28,7 @@ Every implementation prompt must include:
 ## Standard implementation prompt structure
 
 ```text
-You are working on my project “App Finanzas”, a personal/family finance PWA built with Next.js, TypeScript, Tailwind, shadcn/ui, Supabase Auth, Supabase/PostgreSQL, GitHub, Vercel, Recharts, and Zod.
+You are working on my project “Rumbo”, a personal/family finance PWA built with Next.js, TypeScript, Tailwind, shadcn/ui, Supabase Auth, Supabase/PostgreSQL, GitHub, Vercel, Recharts, and Zod.
 
 Keep the implementation aligned with the Product Brief, Roadmap, PRD, and Data Model.
 

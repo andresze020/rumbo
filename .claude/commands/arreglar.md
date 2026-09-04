@@ -53,7 +53,7 @@ uno solo, vuelve al paso 3.
 
 - Arregla en **móvil y escritorio**, aunque solo se haya reportado uno.
 - Quita la instrumentación temporal.
-- Corre la puerta de validación (`app-finanzas-verify`): `npm run lint` y
+- Corre la puerta de validación (`rumbo-verify`): `npm run lint` y
   `npx tsc --noEmit`.
 - Si tocó saldos, transferencias, deudas o presupuestos → `/revisar-ledger`.
 - Prueba manualmente el flujo en localhost. Un typecheck en verde no dice nada

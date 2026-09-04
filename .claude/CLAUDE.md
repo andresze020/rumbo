@@ -74,7 +74,7 @@ Context is the scarcest resource here; treat it as a budget, not a bucket.
 - If database changes are needed, create or prepare migrations only and list exact manual Supabase commands for the user.
 
 ## Validation expectations
-Before finishing a task, run the validation gate defined by the `app-finanzas-verify`
+Before finishing a task, run the validation gate defined by the `rumbo-verify`
 skill (the single source of truth). In short:
 - npm run lint
 - npx tsc --noEmit  (there is no `typecheck` npm script)

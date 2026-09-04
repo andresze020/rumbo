@@ -1,9 +1,9 @@
 ---
-name: app-finanzas-sprint-flow
-description: Use when planning, starting, implementing, reviewing, or closing an App Finanzas sprint. Enforces branch hygiene, sprint scope, validation, Supabase manual commands, and manual Git release flow.
+name: rumbo-sprint-flow
+description: Use when planning, starting, implementing, reviewing, or closing a Rumbo sprint. Enforces branch hygiene, sprint scope, validation, Supabase manual commands, and manual Git release flow.
 ---
 
-# App Finanzas Sprint Flow
+# Rumbo Sprint Flow
 
 Use this skill when the user asks to continue, start, review, finish, or create a prompt for a sprint.
 
@@ -19,12 +19,12 @@ Use this skill when the user asks to continue, start, review, finish, or create 
 7. Preserve household-first/RLS architecture.
 8. Run Git branch/commit/push/merge/tag as the user asks (see "Git" below).
 9. Do not run Supabase remote/write commands.
-10. Run the validation gate via the `app-finanzas-verify` skill before declaring done.
+10. Run the validation gate via the `rumbo-verify` skill before declaring done.
 11. End with validation and any exact manual commands still required.
 
 ## Closing a sprint
 
-When the user finishes or merges a sprint, invoke the `app-finanzas-state-sync`
+When the user finishes or merges a sprint, invoke the `rumbo-state-sync`
 skill to update `AGENTS.md` and `docs/SPRINT-LOG.md`. A sprint is not "closed"
 until the canonical state reflects it — stale state docs are the project's main
 consistency failure.
@@ -67,7 +67,7 @@ Do:
 - Keep commits logically separable.
 - Create migrations when needed.
 - Explain migration impact.
-- Run the validation gate (`app-finanzas-verify`) before declaring done.
+- Run the validation gate (`rumbo-verify`) before declaring done.
 
 Do not:
 - Expand into unrelated modules.

@@ -88,7 +88,7 @@ Convenciones:
 | Actividad reciente | **real** | filas de transacción |
 
 **Reglas:** reusar `MetricCard`, `Money`/`BalanceAmount`, `Callout`,
-`SectionHeading`. Respetar `app-finanzas-ledger-rules` (dashboards usan
+`SectionHeading`. Respetar `rumbo-ledger-rules` (dashboards usan
 `transaction_allocations`; balances desde `transaction_entries`). Marcar el
 health score como demo en UI y código.
 
@@ -157,7 +157,7 @@ Tendencias / Flujo de caja · Automatización / Reglas / Cola de revisión ·
 Asistente como módulo full · Colaboración del hogar · Plan / Billing.
 
 Cada uno requiere schema/migraciones y debe priorizarse como sprint propio con
-los skills `app-finanzas-ledger-rules` + `app-finanzas-supabase-rls`. Hasta
+los skills `rumbo-ledger-rules` + `rumbo-supabase-rls`. Hasta
 entonces viven como nav + locked (Sprint 1).
 
 ---

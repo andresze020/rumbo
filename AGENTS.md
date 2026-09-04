@@ -1,7 +1,7 @@
 # AGENTS.md — Rumbo
 
 > Canonical project-state document. Keep this in sync at every sprint close
-> (see the `app-finanzas-state-sync` skill). If this file and the code disagree,
+> (see the `rumbo-state-sync` skill). If this file and the code disagree,
 > the code wins — and this file is the bug.
 
 ## Project context
@@ -50,8 +50,8 @@ The product is household-first. All financial data must belong to a household.
     the toast stack (`.vv-pin-bottom`). `.vv-pin-top` had no consumers left
     after #61 and was removed.
   - **Renamed to Rumbo (#58).** `package.json`, `public/manifest.json`,
-    README, AGENTS.md, the scripts and the user-facing strings. `docs/` is
-    still largely "App Finanzas" — see `docs/pending-work.md` §7.
+    README, AGENTS.md, the scripts and the user-facing strings. The `docs/`
+    and skill halves followed on 2026-09-03 (entry below).
   - **Install hint moved inside `main` (#60).** It was a sibling above it, so
     it started at y=0 and rendered under the mobile top bar. Page content
     belongs inside the scroller.
@@ -229,7 +229,7 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 - Use server actions for writes.
 - Prefer simple, readable code over abstractions.
 - Use TypeScript types where practical.
-- Run checks before final answer (see the `app-finanzas-verify` skill):
+- Run checks before final answer (see the `rumbo-verify` skill):
   - `npm run lint`
   - `npx tsc --noEmit`  (there is no `typecheck` npm script)
   - `npm run build` when feasible

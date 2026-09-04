@@ -62,7 +62,7 @@ Use one row per session above after checking:
 - Total imports:
 - Total bugs / frictions logged:
 - Times I needed AndroMoney instead:
-- Overall: could I rely on App Finanzas alone yet? (Yes / Not yet — why):
+- Overall: could I rely on Rumbo alone yet? (Yes / Not yet — why):
 
 ## Related documents
 

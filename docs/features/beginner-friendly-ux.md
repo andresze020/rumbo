@@ -159,7 +159,7 @@ stay valid).
 | Savings Rate | "The share of your income you kept instead of spending, this month." | Dashboard "Savings rate" card |
 | Liabilities / Debts | "Money you owe — credit cards, loans, etc." | Dashboard "Total liabilities" card, Debts page header |
 | Exchange rate | "How many units of this account's currency equal 1 unit of your household's main currency." | Next to the (now collapsed) exchange rate field label, replacing/augmenting the existing inline helper text |
-| Opening balance | "The balance of this account on the day you started tracking it in App Finanzas." | Opening balance form header |
+| Opening balance | "The balance of this account on the day you started tracking it in Rumbo." | Opening balance form header |
 | Allocations / Budget categories | "How your spending is grouped for budgets and reports." | Categories page header, Budgets page header |
 | Reconciliation | "Checking that the balance here matches your bank statement." | (placeholder — feature not built yet, BF-022; add only if a reconciliation UI affordance already exists, otherwise skip) |
 | Transfer | "Moving money between your own accounts — doesn't count as income or spending." | Transaction form, Transfer type selector |

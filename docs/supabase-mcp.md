@@ -1,7 +1,7 @@
 # Acceso directo a Supabase desde un agente (MCP)
 
 `.mcp.json` declara el servidor MCP oficial de Supabase, acotado al proyecto
-`karbhlstwxhjdnepglza` (App Finanzas, `us-east-2`). Da a los agentes que corren
+`karbhlstwxhjdnepglza` (Rumbo, `us-east-2`). Da a los agentes que corren
 en este checkout —Claude Code y Codex— acceso directo a la base: consultar el
 esquema, ejecutar SQL, leer logs y correr los *security advisors*.
 

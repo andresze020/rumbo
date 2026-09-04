@@ -1,9 +1,9 @@
 ---
-name: app-finanzas-alpha-qa
+name: rumbo-alpha-qa
 description: Use when reviewing alpha readiness, creating QA checklists, testing a sprint, validating responsive UI, or preparing the app for a friend/family beta user.
 ---
 
-# App Finanzas Alpha QA
+# Rumbo Alpha QA
 
 Use this skill for alpha readiness, QA, smoke tests, and manual test plans.
 

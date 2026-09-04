@@ -96,4 +96,4 @@ Ver `IMPLEMENTATION-PLAN.md` para el detalle. Resumen:
 - Sin migraciones Supabase en ningún sprint de este plan.
 - Rama por sprint; commits solo cuando el usuario lo pida explícitamente.
 - Gate de validación por sprint: `npm run lint`, `npx tsc --noEmit`,
-  `npm run build`, smoke manual (skill `app-finanzas-verify`).
+  `npm run build`, smoke manual (skill `rumbo-verify`).

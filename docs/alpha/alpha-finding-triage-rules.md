@@ -4,7 +4,7 @@
 
 ## Guiding principle
 
-App Finanzas must produce **numbers I can trust** with real money. Anything that makes a relied-upon number wrong outranks anything cosmetic or convenience-related.
+Rumbo must produce **numbers I can trust** with real money. Anything that makes a relied-upon number wrong outranks anything cosmetic or convenience-related.
 
 ## Classifications
 

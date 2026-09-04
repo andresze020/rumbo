@@ -610,7 +610,7 @@ build (Next 16).
 
 ### Suggested next prompt (implementation of the highest-priority sprint)
 > Implement **Sprint 12.x — "Multi-currency truth + correctness"** for App
-> Finanzas, following `.claude/CLAUDE.md` and the `app-finanzas-verify` gate.
+> Finanzas, following `.claude/CLAUDE.md` and the `rumbo-verify` gate.
 > 1) Create migration(s) for an `exchange_rates` table (household_id, from_currency,
 > to_currency, rate, rate_date, source, unique per day) with full RLS mirroring the
 > existing pattern, plus a `get_exchange_rate(p_household_id, p_from, p_to, p_date)`

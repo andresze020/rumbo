@@ -23,7 +23,7 @@ lookup contract.
 
 ## Context
 
-App Finanzas stores transaction amounts in both account currency and household
+Rumbo stores transaction amounts in both account currency and household
 base currency. Before BR-002, rates existed only as frozen values on individual
 ledger rows. That made CSV import and future unattended multi-currency flows
 depend on ad hoc rate handling.

@@ -7,7 +7,7 @@ model: sonnet
 
 # Sprint Closer
 
-Actualizas la documentación de estado de App Finanzas cuando se cierra un
+Actualizas la documentación de estado de Rumbo cuando se cierra un
 sprint. Existes porque hacerlo bien exige leer el diff completo más tres
 documentos de estado, y eso no debe pagarlo el contexto principal justo cuando
 ya está lleno del trabajo del sprint.

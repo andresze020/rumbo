@@ -1,9 +1,9 @@
 ---
-name: app-finanzas-docs
-description: Use when writing or updating App Finanzas documentation — feature docs, alpha/process docs, checklists, or any Markdown under docs/. Enforces the project's existing doc conventions (location, Status block, structure, cross-links, privacy).
+name: rumbo-docs
+description: Use when writing or updating Rumbo documentation — feature docs, alpha/process docs, checklists, or any Markdown under docs/. Enforces the project's existing doc conventions (location, Status block, structure, cross-links, privacy).
 ---
 
-# App Finanzas Docs
+# Rumbo Docs
 
 Use this skill to write documentation that matches what already exists under
 `docs/`. Match the current conventions exactly — do not invent a new house style.
@@ -15,7 +15,7 @@ Use this skill to write documentation that matches what already exists under
 - `docs/alpha/<topic>.md` — Alpha process docs: plans, logs, triage rules,
   checklists used during real-data validation.
 - `docs/` root — cross-cutting docs: `alpha-readiness-checklist.md`,
-  `SPRINT-LOG.md` (the latter is owned by `app-finanzas-state-sync`).
+  `SPRINT-LOG.md` (the latter is owned by `rumbo-state-sync`).
 - `Documentation/` — the formal V1 source-of-truth set (Roadmap, Product Brief,
   PRD, Data Model). Treat as read-only references; do not regenerate them.
 
@@ -88,6 +88,6 @@ This is a real personal-finance app. In any doc, especially logs:
 - A feature doc's Status must match reality. If you ship or change a feature,
   update its doc's Status in the same change.
 - Sprint-level state belongs in `AGENTS.md` + `docs/SPRINT-LOG.md` via
-  `app-finanzas-state-sync`, not scattered across feature docs.
-- Validate touched code with `app-finanzas-verify` before marking a doc
+  `rumbo-state-sync`, not scattered across feature docs.
+- Validate touched code with `rumbo-verify` before marking a doc
   "Implemented".
