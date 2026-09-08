@@ -563,6 +563,8 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
                 defaultFromAccountId={copyDefaults?.fromAccountId}
                 defaultToAccountId={copyDefaults?.toAccountId}
                 visibleFields={formData.formFields}
+                quickEntry={formData.quickEntry}
+                categoryMemory={formData.categoryMemory}
                 // The full view, filters included — not just the pathname, or
                 // the redirect after "Create transaction" lands on an
                 // unfiltered list.

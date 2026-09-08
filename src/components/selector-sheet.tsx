@@ -20,8 +20,8 @@ type SelectorSheetProps = {
 }
 
 /**
- * Full-screen, mobile-only picker surface for the transaction form's
- * Account / Category / Payee selectors.
+ * Mobile-only picker surface, shared by the transaction form's Account /
+ * Category / Payee selectors and by the tag multi-select.
  *
  * Why a plain fixed overlay instead of vaul/Base-UI here: the transaction form
  * already lives inside a Base UI Dialog (a bottom sheet on mobile), which traps
