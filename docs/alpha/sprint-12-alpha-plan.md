@@ -4,7 +4,7 @@
 
 ## Objective
 
-Use App Finanzas with **real personal/family financial data**, compare it against
+Use Rumbo with **real personal/family financial data**, compare it against
 current records (AndroMoney and/or bank/credit-card statements), and validate that the
 core MVP produces trustworthy numbers across:
 
@@ -25,7 +25,7 @@ The MVP is feature-complete for personal use, but real Alpha usage is what prove
 ## Scope
 
 - Importing or manually entering real accounts and a bounded slice of transactions.
-- Reconciling App Finanzas numbers against AndroMoney / current records.
+- Reconciling Rumbo numbers against AndroMoney / current records.
 - Using the app for everyday entry.
 - Logging every bug and friction encountered.
 - Triaging findings into a prioritized fix list.
@@ -128,7 +128,7 @@ UI pattern established:
 - All create/edit/action forms now open in `FormDialog`, never inline.
 - Forms are triggered by URL params (`?mode=create`, `?edit={id}`, `?pay={id}`).
 - Cancel/close navigates to the clean URL, naturally dismissing the dialog.
-- Pattern codified in `app-finanzas-ui-polish` skill for future form additions.
+- Pattern codified in `rumbo-ui-polish` skill for future form additions.
 
 Database impact: none for Sprint 12.6.
 
@@ -419,7 +419,7 @@ This sprint involves **real personal/family financial data**. Treat it according
 ## Sprint Execution Workflow (for Sprint 12.7+)
 
 ### Phase 1: Discovery & Logging (Week-long usage)
-1. Use App Finanzas normally with real data.
+1. Use Rumbo normally with real data.
 2. Log findings in `alpha-daily-usage-log.md` (quick informal notes).
 3. Record: what worked, where friction appeared, unexpected behaviors.
 

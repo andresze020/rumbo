@@ -1,9 +1,9 @@
 ---
-name: app-finanzas-supabase-rls
-description: Use when working on Supabase/PostgreSQL migrations, RLS, database functions, views, RPCs, policies, indexes, constraints, or seed/default data for App Finanzas.
+name: rumbo-supabase-rls
+description: Use when working on Supabase/PostgreSQL migrations, RLS, database functions, views, RPCs, policies, indexes, constraints, or seed/default data for Rumbo.
 ---
 
-# App Finanzas Supabase and RLS Guard
+# Rumbo Supabase and RLS Guard
 
 Use this skill for database work.
 

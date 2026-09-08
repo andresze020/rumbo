@@ -1,11 +1,11 @@
 ---
-name: app-finanzas-verify
-description: Use before finishing any App Finanzas code task or before merging a sprint — the single source of truth for "is this ready?". Runs the real validation gate (lint, typecheck, build) plus the minimal smoke test.
+name: rumbo-verify
+description: Use before finishing any Rumbo code task or before merging a sprint — the single source of truth for "is this ready?". Runs the real validation gate (lint, typecheck, build) plus the minimal smoke test.
 ---
 
-# App Finanzas Verify
+# Rumbo Verify
 
-The one place that defines "ready to merge" for App Finanzas. Other skills and docs
+The one place that defines "ready to merge" for Rumbo. Other skills and docs
 point here instead of repeating (and drifting on) validation steps.
 
 ## The real scripts
@@ -34,7 +34,7 @@ If the task added/changed migrations, the gate also includes:
 - Confirm the migration is additive and named `YYYYMMDDHHmmss_*.sql`.
 - List the manual Supabase command for the user (`npx supabase db push`) — never
   run it automatically.
-- Provide verification queries (see `app-finanzas-supabase-rls`).
+- Provide verification queries (see `rumbo-supabase-rls`).
 
 ## Minimal smoke test (manual, for the user)
 
@@ -44,7 +44,7 @@ Only the flows the change touched, plus these always-on invariants:
 3. Account balances and dashboard totals stay consistent.
 4. Transfers do not inflate income or expenses.
 
-Full alpha smoke list lives in `app-finanzas-alpha-qa`; use it for sprint-close QA.
+Full alpha smoke list lives in `rumbo-alpha-qa`; use it for sprint-close QA.
 
 ## Report format
 

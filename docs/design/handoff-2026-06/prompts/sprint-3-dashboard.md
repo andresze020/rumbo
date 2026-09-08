@@ -6,7 +6,7 @@ Copy everything below the line into Claude Code.
 
 You are working on my project "App Finanzas", a personal/family finance PWA built with Next.js, TypeScript, Tailwind, shadcn/ui, Supabase Auth, Supabase/PostgreSQL, GitHub, Vercel, Recharts, and Zod.
 
-Keep the implementation aligned with the Product Brief, Roadmap, PRD, and Data Model. Read the design handoff first: `docs/design/handoff-2026-06/project/App Finanzas.dc.html` (the `isDashboard` block) and `IMPLEMENTATION-PLAN.md` (Sprint 3). Follow `app-finanzas-ledger-rules`.
+Keep the implementation aligned with the Product Brief, Roadmap, PRD, and Data Model. Read the design handoff first: `docs/design/handoff-2026-06/project/App Finanzas.dc.html` (the `isDashboard` block) and `IMPLEMENTATION-PLAN.md` (Sprint 3). Follow `rumbo-ledger-rules`.
 
 Current status:
 - Sprints 1 (grouped nav) and 2 (mobile bottom-nav + FAB) are merged.

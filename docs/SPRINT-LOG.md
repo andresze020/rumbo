@@ -1,7 +1,7 @@
 # Sprint Log — Rumbo
 
 Append-only record of closed sprints. One entry per sprint, newest at the top.
-Maintained at sprint close by the `app-finanzas-state-sync` skill.
+Maintained at sprint close by the `rumbo-state-sync` skill.
 
 History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 `docs/alpha-readiness-checklist.md`. Start logging here going forward.
@@ -14,6 +14,65 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Tables changed:
 - Follow-ups / known gaps:
 -->
+
+## Finishing the rename, and shrinking the Tier-3/4 QA gate (2026-09-03 → 2026-09-04)
+- Goal: close the two items `docs/pending-work.md` had been carrying since the
+  previous sprint close — the half-finished rename to Rumbo, and the eleven-row
+  Tier-3/4 authenticated QA gate that had never been run.
+- Shipped:
+  - **The rename, finished.** #58 had done the code, the manifest and the
+    README and left the parts nobody sees from the app. Ten
+    `.claude/skills/app-finanzas-*` directories renamed with `git mv`, their
+    `name:` frontmatter with them, and every cross-reference updated across
+    `.claude/`, `AGENTS.md`, the docs and the Stop hook. Skill *identifiers*
+    were updated everywhere, frozen records included: an identifier is a path,
+    and one that no longer resolves helps nobody who follows it. The product
+    name moved only in live docs — `docs/design/handoff-2026-06/` and the two
+    benchmark reviews describe what was delivered and reviewed under
+    "App Finanzas", and rewriting them would misreport history. Two things left
+    alone on purpose: the Windows checkout path, which is a real directory
+    rather than a brand, and the i18n translation cache filename in
+    `os.tmpdir()`, where a rename only spends translation tokens re-earning the
+    cache.
+  - **A desk audit of the Tier-3/4 QA checklist, before running it.** The
+    theory being that a checklist you cannot trust wastes the session it is
+    used in. It found one row asserting an invariant the code does not have:
+    BR-035 claimed balances stay unchanged until an instalment is posted, but
+    `create_installment_plan` inserts all N as `posted` in the same call, each
+    with its own entry and allocation. Anyone running that row would have seen
+    the balance move and either filed a false bug or recorded a pass against a
+    misunderstanding of what BR-035 protects — which is that no parent
+    transaction carries the total on top of the instalments.
+  - **Four rows moved from "manual, once" to "automated, always."** BR-040 and
+    BR-039 turned out to be already covered — by `br_040_refund_invariants.sql`
+    and by `br_003_006`'s "transfers have no reporting allocations" — and had
+    simply never been cross-linked to the checklist. Added
+    `br_035_installment_invariants.sql` (instalments sum to the plan total,
+    numbering is 1..N and unique, cancelled plans keep no live future rows) and
+    `uc_009_recurring_transfer_invariants.sql` (no cross-currency template ever
+    auto-posted, none is left with `auto_post` on, auto-posted transfers net to
+    zero with no allocation). UC-9's refusal lives in the form, the server
+    action and the job — none of them a database constraint — so real data is
+    the only thing that can prove it held.
+  - **BR-044 was retired as a QA row**, not skipped: `public.notes` has no
+    amount column and no foreign key into `transactions`,
+    `transaction_entries` or `transaction_allocations`, so "no financial side
+    effect" is true by construction. Its RLS half needs a second household
+    session and belongs in a general RLS pass.
+- Migrations added: none. The two new files are read-only invariants under
+  `supabase/tests/`, discovered automatically by `npm run db:test`.
+- Tables changed: none.
+- Follow-ups / known gaps:
+  - The authenticated pass still has not been run. What is left needs a human:
+    BR-030 and BR-043 first (both aggregate across a window, and neither is
+    cheap to express in SQL without reimplementing the report query, which
+    would test the copy rather than the original), then BR-037, BR-036,
+    BR-045 and BR-031.
+  - The two new invariant files were validated against a disposable local
+    Postgres 16 with a stub schema — every column resolves, they report
+    `passed = false` on planted violations and `true` on clean data — but they
+    have not yet run against the real database. The first `npm run db:test` is
+    their real first run; it is read-only, so it is safe to be that run.
 
 ## Mobile chrome: from chasing the viewport to an app shell (2026-08-24 → 2026-08-29)
 - Goal: make the mobile top bar and bottom nav hold still on a real phone.

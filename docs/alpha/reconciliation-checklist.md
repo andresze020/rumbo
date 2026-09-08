@@ -1,13 +1,13 @@
 # Reconciliation Checklist
 
-> Documentation only. Use this to verify that App Finanzas matches your current system of record after each import/data-entry slice.
+> Documentation only. Use this to verify that Rumbo matches your current system of record after each import/data-entry slice.
 >
 > **Privacy:** describe issues structurally and redact real amounts/account numbers. Do not commit real figures.
 
 ## How to use this checklist
 
 1. Reconcile **one area at a time**.
-2. Compare App Finanzas to AndroMoney/current records/bank statements.
+2. Compare Rumbo to AndroMoney/current records/bank statements.
 3. Mark Pass/Fail and capture surprises.
 4. Any Fail affecting a number you rely on → log it in [bug-friction-log.md](./bug-friction-log.md).
 5. Fix inputs first: mappings, opening balances, cutoff date, FX rate. Do not assume app logic is wrong until inputs are confirmed.
@@ -51,7 +51,7 @@ These areas were changed in Sprint 12.4/12.5 — only re-test if making changes 
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Account list: every active account, type, class, currency, include_in_net_worth flag. |
+| Compare in Rumbo | Account list: every active account, type, class, currency, include_in_net_worth flag. |
 | Compare in system of record | Real list of accounts in AndroMoney/bank portals. |
 | Expected tolerance | Exact. |
 | Common causes of differences | Duplicate account; wrong class; wrong currency; archived/missing account. |
@@ -62,7 +62,7 @@ These areas were changed in Sprint 12.4/12.5 — only re-test if making changes 
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Each account's posted balance with no post-cutoff transactions. |
+| Compare in Rumbo | Each account's posted balance with no post-cutoff transactions. |
 | Compare in system of record | Statement/snapshot balance for each account at cutoff. |
 | Expected tolerance | Exact for bank/card accounts; manual tolerance for cash; FX tolerance for non-base currency. |
 | Common causes of differences | Wrong cutoff date; wrong liability sign; wrong base→account FX rate; used today's balance instead of cutoff balance. |
@@ -73,7 +73,7 @@ These areas were changed in Sprint 12.4/12.5 — only re-test if making changes 
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Count, dates, descriptions, amounts, categories for reconciled month. |
+| Compare in Rumbo | Count, dates, descriptions, amounts, categories for reconciled month. |
 | Compare in system of record | Same month's transactions in AndroMoney/bank statement. |
 | Expected tolerance | Exact; FX tolerance only for base conversion. |
 | Common causes of differences | Duplicate/dropped rows; wrong sign; wrong date parsing; wrong account; invalid row expected to post. |
@@ -84,7 +84,7 @@ These areas were changed in Sprint 12.4/12.5 — only re-test if making changes 
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Transfer appears as movement between accounts, not income/expense. Also check Total Assets impact. |
+| Compare in Rumbo | Transfer appears as movement between accounts, not income/expense. Also check Total Assets impact. |
 | Compare in system of record | Same transfer in AndroMoney/statements. |
 | Expected tolerance | Exact within same currency. For non-base-currency transfers, verify Total Assets impact matches (amount × exchange_rate_to_base). |
 | Common causes of differences | Transfer imported as two expenses/income rows; cross-currency transfer attempted; (Sprint 12.7 FIX) non-base-currency transfer amount treated as base-currency (now fixed). |
@@ -95,7 +95,7 @@ These areas were changed in Sprint 12.4/12.5 — only re-test if making changes 
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Outstanding liability balance displayed as amount owed. |
+| Compare in Rumbo | Outstanding liability balance displayed as amount owed. |
 | Compare in system of record | Credit-card statement balance at cutoff/month-end. |
 | Expected tolerance | Exact. |
 | Common causes of differences | Payment recorded as expense; sign reversed; opening owed amount wrong; pending/posted timing. |
@@ -106,7 +106,7 @@ These areas were changed in Sprint 12.4/12.5 — only re-test if making changes 
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Debt outstanding balance, principal paydown, and base-currency liability value. |
+| Compare in Rumbo | Debt outstanding balance, principal paydown, and base-currency liability value. |
 | Compare in system of record | Loan/debt statement and expected FX conversion if non-base currency. |
 | Expected tolerance | Exact for principal in account currency; FX tolerance in base currency. |
 | Common causes of differences | Principal logged as normal expense; wrong account; wrong opening balance; wrong FX rate; old 1:1 debt FX behavior not migrated/applied. |
@@ -117,7 +117,7 @@ These areas were changed in Sprint 12.4/12.5 — only re-test if making changes 
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Planned vs actual per category, remaining, percent used. |
+| Compare in Rumbo | Planned vs actual per category, remaining, percent used. |
 | Compare in system of record | Expected budget and actual spend per category. |
 | Expected tolerance | Exact for actuals; planned amounts are user input. |
 | Common causes of differences | Category excluded from budget; different categorization; transfers/debt payments leaking into spending. |
@@ -128,7 +128,7 @@ These areas were changed in Sprint 12.4/12.5 — only re-test if making changes 
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Monthly income, expenses, savings, savings rate, expenses by category. |
+| Compare in Rumbo | Monthly income, expenses, savings, savings rate, expenses by category. |
 | Compare in system of record | Independent recomputation for same month. |
 | Expected tolerance | Exact for income/expense/savings; savings rate within rounding. |
 | Common causes of differences | Transfers/debt payments counted as income/expense; pending vs posted; month boundary; category type mismatch. |
@@ -139,7 +139,7 @@ These areas were changed in Sprint 12.4/12.5 — only re-test if making changes 
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Total assets, liabilities, net worth at month-end. |
+| Compare in Rumbo | Total assets, liabilities, net worth at month-end. |
 | Compare in system of record | Sum of real balances at same month-end. |
 | Expected tolerance | Exact for single currency; FX tolerance when currencies combine. |
 | Common causes of differences | Included/excluded account wrong; liability sign; exchange-rate choice; opening balance wrong. |
@@ -150,7 +150,7 @@ These areas were changed in Sprint 12.4/12.5 — only re-test if making changes 
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Preview counts and posted rows. |
+| Compare in Rumbo | Preview counts and posted rows. |
 | Compare in system of record | Source CSV row count and contents. |
 | Expected tolerance | Exact: posted transactions = valid rows; invalid/duplicate rows not posted. |
 | Common causes of differences | Re-running import; mapping errors; duplicate detection too strict/loose; header/encoding issues. |
@@ -161,7 +161,7 @@ These areas were changed in Sprint 12.4/12.5 — only re-test if making changes 
 
 | Field | Detail |
 |---|---|
-| Compare in App Finanzas | Exported transactions/accounts/categories vs app display. |
+| Compare in Rumbo | Exported transactions/accounts/categories vs app display. |
 | Compare in system of record | In-app ledger and expected totals. |
 | Expected tolerance | Exact. |
 | Common causes of differences | Misread sign/column; one row per entry/allocation assumption; locale/encoding in spreadsheet app. |

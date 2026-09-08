@@ -8,9 +8,9 @@ No database changes required. No service worker (offline mode is out of scope fo
 
 ## What this enables
 
-App Finanzas can be installed on Android (Chrome), iOS (Safari), and desktop (Chrome/Edge) as a standalone app:
+Rumbo can be installed on Android (Chrome), iOS (Safari), and desktop (Chrome/Edge) as a standalone app:
 
-- Appears on the home screen / app drawer with the App Finanzas icon.
+- Appears on the home screen / app drawer with the Rumbo icon.
 - Opens without browser chrome (no address bar, no tabs).
 - Receives an entry in the OS task switcher.
 - Uses the brand theme color for the status bar on Android.
@@ -61,7 +61,7 @@ Source SVG is defined inline in `scripts/generate-icons.mjs`. Requires `sharp` (
 
 ```json
 {
-  "name": "App Finanzas",
+  "name": "Rumbo",
   "short_name": "Finanzas",
   "start_url": "/dashboard",
   "display": "standalone",
@@ -114,7 +114,7 @@ installed-PWA QA pass. This cannot be proven from a browser tab alone.
 
 - Long-press/right-click the installed icon and open **Quick add**,
   **Transactions**, and **Recurring**.
-- Share text and a URL from another app to **App Finanzas**.
+- Share text and a URL from another app to **Rumbo**.
 - Confirm the installed app opens the expense quick-add dialog and preserves
   the shared title/text/URL without creating a transaction automatically.
 - Repeat on the target mobile platform after any manifest change; installed

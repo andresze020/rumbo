@@ -1,7 +1,7 @@
 # AGENTS.md — Rumbo
 
 > Canonical project-state document. Keep this in sync at every sprint close
-> (see the `app-finanzas-state-sync` skill). If this file and the code disagree,
+> (see the `rumbo-state-sync` skill). If this file and the code disagree,
 > the code wins — and this file is the bug.
 
 ## Project context
@@ -23,6 +23,32 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **The rename finished, and the Tier-3/4 QA gate got smaller** (2026-09-03 →
+  09-04). Docs, skills and two new SQL invariant files. No app code, no
+  migrations.
+  - **The ten skills are `rumbo-*`.** Directories, `name:` frontmatter and
+    every cross-reference in `.claude/`, `AGENTS.md`, the docs and the Stop
+    hook. Skill identifiers were updated in the frozen records too — an
+    identifier is a path, not a historical claim. The product name moved only
+    in live docs; `docs/design/handoff-2026-06/`, the two benchmark reviews
+    and past SPRINT-LOG entries keep "App Finanzas" because that is what was
+    delivered and reviewed under that name. The Windows checkout path
+    (`…\Projects\app-finanzas`) is a real directory and was left alone.
+  - **A desk audit of `docs/alpha/tier-3-4-authenticated-qa.md` found a wrong
+    row.** BR-035 claimed balances stay unchanged "until an individual
+    instalment is actually posted". `create_installment_plan` inserts **all N
+    instalments as `posted`** in the same call, each with its own entry and
+    allocation. What BR-035 actually protects is that no parent transaction
+    carries the total on top of them. Row rewritten.
+  - **Four of the eleven rows now run under `npm run db:test`.** BR-040 and
+    BR-039 were already covered by `br_040_refund_invariants.sql` and by
+    `br_003_006`'s "transfers have no reporting allocations" — nobody had
+    cross-linked them. Added `br_035_installment_invariants.sql` and
+    `uc_009_recurring_transfer_invariants.sql`. UC-9's cross-currency refusal
+    is app-layer, not a DB constraint, so only real data can prove it held.
+  - **BR-044 needs no pass for the half people worried about**: `public.notes`
+    has no amount column and no foreign key into the ledger, so "no financial
+    side effect" is structural. Its RLS half needs a second household session.
 - **The mobile chrome stopped being `fixed`, and the project became Rumbo**
   (2026-08-24 → 2026-08-29, PRs #48–#61 straight onto `main`). UI and naming
   only, no migrations. Twenty-one commits, most of them one long fight with
@@ -50,8 +76,8 @@ The product is household-first. All financial data must belong to a household.
     the toast stack (`.vv-pin-bottom`). `.vv-pin-top` had no consumers left
     after #61 and was removed.
   - **Renamed to Rumbo (#58).** `package.json`, `public/manifest.json`,
-    README, AGENTS.md, the scripts and the user-facing strings. `docs/` is
-    still largely "App Finanzas" — see `docs/pending-work.md` §7.
+    README, AGENTS.md, the scripts and the user-facing strings. The `docs/`
+    and skill halves followed on 2026-09-03 (entry below).
   - **Install hint moved inside `main` (#60).** It was a sibling above it, so
     it started at y=0 and rendered under the mobile top bar. Page content
     belongs inside the scroller.
@@ -229,7 +255,7 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 - Use server actions for writes.
 - Prefer simple, readable code over abstractions.
 - Use TypeScript types where practical.
-- Run checks before final answer (see the `app-finanzas-verify` skill):
+- Run checks before final answer (see the `rumbo-verify` skill):
   - `npm run lint`
   - `npx tsc --noEmit`  (there is no `typecheck` npm script)
   - `npm run build` when feasible

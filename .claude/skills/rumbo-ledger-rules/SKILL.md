@@ -1,9 +1,9 @@
 ---
-name: app-finanzas-ledger-rules
-description: Use when editing transactions, transfers, debts, account balances, dashboards, budgets, imports, net worth, or any financial calculation in App Finanzas.
+name: rumbo-ledger-rules
+description: Use when editing transactions, transfers, debts, account balances, dashboards, budgets, imports, net worth, or any financial calculation in Rumbo.
 ---
 
-# App Finanzas Ledger Rules
+# Rumbo Ledger Rules
 
 Use this skill for financial logic.
 

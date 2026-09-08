@@ -48,7 +48,7 @@ issuer, region, OS version and wallet app.
    or `requestbin.com`. Open one and copy its unique URL.
    - Treat the URL as a secret for the duration of the spike: anything posted
      to it is readable by whoever has the link. **Delete the bin when done.**
-   - Nothing is deployed and no App Finanzas code runs in this phase.
+   - Nothing is deployed and no Rumbo code runs in this phase.
 2. **Pick the purchase.** Something small you were going to buy anyway, at a
    merchant you can return to (the ice cream shop is ideal — the design's
    worked example depends on repeat visits at the same place).

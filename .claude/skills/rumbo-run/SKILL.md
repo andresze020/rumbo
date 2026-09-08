@@ -1,8 +1,9 @@
 ---
-description: Use when asked to run, start, launch, or open the App Finanzas dev server locally. Starts the Next.js dev server and opens localhost:3000 in the browser.
+name: rumbo-run
+description: Use when asked to run, start, launch, or open the Rumbo dev server locally. Starts the Next.js dev server and opens localhost:3000 in the browser.
 ---
 
-# App Finanzas — Run Dev Server
+# Rumbo — Run Dev Server
 
 ## Steps
 

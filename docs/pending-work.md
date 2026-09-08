@@ -5,7 +5,7 @@
 > QA gates, and the Open Decisions scattered across individual feature docs. Each
 > row is a pointer to its source of truth, not a duplicate — update the linked doc
 > first, then update this index to match. Kept in sync by the
-> `app-finanzas-state-sync` skill at sprint close.
+> `rumbo-state-sync` skill at sprint close.
 >
 > **Last refreshed 2026-08-16** against `main` at `92a7be4`. This refresh
 > removed everything the mobile-capture-parity, Tier-3 and Tier-4 sprints closed
@@ -29,6 +29,15 @@
 > and the half-finished rename to Rumbo (§7). Those PRs went onto `main` one at
 > a time without a sprint close, so nothing about them had reached this file.
 > Additive again — the last full pass over every row is still 2026-08-16.
+>
+> **Touched 2026-09-03** to drop the two §7 rows that closed: PR #54 (closed as
+> superseded) and the rename, now finished — the ten skills are `rumbo-*` and
+> the live docs say Rumbo. The frozen record keeps the old name on purpose:
+> `docs/design/handoff-2026-06/`, the two benchmark reviews and past
+> `SPRINT-LOG.md` entries describe what was delivered and reviewed under
+> "App Finanzas", so changing their prose would misreport history. Skill
+> *identifiers* were updated even there, since a `rumbo-ledger-rules` path that
+> no longer resolves helps nobody.
 >
 > Everything shipped is recorded in `AGENTS.md` → Current status and
 > [SPRINT-LOG.md](./SPRINT-LOG.md); this file only lists what is **not** done.
@@ -125,10 +134,26 @@ cycle (BR-030), optional time-of-day (BR-045), recurring transfers (UC-9), notes
 (BR-044), the calendar (BR-037), transfer-as-expense (BR-039), the budget
 comparison/payment split (BR-043) and the custom month start day (BR-036).
 
-The checklist now exists —
-[alpha/tier-3-4-authenticated-qa.md](./alpha/tier-3-4-authenticated-qa.md), one
-row per feature with the exact invariant that closes it, all eleven still
-`Untested`. Record results there as a new `## Results — YYYY-MM-DD` section.
+The checklist —
+[alpha/tier-3-4-authenticated-qa.md](./alpha/tier-3-4-authenticated-qa.md) — has
+one row per feature with the exact invariant that closes it. Record results
+there as a new `## Results — YYYY-MM-DD` section.
+
+**A desk audit on 2026-09-04 shrank this gate.** Every row was read against the
+code first, which found one row stating an invariant the code does not have
+(BR-035 claimed instalments post lazily; they all post at creation) and three
+rows already covered by invariants nobody had cross-linked. Four rows now run
+automatically under `npm run db:test` against real data — BR-040 and BR-039 on
+tests that already existed, BR-035 and UC-9 on two added that day — and BR-044's
+financial half is structural (`public.notes` has no amount column and no foreign
+key into the ledger), so it needs no pass at all.
+
+What is left genuinely needs a human in an authenticated session: **BR-030** and
+**BR-043** first, since both aggregate across a window and neither is cheap to
+express in SQL without reimplementing the report query; then **BR-037**,
+**BR-036**, **BR-045** and **BR-031**; then the on-screen halves of the
+automated rows. BR-044's RLS half needs a second household member and is better
+folded into a general RLS pass.
 
 ## 5. Open decisions across feature docs
 
@@ -155,8 +180,7 @@ Not features — housekeeping that has a real cost if it keeps sliding.
 
 | Item | State | What closes it |
 |---|---|---|
-| **PR #54** — "Stop lateral dashboard scrolling in offset viewports" | Open since 2026-08-25, `mergeable_state: dirty`, based on the now-ancient `b8b7734` | **Close it, do not rebase.** The lateral-scroll clamp it carried was superseded by #55/#56/#57, and #61 removed the whole `fixed`-chrome mechanism it was correcting. Its one useful line (`width: var(--vv-width)` on `body`) is already on `main` in a different form. |
-| **Rename to Rumbo is half done** | Code, README, AGENTS.md and the manifest say Rumbo (#58). `docs/` still says "App Finanzas" in ~40 files, and the ten `.claude/skills/app-finanzas-*` are still named that way. | Rename the skill directories and their `name:` frontmatter, and sweep the *live* docs (feature docs, alpha process docs, `ai-agents-workflow.md`). **Leave the historical record alone** — `docs/design/handoff-2026-06/`, the two benchmark reviews and past `SPRINT-LOG.md` entries said "App Finanzas" at the time and should keep saying it. |
+| **Two invariants need a column that does not exist** | Both surfaced writing the 2026-09-04 test files, and both need a migration, so neither belongs in a test-only change. (a) `installment_plans` does not store the `p_as_of` that `cancel_installment_plan` was called with, so "a cancelled plan has no live instalment dated after it was cancelled" cannot be stated without a proxy that fires on legitimate data — the reasoning is written out in `br_035_installment_invariants.sql` where check 4 would have gone. (b) `recurring_autopost_log` does not snapshot the two currency codes, so a cross-currency leak whose template was later deleted leaves nothing to find. | (a) Add `installment_plans.cancelled_as_of date`, set it in `cancel_installment_plan`, then add the check. (b) Add `source_currency_code` / `destination_currency_code` to the log and write them in `run_recurring_autopost()`. Both are small additive migrations; do them when something else takes you into those functions rather than on their own. |
 | **Sprints that merge straight to `main` skip their close** | PRs #48–#61 all went onto `main` individually. Nothing about them reached `AGENTS.md`, `SPRINT-LOG.md` or this file until 2026-09-02, eleven days later, and in the meantime `AGENTS.md` actively described a mechanism the code had replaced. | Either run `/cerrar-sprint` on the range when a burst of one-off PRs settles, or accept a standing drift and re-audit on a fixed cadence. The failure mode is not missing history — it is state docs that are *wrong*, which is worse than silent. |
 
 ---

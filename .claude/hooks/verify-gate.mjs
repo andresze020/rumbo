@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Hook Stop - enforcing. Convierte el typecheck de `app-finanzas-verify` en
+ * Hook Stop - enforcing. Convierte el typecheck de `rumbo-verify` en
  * una garantia en vez de un recordatorio.
  *
  * Logica:
@@ -116,7 +116,7 @@ try {
   }
   const salida = ((err.stdout || '') + (err.stderr || '')).trim();
   process.stderr.write(
-    'El typecheck fallo (hook Stop, gate de `app-finanzas-verify`). ' +
+    'El typecheck fallo (hook Stop, gate de `rumbo-verify`). ' +
       'Corrige estos errores antes de terminar; no declares la tarea lista:\n\n' +
       (salida || 'npx tsc --noEmit salio con error y sin output.') +
       '\n',

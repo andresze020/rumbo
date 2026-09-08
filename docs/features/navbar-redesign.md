@@ -62,7 +62,7 @@ Navegación en un rail izquierdo con icono + label. Colapsable a solo iconos. Av
 **Estructura (expandida):**
 ```
 ┌─────────────────┐
-│ [W] App Finanzas│
+│ [W] Rumbo│
 ├─────────────────┤
 │ 📊 Dashboard    │
 │ 💳 Accounts     │

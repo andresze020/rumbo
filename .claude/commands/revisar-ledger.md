@@ -1,5 +1,5 @@
 ---
-description: Revisa el diff actual contra las reglas del ledger, RLS y migraciones de App Finanzas
+description: Revisa el diff actual contra las reglas del ledger, RLS y migraciones de Rumbo
 ---
 
 Lanza el subagente `ledger-guard` (vía la herramienta Agent, con

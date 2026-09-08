@@ -1,9 +1,9 @@
 ---
-name: app-finanzas-state-sync
-description: Use when closing, finishing, or merging an App Finanzas sprint, or whenever AGENTS.md / project-state docs may have drifted from the real code. Keeps the canonical state in sync with reality.
+name: rumbo-state-sync
+description: Use when closing, finishing, or merging a Rumbo sprint, or whenever AGENTS.md / project-state docs may have drifted from the real code. Keeps the canonical state in sync with reality.
 ---
 
-# App Finanzas State Sync
+# Rumbo State Sync
 
 Use this skill to keep the **canonical project state** truthful. The single
 biggest consistency failure on this project is documentation drift: state docs

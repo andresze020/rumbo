@@ -37,7 +37,7 @@ So the migration is a script — but it does **not** write its own ledger rows.
 Every transaction goes through the same RPCs the UI uses
 (`create_manual_transaction`, `create_transfer_transaction`,
 `create_opening_balance`), so the entry/allocation invariants in
-`.claude/skills/app-finanzas-ledger-rules` hold exactly as they do for manual
+`.claude/skills/rumbo-ledger-rules` hold exactly as they do for manual
 entry. The script authenticates as the user with email + password against the
 **anon** key — RLS applies normally, there is no service-role bypass.
 
@@ -83,7 +83,7 @@ instead of being silently imported.
 
 ## How each field lands
 
-| AndroMoney | App Finanzas |
+| AndroMoney | Rumbo |
 |---|---|
 | `Expense(Transfer Out)` / `Income(Transfer In)` | `accounts.name` (created if missing) |
 | `Category` | parent category |
