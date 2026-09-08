@@ -31,6 +31,7 @@ import { PayeePicker, type PayeeOption } from './payee-picker'
 import { RelativeDateChips } from './relative-date-chips'
 import { SelectorSheet } from '@/components/selector-sheet'
 import { useIsMobile } from '@/lib/use-is-mobile'
+import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
 import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
 import { AdvancedFields } from '@/components/advanced-fields'
@@ -283,6 +284,9 @@ export function TransactionForm({
   // focus. Consumed by the effect below.
   const skipAutoFocusRef = useRef(false)
   const isMobile = useIsMobile()
+  // Non-zero only while a soft keyboard is up on a phone. See the actions row
+  // at the bottom of the form for what it buys.
+  const keyboardInset = useSoftKeyboardInset()
 
   // Accounts/categories created inline from the mobile pickers, merged into the
   // prop lists so they show up and can be selected without a page reload.
@@ -2582,10 +2586,17 @@ export function TransactionForm({
       )}
 
       {/* ── Actions ──────────────────────────────────────────────────── */}
-      {/* One row, not three stacked buttons. On a phone the sticky footer sits
-          above a soft keyboard that already owns half the screen, and every row
-          here is a row of form the user cannot see. So:
+      {/* One row, not three stacked buttons, and no row at all while typing.
 
+          With the keyboard up, the sheet is a few hundred pixels tall and this
+          bar was taking a chunk of it to offer "Create transaction" at the exact
+          moment nobody wants it: you have just entered the amount and cannot see
+          a single field below it. So it hides for the duration — the same trade
+          the dialog already makes with its title — and the space goes to the
+          form. Dismissing the keyboard brings it straight back, and while it is
+          gone the keyboard's own Next carries the entry forward.
+
+          The rest of the row:
           - **Cancel is gone** wherever the form is dismissable on its own. In a
             dialog — which is every current caller — Back, Escape, the header's
             X and the backdrop all already cancel, so a fourth way to do it was
@@ -2594,6 +2605,10 @@ export function TransactionForm({
           - **Save & add next** keeps its full label on desktop and shrinks to
             its icon on mobile, where it sits directly beside the primary submit
             and reads as "…and another". */}
+      {/* Unmounted rather than `hidden`: this row is a `flex` container, and a
+          `display` utility beats the UA stylesheet's `[hidden] { display: none }`,
+          so the attribute alone would leave the bar on screen. */}
+      {keyboardInset > 0 ? null : (
       <div className="sticky bottom-0 z-10 -mb-1 flex items-center gap-2 bg-popover pb-1 pt-2 sm:static sm:flex-wrap sm:bg-transparent sm:p-0">
         <SubmitButton
           type="submit"
@@ -2631,6 +2646,7 @@ export function TransactionForm({
           </Link>
         ) : null}
       </div>
+      )}
     </form>
   )
 }

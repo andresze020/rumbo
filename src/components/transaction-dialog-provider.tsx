@@ -25,6 +25,7 @@ import {
 } from '@/app/dashboard/quick-add-actions'
 import { useLanguage } from '@/components/language-provider'
 import { useBackDismiss } from '@/lib/use-back-dismiss'
+import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
 import { todayIsoDateLocal } from '@/lib/format'
 
 type TransactionType = 'income' | 'expense'
@@ -74,49 +75,13 @@ function todayIsoDate() {
 }
 
 /**
- * On mobile the dialog is a bottom-anchored sheet, so when the soft keyboard
- * opens it covers the sheet's footer (Create / Save & Add Next / Cancel). The
- * layout viewport doesn't shrink on iOS, so we measure the keyboard overlap via
- * the VisualViewport API and lift the sheet above it. Returns 0 on desktop (no
- * soft keyboard) and on narrow-viewport-only, so the centered desktop dialog is
- * never affected.
- */
-function useMobileKeyboardInset() {
-  const [inset, setInset] = useState(0)
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    const update = () => {
-      const isMobile = window.matchMedia('(max-width: 639px)').matches
-      // Overlap between the layout viewport bottom and the visual viewport
-      // bottom — i.e. the height taken by the keyboard. Ignore small deltas
-      // (browser toolbars) so only a real keyboard triggers the lift.
-      const overlap = window.innerHeight - vv.height - vv.offsetTop
-      setInset(isMobile && overlap > 120 ? Math.round(overlap) : 0)
-    }
-    update()
-    vv.addEventListener('resize', update)
-    vv.addEventListener('scroll', update)
-    window.addEventListener('resize', update)
-    return () => {
-      vv.removeEventListener('resize', update)
-      vv.removeEventListener('scroll', update)
-      window.removeEventListener('resize', update)
-    }
-  }, [])
-  return inset
-}
-
-/**
  * Scroll whatever field is being typed into back into view once the keyboard
  * is up.
  *
- * Lifting the sheet above the keyboard keeps its footer reachable but leaves
- * very little sheet: header, the pinned action buttons and the keyboard
- * together can cover the amount field you just tapped, so you were typing a
- * number you could not see. The browser's own "scroll the focused input into
- * view" runs before the sheet has been resized and lands in the wrong place,
- * so redo it against the final geometry.
+ * Lifting the sheet above the keyboard leaves very little sheet, and the
+ * browser's own "scroll the focused input into view" runs before the sheet has
+ * been resized and lands in the wrong place, so redo it against the final
+ * geometry.
  */
 function useKeepFocusedFieldVisible(keyboardInset: number) {
   useEffect(() => {
@@ -126,9 +91,12 @@ function useKeepFocusedFieldVisible(keyboardInset: number) {
       const active = document.activeElement
       if (!(active instanceof HTMLElement)) return
       if (!active.matches('input, select, textarea')) return
-      // Centred rather than merely "in view": the action bar is sticky over the
-      // bottom of the sheet, and `nearest` happily parks a field underneath it.
-      active.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      // Top, not centre. Centring was there to keep the field clear of the
+      // sticky action bar, which now hides itself while the keyboard is up —
+      // and centring spent the whole sheet on the one field you are already
+      // looking at. Anchoring it to the top spends the rest on the fields that
+      // come *after* it, which is what you need to see next.
+      active.scrollIntoView({ block: 'start', behavior: 'smooth' })
     }
 
     // The sheet resizes a frame or two behind the keyboard animation; wait for
@@ -232,7 +200,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t } = useLanguage()
-  const keyboardInset = useMobileKeyboardInset()
+  const keyboardInset = useSoftKeyboardInset()
   useKeepFocusedFieldVisible(keyboardInset)
 
   // Read pending "Save and Add Next" defaults straight from the URL on first
