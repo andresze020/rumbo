@@ -73,6 +73,13 @@ type PickerField = null | 'account' | 'from' | 'to' | 'category' | 'payee'
  */
 type ChainField = 'account' | 'category' | 'payee' | 'description' | 'tags'
 
+/**
+ * Where a hop through the chain starts. The amount is not itself a chain field —
+ * nothing advances *to* it — but Enter on it kicks the chain off from before the
+ * first field.
+ */
+type ChainStart = ChainField | 'amount'
+
 /** Where the fill-fast chain goes next. `null` ends it. */
 type AdvanceTarget = PickerField | ChainField
 
@@ -272,6 +279,9 @@ export function TransactionForm({
   const [autofilled, setAutofilled] = useState<ChainField[]>([])
   // Which mobile row is expanded for editing (accordion; null = all collapsed).
   const [expandedField, setExpandedField] = useState<string | null>(null)
+  // Set for exactly one expansion when the row should open without taking
+  // focus. Consumed by the effect below.
+  const skipAutoFocusRef = useRef(false)
   const isMobile = useIsMobile()
 
   // Accounts/categories created inline from the mobile pickers, merged into the
@@ -313,6 +323,14 @@ export function TransactionForm({
   // for them (they already show the list on expand).
   useEffect(() => {
     if (!expandedField) return
+    // BR-046: an autofill lands here with something to *read*. Focusing would
+    // raise the soft keyboard over the values that were just filled in, which
+    // is the one moment the user needs to see the form rather than type into
+    // it. The row still opens; the keyboard waits for a deliberate tap.
+    if (skipAutoFocusRef.current) {
+      skipAutoFocusRef.current = false
+      return
+    }
     const panel = document.querySelector(`[data-field-panel="${expandedField}"]`)
     const el = panel?.querySelector('input:not([type="hidden"]), textarea') as
       | HTMLInputElement
@@ -771,6 +789,9 @@ export function TransactionForm({
   // the *next required and still empty* field, so the chain stops as soon as
   // the mandatory path is covered and never hijacks a one-field correction.
   const advanceToRef = useRef<AdvanceTarget>(null)
+  // Whether that hop should land without raising the keyboard (set when the hop
+  // follows an autofill the user still has to read).
+  const advanceQuietRef = useRef(false)
 
   const openPicker = (field: PickerField) => {
     resetPickerState()
@@ -778,12 +799,19 @@ export function TransactionForm({
     setSheetField(isMobile ? field : null)
   }
 
-  const openDescription = () => {
+  /**
+   * `quiet` opens the description without the keyboard — see the effect above.
+   * The row still expands, so the field is visible and one tap from typing.
+   */
+  const openDescription = (quiet = false) => {
     setSheetField(null)
     // On mobile the row has to expand first; expanding it focuses the input on
-    // its own (see the `expandedField` effect).
+    // its own (see the `expandedField` effect) unless told not to. Only armed on
+    // mobile: desktop expands no panel here, so the flag would survive unread
+    // and swallow the next expansion's focus instead of this one's.
+    skipAutoFocusRef.current = quiet && isMobile
     setExpandedField(isMobile ? 'description' : null)
-    if (!isMobile) {
+    if (!isMobile && !quiet) {
       window.requestAnimationFrame(() => document.getElementById('description')?.focus())
     }
   }
@@ -794,9 +822,9 @@ export function TransactionForm({
     setTagPickerOpen(true)
   }
 
-  const goTo = (target: ChainField) => {
+  const goTo = (target: ChainField, quiet = false) => {
     if (target === 'description') {
-      openDescription()
+      openDescription(quiet)
       return
     }
     if (target === 'tags') {
@@ -808,10 +836,12 @@ export function TransactionForm({
 
   const closePicker = () => {
     const next = advanceToRef.current
+    const quiet = advanceQuietRef.current
     advanceToRef.current = null
+    advanceQuietRef.current = false
 
     if (next) {
-      goTo(next as ChainField)
+      goTo(next as ChainField, quiet)
       return
     }
     setExpandedField(null)
@@ -837,7 +867,7 @@ export function TransactionForm({
    * and nothing opens behind it.
    */
   const nextInChain = (
-    from: ChainField,
+    from: ChainStart,
     justFilled: Partial<Record<ChainField, boolean>> = {}
   ): ChainField | null => {
     const filled: Record<ChainField, boolean> = {
@@ -856,8 +886,10 @@ export function TransactionForm({
       // Tags are income/expense only (BR-023) and optional (BR-032).
       tags: showField('tags') && !isTransfer,
     }
-    const start = entryChain.indexOf(from)
-    if (start < 0) return null
+    // The amount sits before the chain rather than in it, so it starts at -1
+    // and considers every field — including the first.
+    const start = from === 'amount' ? -1 : entryChain.indexOf(from)
+    if (start < -1) return null
     return (
       entryChain.slice(start + 1).find((field) => rendered[field] && !filled[field]) ?? null
     )
@@ -866,10 +898,12 @@ export function TransactionForm({
   /** Queue the next field for `closePicker` to open once the picker dismisses. */
   const advanceAfter = (
     from: ChainField,
-    justFilled: Partial<Record<ChainField, boolean>> = {}
+    justFilled: Partial<Record<ChainField, boolean>> = {},
+    quiet = false
   ) => {
     if (!quickEntry.autoAdvance) return
     advanceToRef.current = nextInChain(from, justFilled)
+    advanceQuietRef.current = quiet
   }
 
   /**
@@ -982,7 +1016,9 @@ export function TransactionForm({
     const filled = applyCategoryMemory(id)
     const seeded = (Object.keys(filled) as ChainField[]).filter((field) => filled[field])
     setAutofilled(seeded)
-    advanceAfter('category', { ...filled, category: true })
+    // Seeded something → the next hop must not raise the keyboard, or the
+    // notice saying what was filled is covered before it can be read.
+    advanceAfter('category', { ...filled, category: true }, seeded.length > 0)
   }
 
   const selectPayee = (name: string) => {
@@ -2222,11 +2258,13 @@ export function TransactionForm({
             currencyCode={amountCurrencyCode}
             value={amountInput}
             onValueChange={setAmountInput}
-            // Enter on the amount starts the fill-fast chain at the first field
-            // still missing, so a whole entry can be typed without hunting.
+            // Enter on the amount opens the first field the entry is still
+            // missing. It asks the chain rather than naming a field, so it
+            // follows the field-order preference — naming `account` here is
+            // what sent Next to the account even with category first.
             onCommit={() => {
-              if (!accountId) openPicker('account')
-              else if (!categoryId) openPicker('category')
+              const first = nextInChain('amount')
+              if (first) goTo(first)
             }}
             size="lg"
             withCalculator
@@ -2544,50 +2582,54 @@ export function TransactionForm({
       )}
 
       {/* ── Actions ──────────────────────────────────────────────────── */}
-      <div className="sticky bottom-0 z-10 -mb-1 space-y-2 bg-popover pb-1 pt-2 sm:static sm:flex sm:flex-wrap sm:items-center sm:gap-2 sm:space-y-0 sm:bg-transparent sm:p-0">
+      {/* One row, not three stacked buttons. On a phone the sticky footer sits
+          above a soft keyboard that already owns half the screen, and every row
+          here is a row of form the user cannot see. So:
+
+          - **Cancel is gone** wherever the form is dismissable on its own. In a
+            dialog — which is every current caller — Back, Escape, the header's
+            X and the backdrop all already cancel, so a fourth way to do it was
+            only costing height. `cancelHref` still renders one, because a form
+            reached as a plain page has no other way out.
+          - **Save & add next** keeps its full label on desktop and shrinks to
+            its icon on mobile, where it sits directly beside the primary submit
+            and reads as "…and another". */}
+      <div className="sticky bottom-0 z-10 -mb-1 flex items-center gap-2 bg-popover pb-1 pt-2 sm:static sm:flex-wrap sm:bg-transparent sm:p-0">
         <SubmitButton
           type="submit"
           disabled={!canSubmit}
-          className="h-11 w-full rounded-xl text-sm font-semibold sm:h-9 sm:w-auto sm:rounded-lg"
+          className="h-10 flex-1 rounded-xl text-sm font-semibold sm:h-9 sm:flex-none sm:rounded-lg"
           pendingText={isTransfer ? t('transactionForm.creatingTransfer') : t('transactionForm.creatingTransaction')}
         >
           {isTransfer ? t('transactionForm.createTransfer') : t('transactionForm.createTransaction')}
         </SubmitButton>
-        <div className="flex gap-2 sm:contents">
-          {!isTransfer ? (
-            <SubmitButton
-              type="submit"
-              name="add_next"
-              value="true"
-              variant="outline"
-              disabled={!canSubmit}
-              className="h-11 flex-1 rounded-xl sm:h-9 sm:flex-none sm:rounded-lg"
-              pendingText={t('transactionForm.saving')}
-            >
-              {t('transactionForm.saveAndAddNext')}
-            </SubmitButton>
-          ) : null}
-          {onCancel ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-              className="h-11 flex-1 rounded-xl sm:h-9 sm:flex-none sm:rounded-lg"
-            >
-              {t('transactionForm.cancel')}
-            </Button>
-          ) : cancelHref ? (
-            <Link
-              href={cancelHref}
-              className={cn(
-                buttonVariants({ variant: 'outline' }),
-                'h-11 flex-1 rounded-xl sm:h-9 sm:flex-none sm:rounded-lg'
-              )}
-            >
-              {t('transactionForm.cancel')}
-            </Link>
-          ) : null}
-        </div>
+        {!isTransfer ? (
+          <SubmitButton
+            type="submit"
+            name="add_next"
+            value="true"
+            variant="outline"
+            disabled={!canSubmit}
+            aria-label={t('transactionForm.saveAndAddNext')}
+            title={t('transactionForm.saveAndAddNext')}
+            className="h-10 w-10 shrink-0 rounded-xl p-0 sm:h-9 sm:w-auto sm:rounded-lg sm:px-3"
+            pendingText={t('transactionForm.saving')}
+          >
+            <Plus className="size-4 sm:hidden" aria-hidden="true" />
+            <span className="hidden sm:inline">{t('transactionForm.saveAndAddNext')}</span>
+          </SubmitButton>
+        ) : null}
+        {!onCancel && cancelHref ? (
+          <Link
+            href={cancelHref}
+            className={cn(
+              buttonVariants({ variant: 'outline' }),
+              'h-10 shrink-0 rounded-xl sm:h-9 sm:rounded-lg'
+            )}
+          >
+            {t('transactionForm.cancel')}
+          </Link>
+        ) : null}
       </div>
     </form>
   )
