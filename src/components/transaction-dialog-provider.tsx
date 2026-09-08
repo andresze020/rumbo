@@ -470,15 +470,26 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
               : undefined
           }
           className={
-            // Centered dialog on desktop; native-style bottom sheet on mobile.
+            // Centered dialog on desktop; a full screen on mobile. It used to be
+            // a 92dvh bottom sheet, which left a strip of dashboard above it and
+            // spent the remaining 8% on nothing — while the form below still had
+            // to scroll. A phone entering a transaction is doing one thing, so it
+            // gets the whole screen: `h-dvh`, square corners, and the actions
+            // pushed to the bottom edge by the spacer inside the form.
             'max-h-[90dvh] overflow-y-auto sm:max-w-xl ' +
+            // Flex column on mobile so the form can claim the leftover height
+            // and pin its actions to the bottom edge; the desktop grid is
+            // untouched.
+            'max-sm:flex max-sm:flex-col max-sm:gap-3 ' +
             'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 ' +
-            'max-sm:max-h-[92dvh] max-sm:rounded-t-2xl max-sm:rounded-b-none ' +
-            'max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] ' +
+            'max-sm:h-dvh max-sm:max-h-dvh max-sm:rounded-none ' +
+            'max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] ' +
             'max-sm:data-open:slide-in-from-bottom-10 max-sm:data-closed:slide-out-to-bottom-10'
           }
         >
-          <div aria-hidden="true" className="mx-auto -mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
+          {/* The drag handle was a bottom-sheet affordance, and this is a full
+              screen now — nothing to drag it down by, and the header's X is the
+              way out. Desktop never showed it. */}
           {/* Screen-reader-only on every phone, not just under a keyboard: the
               title and its subtitle spend ~70px describing something the user
               just tapped a button to do, and the segmented control plus the

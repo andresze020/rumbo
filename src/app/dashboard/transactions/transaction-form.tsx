@@ -2258,7 +2258,11 @@ export function TransactionForm({
     ) : null
 
   return (
-    <form action={submitAction} onSubmit={rememberCategoryUsage} className="space-y-3">
+    <form
+      action={submitAction}
+      onSubmit={rememberCategoryUsage}
+      className="space-y-3 max-sm:flex max-sm:min-h-full max-sm:flex-1 max-sm:flex-col"
+    >
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
 
       <SelectorSheet
@@ -2650,38 +2654,56 @@ export function TransactionForm({
       {/* Unmounted rather than `hidden`: this row is a `flex` container, and a
           `display` utility beats the UA stylesheet's `[hidden] { display: none }`,
           so the attribute alone would leave the bar on screen. */}
+      {/* Pushes the actions to the bottom edge of the full-screen sheet when the
+          form is shorter than the screen. A flex spacer rather than `mt-auto`,
+          which would fight `space-y-3`'s own margin on the same side. */}
+      <div aria-hidden="true" className="hidden max-sm:block max-sm:flex-1" />
+
       {keyboardInset > 0 ? null : (
-      <div className="sticky bottom-0 z-10 -mb-1 flex items-center gap-2 bg-popover pb-1 pt-2 sm:static sm:flex-wrap sm:bg-transparent sm:p-0">
-        <SubmitButton
-          type="submit"
-          disabled={!canSubmit}
-          className="h-10 flex-1 rounded-xl text-sm font-semibold sm:h-9 sm:flex-none sm:rounded-lg"
-          pendingText={isTransfer ? t('transactionForm.creatingTransfer') : t('transactionForm.creatingTransaction')}
-        >
-          {isTransfer ? t('transactionForm.createTransfer') : t('transactionForm.createTransaction')}
-        </SubmitButton>
-        {!isTransfer ? (
+      <div className="sticky bottom-0 z-10 flex items-center gap-2 border-t bg-popover pb-1 pt-3 sm:static sm:flex-wrap sm:border-t-0 sm:bg-transparent sm:p-0">
+        {/* One split button on mobile, not a wide primary next to an orphaned
+            square. "Save" and "save and start another" are the same action with
+            one difference, so they read as one control divided in two: shared
+            shape, shared colour, a hairline between them. Desktop has room for
+            both labels, so the two halves come apart there and the divider and
+            the fixed width drop away. */}
+        <div className="flex flex-1 overflow-hidden rounded-xl sm:contents">
           <SubmitButton
             type="submit"
-            name="add_next"
-            value="true"
-            variant="outline"
             disabled={!canSubmit}
-            aria-label={t('transactionForm.saveAndAddNext')}
-            title={t('transactionForm.saveAndAddNext')}
-            className="h-10 w-10 shrink-0 rounded-xl p-0 sm:h-9 sm:w-auto sm:rounded-lg sm:px-3"
-            pendingText={t('transactionForm.saving')}
+            className="h-11 flex-1 rounded-none text-sm font-semibold sm:h-9 sm:flex-none sm:rounded-lg"
+            pendingText={isTransfer ? t('transactionForm.creatingTransfer') : t('transactionForm.creatingTransaction')}
           >
-            <Plus className="size-4 sm:hidden" aria-hidden="true" />
-            <span className="hidden sm:inline">{t('transactionForm.saveAndAddNext')}</span>
+            {isTransfer ? t('transactionForm.createTransfer') : t('transactionForm.createTransaction')}
           </SubmitButton>
-        ) : null}
+          {!isTransfer ? (
+            <SubmitButton
+              type="submit"
+              name="add_next"
+              value="true"
+              disabled={!canSubmit}
+              aria-label={t('transactionForm.saveAndAddNext')}
+              title={t('transactionForm.saveAndAddNext')}
+              className={cn(
+                'h-11 w-14 shrink-0 rounded-none border-l border-primary-foreground/25 p-0',
+                'sm:h-9 sm:w-auto sm:rounded-lg sm:border-l-0 sm:px-3',
+                // Desktop keeps the quieter outline treatment it had; on mobile
+                // it is the same solid as its other half.
+                'sm:border sm:border-border sm:bg-background sm:text-foreground sm:hover:bg-muted'
+              )}
+              pendingText={t('transactionForm.saving')}
+            >
+              <Plus className="size-4.5 sm:hidden" aria-hidden="true" />
+              <span className="hidden sm:inline">{t('transactionForm.saveAndAddNext')}</span>
+            </SubmitButton>
+          ) : null}
+        </div>
         {!onCancel && cancelHref ? (
           <Link
             href={cancelHref}
             className={cn(
               buttonVariants({ variant: 'outline' }),
-              'h-10 shrink-0 rounded-xl sm:h-9 sm:rounded-lg'
+              'h-11 shrink-0 rounded-xl px-4 sm:h-9 sm:rounded-lg'
             )}
           >
             {t('transactionForm.cancel')}
