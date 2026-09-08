@@ -15,27 +15,50 @@
 -- the guard is app-layer, so only the data can prove it held.
 -- ============================================================
 
--- 1. THE row. No cross-currency transfer template has ever auto-posted. The
---    log records one row per attempt; a `posted` row whose template moves
---    between two different currencies means a guard leaked and a fabricated
---    received amount is now sitting in the ledger.
+-- 1. THE row. Nothing the job auto-posted ever moved between two currencies.
+--
+--    Read from the posted transaction's own ENTRIES, not from the template's
+--    accounts. A log row is a historical fact; the template it points at is
+--    mutable. Joining the two would report a same-currency transfer that
+--    posted correctly and was later edited to point at a foreign-currency
+--    account as though a cross-currency transfer had auto-posted — a false
+--    alarm on data that is fine. The entries carry the currency each leg
+--    actually moved in and never change, so they answer the question that was
+--    asked: what did the job write?
+--
+--    A transfer's legs are one currency each; two distinct currency codes on
+--    one auto-posted transaction means the guard leaked and a fabricated
+--    received amount is now in the ledger. Income and expense auto-posts have
+--    a single entry, so they pass trivially and cost nothing to include.
+--
+--    Known blind spot, inherent to the log rather than to this check: the
+--    log cascades away if its template is deleted, and `transaction_id` is
+--    `on delete set null`. A leak whose template was deleted afterwards
+--    leaves nothing to find. Snapshotting the two currency codes on the log
+--    row at write time would close it — a migration, so not from here.
 with params as (
   select '__HOUSEHOLD_ID__'::uuid as household_id
+),
+autoposted as (
+  select distinct l.transaction_id
+  from public.recurring_autopost_log l
+  where l.household_id = (select household_id from params)
+    and l.status = 'posted'
+    and l.transaction_id is not null
+),
+leg_currencies as (
+  select
+    e.transaction_id,
+    count(distinct e.currency_code) as distinct_currencies
+  from public.transaction_entries e
+  join autoposted a on a.transaction_id = e.transaction_id
+  where e.household_id = (select household_id from params)
+  group by e.transaction_id
 )
 select
-  'UC-9 no cross-currency transfer template ever auto-posted' as check_name,
+  'UC-9 nothing auto-posted ever moved between two currencies' as check_name,
   not exists (
-    select 1
-    from public.recurring_autopost_log l
-    join public.recurring_transactions r
-      on r.id = l.recurring_id
-      and r.household_id = l.household_id
-    join public.accounts a_from on a_from.id = r.account_id
-    join public.accounts a_to on a_to.id = r.to_account_id
-    where l.household_id = (select household_id from params)
-      and l.status = 'posted'
-      and r.transaction_type = 'transfer'
-      and a_from.currency_code <> a_to.currency_code
+    select 1 from leg_currencies where distinct_currencies > 1
   ) as passed;
 
 -- 2. No cross-currency transfer template is left with `auto_post` enabled.
@@ -43,6 +66,13 @@ select
 --    cross-currency after the fact — by pointing at a different account, or by
 --    an account changing currency. If that ever happens the flag must not be
 --    silently carried forward waiting for the job to skip it every night.
+--
+--    This one reads the template's CURRENT accounts on purpose, unlike check 1.
+--    The question here is about the state of the world now — "is a template
+--    armed to do something it must refuse?" — not about what already happened,
+--    so mutable state is the correct source. Do not "fix" it into check 1's
+--    entry-derived shape: a template that has never posted has no entries to
+--    read, and that is exactly the case this needs to catch.
 with params as (
   select '__HOUSEHOLD_ID__'::uuid as household_id
 )
