@@ -479,11 +479,13 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
           }
         >
           <div aria-hidden="true" className="mx-auto -mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
-          {/* With the keyboard up the sheet is only a few hundred pixels tall,
-              and the title plus its subtitle eat a third of that describing
-              something you are already doing. Collapsed to screen-reader-only
-              (not unmounted) so the dialog keeps its accessible name. */}
-          <DialogHeader className={keyboardInset ? 'sr-only' : undefined}>
+          {/* Screen-reader-only on every phone, not just under a keyboard: the
+              title and its subtitle spend ~70px describing something the user
+              just tapped a button to do, and the segmented control plus the
+              AMOUNT label below say it anyway. `sr-only` rather than unmounted,
+              so the dialog keeps its accessible name — and `DialogContent`
+              draws its own close X, so nothing here is the way out. */}
+          <DialogHeader className="max-sm:sr-only">
             <DialogTitle>{t('transactionForm.dialogTitle')}</DialogTitle>
             <DialogDescription>
               {t('transactionForm.dialogDescription')}

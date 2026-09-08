@@ -139,7 +139,12 @@ export function TagMultiSelect({
         <input key={id} type="hidden" name="tag_id" value={id} />
       ))}
 
-      <div className="flex items-center justify-between gap-2">
+      {/* Hidden on phones: the picker button below already reads "Tags" when
+          nothing is selected, so this row is a second label for the same
+          control — and vertical space in the transaction sheet is the scarcest
+          thing there is. The "Manage" link goes with it; the tags screen is a
+          tap away in the nav. */}
+      <div className="flex items-center justify-between gap-2 max-sm:hidden">
         <Label>{label}</Label>
         <Link
           href="/dashboard/tags"
@@ -190,7 +195,7 @@ export function TagMultiSelect({
       ) : null}
 
       {helpText ? (
-        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+        <p className="flex items-center gap-1 text-xs text-muted-foreground max-sm:hidden">
           <Tags className="size-3" aria-hidden="true" />
           {helpText}
         </p>

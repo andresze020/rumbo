@@ -51,7 +51,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { roundToCents } from '@/lib/calc'
 import { fetchFxRate } from '@/lib/fx'
-import { currentTimeLocal, formatCurrency } from '@/lib/format'
+import {
+  currentTimeLocal,
+  formatCurrency,
+  formatIsoDate,
+  shiftIsoDate,
+  todayIsoDateLocal,
+} from '@/lib/format'
 import { useLanguage } from '@/components/language-provider'
 import { RECURRING_FREQUENCIES } from '@/lib/recurring/shared'
 import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
@@ -1063,7 +1069,7 @@ export function TransactionForm({
             resetPickerState()
             setExpandedField(open ? null : id)
           }}
-          className="flex w-full items-center gap-3 px-1 py-3 text-left"
+          className="flex w-full items-center gap-3 px-1 py-2.5 text-left"
         >
           <span className="shrink-0 text-muted-foreground">{icon}</span>
           <span className="shrink-0 text-sm font-medium">{label}</span>
@@ -1121,7 +1127,7 @@ export function TransactionForm({
           onOpen?.()
           setSheetField(id)
         }}
-        className="flex w-full items-center gap-3 px-1 py-3 text-left"
+        className="flex w-full items-center gap-3 px-1 py-2.5 text-left"
       >
         <span className="shrink-0 text-muted-foreground">{icon}</span>
         <span className="shrink-0 text-sm font-medium">{label}</span>
@@ -1741,6 +1747,16 @@ export function TransactionForm({
     )
   }
 
+  // BR-033's chips cover today and the two days before it. Anything else was
+  // chosen from the calendar, and only then does the calendar button need to
+  // spell the date out.
+  const chipDates = [0, -1, -2].map((offset) => shiftIsoDate(todayIsoDateLocal(), offset))
+  const dateIsOffChip = !chipDates.includes(transactionDate)
+  const offChipDateLabel = formatIsoDate(transactionDate, locale, {
+    month: 'short',
+    day: 'numeric',
+  })
+
   const accountPickerRow = pickerRow({
     id: 'account',
     icon: <Wallet className="size-4.5" />,
@@ -1813,16 +1829,42 @@ export function TransactionForm({
         </>
       )}
 
-      <div className="px-1 pb-2 pt-2">{dateChips}</div>
-
-      {editRow({
-        id: 'date',
-        icon: <CalendarDays className="size-4.5" />,
-        label: t('transactionForm.date'),
-        value: transactionDate,
-        placeholder: '—',
-        children: dateField,
-      })}
+      {/* Date: one row, not two. BR-033's chips and a separate Date row were
+          ~100px between them saying the same thing twice — the chips already
+          carry the answer for the dates that cover most manual entry. The
+          calendar button is the escape hatch to any other date, and it shows
+          that date once it is off-chip, so nothing became unreadable. */}
+      <div className="flex items-center gap-1.5 px-1 py-2">
+        <RelativeDateChips
+          value={transactionDate}
+          onSelect={changeTransactionDate}
+          className="min-w-0 flex-1"
+        />
+        <button
+          type="button"
+          aria-label={t('transactionForm.date')}
+          aria-expanded={expandedField === 'date'}
+          onClick={() => {
+            resetPickerState()
+            setExpandedField(expandedField === 'date' ? null : 'date')
+          }}
+          className={cn(
+            'flex h-[42px] shrink-0 items-center gap-1.5 rounded-lg border px-2 text-[11px] font-medium transition-colors',
+            dateIsOffChip
+              ? 'border-primary bg-primary/10 text-primary'
+              : 'border-border text-muted-foreground'
+          )}
+        >
+          <CalendarDays className="size-4" aria-hidden="true" />
+          {dateIsOffChip ? <span className="truncate">{offChipDateLabel}</span> : null}
+        </button>
+      </div>
+      <div
+        data-field-panel="date"
+        className={cn('px-1 pb-3 [&_label]:sr-only', expandedField === 'date' ? 'block' : 'hidden')}
+      >
+        {dateField}
+      </div>
 
       {/* BR-045: sits directly under the date, since together they are one
           "when". Absent entirely unless the user turned the field on. */}
