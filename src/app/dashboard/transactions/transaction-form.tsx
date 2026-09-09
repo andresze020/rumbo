@@ -1519,6 +1519,34 @@ export function TransactionForm({
           </div>
         ) : (
           <>
+            {/* Above the list, not below it. These are the categories this
+                household actually uses, and at the bottom of a full-screen
+                picker they sat below the fold — invisible exactly when they
+                would have saved the scroll. */}
+            {frequentCategories.length > 0 && !categorySearch.trim() ? (
+              <div className="mb-2 flex flex-wrap items-center gap-1.5 border-b pb-2">
+                <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
+                {frequentCategories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => {
+                      selectCategory(category.id)
+                      closePicker()
+                    }}
+                    className={cn(
+                      'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
+                      categoryId === category.id
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                  >
+                    {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
+                    {categoryName(category)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {withSearch ? categorySearchField : null}
             <div className={cn('sm:max-h-72 sm:overflow-y-auto', withSearch && 'mt-2')}>
               {query
@@ -1612,30 +1640,6 @@ export function TransactionForm({
               ) : null}
             </div>
 
-            {frequentCategories.length > 0 && !categorySearch.trim() ? (
-              <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t pt-2">
-                <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
-                {frequentCategories.map((category) => (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => {
-                      selectCategory(category.id)
-                      closePicker()
-                    }}
-                    className={cn(
-                      'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
-                      categoryId === category.id
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
-                    {categoryName(category)}
-                  </button>
-                ))}
-              </div>
-            ) : null}
           </>
         )}
       </>

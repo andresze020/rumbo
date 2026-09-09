@@ -23,7 +23,9 @@ import {
   getQuickAddFormData,
   type QuickAddFormData,
 } from '@/app/dashboard/quick-add-actions'
+import { X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { useBackDismiss } from '@/lib/use-back-dismiss'
 import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
 import { todayIsoDateLocal } from '@/lib/format'
@@ -200,6 +202,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t } = useLanguage()
+  const ui = useUiTranslation()
   const keyboardInset = useSoftKeyboardInset()
   useKeepFocusedFieldVisible(keyboardInset)
 
@@ -462,6 +465,10 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
         }}
       >
         <DialogContent
+          // Own close button: the built-in one is absolutely positioned in the
+          // corner, where on a phone it lands on top of the type selector's
+          // "Transfer". Ours gets its own row instead (see below).
+          showCloseButton={false}
           // Lift the mobile bottom sheet above the on-screen keyboard so its
           // footer buttons stay reachable; no-op on desktop (inset is 0).
           style={
@@ -484,23 +491,27 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
             'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 ' +
             'max-sm:h-dvh max-sm:max-h-dvh max-sm:rounded-none ' +
             'max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] ' +
-            // The close X is the only chrome a full-screen form has left, and
-            // `DialogContent`'s default ghost icon-sm reads as a stray glyph in
-            // the corner at that size. Scoped to this dialog rather than
-            // changed in `ui/dialog.tsx`, which every other dialog shares.
-            'max-sm:[&>[data-slot=dialog-close]]:top-3 ' +
-            'max-sm:[&>[data-slot=dialog-close]]:right-3 ' +
-            'max-sm:[&>[data-slot=dialog-close]]:size-9 ' +
-            'max-sm:[&>[data-slot=dialog-close]]:rounded-full ' +
-            'max-sm:[&>[data-slot=dialog-close]]:bg-muted ' +
-            'max-sm:[&>[data-slot=dialog-close]]:text-foreground ' +
-            "max-sm:[&>[data-slot=dialog-close]_svg:not([class*='size-'])]:size-5 " +
             'max-sm:data-open:slide-in-from-bottom-10 max-sm:data-closed:slide-out-to-bottom-10'
           }
         >
           {/* The drag handle was a bottom-sheet affordance, and this is a full
-              screen now — nothing to drag it down by, and the header's X is the
-              way out. Desktop never showed it. */}
+              screen now — nothing to drag it down by, and this X is the way
+              out. Desktop never showed the handle. */}
+
+          {/* A row of its own on mobile, not a corner overlay: absolutely
+              positioned it sat on top of the type selector and clipped
+              "Transfer". On desktop it goes back to the corner, where there is
+              a title bar to sit beside and nothing to collide with. */}
+          <div className="flex shrink-0 justify-end sm:absolute sm:top-2 sm:right-2 sm:z-10">
+            <button
+              type="button"
+              onClick={closeDialog}
+              aria-label={ui('Close')}
+              className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground transition-colors active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-7 sm:bg-transparent sm:text-muted-foreground sm:hover:bg-muted"
+            >
+              <X className="size-5 sm:size-4" aria-hidden="true" />
+            </button>
+          </div>
           {/* Screen-reader-only on every phone, not just under a keyboard: the
               title and its subtitle spend ~70px describing something the user
               just tapped a button to do, and the segmented control plus the
