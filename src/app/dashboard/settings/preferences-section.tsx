@@ -212,7 +212,7 @@ export function PreferencesSection({
               name="autofill_from_category"
               defaultChecked={preferences.quickEntry.autofillFromLastInCategory}
               label="Fill from the last entry in the category"
-              description="When you pick a category, copy the account, payee and tags from the most recent transaction in it. Only ever fills fields you have left empty, and every value stays editable."
+              description="When you pick a category, copy the account, payee and tags from the most recent transaction in it, and offer that category's recent descriptions as one-tap chips. Only ever fills fields you have left empty, and every value stays editable. Untick all three below to get the description chips and nothing else."
             />
 
             <div className="space-y-2 rounded-lg border border-dashed p-3">

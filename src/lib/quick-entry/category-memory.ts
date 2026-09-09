@@ -21,6 +21,14 @@ export type CategoryEntryMemory = Record<
     accountId: string | null
     payeeName: string | null
     tagIds: string[]
+    /**
+     * The descriptions most recently used in this category, newest first and
+     * de-duplicated. Offered as one-tap chips rather than filled in: unlike the
+     * account or the payee, a description is genuinely different most times, so
+     * guessing one is wrong more often than right — but *showing* the last few
+     * beats hunting for the browser's own cached-input strip.
+     */
+    descriptions: string[]
   }
 >
 
@@ -32,7 +40,11 @@ export type CategoryEntryMemory = Record<
  */
 const LOOKBACK_TRANSACTIONS = 400
 
+/** How many past descriptions to offer per category. */
+const MAX_DESCRIPTIONS = 3
+
 type MemoryRow = {
+  description: string | null
   payees: { name: string } | { name: string }[] | null
   transaction_allocations: { category_id: string }[] | null
   transaction_entries: { account_id: string }[] | null
@@ -66,7 +78,8 @@ export async function loadCategoryEntryMemory(
   const { data, error } = await supabase
     .from('transactions')
     .select(
-      `payees(name),
+      `description,
+       payees(name),
        transaction_allocations(category_id),
        transaction_entries(account_id),
        transaction_tags(tag_id)`
@@ -93,9 +106,26 @@ export async function loadCategoryEntryMemory(
     const name = payeeName(row.payees)
     const tagIds = (row.transaction_tags ?? []).map((tag) => tag.tag_id)
 
+    const description = row.description?.trim() || null
+
     for (const { category_id: categoryId } of categories) {
-      if (!categoryId || memory[categoryId]) continue
-      memory[categoryId] = { accountId, payeeName: name, tagIds }
+      if (!categoryId) continue
+      // The first row wins for account / payee / tags — rows arrive newest
+      // first, so that is the most recent entry. Descriptions keep collecting
+      // past it, since the point is to offer a few to choose between.
+      const entry = (memory[categoryId] ??= {
+        accountId,
+        payeeName: name,
+        tagIds,
+        descriptions: [],
+      })
+      if (
+        description &&
+        entry.descriptions.length < MAX_DESCRIPTIONS &&
+        !entry.descriptions.includes(description)
+      ) {
+        entry.descriptions.push(description)
+      }
     }
   }
 

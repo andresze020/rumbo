@@ -92,7 +92,15 @@ export function SelectorSheet({
     <div
       role="dialog"
       aria-modal="true"
-      className="vv-pin-screen fixed inset-0 z-[60] flex flex-col sm:hidden"
+      // `h-dvh` and an opaque background on the *outer* box, not just the panel.
+      // `inset-0` is not the screen here: the transaction dialog carries
+      // `translate-x-0`/`translate-y-0` on mobile, and any `translate` other
+      // than `none` makes an element a containing block for its `fixed`
+      // descendants — so this sheet is measured against the dialog, which the
+      // keyboard shortens. That left a band below the list showing the form
+      // behind it. Sizing to the viewport and painting the whole box closes it
+      // whatever the dialog's height turns out to be.
+      className="vv-pin-screen fixed inset-0 z-[60] flex h-dvh flex-col bg-background sm:hidden"
     >
       <div
         className={cn(

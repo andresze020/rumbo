@@ -1783,6 +1783,12 @@ export function TransactionForm({
     )
   }
 
+  // BR-046: what this category's past entries were called. Empty until a
+  // category is picked, and empty for a brand-new one.
+  const descriptionSuggestions = categoryId
+    ? (categoryMemory?.[categoryId]?.descriptions ?? [])
+    : []
+
   // BR-033's chips cover today and the two days before it. Anything else was
   // chosen from the calendar, and only then does the calendar button need to
   // spell the date out.
@@ -1977,6 +1983,33 @@ export function TransactionForm({
         children: (
           <div className="space-y-1.5">
             <Label htmlFor="description">{t('transactionForm.description')}</Label>
+            {/* BR-046: the descriptions this category has carried before, as
+                one-tap chips. The browser offers the same thing from its own
+                cache of submitted values, but that list is per field name
+                across every site, sits in a keyboard strip nobody styled, and
+                knows nothing about which category you just picked. This does.
+                Offered, never filled: unlike the account or the payee, a
+                description really is different most times. */}
+            {descriptionSuggestions.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 pb-0.5">
+                {descriptionSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => setDescription(suggestion)}
+                    className={cn(
+                      'flex h-8 max-w-full items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
+                      description === suggestion
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                  >
+                    <Sparkles className="size-3 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{suggestion}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <Input
               id="description"
               name="description"
