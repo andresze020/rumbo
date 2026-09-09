@@ -2013,6 +2013,12 @@ export function TransactionForm({
             <Input
               id="description"
               name="description"
+              // The chips above are this field's suggestions now. The browser's
+              // own list came from its cache of submitted values, keyed on the
+              // field name across every site, and it knew nothing about the
+              // category — so it sat in a keyboard strip nobody styled, offering
+              // worse answers than the row right above it.
+              autoComplete="off"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               onKeyDown={(e) => {
@@ -2436,7 +2442,12 @@ export function TransactionForm({
           {/* Description: kept essential (visible on mobile too). */}
           <div className="space-y-1.5 col-span-2">
             <Label htmlFor="description">{t('transactionForm.description')}</Label>
-            <Input id="description" name="description" defaultValue={defaultDescription} />
+            <Input
+              id="description"
+              name="description"
+              autoComplete="off"
+              defaultValue={defaultDescription}
+            />
           </div>
         </div>
       ) : (
@@ -2492,7 +2503,12 @@ export function TransactionForm({
 
           <div className="space-y-1.5 col-span-2">
             <Label htmlFor="description">{t('transactionForm.description')}</Label>
-            <Input id="description" name="description" defaultValue={defaultDescription} />
+            <Input
+              id="description"
+              name="description"
+              autoComplete="off"
+              defaultValue={defaultDescription}
+            />
           </div>
 
           {/* UC-10: turn a normal entry into a recurring one. Kept essential so

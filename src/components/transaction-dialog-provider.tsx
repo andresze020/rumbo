@@ -85,14 +85,24 @@ function todayIsoDate() {
  * been resized and lands in the wrong place, so redo it against the final
  * geometry.
  */
-function useKeepFocusedFieldVisible(keyboardInset: number) {
+function useKeepFocusedFieldVisible(keyboardOpen: boolean) {
   useEffect(() => {
-    if (!keyboardInset) return
+    if (!keyboardOpen) return
 
     const reveal = () => {
       const active = document.activeElement
       if (!(active instanceof HTMLElement)) return
       if (!active.matches('input, select, textarea')) return
+
+      // Only when the field is actually out of the way. Scrolling a field that
+      // is already on screen is what made a deliberate scroll snap back: the
+      // user drags, this fires, and the page yanks itself home.
+      const rect = active.getBoundingClientRect()
+      const visibleBottom = window.visualViewport
+        ? window.visualViewport.height
+        : window.innerHeight
+      if (rect.top >= 0 && rect.bottom <= visibleBottom) return
+
       // Top, not centre. Centring was there to keep the field clear of the
       // sticky action bar, which now hides itself while the keyboard is up —
       // and centring spent the whole sheet on the one field you are already
@@ -102,17 +112,23 @@ function useKeepFocusedFieldVisible(keyboardInset: number) {
     }
 
     // The sheet resizes a frame or two behind the keyboard animation; wait for
-    // the new height before deciding where the middle is.
+    // the new height before deciding where the top is.
     const timer = window.setTimeout(reveal, 150)
-    // Moving between fields while the keyboard is already up never changes the
-    // inset, so this effect would not re-run on its own.
+    // Moving between fields while the keyboard is already up does not reopen
+    // it, so this effect would not re-run on its own.
     document.addEventListener('focusin', reveal)
 
     return () => {
       window.clearTimeout(timer)
       document.removeEventListener('focusin', reveal)
     }
-  }, [keyboardInset])
+    // Deliberately the *boolean*, not the pixel inset. Scrolling with the
+    // keyboard up hides and shows the browser's URL bar, which changes
+    // `window.innerHeight` and so the measured inset — and keying this effect
+    // on that number meant every one of those wobbles re-ran it and dragged the
+    // page back to the focused field mid-scroll. Only opening the keyboard
+    // should reveal anything; the guard above handles the rest.
+  }, [keyboardOpen])
 }
 
 /**
@@ -204,7 +220,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   const { t } = useLanguage()
   const ui = useUiTranslation()
   const keyboardInset = useSoftKeyboardInset()
-  useKeepFocusedFieldVisible(keyboardInset)
+  useKeepFocusedFieldVisible(keyboardInset > 0)
 
   // Read pending "Save and Add Next" defaults straight from the URL on first
   // render so a freshly mounted provider (e.g. after a server-action redirect
