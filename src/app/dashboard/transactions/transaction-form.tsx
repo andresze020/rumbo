@@ -1268,10 +1268,58 @@ export function TransactionForm({
   // Account picker used by the account / from / to rows: a searchable list plus
   // a "Create …" row that drills into a compact create sub-view (name +
   // type + currency) so the row stays lean until you actually add an account.
+  // The pickers' search boxes, hoisted out of their bodies so the mobile sheet
+  // can pin them under its header (see `SelectorSheet`'s `search` prop) while
+  // the desktop popover keeps them inline at the top of the list.
+  //
+  // `type="search"` + `autoComplete="off"`: these are filters over the
+  // household's own data, and without the hint Android's autofill offers to
+  // fill them from the saved-passwords / cards / addresses profile.
+  const accountSearchField = (
+    <Input
+      placeholder="Search or add an account"
+      value={accountSearch}
+      onChange={(e) => setAccountSearch(e.target.value)}
+      type="search"
+      autoComplete="off"
+    />
+  )
+
+  const categorySearchField = (
+    <Input
+      placeholder="Search or add a category"
+      value={categorySearch}
+      onChange={(e) => setCategorySearch(e.target.value)}
+      type="search"
+      autoComplete="off"
+    />
+  )
+
+  const subcategorySearchField = (
+    <Input
+      placeholder="Search or add a subcategory"
+      value={subcategorySearch}
+      onChange={(e) => setSubcategorySearch(e.target.value)}
+      type="search"
+      autoComplete="off"
+    />
+  )
+
+  const payeeSearchField = (
+    <Input
+      placeholder="Search or add a payee"
+      value={payeeName}
+      onChange={(e) => setPayeeName(e.target.value)}
+      type="search"
+      autoComplete="off"
+    />
+  )
+
   const accountPickerBody = (
     selectedId: string,
     onSelect: (id: string) => void,
-    disabledId?: string
+    disabledId?: string,
+    withSearch = true
   ) => {
     const query = accountSearch.trim().toLowerCase()
     const matches = availableAccounts.filter((a) =>
@@ -1326,12 +1374,8 @@ export function TransactionForm({
           </div>
         ) : (
           <>
-            <Input
-              placeholder="Search or add an account"
-              value={accountSearch}
-              onChange={(e) => setAccountSearch(e.target.value)}
-            />
-            <div className="mt-2 sm:max-h-72 sm:overflow-y-auto">
+            {withSearch ? accountSearchField : null}
+            <div className={cn('sm:max-h-72 sm:overflow-y-auto', withSearch && 'mt-2')}>
               {matches.map((a) => (
                 <button
                   key={a.id}
@@ -1380,7 +1424,7 @@ export function TransactionForm({
   // Category picker: searchable parent list that drills into a parent's
   // subcategories (hiding the parent list so there's no scrolling), plus a
   // payee-style "Create …" row for a brand-new top-level category.
-  const categoryPickerBody = () => {
+  const categoryPickerBody = (withSearch = true) => {
     const query = categorySearch.trim().toLowerCase()
     const parents = mobileParentCategories
     // While searching, match across every compatible category (parents AND
@@ -1431,11 +1475,7 @@ export function TransactionForm({
                 </div>
               </>
             )}
-            <Input
-              placeholder="Search or add a subcategory"
-              value={subcategorySearch}
-              onChange={(e) => setSubcategorySearch(e.target.value)}
-            />
+            {withSearch ? subcategorySearchField : null}
             {optionList(
               [
                 // Select the parent itself (e.g. "All Travel") — the "no
@@ -1479,12 +1519,8 @@ export function TransactionForm({
           </div>
         ) : (
           <>
-            <Input
-              placeholder="Search or add a category"
-              value={categorySearch}
-              onChange={(e) => setCategorySearch(e.target.value)}
-            />
-            <div className="mt-2 sm:max-h-72 sm:overflow-y-auto">
+            {withSearch ? categorySearchField : null}
+            <div className={cn('sm:max-h-72 sm:overflow-y-auto', withSearch && 'mt-2')}>
               {query
                 ? searchMatches.map((c) => {
                     const parent = c.parent_category_id
@@ -1610,17 +1646,13 @@ export function TransactionForm({
   // hierarchy — plus a "Create …" row. The name is resolved to a payee_id by
   // the server action on submit (get-or-create), so "creating" here is just
   // keeping the typed text and closing.
-  const payeePickerBody = () => {
+  const payeePickerBody = (withSearch = true) => {
     const trimmed = payeeName.trim()
     const normalized = trimmed.toLowerCase()
     return (
       <>
-        <Input
-          placeholder="Search or add a payee"
-          value={payeeName}
-          onChange={(e) => setPayeeName(e.target.value)}
-        />
-        <div className="mt-2 sm:max-h-[60vh] sm:overflow-y-auto">
+        {withSearch ? payeeSearchField : null}
+        <div className={cn('sm:max-h-[60vh] sm:overflow-y-auto', withSearch && 'mt-2')}>
           {payees
             .filter((p) => p.name.toLowerCase().includes(normalized))
             .slice(0, 50)
@@ -2213,17 +2245,27 @@ export function TransactionForm({
       ? ui('New account')
       : baseSheetTitle
 
+  // Every picker hands its search box to the sheet instead of keeping it at the
+  // top of the list, so it stays under the header while the list scrolls.
   let sheetBody: ReactNode = null
+  let sheetSearch: ReactNode = null
   if (sheetField === 'category') {
-    sheetBody = categoryPickerBody()
+    sheetBody = categoryPickerBody(false)
+    sheetSearch = categoryDrillParentId ? subcategorySearchField : categorySearchField
   } else if (sheetField === 'payee') {
-    sheetBody = payeePickerBody()
-  } else if (sheetField === 'account') {
-    sheetBody = accountPickerBody(accountId, selectAccount)
-  } else if (sheetField === 'from') {
-    sheetBody = accountPickerBody(fromAccountId, selectFromAccount, toAccountId)
-  } else if (sheetField === 'to') {
-    sheetBody = accountPickerBody(toAccountId, selectToAccount, fromAccountId)
+    sheetBody = payeePickerBody(false)
+    sheetSearch = payeeSearchField
+  } else if (sheetField === 'account' || sheetField === 'from' || sheetField === 'to') {
+    const [selectedId, onSelect, disabledId] =
+      sheetField === 'account'
+        ? ([accountId, selectAccount, undefined] as const)
+        : sheetField === 'from'
+          ? ([fromAccountId, selectFromAccount, toAccountId] as const)
+          : ([toAccountId, selectToAccount, fromAccountId] as const)
+    sheetBody = accountPickerBody(selectedId, onSelect, disabledId, false)
+    // The inline "new account" form replaces the list entirely — there is
+    // nothing left to search.
+    sheetSearch = showAccountCreate ? null : accountSearchField
   }
 
   /**
@@ -2270,6 +2312,7 @@ export function TransactionForm({
         onClose={closePicker}
         onBack={sheetBack}
         title={sheetTitle}
+        search={sheetSearch}
       >
         {sheetBody}
       </SelectorSheet>

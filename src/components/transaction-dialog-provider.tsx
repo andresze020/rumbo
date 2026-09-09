@@ -484,6 +484,17 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
             'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 ' +
             'max-sm:h-dvh max-sm:max-h-dvh max-sm:rounded-none ' +
             'max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] ' +
+            // The close X is the only chrome a full-screen form has left, and
+            // `DialogContent`'s default ghost icon-sm reads as a stray glyph in
+            // the corner at that size. Scoped to this dialog rather than
+            // changed in `ui/dialog.tsx`, which every other dialog shares.
+            'max-sm:[&>[data-slot=dialog-close]]:top-3 ' +
+            'max-sm:[&>[data-slot=dialog-close]]:right-3 ' +
+            'max-sm:[&>[data-slot=dialog-close]]:size-9 ' +
+            'max-sm:[&>[data-slot=dialog-close]]:rounded-full ' +
+            'max-sm:[&>[data-slot=dialog-close]]:bg-muted ' +
+            'max-sm:[&>[data-slot=dialog-close]]:text-foreground ' +
+            "max-sm:[&>[data-slot=dialog-close]_svg:not([class*='size-'])]:size-5 " +
             'max-sm:data-open:slide-in-from-bottom-10 max-sm:data-closed:slide-out-to-bottom-10'
           }
         >

@@ -46,15 +46,15 @@ type TagMultiSelectProps = {
  * "cleared all tags" (present, empty) from "form didn't manage tags" (absent).
  *
  * Two surfaces for the picker itself, for one reason: the soft keyboard.
- * - **Desktop** gets the inline panel below the field.
- * - **Mobile** gets the same bottom `SelectorSheet` the account, category and
- *   payee pickers use. The old inline panel opened *in place*, wherever the
- *   field happened to sit in a long scrolling form, then auto-focused its search
- *   input — so the keyboard rose and buried both the list and the chips you were
- *   editing, and the only way back out was the button you came in through. The
- *   sheet is anchored to the bottom of the screen instead, repeats the selected
- *   chips at the top where they stay visible above the keyboard, and closes from
- *   its own header, the backdrop, Escape and Android Back.
+ * - **Desktop** gets the inline panel below the field, search at the top.
+ * - **Mobile** gets the same full-screen `SelectorSheet` the account, category
+ *   and payee pickers use, with the search **pinned under the sheet's header**
+ *   so it cannot scroll away while you type. The old inline panel opened *in
+ *   place*, wherever the field happened to sit in a scrolling form, and
+ *   auto-focused its search — so the keyboard rose and buried both the list and
+ *   the chips you were editing, and the only way back out was the button you
+ *   came in through. The sheet repeats the selected chips above the list and
+ *   closes from its header, Escape and Android Back.
  *
  * Neither surface autofocuses. The keyboard appears when the user taps the
  * search field on purpose, and not before.
@@ -87,18 +87,56 @@ export function TagMultiSelect({
 
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const open = openProp ?? uncontrolledOpen
+  const [search, setSearch] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
+
+  /**
+   * Search and error are cleared on the way *out*, not on the way in: every
+   * open then starts blank whoever opened it — the chip below, or the
+   * transaction form's entry chain — and no effect has to reset state after
+   * the fact.
+   */
   const setOpen = (next: boolean) => {
+    if (!next) {
+      setSearch('')
+      setCreateError('')
+    }
     if (openProp === undefined) setUncontrolledOpen(next)
     onOpenChange?.(next)
   }
+
+  const selectedSet = useMemo(() => new Set(selected), [selected])
+  const query = search.trim()
+  const normalizedQuery = query.toLowerCase()
+  const matches = useMemo(
+    () =>
+      allTags.filter(
+        (tag) => !normalizedQuery || tag.name.toLowerCase().includes(normalizedQuery)
+      ),
+    [allTags, normalizedQuery]
+  )
+  const hasExact = allTags.some((tag) => tag.name.toLowerCase() === normalizedQuery)
+  const canCreate = Boolean(query) && !hasExact
 
   function toggle(id: string) {
     setSelected(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id])
   }
 
-  function handleCreated(tag: TagOption) {
+  async function handleCreate() {
+    if (!canCreate || creating) return
+    setCreating(true)
+    setCreateError('')
+    const result = await quickCreateTag(query)
+    setCreating(false)
+    if ('error' in result) {
+      setCreateError(result.error)
+      return
+    }
+    const tag = result.tag
     setCreatedTags((prev) => (prev.some((t) => t.id === tag.id) ? prev : [...prev, tag]))
     if (!selected.includes(tag.id)) setSelected([...selected, tag.id])
+    setSearch('')
   }
 
   const selectedTags = selected
@@ -123,13 +161,89 @@ export function TagMultiSelect({
     </>
   )
 
-  const pickerBody = (
-    <TagPickerBody
-      tags={allTags}
-      selected={selected}
-      onToggle={toggle}
-      onCreated={handleCreated}
+  // `type="search"` + `autoComplete="off"`: this filters the household's own
+  // tags, and without the hint Android's autofill offers to fill it from the
+  // saved-passwords / cards / addresses profile.
+  const searchField = (
+    <Input
+      placeholder="Search or create a tag…"
+      value={search}
+      type="search"
+      autoComplete="off"
+      onChange={(e) => {
+        setSearch(e.target.value)
+        setCreateError('')
+      }}
+      onKeyDown={(e) => {
+        // Enter creates the typed tag when it doesn't already exist.
+        if (e.key === 'Enter' && canCreate) {
+          e.preventDefault()
+          void handleCreate()
+        }
+      }}
+      className="h-9"
     />
+  )
+
+  // The matching tags plus the "Create …" row. The search box is a sibling of
+  // this, not part of it, so the sheet can pin it above the scrolling list.
+  const optionList = (
+    <>
+      {matches.map((tag) => {
+        const isSelected = selectedSet.has(tag.id)
+        return (
+          <button
+            key={tag.id}
+            type="button"
+            onClick={() => toggle(tag.id)}
+            className={cn(
+              'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
+              isSelected ? 'bg-primary/10' : 'hover:bg-muted'
+            )}
+          >
+            <span
+              aria-hidden="true"
+              className="size-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: tag.color ?? 'var(--muted-foreground)' }}
+            />
+            <span className="min-w-0 flex-1 truncate">{tag.name}</span>
+            {isSelected ? (
+              <Check className="size-4 shrink-0 text-primary" aria-hidden="true" />
+            ) : null}
+          </button>
+        )
+      })}
+
+      {canCreate ? (
+        <button
+          type="button"
+          disabled={creating}
+          onClick={handleCreate}
+          className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-muted disabled:opacity-50"
+        >
+          <Plus className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate">
+            {creating ? (
+              'Creating…'
+            ) : (
+              <>
+                Create “<span className="font-semibold">{query}</span>”
+              </>
+            )}
+          </span>
+        </button>
+      ) : null}
+
+      {matches.length === 0 && !query ? (
+        <p className="px-2 py-2 text-xs text-muted-foreground">
+          Type to create your first tag.
+        </p>
+      ) : null}
+
+      {createError ? (
+        <p className="px-1 pt-1 text-xs text-destructive">{createError}</p>
+      ) : null}
+    </>
   )
 
   return (
@@ -171,7 +285,12 @@ export function TagMultiSelect({
       </div>
 
       {isMobile ? (
-        <SelectorSheet open={open} onClose={() => setOpen(false)} title={label}>
+        <SelectorSheet
+          open={open}
+          onClose={() => setOpen(false)}
+          title={label}
+          search={searchField}
+        >
           {/* The current selection, repeated inside the sheet. This is the whole
               point of the sheet: with the keyboard up, the field back in the
               form is off-screen, so what you have already tagged has to be
@@ -181,7 +300,7 @@ export function TagMultiSelect({
               {removableChips}
             </div>
           ) : null}
-          {pickerBody}
+          {optionList}
           <button
             type="button"
             onClick={() => setOpen(false)}
@@ -191,7 +310,10 @@ export function TagMultiSelect({
           </button>
         </SelectorSheet>
       ) : open ? (
-        <div className="rounded-xl border bg-popover p-2 shadow-sm">{pickerBody}</div>
+        <div className="rounded-xl border bg-popover p-2 shadow-sm">
+          {searchField}
+          <div className="mt-2 max-h-48 overflow-y-auto">{optionList}</div>
+        </div>
       ) : null}
 
       {helpText ? (
@@ -201,132 +323,5 @@ export function TagMultiSelect({
         </p>
       ) : null}
     </div>
-  )
-}
-
-/**
- * The search box, the matching list and the "Create …" row — the picker's whole
- * interior, identical on the sheet and on the inline panel so the two can't
- * drift apart.
- *
- * A separate component so that the search text and the create error live and
- * die with an *open* picker: both surfaces unmount this when they close, so
- * every open starts on a clean list without an effect resetting anything.
- */
-function TagPickerBody({
-  tags,
-  selected,
-  onToggle,
-  onCreated,
-}: {
-  tags: TagOption[]
-  selected: string[]
-  onToggle: (id: string) => void
-  onCreated: (tag: TagOption) => void
-}) {
-  const [search, setSearch] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState('')
-
-  const selectedSet = useMemo(() => new Set(selected), [selected])
-  const query = search.trim()
-  const normalizedQuery = query.toLowerCase()
-  const matches = useMemo(
-    () =>
-      tags.filter(
-        (tag) => !normalizedQuery || tag.name.toLowerCase().includes(normalizedQuery)
-      ),
-    [tags, normalizedQuery]
-  )
-  const hasExact = tags.some((tag) => tag.name.toLowerCase() === normalizedQuery)
-
-  async function handleCreate() {
-    if (!query || creating) return
-    setCreating(true)
-    setCreateError('')
-    const result = await quickCreateTag(query)
-    setCreating(false)
-    if ('error' in result) {
-      setCreateError(result.error)
-      return
-    }
-    onCreated(result.tag)
-    setSearch('')
-  }
-
-  return (
-    <>
-      <Input
-        placeholder="Search or create a tag…"
-        value={search}
-        onChange={(e) => {
-          setSearch(e.target.value)
-          setCreateError('')
-        }}
-        onKeyDown={(e) => {
-          // Enter creates the typed tag when it doesn't already exist.
-          if (e.key === 'Enter' && query && !hasExact) {
-            e.preventDefault()
-            void handleCreate()
-          }
-        }}
-        className="h-9"
-      />
-      <div className="mt-2 max-h-48 overflow-y-auto">
-        {matches.map((tag) => {
-          const isSelected = selectedSet.has(tag.id)
-          return (
-            <button
-              key={tag.id}
-              type="button"
-              onClick={() => onToggle(tag.id)}
-              className={cn(
-                'flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm',
-                isSelected ? 'bg-primary/10' : 'hover:bg-muted'
-              )}
-            >
-              <span
-                aria-hidden="true"
-                className="size-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: tag.color ?? 'var(--muted-foreground)' }}
-              />
-              <span className="min-w-0 flex-1 truncate">{tag.name}</span>
-              {isSelected ? (
-                <Check className="size-4 shrink-0 text-primary" aria-hidden="true" />
-              ) : null}
-            </button>
-          )
-        })}
-
-        {query && !hasExact ? (
-          <button
-            type="button"
-            disabled={creating}
-            onClick={handleCreate}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-muted disabled:opacity-50"
-          >
-            <Plus className="size-4 shrink-0 text-primary" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate">
-              {creating ? (
-                'Creating…'
-              ) : (
-                <>
-                  Create “<span className="font-semibold">{query}</span>”
-                </>
-              )}
-            </span>
-          </button>
-        ) : null}
-
-        {matches.length === 0 && !query ? (
-          <p className="px-2 py-2 text-xs text-muted-foreground">
-            Type to create your first tag.
-          </p>
-        ) : null}
-      </div>
-      {createError ? (
-        <p className="px-1 pt-1 text-xs text-destructive">{createError}</p>
-      ) : null}
-    </>
   )
 }
