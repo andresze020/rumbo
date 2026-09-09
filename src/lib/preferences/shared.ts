@@ -24,6 +24,18 @@ export type TransactionFormField = (typeof TRANSACTION_FORM_FIELDS)[number]
 export const TRANSACTION_PERIODS = ['current_month', 'last_30_days', 'all_time'] as const
 export type TransactionPeriod = (typeof TRANSACTION_PERIODS)[number]
 
+/**
+ * BR-046 — where the entry chain starts. `category_first` puts the category
+ * directly under the amount, which is what makes the autofill below useful: the
+ * category is the one field that predicts the rest of the entry.
+ */
+export const TRANSACTION_FIELD_ORDERS = ['category_first', 'account_first'] as const
+export type TransactionFieldOrder = (typeof TRANSACTION_FIELD_ORDERS)[number]
+
+/** BR-046 — fields the category autofill is allowed to seed. */
+export const QUICK_ENTRY_AUTOFILL_FIELDS = ['account', 'payee', 'tags'] as const
+export type QuickEntryAutofillField = (typeof QUICK_ENTRY_AUTOFILL_FIELDS)[number]
+
 /** App-wide type scale. */
 export const TEXT_SIZES = ['default', 'large', 'larger'] as const
 export type TextSize = (typeof TEXT_SIZES)[number]
@@ -45,6 +57,26 @@ export type UiPreferences = {
    * never asked for.
    */
   formFields: Record<TransactionFormField, boolean>
+  /**
+   * BR-046 — how fast the add-transaction form is to fill in. Presentation
+   * only, like everything else here: `autofill` seeds inputs the user can still
+   * change before saving, it never writes anything the form would not have
+   * submitted anyway.
+   */
+  quickEntry: {
+    fieldOrder: TransactionFieldOrder
+    /**
+     * Master switch for "copy the last entry in this category". Off by default:
+     * the form's long-standing rule is that it never arrives pre-filled with a
+     * value nobody chose, and this only bends that rule *after* a deliberate
+     * category pick — but bending it at all is the user's call, not ours.
+     */
+    autofillFromLastInCategory: boolean
+    /** Which fields that autofill may seed, when it is on. */
+    autofillFields: Record<QuickEntryAutofillField, boolean>
+    /** Whether filling one field opens the next empty one on its own. */
+    autoAdvance: boolean
+  }
   transactions: {
     defaultPeriod: TransactionPeriod
     /** Accounts the list opens filtered to. Empty means every account. */
@@ -66,6 +98,16 @@ export const DEFAULT_UI_PREFERENCES: UiPreferences = {
     // BR-045: opt-in. A household that never records times should not have to
     // turn a new field off.
     time: false,
+  },
+  quickEntry: {
+    fieldOrder: 'category_first',
+    // Opt-in. See the field's doc comment: an unasked-for pre-fill is the exact
+    // failure this form was built to avoid.
+    autofillFromLastInCategory: false,
+    // What the master switch turns on when it is flipped. Narrowing this is for
+    // the household that wants, say, the account back but not the tags.
+    autofillFields: { account: true, payee: true, tags: true },
+    autoAdvance: true,
   },
   transactions: {
     defaultPeriod: 'current_month',
@@ -89,6 +131,10 @@ export function isTransactionPeriod(value: unknown): value is TransactionPeriod 
   return TRANSACTION_PERIODS.includes(value as TransactionPeriod)
 }
 
+export function isTransactionFieldOrder(value: unknown): value is TransactionFieldOrder {
+  return TRANSACTION_FIELD_ORDERS.includes(value as TransactionFieldOrder)
+}
+
 export function isTextSize(value: unknown): value is TextSize {
   return TEXT_SIZES.includes(value as TextSize)
 }
@@ -96,6 +142,8 @@ export function isTextSize(value: unknown): value is TextSize {
 export function parseUiPreferences(raw: unknown): UiPreferences {
   const root = asRecord(raw)
   const formFields = asRecord(root.formFields)
+  const quickEntry = asRecord(root.quickEntry)
+  const quickEntryFields = asRecord(quickEntry.autofillFields)
   const transactions = asRecord(root.transactions)
 
   const period = transactions.defaultPeriod
@@ -113,6 +161,28 @@ export function parseUiPreferences(raw: unknown): UiPreferences {
         asBoolean(formFields[field], DEFAULT_UI_PREFERENCES.formFields[field]),
       ])
     ) as Record<TransactionFormField, boolean>,
+    quickEntry: {
+      fieldOrder: isTransactionFieldOrder(quickEntry.fieldOrder)
+        ? quickEntry.fieldOrder
+        : DEFAULT_UI_PREFERENCES.quickEntry.fieldOrder,
+      autofillFromLastInCategory: asBoolean(
+        quickEntry.autofillFromLastInCategory,
+        DEFAULT_UI_PREFERENCES.quickEntry.autofillFromLastInCategory
+      ),
+      autofillFields: Object.fromEntries(
+        QUICK_ENTRY_AUTOFILL_FIELDS.map((field) => [
+          field,
+          asBoolean(
+            quickEntryFields[field],
+            DEFAULT_UI_PREFERENCES.quickEntry.autofillFields[field]
+          ),
+        ])
+      ) as Record<QuickEntryAutofillField, boolean>,
+      autoAdvance: asBoolean(
+        quickEntry.autoAdvance,
+        DEFAULT_UI_PREFERENCES.quickEntry.autoAdvance
+      ),
+    },
     transactions: {
       defaultPeriod: isTransactionPeriod(period)
         ? period

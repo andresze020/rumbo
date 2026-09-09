@@ -18,6 +18,7 @@ import {
   Plus,
   Repeat,
   Shapes,
+  Sparkles,
   Store,
   StickyNote,
   Wallet,
@@ -28,7 +29,9 @@ import {
 } from './actions'
 import { PayeePicker, type PayeeOption } from './payee-picker'
 import { RelativeDateChips } from './relative-date-chips'
-import { SelectorSheet } from './selector-sheet'
+import { SelectorSheet } from '@/components/selector-sheet'
+import { useIsMobile } from '@/lib/use-is-mobile'
+import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
 import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
 import { AdvancedFields } from '@/components/advanced-fields'
@@ -48,12 +51,20 @@ import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
 import { roundToCents } from '@/lib/calc'
 import { fetchFxRate } from '@/lib/fx'
-import { currentTimeLocal, formatCurrency } from '@/lib/format'
+import {
+  currentTimeLocal,
+  formatCurrency,
+  formatIsoDate,
+  shiftIsoDate,
+  todayIsoDateLocal,
+} from '@/lib/format'
 import { useLanguage } from '@/components/language-provider'
 import { RECURRING_FREQUENCIES } from '@/lib/recurring/shared'
 import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
-import type { TransactionFormField } from '@/lib/preferences/shared'
+import type { CategoryEntryMemory } from '@/lib/quick-entry/category-memory'
+import type { TransactionFormField, UiPreferences } from '@/lib/preferences/shared'
+import { DEFAULT_UI_PREFERENCES } from '@/lib/preferences/shared'
 import { cn } from '@/lib/utils'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
@@ -62,10 +73,35 @@ type TransactionType = 'income' | 'expense' | 'transfer'
 type PickerField = null | 'account' | 'from' | 'to' | 'category' | 'payee'
 
 /**
- * Where the fill-fast chain goes next. `description` is not a picker — it ends
- * the chain by taking focus, since there is nothing left to choose from a list.
+ * The fields the fill-fast chain walks, in the order it walks them. Everything
+ * before `description` is a picker; `description` takes focus instead (there is
+ * nothing to choose from a list), and `tags` hands off to the tag multi-select's
+ * own sheet.
  */
-type AdvanceTarget = PickerField | 'description'
+type ChainField = 'account' | 'category' | 'payee' | 'description' | 'tags'
+
+/**
+ * Where a hop through the chain starts. The amount is not itself a chain field —
+ * nothing advances *to* it — but Enter on it kicks the chain off from before the
+ * first field.
+ */
+type ChainStart = ChainField | 'amount'
+
+/** Where the fill-fast chain goes next. `null` ends it. */
+type AdvanceTarget = PickerField | ChainField
+
+/**
+ * BR-046 — the two supported entry orders. `category_first` is the default:
+ * picking the category is what lets the form fill the rest of the entry in from
+ * the last transaction in it, so it has to come first to be worth anything.
+ */
+const ENTRY_CHAINS: Record<
+  UiPreferences['quickEntry']['fieldOrder'],
+  ChainField[]
+> = {
+  category_first: ['category', 'account', 'payee', 'description', 'tags'],
+  account_first: ['account', 'category', 'payee', 'description', 'tags'],
+}
 
 export type TransactionFormAccount = {
   id: string
@@ -119,6 +155,18 @@ type TransactionFormProps = {
    * no user preference in hand (e.g. the AI assistant's draft review).
    */
   visibleFields?: Partial<Record<TransactionFormField, boolean>>
+  /**
+   * BR-046: field order, auto-advance and the category autofill. Omitted means
+   * the built-in defaults, which is right for callers with no user preference in
+   * hand (the AI assistant's draft review) — the autofill is off there anyway,
+   * since it has no `categoryMemory` to read.
+   */
+  quickEntry?: UiPreferences['quickEntry']
+  /**
+   * BR-046: what the last entry in each category looked like. Absent means the
+   * autofill simply never fires — the form degrades to picking by hand.
+   */
+  categoryMemory?: CategoryEntryMemory
   returnTo?: string
 }
 
@@ -153,18 +201,6 @@ function accountLeading(account: TransactionFormAccount | undefined) {
  * is a compact tap-to-expand row) vs the desktop two-column grid. Starts false
  * so SSR/first paint is deterministic, then resolves on mount.
  */
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 639px)')
-    const onChange = () => setIsMobile(mq.matches)
-    onChange()
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
-  return isMobile
-}
-
 export function TransactionForm({
   accounts,
   baseCurrency,
@@ -188,6 +224,8 @@ export function TransactionForm({
   defaultFromAccountId,
   defaultToAccountId,
   visibleFields,
+  quickEntry = DEFAULT_UI_PREFERENCES.quickEntry,
+  categoryMemory,
   returnTo,
 }: TransactionFormProps) {
   const { t, locale } = useLanguage()
@@ -231,9 +269,30 @@ export function TransactionForm({
   const [description, setDescription] = useState(defaultDescription ?? '')
   const [payeeName, setPayeeName] = useState(defaultMerchantName ?? '')
   const [notes, setNotes] = useState(defaultNotes ?? '')
+  // BR-023 tags, lifted out of TagMultiSelect so the category autofill can seed
+  // them and the chain can open their picker. Filtered against the offered tags
+  // for the same reason the multi-select filters its own default: a stale id
+  // from a copied transaction whose tag has since been archived must not be
+  // resubmitted.
+  const [tagIds, setTagIds] = useState<string[]>(() =>
+    (defaultTagIds ?? []).filter((id) => tags.some((tag) => tag.id === id))
+  )
+  const [tagPickerOpen, setTagPickerOpen] = useState(false)
+  /**
+   * BR-046: which fields the last category pick filled in, so the form can say
+   * so and offer to undo it. Nothing here is submitted — it only drives the
+   * notice.
+   */
+  const [autofilled, setAutofilled] = useState<ChainField[]>([])
   // Which mobile row is expanded for editing (accordion; null = all collapsed).
   const [expandedField, setExpandedField] = useState<string | null>(null)
+  // Set for exactly one expansion when the row should open without taking
+  // focus. Consumed by the effect below.
+  const skipAutoFocusRef = useRef(false)
   const isMobile = useIsMobile()
+  // Non-zero only while a soft keyboard is up on a phone. See the actions row
+  // at the bottom of the form for what it buys.
+  const keyboardInset = useSoftKeyboardInset()
 
   // Accounts/categories created inline from the mobile pickers, merged into the
   // prop lists so they show up and can be selected without a page reload.
@@ -274,6 +333,14 @@ export function TransactionForm({
   // for them (they already show the list on expand).
   useEffect(() => {
     if (!expandedField) return
+    // BR-046: an autofill lands here with something to *read*. Focusing would
+    // raise the soft keyboard over the values that were just filled in, which
+    // is the one moment the user needs to see the form rather than type into
+    // it. The row still opens; the keyboard waits for a deliberate tap.
+    if (skipAutoFocusRef.current) {
+      skipAutoFocusRef.current = false
+      return
+    }
     const panel = document.querySelector(`[data-field-panel="${expandedField}"]`)
     const el = panel?.querySelector('input:not([type="hidden"]), textarea') as
       | HTMLInputElement
@@ -533,6 +600,9 @@ export function TransactionForm({
     setUserRate('')
     setFxNote('')
     setFxError('')
+    // The category that justified the autofill is gone, so the notice offering
+    // to undo it has nothing left to describe.
+    setAutofilled([])
   }
 
   const typeOptions = [
@@ -729,6 +799,9 @@ export function TransactionForm({
   // the *next required and still empty* field, so the chain stops as soon as
   // the mandatory path is covered and never hijacks a one-field correction.
   const advanceToRef = useRef<AdvanceTarget>(null)
+  // Whether that hop should land without raising the keyboard (set when the hop
+  // follows an autofill the user still has to read).
+  const advanceQuietRef = useRef(false)
 
   const openPicker = (field: PickerField) => {
     resetPickerState()
@@ -736,30 +809,193 @@ export function TransactionForm({
     setSheetField(isMobile ? field : null)
   }
 
-  const closePicker = () => {
-    const next = advanceToRef.current
-    advanceToRef.current = null
+  /**
+   * `quiet` opens the description without the keyboard — see the effect above.
+   * The row still expands, so the field is visible and one tap from typing.
+   */
+  const openDescription = (quiet = false) => {
+    setSheetField(null)
+    // On mobile the row has to expand first; expanding it focuses the input on
+    // its own (see the `expandedField` effect) unless told not to. Only armed on
+    // mobile: desktop expands no panel here, so the flag would survive unread
+    // and swallow the next expansion's focus instead of this one's.
+    skipAutoFocusRef.current = quiet && isMobile
+    setExpandedField(isMobile ? 'description' : null)
+    if (!isMobile && !quiet) {
+      window.requestAnimationFrame(() => document.getElementById('description')?.focus())
+    }
+  }
 
-    // Description is the end of the chain: it's a plain text field, so it gets
-    // focus rather than a picker. On mobile that means expanding its row, which
-    // focuses the input on its own.
-    if (next === 'description') {
-      setSheetField(null)
-      setExpandedField(isMobile ? 'description' : null)
-      if (!isMobile) {
-        window.requestAnimationFrame(() =>
-          document.getElementById('description')?.focus()
-        )
-      }
+  const openTagPicker = () => {
+    setSheetField(null)
+    setExpandedField(null)
+    setTagPickerOpen(true)
+  }
+
+  const goTo = (target: ChainField, quiet = false) => {
+    if (target === 'description') {
+      openDescription(quiet)
       return
     }
+    if (target === 'tags') {
+      openTagPicker()
+      return
+    }
+    openPicker(target)
+  }
+
+  const closePicker = () => {
+    const next = advanceToRef.current
+    const quiet = advanceQuietRef.current
+    advanceToRef.current = null
+    advanceQuietRef.current = false
 
     if (next) {
-      openPicker(next)
+      goTo(next as ChainField, quiet)
       return
     }
     setExpandedField(null)
     setSheetField(null)
+  }
+
+  // ── BR-046: the fill-fast chain ──────────────────────────────────────────
+  // One ordered list drives both supported field orders, so "what comes next"
+  // is data rather than a branch in every selection handler — which is how the
+  // category → payee link went missing in the first place.
+  const entryChain = ENTRY_CHAINS[quickEntry.fieldOrder]
+  // Hoisted out of the JSX below: a string literal inside a JSX expression is
+  // read as visible copy by the i18n audit, and this one is an enum value.
+  const categoryFirst = quickEntry.fieldOrder === 'category_first'
+
+  /**
+   * The next field after `from` that is both rendered and still empty, or
+   * `null` when the entry is covered. `justFilled` carries the values set in the
+   * same event — React state has not caught up yet when this runs.
+   *
+   * Stopping at the first *filled* field is what keeps a one-field correction
+   * from hijacking the form: re-pick a category on an otherwise complete entry
+   * and nothing opens behind it.
+   */
+  const nextInChain = (
+    from: ChainStart,
+    justFilled: Partial<Record<ChainField, boolean>> = {}
+  ): ChainField | null => {
+    const filled: Record<ChainField, boolean> = {
+      account: Boolean(accountId),
+      category: Boolean(categoryId),
+      payee: Boolean(payeeName),
+      description: Boolean(description),
+      tags: tagIds.length > 0,
+      ...justFilled,
+    }
+    const rendered: Record<ChainField, boolean> = {
+      account: true,
+      category: true,
+      payee: showField('payee'),
+      description: true,
+      // Tags are income/expense only (BR-023) and optional (BR-032).
+      tags: showField('tags') && !isTransfer,
+    }
+    // The amount sits before the chain rather than in it, so it starts at -1
+    // and considers every field — including the first.
+    const start = from === 'amount' ? -1 : entryChain.indexOf(from)
+    if (start < -1) return null
+    return (
+      entryChain.slice(start + 1).find((field) => rendered[field] && !filled[field]) ?? null
+    )
+  }
+
+  /** Queue the next field for `closePicker` to open once the picker dismisses. */
+  const advanceAfter = (
+    from: ChainField,
+    justFilled: Partial<Record<ChainField, boolean>> = {},
+    quiet = false
+  ) => {
+    if (!quickEntry.autoAdvance) return
+    advanceToRef.current = nextInChain(from, justFilled)
+    advanceQuietRef.current = quiet
+  }
+
+  /**
+   * BR-046 — seed account / payee / tags from the last transaction in the
+   * category the user just picked.
+   *
+   * The rules that keep this a suggestion rather than a decision:
+   * - it only ever writes into a field the user has left **empty**, so it can't
+   *   overwrite a deliberate choice or a value a Copy seeded;
+   * - it validates every remembered id against what this form was actually
+   *   given, so an archived account or a deleted tag is dropped, not submitted;
+   * - it is off unless the user turned it on, and each of the three fields can
+   *   be excluded on its own.
+   *
+   * Returns the fields it filled, both to drive the undo notice and to tell the
+   * chain which fields no longer need visiting.
+   */
+  const applyCategoryMemory = (nextCategoryId: string) => {
+    const filled: Partial<Record<ChainField, boolean>> = {}
+    if (!quickEntry.autofillFromLastInCategory) return filled
+    const memory = categoryMemory?.[nextCategoryId]
+    if (!memory) return filled
+    const allowed = quickEntry.autofillFields
+
+    if (
+      allowed.account &&
+      !accountId &&
+      memory.accountId &&
+      availableAccounts.some((account) => account.id === memory.accountId)
+    ) {
+      setAccountId(memory.accountId)
+      // Same reset selectAccount does: a remembered account can be in another
+      // currency, and a rate typed for the previous one must not survive it.
+      setUserRate('')
+      setFxNote('')
+      setFxError('')
+      filled.account = true
+    }
+
+    if (allowed.payee && showField('payee') && !payeeName && memory.payeeName) {
+      setPayeeName(memory.payeeName)
+      filled.payee = true
+    }
+
+    if (
+      allowed.tags &&
+      showField('tags') &&
+      !isTransfer &&
+      tagIds.length === 0 &&
+      memory.tagIds.length > 0
+    ) {
+      const known = memory.tagIds.filter((id) => tags.some((tag) => tag.id === id))
+      if (known.length > 0) {
+        setTagIds(known)
+        filled.tags = true
+      }
+    }
+
+    return filled
+  }
+
+  /**
+   * Drop a field from the notice the moment the user edits it themselves —
+   * otherwise Undo would offer to clear a value they chose by hand, which is a
+   * worse failure than not having offered Undo at all.
+   */
+  const clearAutofilled = (field: ChainField) =>
+    setAutofilled((prev) => prev.filter((entry) => entry !== field))
+
+  /** Put back exactly what the autofill touched, and nothing else. */
+  const undoAutofill = () => {
+    for (const field of autofilled) {
+      if (field === 'account') {
+        setAccountId('')
+        setUserRate('')
+        setFxNote('')
+        setFxError('')
+      }
+      if (field === 'payee') setPayeeName('')
+      if (field === 'tags') setTagIds([])
+    }
+    setAutofilled([])
   }
 
   // Shared selection handlers, used by both the mobile sheet and the desktop
@@ -769,7 +1005,8 @@ export function TransactionForm({
     setUserRate('')
     setFxNote('')
     setFxError('')
-    if (!categoryId) advanceToRef.current = 'category'
+    clearAutofilled('account')
+    advanceAfter('account', { account: true })
   }
 
   const selectFromAccount = (id: string) => {
@@ -786,14 +1023,18 @@ export function TransactionForm({
 
   const selectCategory = (id: string) => {
     setCategoryId(id)
-    if (showField('payee') && !payeeName) advanceToRef.current = 'payee'
+    const filled = applyCategoryMemory(id)
+    const seeded = (Object.keys(filled) as ChainField[]).filter((field) => filled[field])
+    setAutofilled(seeded)
+    // Seeded something → the next hop must not raise the keyboard, or the
+    // notice saying what was filled is covered before it can be read.
+    advanceAfter('category', { ...filled, category: true }, seeded.length > 0)
   }
 
-  // Description is always rendered (it isn't one of BR-032's optional fields),
-  // so the chain can always end there.
   const selectPayee = (name: string) => {
     setPayeeName(name)
-    if (!description) advanceToRef.current = 'description'
+    clearAutofilled('payee')
+    advanceAfter('payee', { payee: Boolean(name.trim()) })
   }
 
   // Open the category picker drilled straight into the currently selected
@@ -828,7 +1069,7 @@ export function TransactionForm({
             resetPickerState()
             setExpandedField(open ? null : id)
           }}
-          className="flex w-full items-center gap-3 px-1 py-3 text-left"
+          className="flex w-full items-center gap-3 px-1 py-2.5 text-left"
         >
           <span className="shrink-0 text-muted-foreground">{icon}</span>
           <span className="shrink-0 text-sm font-medium">{label}</span>
@@ -886,7 +1127,7 @@ export function TransactionForm({
           onOpen?.()
           setSheetField(id)
         }}
-        className="flex w-full items-center gap-3 px-1 py-3 text-left"
+        className="flex w-full items-center gap-3 px-1 py-2.5 text-left"
       >
         <span className="shrink-0 text-muted-foreground">{icon}</span>
         <span className="shrink-0 text-sm font-medium">{label}</span>
@@ -1027,10 +1268,58 @@ export function TransactionForm({
   // Account picker used by the account / from / to rows: a searchable list plus
   // a "Create …" row that drills into a compact create sub-view (name +
   // type + currency) so the row stays lean until you actually add an account.
+  // The pickers' search boxes, hoisted out of their bodies so the mobile sheet
+  // can pin them under its header (see `SelectorSheet`'s `search` prop) while
+  // the desktop popover keeps them inline at the top of the list.
+  //
+  // `type="search"` + `autoComplete="off"`: these are filters over the
+  // household's own data, and without the hint Android's autofill offers to
+  // fill them from the saved-passwords / cards / addresses profile.
+  const accountSearchField = (
+    <Input
+      placeholder="Search or add an account"
+      value={accountSearch}
+      onChange={(e) => setAccountSearch(e.target.value)}
+      type="search"
+      autoComplete="off"
+    />
+  )
+
+  const categorySearchField = (
+    <Input
+      placeholder="Search or add a category"
+      value={categorySearch}
+      onChange={(e) => setCategorySearch(e.target.value)}
+      type="search"
+      autoComplete="off"
+    />
+  )
+
+  const subcategorySearchField = (
+    <Input
+      placeholder="Search or add a subcategory"
+      value={subcategorySearch}
+      onChange={(e) => setSubcategorySearch(e.target.value)}
+      type="search"
+      autoComplete="off"
+    />
+  )
+
+  const payeeSearchField = (
+    <Input
+      placeholder="Search or add a payee"
+      value={payeeName}
+      onChange={(e) => setPayeeName(e.target.value)}
+      type="search"
+      autoComplete="off"
+    />
+  )
+
   const accountPickerBody = (
     selectedId: string,
     onSelect: (id: string) => void,
-    disabledId?: string
+    disabledId?: string,
+    withSearch = true
   ) => {
     const query = accountSearch.trim().toLowerCase()
     const matches = availableAccounts.filter((a) =>
@@ -1085,12 +1374,8 @@ export function TransactionForm({
           </div>
         ) : (
           <>
-            <Input
-              placeholder="Search or add an account"
-              value={accountSearch}
-              onChange={(e) => setAccountSearch(e.target.value)}
-            />
-            <div className="mt-2 sm:max-h-72 sm:overflow-y-auto">
+            {withSearch ? accountSearchField : null}
+            <div className={cn('sm:max-h-72 sm:overflow-y-auto', withSearch && 'mt-2')}>
               {matches.map((a) => (
                 <button
                   key={a.id}
@@ -1139,7 +1424,7 @@ export function TransactionForm({
   // Category picker: searchable parent list that drills into a parent's
   // subcategories (hiding the parent list so there's no scrolling), plus a
   // payee-style "Create …" row for a brand-new top-level category.
-  const categoryPickerBody = () => {
+  const categoryPickerBody = (withSearch = true) => {
     const query = categorySearch.trim().toLowerCase()
     const parents = mobileParentCategories
     // While searching, match across every compatible category (parents AND
@@ -1190,11 +1475,7 @@ export function TransactionForm({
                 </div>
               </>
             )}
-            <Input
-              placeholder="Search or add a subcategory"
-              value={subcategorySearch}
-              onChange={(e) => setSubcategorySearch(e.target.value)}
-            />
+            {withSearch ? subcategorySearchField : null}
             {optionList(
               [
                 // Select the parent itself (e.g. "All Travel") — the "no
@@ -1204,7 +1485,11 @@ export function TransactionForm({
               ],
               categoryId,
               (value) => {
-                setCategoryId(value)
+                // `selectCategory`, not a bare `setCategoryId`: drilling into a
+                // parent and tapping a child is the *common* way to pick a
+                // category, and going through the setter directly is what used
+                // to drop the autofill and the jump to the payee.
+                selectCategory(value)
                 closePicker()
               }
             )}
@@ -1234,12 +1519,36 @@ export function TransactionForm({
           </div>
         ) : (
           <>
-            <Input
-              placeholder="Search or add a category"
-              value={categorySearch}
-              onChange={(e) => setCategorySearch(e.target.value)}
-            />
-            <div className="mt-2 sm:max-h-72 sm:overflow-y-auto">
+            {/* Above the list, not below it. These are the categories this
+                household actually uses, and at the bottom of a full-screen
+                picker they sat below the fold — invisible exactly when they
+                would have saved the scroll. */}
+            {frequentCategories.length > 0 && !categorySearch.trim() ? (
+              <div className="mb-2 flex flex-wrap items-center gap-1.5 border-b pb-2">
+                <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
+                {frequentCategories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => {
+                      selectCategory(category.id)
+                      closePicker()
+                    }}
+                    className={cn(
+                      'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
+                      categoryId === category.id
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                  >
+                    {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
+                    {categoryName(category)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {withSearch ? categorySearchField : null}
+            <div className={cn('sm:max-h-72 sm:overflow-y-auto', withSearch && 'mt-2')}>
               {query
                 ? searchMatches.map((c) => {
                     const parent = c.parent_category_id
@@ -1331,30 +1640,6 @@ export function TransactionForm({
               ) : null}
             </div>
 
-            {frequentCategories.length > 0 && !categorySearch.trim() ? (
-              <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t pt-2">
-                <span className="text-xs text-muted-foreground">{t('transactionForm.frequentlyUsed')}</span>
-                {frequentCategories.map((category) => (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => {
-                      selectCategory(category.id)
-                      closePicker()
-                    }}
-                    className={cn(
-                      'flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
-                      categoryId === category.id
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    {category.icon ? <span aria-hidden="true">{category.icon}</span> : null}
-                    {categoryName(category)}
-                  </button>
-                ))}
-              </div>
-            ) : null}
           </>
         )}
       </>
@@ -1365,17 +1650,13 @@ export function TransactionForm({
   // hierarchy — plus a "Create …" row. The name is resolved to a payee_id by
   // the server action on submit (get-or-create), so "creating" here is just
   // keeping the typed text and closing.
-  const payeePickerBody = () => {
+  const payeePickerBody = (withSearch = true) => {
     const trimmed = payeeName.trim()
     const normalized = trimmed.toLowerCase()
     return (
       <>
-        <Input
-          placeholder="Search or add a payee"
-          value={payeeName}
-          onChange={(e) => setPayeeName(e.target.value)}
-        />
-        <div className="mt-2 sm:max-h-[60vh] sm:overflow-y-auto">
+        {withSearch ? payeeSearchField : null}
+        <div className={cn('sm:max-h-[60vh] sm:overflow-y-auto', withSearch && 'mt-2')}>
           {payees
             .filter((p) => p.name.toLowerCase().includes(normalized))
             .slice(0, 50)
@@ -1502,6 +1783,74 @@ export function TransactionForm({
     )
   }
 
+  // BR-046: what this category's past entries were called. Empty until a
+  // category is picked, and empty for a brand-new one.
+  const descriptionSuggestions = categoryId
+    ? (categoryMemory?.[categoryId]?.descriptions ?? [])
+    : []
+
+  // BR-033's chips cover today and the two days before it. Anything else was
+  // chosen from the calendar, and only then does the calendar button need to
+  // spell the date out.
+  const chipDates = [0, -1, -2].map((offset) => shiftIsoDate(todayIsoDateLocal(), offset))
+  const dateIsOffChip = !chipDates.includes(transactionDate)
+  const offChipDateLabel = formatIsoDate(transactionDate, locale, {
+    month: 'short',
+    day: 'numeric',
+  })
+
+  const accountPickerRow = pickerRow({
+    id: 'account',
+    icon: <Wallet className="size-4.5" />,
+    label: t('transactionForm.account'),
+    value: selectedAccount ? formatAccountLabel(selectedAccount) : '',
+    placeholder: t('transactionForm.selectAccount'),
+  })
+
+  const categoryPickerRow = pickerRow({
+    id: 'category',
+    icon: <Shapes className="size-4.5" />,
+    label: t('transactionForm.category'),
+    value: categoryValue,
+    placeholder: t('transactionForm.selectCategory'),
+    onOpen: syncCategoryDrillToSelection,
+  })
+
+  const orderedPickerRows = categoryFirst ? (
+    <>
+      {categoryPickerRow}
+      {accountPickerRow}
+    </>
+  ) : (
+    <>
+      {accountPickerRow}
+      {categoryPickerRow}
+    </>
+  )
+
+  const desktopAccountCombo = desktopCombo({
+    id: 'account',
+    label: t('transactionForm.account'),
+    leading: accountLeading(selectedAccount),
+    valueText: selectedAccount ? formatAccountLabel(selectedAccount) : '',
+    placeholder: t('transactionForm.selectAccount'),
+    hiddenName: 'account_id',
+    hiddenValue: accountId,
+    body: accountPickerBody(accountId, selectAccount),
+  })
+
+  const desktopCategoryCombo = desktopCombo({
+    id: 'category',
+    label: t('transactionForm.category'),
+    valueText: categoryValue,
+    placeholder: t('transactionForm.selectCategory'),
+    hiddenName: 'category_id',
+    hiddenValue: categoryId,
+    body: categoryPickerBody(),
+    className: 'col-span-2',
+    onOpen: syncCategoryDrillToSelection,
+  })
+
   const mobileFields = (
     <div className="rounded-xl border px-2">
       {/* Selection lives in hidden inputs that stay mounted regardless of the
@@ -1522,16 +1871,42 @@ export function TransactionForm({
         </>
       )}
 
-      <div className="px-1 pb-2 pt-2">{dateChips}</div>
-
-      {editRow({
-        id: 'date',
-        icon: <CalendarDays className="size-4.5" />,
-        label: t('transactionForm.date'),
-        value: transactionDate,
-        placeholder: '—',
-        children: dateField,
-      })}
+      {/* Date: one row, not two. BR-033's chips and a separate Date row were
+          ~100px between them saying the same thing twice — the chips already
+          carry the answer for the dates that cover most manual entry. The
+          calendar button is the escape hatch to any other date, and it shows
+          that date once it is off-chip, so nothing became unreadable. */}
+      <div className="flex items-center gap-1.5 px-1 py-2">
+        <RelativeDateChips
+          value={transactionDate}
+          onSelect={changeTransactionDate}
+          className="min-w-0 flex-1"
+        />
+        <button
+          type="button"
+          aria-label={t('transactionForm.date')}
+          aria-expanded={expandedField === 'date'}
+          onClick={() => {
+            resetPickerState()
+            setExpandedField(expandedField === 'date' ? null : 'date')
+          }}
+          className={cn(
+            'flex h-[42px] shrink-0 items-center gap-1.5 rounded-lg border px-2 text-[11px] font-medium transition-colors',
+            dateIsOffChip
+              ? 'border-primary bg-primary/10 text-primary'
+              : 'border-border text-muted-foreground'
+          )}
+        >
+          <CalendarDays className="size-4" aria-hidden="true" />
+          {dateIsOffChip ? <span className="truncate">{offChipDateLabel}</span> : null}
+        </button>
+      </div>
+      <div
+        data-field-panel="date"
+        className={cn('px-1 pb-3 [&_label]:sr-only', expandedField === 'date' ? 'block' : 'hidden')}
+      >
+        {dateField}
+      </div>
 
       {/* BR-045: sits directly under the date, since together they are one
           "when". Absent entirely unless the user turned the field on. */}
@@ -1550,21 +1925,11 @@ export function TransactionForm({
           the figure each one applies to — they are deliberately absent here. */}
       {isTransfer ? null : (
         <>
-          {pickerRow({
-            id: 'account',
-            icon: <Wallet className="size-4.5" />,
-            label: t('transactionForm.account'),
-            value: selectedAccount ? formatAccountLabel(selectedAccount) : '',
-            placeholder: t('transactionForm.selectAccount'),
-          })}
-          {pickerRow({
-            id: 'category',
-            icon: <Shapes className="size-4.5" />,
-            label: t('transactionForm.category'),
-            value: categoryValue,
-            placeholder: t('transactionForm.selectCategory'),
-            onOpen: syncCategoryDrillToSelection,
-          })}
+          {/* BR-046: account and category swap places with the field-order
+              preference. Category first is the default — it is the field that
+              can fill in the other two, so asking for it first is what turns a
+              five-tap entry into a two-tap one. */}
+          {orderedPickerRows}
           {showField('payee')
             ? pickerRow({
                 id: 'payee',
@@ -1618,11 +1983,59 @@ export function TransactionForm({
         children: (
           <div className="space-y-1.5">
             <Label htmlFor="description">{t('transactionForm.description')}</Label>
+            {/* BR-046: the descriptions this category has carried before, as
+                one-tap chips. The browser offers the same thing from its own
+                cache of submitted values, but that list is per field name
+                across every site, sits in a keyboard strip nobody styled, and
+                knows nothing about which category you just picked. This does.
+                Offered, never filled: unlike the account or the payee, a
+                description really is different most times. */}
+            {descriptionSuggestions.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 pb-0.5">
+                {descriptionSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => setDescription(suggestion)}
+                    className={cn(
+                      'flex h-8 max-w-full items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
+                      description === suggestion
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                  >
+                    <Sparkles className="size-3 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{suggestion}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <Input
               id="description"
               name="description"
+              // The chips above are this field's suggestions now. The browser's
+              // own list came from its cache of submitted values, keyed on the
+              // field name across every site, and it knew nothing about the
+              // category — so it sat in a keyboard strip nobody styled, offering
+              // worse answers than the row right above it.
+              autoComplete="off"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              onKeyDown={(e) => {
+                // A text field has no "chosen" moment a picker can hook into,
+                // so the keyboard's Enter/Done is the one: it closes the row and
+                // hands the chain on to tags. Without preventDefault this would
+                // submit the half-filled form instead.
+                if (e.key !== 'Enter') return
+                e.preventDefault()
+                const next = quickEntry.autoAdvance
+                  ? nextInChain('description', {
+                      description: Boolean(description.trim()),
+                    })
+                  : null
+                setExpandedField(null)
+                if (next) goTo(next)
+              }}
             />
           </div>
         ),
@@ -1875,21 +2288,66 @@ export function TransactionForm({
       ? ui('New account')
       : baseSheetTitle
 
+  // Every picker hands its search box to the sheet instead of keeping it at the
+  // top of the list, so it stays under the header while the list scrolls.
   let sheetBody: ReactNode = null
+  let sheetSearch: ReactNode = null
   if (sheetField === 'category') {
-    sheetBody = categoryPickerBody()
+    sheetBody = categoryPickerBody(false)
+    sheetSearch = categoryDrillParentId ? subcategorySearchField : categorySearchField
   } else if (sheetField === 'payee') {
-    sheetBody = payeePickerBody()
-  } else if (sheetField === 'account') {
-    sheetBody = accountPickerBody(accountId, selectAccount)
-  } else if (sheetField === 'from') {
-    sheetBody = accountPickerBody(fromAccountId, selectFromAccount, toAccountId)
-  } else if (sheetField === 'to') {
-    sheetBody = accountPickerBody(toAccountId, selectToAccount, fromAccountId)
+    sheetBody = payeePickerBody(false)
+    sheetSearch = payeeSearchField
+  } else if (sheetField === 'account' || sheetField === 'from' || sheetField === 'to') {
+    const [selectedId, onSelect, disabledId] =
+      sheetField === 'account'
+        ? ([accountId, selectAccount, undefined] as const)
+        : sheetField === 'from'
+          ? ([fromAccountId, selectFromAccount, toAccountId] as const)
+          : ([toAccountId, selectToAccount, fromAccountId] as const)
+    sheetBody = accountPickerBody(selectedId, onSelect, disabledId, false)
+    // The inline "new account" form replaces the list entirely — there is
+    // nothing left to search.
+    sheetSearch = showAccountCreate ? null : accountSearchField
   }
 
+  /**
+   * BR-046 — what the last category pick filled in, and a way out of it.
+   *
+   * A silent pre-fill is the failure mode this form spent a sprint removing, so
+   * the autofill is never silent: it names the fields it touched and offers to
+   * put them all back. Absent whenever nothing was filled.
+   */
+  const autofillNotice =
+    autofilled.length > 0 ? (
+      <div className="flex items-center gap-2 rounded-xl border border-dashed bg-muted/40 px-3 py-2 text-xs">
+        <Sparkles className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+        <span className="min-w-0 flex-1 text-muted-foreground">
+          {ui('Filled in from your last entry here')}:{' '}
+          <span className="font-medium text-foreground">
+            {autofilled
+              .map((field) =>
+                ui(field === 'account' ? 'Account' : field === 'payee' ? 'Payee' : 'Tags')
+              )
+              .join(', ')}
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={undoAutofill}
+          className="shrink-0 font-medium text-primary underline-offset-2 hover:underline"
+        >
+          {ui('Undo')}
+        </button>
+      </div>
+    ) : null
+
   return (
-    <form action={submitAction} onSubmit={rememberCategoryUsage} className="space-y-3">
+    <form
+      action={submitAction}
+      onSubmit={rememberCategoryUsage}
+      className="space-y-3 max-sm:flex max-sm:min-h-full max-sm:flex-1 max-sm:flex-col"
+    >
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
 
       <SelectorSheet
@@ -1897,6 +2355,7 @@ export function TransactionForm({
         onClose={closePicker}
         onBack={sheetBack}
         title={sheetTitle}
+        search={sheetSearch}
       >
         {sheetBody}
       </SelectorSheet>
@@ -1935,11 +2394,13 @@ export function TransactionForm({
             currencyCode={amountCurrencyCode}
             value={amountInput}
             onValueChange={setAmountInput}
-            // Enter on the amount starts the fill-fast chain at the first field
-            // still missing, so a whole entry can be typed without hunting.
+            // Enter on the amount opens the first field the entry is still
+            // missing. It asks the chain rather than naming a field, so it
+            // follows the field-order preference — naming `account` here is
+            // what sent Next to the account even with category first.
             onCommit={() => {
-              if (!accountId) openPicker('account')
-              else if (!categoryId) openPicker('category')
+              const first = nextInChain('amount')
+              if (first) goTo(first)
             }}
             size="lg"
             withCalculator
@@ -1981,49 +2442,56 @@ export function TransactionForm({
           {/* Description: kept essential (visible on mobile too). */}
           <div className="space-y-1.5 col-span-2">
             <Label htmlFor="description">{t('transactionForm.description')}</Label>
-            <Input id="description" name="description" defaultValue={defaultDescription} />
+            <Input
+              id="description"
+              name="description"
+              autoComplete="off"
+              defaultValue={defaultDescription}
+            />
           </div>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          {desktopCombo({
-            id: 'account',
-            label: t('transactionForm.account'),
-            leading: accountLeading(selectedAccount),
-            valueText: selectedAccount ? formatAccountLabel(selectedAccount) : '',
-            placeholder: t('transactionForm.selectAccount'),
-            hiddenName: 'account_id',
-            hiddenValue: accountId,
-            body: accountPickerBody(accountId, selectAccount),
-          })}
-
-          <div className="space-y-1.5">
-            {dateField}
-            {dateChips}
-            {timeField}
-          </div>
-
-          {desktopCombo({
-            id: 'category',
-            label: t('transactionForm.category'),
-            valueText: categoryValue,
-            placeholder: t('transactionForm.selectCategory'),
-            hiddenName: 'category_id',
-            hiddenValue: categoryId,
-            body: categoryPickerBody(),
-            className: 'col-span-2',
-            onOpen: syncCategoryDrillToSelection,
-          })}
+          {/* BR-046: the same swap the mobile rows do. On the grid the category
+              takes the full width in either position — it is the longest label
+              of the three and reads badly in a half column. */}
+          {categoryFirst ? (
+            <>
+              {desktopCategoryCombo}
+              {desktopAccountCombo}
+              <div className="space-y-1.5">
+                {dateField}
+                {dateChips}
+                {timeField}
+              </div>
+            </>
+          ) : (
+            <>
+              {desktopAccountCombo}
+              <div className="space-y-1.5">
+                {dateField}
+                {dateChips}
+                {timeField}
+              </div>
+              {desktopCategoryCombo}
+            </>
+          )}
 
           {/* Payee & Description: kept essential (visible on mobile too) and
               full-width so they're comfortable to type into. Payee sits above
-              description to match the entry order the pickers chain through:
-              amount → account → category → payee → description. */}
+              description to match the entry order the pickers chain through
+              (see ENTRY_CHAINS). Controlled rather than defaultValue-only, so
+              the category autofill's value shows up here and not just in the
+              submitted form data. */}
           {showField('payee') ? (
             <div className="col-span-2">
               <PayeePicker
                 payees={payees}
-                defaultValue={defaultMerchantName}
+                value={payeeName}
+                onValueChange={(next) => {
+                  setPayeeName(next)
+                  clearAutofilled('payee')
+                }}
                 // "Payer" for income (who paid you), "Payee" for an expense (whom you
                 // paid) — same underlying payees table, context-appropriate wording.
                 label={t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')}
@@ -2035,7 +2503,12 @@ export function TransactionForm({
 
           <div className="space-y-1.5 col-span-2">
             <Label htmlFor="description">{t('transactionForm.description')}</Label>
-            <Input id="description" name="description" defaultValue={defaultDescription} />
+            <Input
+              id="description"
+              name="description"
+              autoComplete="off"
+              defaultValue={defaultDescription}
+            />
           </div>
 
           {/* UC-10: turn a normal entry into a recurring one. Kept essential so
@@ -2094,6 +2567,8 @@ export function TransactionForm({
       </>
       )}
 
+      {autofillNotice}
+
       {/* ── Tags (income/expense only; BR-023) ────────────────────────── */}
       {/* Rendered outside the mobile/desktop branch so the selection survives a
           breakpoint change. Shown even with no tags yet — the picker can create
@@ -2101,7 +2576,13 @@ export function TransactionForm({
       {!isTransfer && showField('tags') ? (
         <TagMultiSelect
           tags={tags}
-          defaultValue={defaultTagIds}
+          value={tagIds}
+          onValueChange={(next) => {
+            setTagIds(next)
+            clearAutofilled('tags')
+          }}
+          open={tagPickerOpen}
+          onOpenChange={setTagPickerOpen}
           label={t('transactionForm.tags')}
           helpText={t('transactionForm.tagsHelp')}
           manageLabel={t('transactionForm.tagsManage')}
@@ -2247,51 +2728,85 @@ export function TransactionForm({
       )}
 
       {/* ── Actions ──────────────────────────────────────────────────── */}
-      <div className="sticky bottom-0 z-10 -mb-1 space-y-2 bg-popover pb-1 pt-2 sm:static sm:flex sm:flex-wrap sm:items-center sm:gap-2 sm:space-y-0 sm:bg-transparent sm:p-0">
-        <SubmitButton
-          type="submit"
-          disabled={!canSubmit}
-          className="h-11 w-full rounded-xl text-sm font-semibold sm:h-9 sm:w-auto sm:rounded-lg"
-          pendingText={isTransfer ? t('transactionForm.creatingTransfer') : t('transactionForm.creatingTransaction')}
-        >
-          {isTransfer ? t('transactionForm.createTransfer') : t('transactionForm.createTransaction')}
-        </SubmitButton>
-        <div className="flex gap-2 sm:contents">
+      {/* One row, not three stacked buttons, and no row at all while typing.
+
+          With the keyboard up, the sheet is a few hundred pixels tall and this
+          bar was taking a chunk of it to offer "Create transaction" at the exact
+          moment nobody wants it: you have just entered the amount and cannot see
+          a single field below it. So it hides for the duration — the same trade
+          the dialog already makes with its title — and the space goes to the
+          form. Dismissing the keyboard brings it straight back, and while it is
+          gone the keyboard's own Next carries the entry forward.
+
+          The rest of the row:
+          - **Cancel is gone** wherever the form is dismissable on its own. In a
+            dialog — which is every current caller — Back, Escape, the header's
+            X and the backdrop all already cancel, so a fourth way to do it was
+            only costing height. `cancelHref` still renders one, because a form
+            reached as a plain page has no other way out.
+          - **Save & add next** keeps its full label on desktop and shrinks to
+            its icon on mobile, where it sits directly beside the primary submit
+            and reads as "…and another". */}
+      {/* Unmounted rather than `hidden`: this row is a `flex` container, and a
+          `display` utility beats the UA stylesheet's `[hidden] { display: none }`,
+          so the attribute alone would leave the bar on screen. */}
+      {/* Pushes the actions to the bottom edge of the full-screen sheet when the
+          form is shorter than the screen. A flex spacer rather than `mt-auto`,
+          which would fight `space-y-3`'s own margin on the same side. */}
+      <div aria-hidden="true" className="hidden max-sm:block max-sm:flex-1" />
+
+      {keyboardInset > 0 ? null : (
+      <div className="sticky bottom-0 z-10 flex items-center gap-2 border-t bg-popover pb-1 pt-3 sm:static sm:flex-wrap sm:border-t-0 sm:bg-transparent sm:p-0">
+        {/* One split button on mobile, not a wide primary next to an orphaned
+            square. "Save" and "save and start another" are the same action with
+            one difference, so they read as one control divided in two: shared
+            shape, shared colour, a hairline between them. Desktop has room for
+            both labels, so the two halves come apart there and the divider and
+            the fixed width drop away. */}
+        <div className="flex flex-1 overflow-hidden rounded-xl sm:contents">
+          <SubmitButton
+            type="submit"
+            disabled={!canSubmit}
+            className="h-11 flex-1 rounded-none text-sm font-semibold sm:h-9 sm:flex-none sm:rounded-lg"
+            pendingText={isTransfer ? t('transactionForm.creatingTransfer') : t('transactionForm.creatingTransaction')}
+          >
+            {isTransfer ? t('transactionForm.createTransfer') : t('transactionForm.createTransaction')}
+          </SubmitButton>
           {!isTransfer ? (
             <SubmitButton
               type="submit"
               name="add_next"
               value="true"
-              variant="outline"
               disabled={!canSubmit}
-              className="h-11 flex-1 rounded-xl sm:h-9 sm:flex-none sm:rounded-lg"
+              aria-label={t('transactionForm.saveAndAddNext')}
+              title={t('transactionForm.saveAndAddNext')}
+              className={cn(
+                'h-11 w-14 shrink-0 rounded-none border-l border-primary-foreground/25 p-0',
+                'sm:h-9 sm:w-auto sm:rounded-lg sm:border-l-0 sm:px-3',
+                // Desktop keeps the quieter outline treatment it had; on mobile
+                // it is the same solid as its other half.
+                'sm:border sm:border-border sm:bg-background sm:text-foreground sm:hover:bg-muted'
+              )}
               pendingText={t('transactionForm.saving')}
             >
-              {t('transactionForm.saveAndAddNext')}
+              <Plus className="size-4.5 sm:hidden" aria-hidden="true" />
+              <span className="hidden sm:inline">{t('transactionForm.saveAndAddNext')}</span>
             </SubmitButton>
           ) : null}
-          {onCancel ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-              className="h-11 flex-1 rounded-xl sm:h-9 sm:flex-none sm:rounded-lg"
-            >
-              {t('transactionForm.cancel')}
-            </Button>
-          ) : cancelHref ? (
-            <Link
-              href={cancelHref}
-              className={cn(
-                buttonVariants({ variant: 'outline' }),
-                'h-11 flex-1 rounded-xl sm:h-9 sm:flex-none sm:rounded-lg'
-              )}
-            >
-              {t('transactionForm.cancel')}
-            </Link>
-          ) : null}
         </div>
+        {!onCancel && cancelHref ? (
+          <Link
+            href={cancelHref}
+            className={cn(
+              buttonVariants({ variant: 'outline' }),
+              'h-11 shrink-0 rounded-xl px-4 sm:h-9 sm:rounded-lg'
+            )}
+          >
+            {t('transactionForm.cancel')}
+          </Link>
+        ) : null}
       </div>
+      )}
     </form>
   )
 }
