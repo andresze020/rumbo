@@ -592,17 +592,21 @@ export function TransactionForm({
   function handleTransactionTypeChange(value: TransactionType) {
     setTransactionType(value)
     if (value === 'transfer') {
-      // Carry current account over as the transfer source
-      setFromAccountId(accountId)
+      // Carry current account over as the transfer source — unless it is the
+      // autofill's guess rather than the user's pick, in which case it goes
+      // with the category below instead of riding into the transfer.
+      setFromAccountId(autofilled.includes('account') ? '' : accountId)
     }
     setToAccountId('')
     setCategoryId('')
     setUserRate('')
     setFxNote('')
     setFxError('')
-    // The category that justified the autofill is gone, so the notice offering
-    // to undo it has nothing left to describe.
-    setAutofilled([])
+    // The category that justified the autofill is cleared above, so what it
+    // seeded goes too. Dropping only the notice would strand a grocery payee
+    // and its tags in an income entry — and leave them non-empty, so the income
+    // category picked next could no longer fill them either.
+    undoAutofill()
   }
 
   const typeOptions = [
@@ -928,48 +932,67 @@ export function TransactionForm({
    * - it is off unless the user turned it on, and each of the three fields can
    *   be excluded on its own.
    *
-   * Returns the fields it filled, both to drive the undo notice and to tell the
-   * chain which fields no longer need visiting.
+   * `replaceable` names the fields a *previous* category seeded and the user
+   * never touched. Those are this feature's own guesses rather than choices, so
+   * they count as empty here and must not outlive the category that justified
+   * them: the new category either fills them again or they are cleared. Without
+   * that, re-picking a category would submit the new one with the old one's
+   * account, payee and tags — and, because nothing was written, with no Undo
+   * notice offering to take them back.
+   *
+   * Returns every field it touched, mapped to whether it left a value there —
+   * which drives the undo notice and tells the chain which fields no longer
+   * need visiting (and which were just emptied and do).
    */
-  const applyCategoryMemory = (nextCategoryId: string) => {
+  const applyCategoryMemory = (
+    nextCategoryId: string,
+    replaceable: ChainField[] = []
+  ) => {
     const filled: Partial<Record<ChainField, boolean>> = {}
     if (!quickEntry.autofillFromLastInCategory) return filled
     const memory = categoryMemory?.[nextCategoryId]
-    if (!memory) return filled
     const allowed = quickEntry.autofillFields
+    // Free to write: the user left it empty, or what's there is our own guess
+    // for the category being replaced.
+    const free = (field: ChainField, isEmpty: boolean) =>
+      isEmpty || replaceable.includes(field)
 
-    if (
+    const rememberedAccount =
       allowed.account &&
-      !accountId &&
-      memory.accountId &&
+      memory?.accountId &&
       availableAccounts.some((account) => account.id === memory.accountId)
-    ) {
-      setAccountId(memory.accountId)
+        ? memory.accountId
+        : ''
+    if (free('account', !accountId) && (rememberedAccount || replaceable.includes('account'))) {
+      setAccountId(rememberedAccount)
       // Same reset selectAccount does: a remembered account can be in another
       // currency, and a rate typed for the previous one must not survive it.
       setUserRate('')
       setFxNote('')
       setFxError('')
-      filled.account = true
+      // `false` rather than absent: `nextInChain` overlays this on state that
+      // has not updated yet, so a field cleared here must be reported empty or
+      // the chain skips right over it.
+      filled.account = Boolean(rememberedAccount)
     }
 
-    if (allowed.payee && showField('payee') && !payeeName && memory.payeeName) {
-      setPayeeName(memory.payeeName)
-      filled.payee = true
+    const rememberedPayee =
+      allowed.payee && showField('payee') ? memory?.payeeName || '' : ''
+    if (free('payee', !payeeName) && (rememberedPayee || replaceable.includes('payee'))) {
+      setPayeeName(rememberedPayee)
+      filled.payee = Boolean(rememberedPayee)
     }
 
+    const rememberedTags =
+      allowed.tags && showField('tags') && !isTransfer
+        ? (memory?.tagIds ?? []).filter((id) => tags.some((tag) => tag.id === id))
+        : []
     if (
-      allowed.tags &&
-      showField('tags') &&
-      !isTransfer &&
-      tagIds.length === 0 &&
-      memory.tagIds.length > 0
+      free('tags', tagIds.length === 0) &&
+      (rememberedTags.length > 0 || replaceable.includes('tags'))
     ) {
-      const known = memory.tagIds.filter((id) => tags.some((tag) => tag.id === id))
-      if (known.length > 0) {
-        setTagIds(known)
-        filled.tags = true
-      }
+      setTagIds(rememberedTags)
+      filled.tags = rememberedTags.length > 0
     }
 
     return filled
@@ -1023,7 +1046,10 @@ export function TransactionForm({
 
   const selectCategory = (id: string) => {
     setCategoryId(id)
-    const filled = applyCategoryMemory(id)
+    // Whatever is still in `autofilled` belongs to the category being replaced,
+    // so it is fair game; a field the user edited dropped out of that list when
+    // they edited it and is left alone.
+    const filled = applyCategoryMemory(id, autofilled)
     const seeded = (Object.keys(filled) as ChainField[]).filter((field) => filled[field])
     setAutofilled(seeded)
     // Seeded something → the next hop must not raise the keyboard, or the
@@ -1249,6 +1275,10 @@ export function TransactionForm({
       setUserRate('')
       setFxNote('')
       setFxError('')
+      // Creating an account and picking it is as deliberate as choosing one, so
+      // it leaves the Undo notice — otherwise Undo would clear the account they
+      // just made.
+      clearAutofilled('account')
     }
     setNewAccountName('')
     closePicker()
@@ -1309,7 +1339,13 @@ export function TransactionForm({
     <Input
       placeholder="Search or add a payee"
       value={payeeName}
-      onChange={(e) => setPayeeName(e.target.value)}
+      // Typing here is the user overruling the autofill, exactly as it is in the
+      // desktop picker — so it drops out of the Undo notice too, or Undo would
+      // later erase what they typed.
+      onChange={(e) => {
+        setPayeeName(e.target.value)
+        clearAutofilled('payee')
+      }}
       type="search"
       autoComplete="off"
     />

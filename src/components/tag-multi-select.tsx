@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Plus, Tags, X } from 'lucide-react'
 import { quickCreateTag } from '@/app/dashboard/quick-create-actions'
 import { SelectorSheet } from '@/components/selector-sheet'
@@ -106,6 +106,17 @@ export function TagMultiSelect({
     onOpenChange?.(next)
   }
 
+  /**
+   * `handleCreate` awaits the server, and nothing stops the user toggling other
+   * tags while it does. Reading the selection back from a ref rather than from
+   * the closure means the created tag is merged into whatever is selected when
+   * the request lands, instead of restoring the snapshot from when it was sent.
+   */
+  const selectedRef = useRef(selected)
+  useEffect(() => {
+    selectedRef.current = selected
+  }, [selected])
+
   const selectedSet = useMemo(() => new Set(selected), [selected])
   const query = search.trim()
   const normalizedQuery = query.toLowerCase()
@@ -135,7 +146,8 @@ export function TagMultiSelect({
     }
     const tag = result.tag
     setCreatedTags((prev) => (prev.some((t) => t.id === tag.id) ? prev : [...prev, tag]))
-    if (!selected.includes(tag.id)) setSelected([...selected, tag.id])
+    const current = selectedRef.current
+    if (!current.includes(tag.id)) setSelected([...current, tag.id])
     setSearch('')
   }
 
