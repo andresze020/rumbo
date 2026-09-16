@@ -23,8 +23,11 @@ import {
   getQuickAddFormData,
   type QuickAddFormData,
 } from '@/app/dashboard/quick-add-actions'
+import { X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { useBackDismiss } from '@/lib/use-back-dismiss'
+import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
 import { todayIsoDateLocal } from '@/lib/format'
 
 type TransactionType = 'income' | 'expense'
@@ -74,75 +77,58 @@ function todayIsoDate() {
 }
 
 /**
- * On mobile the dialog is a bottom-anchored sheet, so when the soft keyboard
- * opens it covers the sheet's footer (Create / Save & Add Next / Cancel). The
- * layout viewport doesn't shrink on iOS, so we measure the keyboard overlap via
- * the VisualViewport API and lift the sheet above it. Returns 0 on desktop (no
- * soft keyboard) and on narrow-viewport-only, so the centered desktop dialog is
- * never affected.
- */
-function useMobileKeyboardInset() {
-  const [inset, setInset] = useState(0)
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    const update = () => {
-      const isMobile = window.matchMedia('(max-width: 639px)').matches
-      // Overlap between the layout viewport bottom and the visual viewport
-      // bottom — i.e. the height taken by the keyboard. Ignore small deltas
-      // (browser toolbars) so only a real keyboard triggers the lift.
-      const overlap = window.innerHeight - vv.height - vv.offsetTop
-      setInset(isMobile && overlap > 120 ? Math.round(overlap) : 0)
-    }
-    update()
-    vv.addEventListener('resize', update)
-    vv.addEventListener('scroll', update)
-    window.addEventListener('resize', update)
-    return () => {
-      vv.removeEventListener('resize', update)
-      vv.removeEventListener('scroll', update)
-      window.removeEventListener('resize', update)
-    }
-  }, [])
-  return inset
-}
-
-/**
  * Scroll whatever field is being typed into back into view once the keyboard
  * is up.
  *
- * Lifting the sheet above the keyboard keeps its footer reachable but leaves
- * very little sheet: header, the pinned action buttons and the keyboard
- * together can cover the amount field you just tapped, so you were typing a
- * number you could not see. The browser's own "scroll the focused input into
- * view" runs before the sheet has been resized and lands in the wrong place,
- * so redo it against the final geometry.
+ * Lifting the sheet above the keyboard leaves very little sheet, and the
+ * browser's own "scroll the focused input into view" runs before the sheet has
+ * been resized and lands in the wrong place, so redo it against the final
+ * geometry.
  */
-function useKeepFocusedFieldVisible(keyboardInset: number) {
+function useKeepFocusedFieldVisible(keyboardOpen: boolean) {
   useEffect(() => {
-    if (!keyboardInset) return
+    if (!keyboardOpen) return
 
     const reveal = () => {
       const active = document.activeElement
       if (!(active instanceof HTMLElement)) return
       if (!active.matches('input, select, textarea')) return
-      // Centred rather than merely "in view": the action bar is sticky over the
-      // bottom of the sheet, and `nearest` happily parks a field underneath it.
-      active.scrollIntoView({ block: 'center', behavior: 'smooth' })
+
+      // Only when the field is actually out of the way. Scrolling a field that
+      // is already on screen is what made a deliberate scroll snap back: the
+      // user drags, this fires, and the page yanks itself home.
+      const rect = active.getBoundingClientRect()
+      const visibleBottom = window.visualViewport
+        ? window.visualViewport.height
+        : window.innerHeight
+      if (rect.top >= 0 && rect.bottom <= visibleBottom) return
+
+      // Top, not centre. Centring was there to keep the field clear of the
+      // sticky action bar, which now hides itself while the keyboard is up —
+      // and centring spent the whole sheet on the one field you are already
+      // looking at. Anchoring it to the top spends the rest on the fields that
+      // come *after* it, which is what you need to see next.
+      active.scrollIntoView({ block: 'start', behavior: 'smooth' })
     }
 
     // The sheet resizes a frame or two behind the keyboard animation; wait for
-    // the new height before deciding where the middle is.
+    // the new height before deciding where the top is.
     const timer = window.setTimeout(reveal, 150)
-    // Moving between fields while the keyboard is already up never changes the
-    // inset, so this effect would not re-run on its own.
+    // Moving between fields while the keyboard is already up does not reopen
+    // it, so this effect would not re-run on its own.
     document.addEventListener('focusin', reveal)
 
     return () => {
       window.clearTimeout(timer)
       document.removeEventListener('focusin', reveal)
     }
-  }, [keyboardInset])
+    // Deliberately the *boolean*, not the pixel inset. Scrolling with the
+    // keyboard up hides and shows the browser's URL bar, which changes
+    // `window.innerHeight` and so the measured inset — and keying this effect
+    // on that number meant every one of those wobbles re-ran it and dragged the
+    // page back to the focused field mid-scroll. Only opening the keyboard
+    // should reveal anything; the guard above handles the rest.
+  }, [keyboardOpen])
 }
 
 /**
@@ -232,8 +218,9 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t } = useLanguage()
-  const keyboardInset = useMobileKeyboardInset()
-  useKeepFocusedFieldVisible(keyboardInset)
+  const ui = useUiTranslation()
+  const keyboardInset = useSoftKeyboardInset()
+  useKeepFocusedFieldVisible(keyboardInset > 0)
 
   // Read pending "Save and Add Next" defaults straight from the URL on first
   // render so a freshly mounted provider (e.g. after a server-action redirect
@@ -494,6 +481,10 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
         }}
       >
         <DialogContent
+          // Own close button: the built-in one is absolutely positioned in the
+          // corner, where on a phone it lands on top of the type selector's
+          // "Transfer". Ours gets its own row instead (see below).
+          showCloseButton={false}
           // Lift the mobile bottom sheet above the on-screen keyboard so its
           // footer buttons stay reachable; no-op on desktop (inset is 0).
           style={
@@ -502,20 +493,48 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
               : undefined
           }
           className={
-            // Centered dialog on desktop; native-style bottom sheet on mobile.
+            // Centered dialog on desktop; a full screen on mobile. It used to be
+            // a 92dvh bottom sheet, which left a strip of dashboard above it and
+            // spent the remaining 8% on nothing — while the form below still had
+            // to scroll. A phone entering a transaction is doing one thing, so it
+            // gets the whole screen: `h-dvh`, square corners, and the actions
+            // pushed to the bottom edge by the spacer inside the form.
             'max-h-[90dvh] overflow-y-auto sm:max-w-xl ' +
+            // Flex column on mobile so the form can claim the leftover height
+            // and pin its actions to the bottom edge; the desktop grid is
+            // untouched.
+            'max-sm:flex max-sm:flex-col max-sm:gap-3 ' +
             'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 ' +
-            'max-sm:max-h-[92dvh] max-sm:rounded-t-2xl max-sm:rounded-b-none ' +
-            'max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] ' +
+            'max-sm:h-dvh max-sm:max-h-dvh max-sm:rounded-none ' +
+            'max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] ' +
             'max-sm:data-open:slide-in-from-bottom-10 max-sm:data-closed:slide-out-to-bottom-10'
           }
         >
-          <div aria-hidden="true" className="mx-auto -mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
-          {/* With the keyboard up the sheet is only a few hundred pixels tall,
-              and the title plus its subtitle eat a third of that describing
-              something you are already doing. Collapsed to screen-reader-only
-              (not unmounted) so the dialog keeps its accessible name. */}
-          <DialogHeader className={keyboardInset ? 'sr-only' : undefined}>
+          {/* The drag handle was a bottom-sheet affordance, and this is a full
+              screen now — nothing to drag it down by, and this X is the way
+              out. Desktop never showed the handle. */}
+
+          {/* A row of its own on mobile, not a corner overlay: absolutely
+              positioned it sat on top of the type selector and clipped
+              "Transfer". On desktop it goes back to the corner, where there is
+              a title bar to sit beside and nothing to collide with. */}
+          <div className="flex shrink-0 justify-end sm:absolute sm:top-2 sm:right-2 sm:z-10">
+            <button
+              type="button"
+              onClick={closeDialog}
+              aria-label={ui('Close')}
+              className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground transition-colors active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-7 sm:bg-transparent sm:text-muted-foreground sm:hover:bg-muted"
+            >
+              <X className="size-5 sm:size-4" aria-hidden="true" />
+            </button>
+          </div>
+          {/* Screen-reader-only on every phone, not just under a keyboard: the
+              title and its subtitle spend ~70px describing something the user
+              just tapped a button to do, and the segmented control plus the
+              AMOUNT label below say it anyway. `sr-only` rather than unmounted,
+              so the dialog keeps its accessible name — and `DialogContent`
+              draws its own close X, so nothing here is the way out. */}
+          <DialogHeader className="max-sm:sr-only">
             <DialogTitle>{t('transactionForm.dialogTitle')}</DialogTitle>
             <DialogDescription>
               {t('transactionForm.dialogDescription')}
@@ -563,6 +582,8 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
                 defaultFromAccountId={copyDefaults?.fromAccountId}
                 defaultToAccountId={copyDefaults?.toAccountId}
                 visibleFields={formData.formFields}
+                quickEntry={formData.quickEntry}
+                categoryMemory={formData.categoryMemory}
                 // The full view, filters included — not just the pathname, or
                 // the redirect after "Create transaction" lands on an
                 // unfiltered list.

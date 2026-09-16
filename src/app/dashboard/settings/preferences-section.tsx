@@ -9,7 +9,11 @@ import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
 import { updateUiPreferencesAction } from './settings-actions'
 import { nativeSelectCls } from '@/lib/form-styles'
-import type { TransactionFormField, UiPreferences } from '@/lib/preferences/shared'
+import type {
+  QuickEntryAutofillField,
+  TransactionFormField,
+  UiPreferences,
+} from '@/lib/preferences/shared'
 
 type AccountOption = { id: string; name: string }
 
@@ -47,6 +51,27 @@ const FORM_FIELD_LABELS: Record<TransactionFormField, { label: string; descripti
     label: 'Time of day',
     description:
       'Orders same-day entries. Off by default, and it never changes which month a transaction belongs to.',
+  },
+}
+
+const AUTOFILL_FIELD_LABELS: Record<QuickEntryAutofillField, string> = {
+  account: 'Account',
+  payee: 'Payee',
+  tags: 'Tags',
+}
+
+const FIELD_ORDER_LABELS: Record<
+  UiPreferences['quickEntry']['fieldOrder'],
+  { label: string; description: string }
+> = {
+  category_first: {
+    label: 'Category, then account',
+    description:
+      'The category sits directly under the amount. Pair it with the autofill below: the category is the field that predicts the rest of the entry.',
+  },
+  account_first: {
+    label: 'Account, then category',
+    description: 'The order the form used before.',
   },
 }
 
@@ -145,6 +170,74 @@ export function PreferencesSection({
                   description={FORM_FIELD_LABELS[field].description}
                 />
               ))}
+            </div>
+          </fieldset>
+
+          <fieldset className="space-y-3 border-t pt-6">
+            <legend className="text-sm font-medium">Quick entry</legend>
+            <p className="text-xs text-muted-foreground">
+              How fast the add-transaction form is to fill in. Nothing here changes
+              what gets saved — only what the form offers you before you save it.
+            </p>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="field_order">Field order</Label>
+              <select
+                id="field_order"
+                name="field_order"
+                defaultValue={preferences.quickEntry.fieldOrder}
+                className={nativeSelectCls}
+              >
+                {(
+                  Object.keys(FIELD_ORDER_LABELS) as Array<keyof typeof FIELD_ORDER_LABELS>
+                ).map((order) => (
+                  <option key={order} value={order}>
+                    {FIELD_ORDER_LABELS[order].label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {FIELD_ORDER_LABELS[preferences.quickEntry.fieldOrder].description}
+              </p>
+            </div>
+
+            <CheckboxRow
+              name="auto_advance"
+              defaultChecked={preferences.quickEntry.autoAdvance}
+              label="Jump to the next field"
+              description="Choosing a value opens the next field you have not filled in yet, all the way to tags. Correcting one field on its own never chains."
+            />
+
+            <CheckboxRow
+              name="autofill_from_category"
+              defaultChecked={preferences.quickEntry.autofillFromLastInCategory}
+              label="Fill from the last entry in the category"
+              description="When you pick a category, copy the account, payee and tags from the most recent transaction in it, and offer that category's recent descriptions as one-tap chips. Only ever fills fields you have left empty, and every value stays editable. Untick all three below to get the description chips and nothing else."
+            />
+
+            <div className="space-y-2 rounded-lg border border-dashed p-3">
+              <p className="text-sm font-medium">Fields it may fill</p>
+              <div className="flex flex-wrap gap-3">
+                {(Object.keys(AUTOFILL_FIELD_LABELS) as QuickEntryAutofillField[]).map(
+                  (field) => (
+                    <Label
+                      key={field}
+                      className="cursor-pointer items-center gap-2 font-normal"
+                    >
+                      <input
+                        type="checkbox"
+                        name={`autofill_${field}`}
+                        defaultChecked={preferences.quickEntry.autofillFields[field]}
+                        className="size-4 shrink-0 accent-primary"
+                      />
+                      <span>{AUTOFILL_FIELD_LABELS[field]}</span>
+                    </Label>
+                  )
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ignored while the switch above is off.
+              </p>
             </div>
           </fieldset>
 

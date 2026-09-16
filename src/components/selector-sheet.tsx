@@ -16,12 +16,18 @@ type SelectorSheetProps = {
    * header shows a back chevron and Back/Escape step up instead of closing.
    */
   onBack?: () => void
+  /**
+   * The picker's search field. Rendered in a fixed strip under the header
+   * rather than at the top of the scrolling list, so it stays put — and
+   * visible — while the list scrolls and the keyboard is up.
+   */
+  search?: ReactNode
   children: ReactNode
 }
 
 /**
- * Full-screen, mobile-only picker surface for the transaction form's
- * Account / Category / Payee selectors.
+ * Mobile-only picker surface, shared by the transaction form's Account /
+ * Category / Payee selectors and by the tag multi-select.
  *
  * Why a plain fixed overlay instead of vaul/Base-UI here: the transaction form
  * already lives inside a Base UI Dialog (a bottom sheet on mobile), which traps
@@ -41,6 +47,7 @@ export function SelectorSheet({
   onClose,
   title,
   onBack,
+  search,
   children,
 }: SelectorSheetProps) {
   const ui = useUiTranslation()
@@ -76,34 +83,32 @@ export function SelectorSheet({
   if (!open) return null
 
   return (
-    // A bottom sheet that hugs its content instead of a full-screen surface:
-    // short lists (a handful of accounts) leave no dead space, and the sheet
-    // only grows to `max-h` when there are enough items to need scrolling. When
-    // the user taps the search field the keyboard raises the sheet and the list
-    // scrolls within its own max-height — the picker never gets buried.
+    // A full screen, not a bottom sheet that hugs its content. Hugging was fine
+    // for a handful of accounts, but a real category or payee list is long: the
+    // sheet grew to its max, the keyboard took half of what was left, and the
+    // search box you were typing into scrolled out of the top. Picking a field
+    // is its own task, so it gets its own screen — header fixed, search fixed
+    // under it (see `search`), and only the list scrolls.
     <div
       role="dialog"
       aria-modal="true"
-      className="vv-pin-screen fixed inset-0 z-[60] flex flex-col justify-end sm:hidden"
+      // `h-dvh` and an opaque background on the *outer* box, not just the panel.
+      // `inset-0` is not the screen here: the transaction dialog carries
+      // `translate-x-0`/`translate-y-0` on mobile, and any `translate` other
+      // than `none` makes an element a containing block for its `fixed`
+      // descendants — so this sheet is measured against the dialog, which the
+      // keyboard shortens. That left a band below the list showing the form
+      // behind it. Sizing to the viewport and painting the whole box closes it
+      // whatever the dialog's height turns out to be.
+      className="vv-pin-screen fixed inset-0 z-[60] flex h-dvh flex-col bg-background sm:hidden"
     >
       <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-black/40 animate-in fade-in-0 duration-200"
-        onClick={onClose}
-      />
-
-      <div
         className={cn(
-          'relative flex max-h-[85dvh] flex-col rounded-t-2xl border-t bg-background',
+          'relative flex h-full min-h-0 flex-col bg-background',
           'animate-in slide-in-from-bottom-4 duration-200'
         )}
       >
-        <div
-          aria-hidden="true"
-          className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-muted-foreground/30"
-        />
-
-        <header className="flex items-center gap-1 border-b px-2 pb-2 pt-1.5">
+        <header className="flex shrink-0 items-center gap-1 border-b px-2 pb-2 pt-[max(0.375rem,env(safe-area-inset-top))]">
           {/* A full-size tap target in the header, not a small text link buried
               in the scrolling body: stepping back out of a subcategory list is
               the most repeated move in this sheet. */}
@@ -129,6 +134,13 @@ export function SelectorSheet({
             <X className="size-5" aria-hidden="true" />
           </button>
         </header>
+
+        {/* Fixed under the header, outside the scroller. This is the whole
+            reason the sheet went full-screen: with the search inside the list,
+            typing scrolled it away and you could not see what you had typed. */}
+        {search ? (
+          <div className="shrink-0 border-b px-3 py-2">{search}</div>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
           {children}

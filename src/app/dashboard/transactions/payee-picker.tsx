@@ -109,6 +109,10 @@ export function PayeePicker({
           <Autocomplete.Input
             id={id}
             name="payee_name"
+            // Without this, Android reads the `name` in `payee_name` as a
+            // person-name field and offers the saved-addresses profile. This is
+            // the household's own payee list, not a contact.
+            autoComplete="off"
             placeholder={ui('Search or add a payee')}
             render={<Input className="pl-10" />}
           />

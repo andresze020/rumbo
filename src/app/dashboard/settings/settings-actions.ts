@@ -6,7 +6,9 @@ import { createClient } from '@/lib/supabase/server'
 import {
   DEFAULT_UI_PREFERENCES,
   isTextSize,
+  isTransactionFieldOrder,
   isTransactionPeriod,
+  QUICK_ENTRY_AUTOFILL_FIELDS,
   TRANSACTION_FORM_FIELDS,
   type UiPreferences,
 } from '@/lib/preferences/shared'
@@ -222,12 +224,26 @@ export async function updateUiPreferencesAction(formData: FormData) {
   ]
   const period = String(formData.get('default_period') ?? '')
   const textSize = String(formData.get('text_size') ?? '')
+  const fieldOrder = String(formData.get('field_order') ?? '')
 
   const preferences: UiPreferences = {
     textSize: isTextSize(textSize) ? textSize : DEFAULT_UI_PREFERENCES.textSize,
     formFields: Object.fromEntries(
       TRANSACTION_FORM_FIELDS.map((field) => [field, formData.get(`field_${field}`) !== null])
     ) as UiPreferences['formFields'],
+    quickEntry: {
+      fieldOrder: isTransactionFieldOrder(fieldOrder)
+        ? fieldOrder
+        : DEFAULT_UI_PREFERENCES.quickEntry.fieldOrder,
+      autofillFromLastInCategory: formData.get('autofill_from_category') !== null,
+      autofillFields: Object.fromEntries(
+        QUICK_ENTRY_AUTOFILL_FIELDS.map((field) => [
+          field,
+          formData.get(`autofill_${field}`) !== null,
+        ])
+      ) as UiPreferences['quickEntry']['autofillFields'],
+      autoAdvance: formData.get('auto_advance') !== null,
+    },
     transactions: {
       defaultPeriod: isTransactionPeriod(period)
         ? period

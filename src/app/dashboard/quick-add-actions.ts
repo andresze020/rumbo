@@ -2,6 +2,10 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getUiPreferences } from '@/lib/preferences/server'
+import {
+  loadCategoryEntryMemory,
+  type CategoryEntryMemory,
+} from '@/lib/quick-entry/category-memory'
 import type { UiPreferences } from '@/lib/preferences/shared'
 
 export type QuickAddAccount = {
@@ -45,6 +49,14 @@ export type QuickAddFormData = {
   currencies: string[]
   /** BR-032: which optional form fields this user wants rendered. */
   formFields: UiPreferences['formFields']
+  /** BR-046: field order, autofill and auto-advance. */
+  quickEntry: UiPreferences['quickEntry']
+  /**
+   * BR-046: what the last entry in each category looked like. Empty when the
+   * autofill preference is off — there is no reason to ship a map the form is
+   * not allowed to read.
+   */
+  categoryMemory: CategoryEntryMemory
 }
 
 export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
@@ -64,6 +76,7 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
     if (!profile?.default_household_id) return null
 
     const householdId = profile.default_household_id
+    const preferences = await getUiPreferences()
 
     const [householdResult, accountsResult, categoriesResult, payeesResult, tagsResult, currenciesResult] = await Promise.all([
       supabase
@@ -106,6 +119,12 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
         .order('code', { ascending: true }),
     ])
 
+    // Only fetched when the user has actually turned the autofill on, so the
+    // default install pays nothing for a feature it is not using.
+    const categoryMemory = preferences.quickEntry.autofillFromLastInCategory
+      ? await loadCategoryEntryMemory(supabase, householdId)
+      : {}
+
     return {
       baseCurrency: householdResult.data?.base_currency ?? 'CAD',
       accounts: (accountsResult.data ?? []) as QuickAddAccount[],
@@ -113,7 +132,9 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
       payees: (payeesResult.data ?? []) as QuickAddPayee[],
       tags: (tagsResult.data ?? []) as QuickAddTag[],
       currencies: (currenciesResult.data ?? []).map((c) => c.code as string),
-      formFields: (await getUiPreferences()).formFields,
+      formFields: preferences.formFields,
+      quickEntry: preferences.quickEntry,
+      categoryMemory,
     }
   } catch {
     return null
