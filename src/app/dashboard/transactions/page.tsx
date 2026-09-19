@@ -17,7 +17,6 @@ import { TransactionToasts } from './transaction-toasts'
 import { RememberTransactionScope } from './remember-scope'
 import { TransactionsHeader } from './transactions-header'
 import { TransactionsSummary } from './transactions-summary'
-import { MONTH_TOKEN, type PeriodMode } from './period-selector'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
@@ -33,6 +32,18 @@ import {
   hasDefaultTransactionScope,
   type UiPreferences,
 } from '@/lib/preferences/shared'
+import {
+  ALL_TIME_FROM,
+  ALL_TIME_TO,
+  appendPeriodParams,
+  currentMonth,
+  formatPeriodLabel,
+  hasPeriodParam,
+  offsetDate,
+  parseTransactionPeriod,
+  todayIsoDate,
+  type TransactionPeriod,
+} from '@/lib/periods/transaction-period'
 import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import { createUiTranslator } from '@/lib/i18n/ui'
@@ -41,11 +52,8 @@ import type { Locale } from '@/lib/i18n/dictionaries'
 import {
   formatCurrency,
   formatIsoDate,
-  formatIsoDateRange,
   formatIsoTime,
   formatLabel as formatValue,
-  formatMonthLabel,
-  formatMonthLabelShort,
   localeToBcp47,
 } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -56,6 +64,7 @@ type TransactionsPageProps = {
     error?: string
     voided?: string
     updated?: string
+    period?: string
     month?: string
     date_from?: string
     date_to?: string
@@ -166,9 +175,11 @@ type CategoryLookup = {
 type TransactionFilters = {
   accountIds: string[]
   categoryIds: string[]
-  month: string
-  dateFrom: string
-  dateTo: string
+  /**
+   * The one period this screen is showing. Not a month *and* a range that can
+   * disagree — see `lib/periods/transaction-period`.
+   */
+  period: TransactionPeriod
   search: string
   statuses: string[]
   review: string
@@ -207,51 +218,6 @@ type TransactionRow = {
   transferInEntry?: TransactionEntry
   transferOutEntry?: TransactionEntry
   transferToAccountName: string
-}
-
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function currentMonth() {
-  return todayIsoDate().slice(0, 7)
-}
-
-function normalizeMonth(value: string | undefined) {
-  return value && /^\d{4}-\d{2}$/.test(value) ? value : currentMonth()
-}
-
-function monthFirstDay(month: string) {
-  return `${month}-01`
-}
-
-function monthLastDay(month: string) {
-  const [yr, mo] = month.split('-').map(Number)
-  return new Date(Date.UTC(yr, mo, 0)).toISOString().slice(0, 10)
-}
-
-function offsetDate(baseDate: string, days: number): string {
-  const [yr, mo, dy] = baseDate.split('-').map(Number)
-  return new Date(Date.UTC(yr, mo - 1, dy + days)).toISOString().slice(0, 10)
-}
-
-// Shift a YYYY-MM month string by whole months (negative = earlier).
-function offsetMonth(month: string, months: number): string {
-  const [yr, mo] = month.split('-').map(Number)
-  return new Date(Date.UTC(yr, mo - 1 + months, 1)).toISOString().slice(0, 7)
-}
-
-// A range wide enough to cover every transaction, used for the "All time" preset.
-const ALL_TIME_FROM = '2000-01-01'
-const ALL_TIME_TO = '2099-12-31'
-
-function formatDateRangeLabel(dateFrom: string, dateTo: string, locale: Locale): string {
-  const fromMonth = dateFrom.slice(0, 7)
-  const toMonth = dateTo.slice(0, 7)
-  if (fromMonth === toMonth) {
-    return formatMonthLabel(fromMonth, locale)
-  }
-  return formatIsoDateRange(dateFrom, dateTo, locale)
 }
 
 function normalizeOption(value: string | undefined, allowedValues: string[]) {
@@ -369,21 +335,18 @@ function inheritCategoryVisual(
   return null
 }
 
+/**
+ * The URL for a set of filters. One writer, and the period goes through
+ * `appendPeriodParams` — the same function `parseTransactionPeriod` reads back
+ * — so a link this builds and a link a user pastes resolve identically.
+ */
 function transactionsPath(
   filters: TransactionFilters,
   panel?: { edit?: string; mode?: 'create'; refund?: string }
 ) {
   const params = new URLSearchParams()
 
-  if (filters.dateFrom && filters.dateTo) {
-    params.set('date_from', filters.dateFrom)
-    params.set('date_to', filters.dateTo)
-  } else if (filters.payeeIds.length === 0 && filters.tagIds.length === 0) {
-    // A payee/tag filter with no explicit range is an all-time view of that
-    // payee/tag — don't pin it to the current month, or navigating back to this
-    // URL would hide its transactions from other months.
-    params.set('month', filters.month || currentMonth())
-  }
+  appendPeriodParams(params, filters.period)
 
   for (const value of filters.types) params.append('type', value)
   for (const value of filters.statuses) params.append('status', value)
@@ -401,16 +364,21 @@ function transactionsPath(
 }
 
 /**
- * "Clear filters" has to mean *no* filters — every account, every date.
+ * "Show me everything" — every account, every date.
  *
  * A bare `/dashboard/transactions` will not do: that is exactly the URL the
  * BR-038 landing preferences claim, so clearing would bounce straight back to
- * the user's default period and account. Spelling out the widest possible range
- * both keeps the redirect out of the way and says what it means.
+ * the user's default period and account. Naming the period explicitly both
+ * keeps the redirect out of the way and says what it means.
+ *
+ * Note this is *not* what the filter sheet's "Clear all" uses any more: the
+ * period is its own context now, and clearing a category should not silently
+ * widen the months you were looking at.
  */
-const CLEAR_FILTERS_HREF = `/dashboard/transactions?date_from=${ALL_TIME_FROM}&date_to=${ALL_TIME_TO}`
+const CLEAR_FILTERS_HREF = '/dashboard/transactions?period=all-time'
 
 const FILTER_PARAM_KEYS = [
+  'period',
   'month',
   'date_from',
   'date_to',
@@ -526,27 +494,6 @@ export default async function TransactionsPage({
     redirect(preferredScopeHref(preferences, params))
   }
 
-  const rawDateFrom = typeof params.date_from === 'string' ? params.date_from : ''
-  const rawDateTo = typeof params.date_to === 'string' ? params.date_to : ''
-  const hasCustomDateRange =
-    Boolean(rawDateFrom && rawDateTo) &&
-    /^\d{4}-\d{2}-\d{2}$/.test(rawDateFrom) &&
-    /^\d{4}-\d{2}-\d{2}$/.test(rawDateTo)
-
-  let resolvedDateFrom: string
-  let resolvedDateTo: string
-  let resolvedMonth: string
-
-  if (hasCustomDateRange) {
-    resolvedDateFrom = rawDateFrom
-    resolvedDateTo = rawDateTo
-    resolvedMonth = rawDateFrom.slice(0, 7)
-  } else {
-    resolvedMonth = normalizeMonth(params.month)
-    resolvedDateFrom = monthFirstDay(resolvedMonth)
-    resolvedDateTo = monthLastDay(resolvedMonth)
-  }
-
   // Type, status and payee are multi-value like account/category/tag: an empty
   // list means "all", so "no filter" and "every option ticked" stay the same
   // query. Unknown values are dropped rather than passed through to the RPC.
@@ -563,19 +510,26 @@ export default async function TransactionsPage({
   const selectedPayeeIds = toIdList(params.payee_id)
   const selectedTagIds = toIdList(params.tag_id)
 
-  // A payee/tag filter defaults to an all-time view; only constrain by date when
-  // the user has explicitly picked a month or a custom range.
-  const applyDateWindow =
-    (selectedPayeeIds.length === 0 && selectedTagIds.length === 0) ||
-    hasCustomDateRange ||
-    params.month !== undefined
+  // ── The period, resolved exactly once ─────────────────────────────────────
+  // Everything below reads `period`: the RPC's date bounds, the totals, the
+  // count, the date headers and the control's own label. There is no second
+  // month or range living anywhere else for it to disagree with.
+  //
+  // A payee- or tag-only URL says nothing about a period, and those views are
+  // all of history by design — so that is what it resolves to, rather than
+  // being labelled with a month the results do not have.
+  const period = parseTransactionPeriod(params, {
+    unboundedFallback:
+      (selectedPayeeIds.length > 0 || selectedTagIds.length > 0) &&
+      !hasPeriodParam(params),
+  })
+  const resolvedDateFrom = period.dateFrom
+  const resolvedDateTo = period.dateTo
 
   const filters: TransactionFilters = {
     accountIds: selectedAccountIds,
     categoryIds: selectedCategoryIds,
-    month: resolvedMonth,
-    dateFrom: hasCustomDateRange ? resolvedDateFrom : '',
-    dateTo: hasCustomDateRange ? resolvedDateTo : '',
+    period,
     search: searchText,
     statuses: selectedStatuses,
     review: selectedReview,
@@ -584,17 +538,27 @@ export default async function TransactionsPage({
     tagIds: selectedTagIds,
   }
 
+  /**
+   * The filters the sheet owns — everything except the period.
+   *
+   * This is what the "Filters" badge counts and what "Clear" and "Clear all"
+   * reset. The period is deliberately not in it: it is a context of its own
+   * now, so "2 filters" never means "and also September", and clearing a
+   * category never silently widens the months you were reading.
+   */
+  const generalFilterCount =
+    (selectedTypes.length > 0 ? 1 : 0) +
+    (selectedStatuses.length > 0 ? 1 : 0) +
+    (selectedReview !== 'all' ? 1 : 0) +
+    (selectedAccountIds.length > 0 ? 1 : 0) +
+    (selectedCategoryIds.length > 0 ? 1 : 0) +
+    (selectedPayeeIds.length > 0 ? 1 : 0) +
+    (selectedTagIds.length > 0 ? 1 : 0)
+  const hasGeneralFilters = generalFilterCount > 0
+  // Whether the *view* is narrowed at all, period included. Drives the empty
+  // states and what gets remembered for the next bare landing.
   const hasActiveFilters =
-    hasCustomDateRange ||
-    params.month !== undefined ||
-    selectedTypes.length > 0 ||
-    selectedStatuses.length > 0 ||
-    selectedReview !== 'all' ||
-    selectedAccountIds.length > 0 ||
-    selectedCategoryIds.length > 0 ||
-    searchText.length > 0 ||
-    selectedPayeeIds.length > 0 ||
-    selectedTagIds.length > 0
+    hasGeneralFilters || searchText.length > 0 || hasPeriodParam(params)
 
   const editTransactionId =
     typeof params.edit === 'string' ? params.edit : null
@@ -758,8 +722,10 @@ export default async function TransactionsPage({
     'search_household_transactions',
     {
       p_household_id: household.id,
-      p_date_from: applyDateWindow ? resolvedDateFrom : null,
-      p_date_to: applyDateWindow ? resolvedDateTo : null,
+      // `bounded` is false only for All time, where null bounds mean "no
+      // window" rather than a range that merely looks wide.
+      p_date_from: period.bounded ? resolvedDateFrom : null,
+      p_date_to: period.bounded ? resolvedDateTo : null,
       p_types: selectedTypes.length ? selectedTypes : null,
       p_statuses: selectedStatuses.length ? selectedStatuses : null,
       p_review: selectedReview !== 'all' ? selectedReview : null,
@@ -1106,7 +1072,6 @@ export default async function TransactionsPage({
   const visibleCount = totalCount
   const pendingCount = totalPending
   const importedCount = totalImported
-  const dateRangeLabel = formatDateRangeLabel(resolvedDateFrom, resolvedDateTo, locale)
 
   // What used to be a full header row of its own, and before that the
   // "ACTIVITY" title bar: how many rows the filters matched. It rides along
@@ -1148,83 +1113,36 @@ export default async function TransactionsPage({
       : `${listBasePath}${listBasePath.includes('?') ? '&' : '?'}page=${page}`
 
   // ── The period control ───────────────────────────────────────────────────
-  // It rebuilds this URL with its own month, so every other applied filter
-  // survives the change. `date_from`/`date_to` are dropped on purpose: a month
-  // and an explicit range are two answers to the same question, and the range
-  // wins over the month further up, so leaving one in would make the control
-  // look inert.
-  const monthHrefParams = new URLSearchParams(
-    transactionsPath(filters).split('?')[1] ?? ''
-  )
-  monthHrefParams.delete('date_from')
-  monthHrefParams.delete('date_to')
-  monthHrefParams.set('month', MONTH_TOKEN)
-  const monthHrefTemplate = `/dashboard/transactions?${monthHrefParams.toString()}`
+  // It owns the period and nothing else, so it navigates by rewriting only the
+  // period params on top of everything else that is applied. `baseQuery` is
+  // that everything-else; `appendPeriodParams` on the client writes the period
+  // back in the exact shape `parseTransactionPeriod` reads here.
+  const periodBaseParams = new URLSearchParams(listBasePath.split('?')[1] ?? '')
+  for (const key of ['period', 'month', 'date_from', 'date_to', 'page']) {
+    periodBaseParams.delete(key)
+  }
+  const periodBaseQuery = periodBaseParams.toString()
+  const periodLabel = formatPeriodLabel(period, locale, ui)
 
-  // "All time" keeps every other filter, exactly as a month does. It used to
-  // reuse CLEAR_FILTERS_HREF, which drops the lot — picking a period should
-  // never clear an account or a search.
-  const allTimeHref = transactionsPath({
+  // The mirror image, for the filter bar: the period params on their own. It
+  // rebuilds the query from its own staged filters and this, so applying a
+  // filter can no more change the period than picking a period can drop a
+  // filter.
+  const periodQuery = appendPeriodParams(new URLSearchParams(), period).toString()
+
+  // "Clear" and "Clear all" drop the general filters and the search, and leave
+  // the period exactly where it is.
+  const clearGeneralFiltersHref = transactionsPath({
     ...filters,
-    dateFrom: ALL_TIME_FROM,
-    dateTo: ALL_TIME_TO,
+    types: [],
+    statuses: [],
+    review: 'all',
+    accountIds: [],
+    categoryIds: [],
+    payeeIds: [],
+    tagIds: [],
+    search: '',
   })
-
-  // What the control is actually showing, in its own terms. Three cases, and
-  // the second is easy to miss: a payee/tag URL with no month and no range is
-  // an all-time view (`applyDateWindow` sends null bounds to the RPC), so
-  // labelling it with the current month would have the button claim a period
-  // the results do not have.
-  const isAllTimeView =
-    !applyDateWindow ||
-    (resolvedDateFrom === ALL_TIME_FROM && resolvedDateTo === ALL_TIME_TO)
-  // A range that happens to span exactly one calendar month *is* that month —
-  // the "This month" preset produces one — so the grid should light it up
-  // rather than treat it as an arbitrary range.
-  const rangeIsWholeMonth =
-    hasCustomDateRange &&
-    resolvedDateFrom === monthFirstDay(resolvedMonth) &&
-    resolvedDateTo === monthLastDay(resolvedMonth)
-  const periodMode: PeriodMode = isAllTimeView
-    ? 'all-time'
-    : !hasCustomDateRange || rangeIsWholeMonth
-    ? 'month'
-    : 'custom'
-  const periodLabel =
-    periodMode === 'all-time'
-      ? ui('All time')
-      : periodMode === 'custom'
-      ? dateRangeLabel
-      : formatMonthLabel(resolvedMonth, locale)
-  const periodShortLabel =
-    periodMode === 'all-time'
-      ? ui('All time')
-      : periodMode === 'custom'
-      ? dateRangeLabel
-      : formatMonthLabelShort(resolvedMonth, locale)
-
-  // Presets — computed server-side to bake in current non-date filters
-  const todayStr = todayIsoDate()
-  const thisYear = todayStr.slice(0, 4)
-  const thisMonthStr = currentMonth()
-  const lastMonthStr = offsetMonth(thisMonthStr, -1)
-  const rawPresets = [
-    { label: 'This month', from: monthFirstDay(thisMonthStr), to: monthLastDay(thisMonthStr) },
-    { label: 'Last month', from: monthFirstDay(lastMonthStr), to: monthLastDay(lastMonthStr) },
-    { label: 'Last 3 months', from: monthFirstDay(offsetMonth(thisMonthStr, -2)), to: todayStr },
-    { label: 'Last 6 months', from: monthFirstDay(offsetMonth(thisMonthStr, -5)), to: todayStr },
-    { label: 'Year to date', from: `${thisYear}-01-01`, to: todayStr },
-    { label: 'All time', from: ALL_TIME_FROM, to: ALL_TIME_TO },
-  ]
-  // Presets carry their raw range, not a link: clicking one has to stage the
-  // range in the form and wait for "Apply filters" like every other control.
-  // A navigating preset applied itself immediately, so dismissing the sheet
-  // left a range the user never confirmed.
-  const presetOptions = rawPresets.map((p) => ({
-    label: p.label,
-    dateFrom: p.from,
-    dateTo: p.to,
-  }))
 
   const accountOptions = allAccounts.map((a) => {
     const label = [a.name, a.institution_name, a.currency_code, a.is_archived ? 'archived' : null]
@@ -1416,13 +1334,9 @@ export default async function TransactionsPage({
           period sits beside the title instead of being buried in the filter
           sheet. */}
       <TransactionsHeader
-        householdName={household.name}
+        period={period}
         periodLabel={periodLabel}
-        periodShortLabel={periodShortLabel}
-        periodMonth={resolvedMonth}
-        periodMode={periodMode}
-        monthHrefTemplate={monthHrefTemplate}
-        allTimeHref={allTimeHref}
+        periodBaseQuery={periodBaseQuery}
       />
 
       {/* Keeps these filters for the next bare landing on this screen. */}
@@ -1462,17 +1376,14 @@ export default async function TransactionsPage({
           selectedReview={selectedReview}
           selectedAccountIds={selectedAccountIds}
           selectedCategoryIds={selectedCategoryIds}
-          resolvedDateFrom={resolvedDateFrom}
-          resolvedDateTo={resolvedDateTo}
-          hasActiveFilters={hasActiveFilters}
           accountOptions={accountOptions}
           categoryOptions={categoryOpts}
           tagOptions={tagFilterOptions}
           selectedTagIds={selectedTagIds}
           payeeOptions={payeeFilterOptions}
           selectedPayeeIds={selectedPayeeIds}
-          presetOptions={presetOptions}
-          clearHref={CLEAR_FILTERS_HREF}
+          periodQuery={periodQuery}
+          clearHref={clearGeneralFiltersHref}
         />
       </div>
 

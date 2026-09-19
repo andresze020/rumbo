@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   Drawer,
   DrawerContent,
@@ -13,59 +13,66 @@ import {
 import { useLanguage } from '@/components/language-provider'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { localeToBcp47 } from '@/lib/format'
+import {
+  appendPeriodParams,
+  customPeriod,
+  formatPeriodDate,
+  resolvesTheSame,
+  monthPeriod,
+  presetPeriod,
+  type PeriodPreset,
+  type TransactionPeriod,
+} from '@/lib/periods/transaction-period'
 import { cn } from '@/lib/utils'
 
-/**
- * Placeholder the server leaves in `monthHrefTemplate` where the chosen
- * `YYYY-MM` goes. The href is built server-side (it has to carry every other
- * applied filter) and only the month is filled in here.
- */
-export const MONTH_TOKEN = '__month__'
-
-/**
- * Which of the three things the applied period is. `custom` is a real state,
- * not the absence of a month: an explicit range like "Last 3 months" leaves
- * every tile here unselected, and reading it as "not a month, therefore all
- * time" lit up the All time button for it.
- */
-export type PeriodMode = 'month' | 'all-time' | 'custom'
-
 type PeriodSelectorProps = {
-  /** What the button reads, already localized: "September 2026", "All time"… */
+  /** The applied period, parsed from the URL by the server. */
+  period: TransactionPeriod
+  /** What the trigger reads, rendered server-side so first paint is right. */
   label: string
-  /** The same, abbreviated ("Sep 2026"). A 320px screen has no room for the
-      full month name beside the title, and a truncated "September 20…" is
-      worse than a short one. */
-  shortLabel: string
-  /** The applied month, `YYYY-MM`. Also seeds the year the grid opens on. */
-  month: string
-  mode: PeriodMode
-  monthHrefTemplate: string
-  allTimeHref: string
+  /** Every applied filter *except* the period, as a query string. */
+  baseQuery: string
 }
 
-export function PeriodSelector({
-  label,
-  shortLabel,
-  month,
-  mode,
-  monthHrefTemplate,
-  allTimeHref,
-}: PeriodSelectorProps) {
+const PRESET_LABELS: { preset: PeriodPreset; label: string }[] = [
+  { preset: 'this-month', label: 'This month' },
+  { preset: 'last-month', label: 'Last month' },
+  { preset: 'last-3-months', label: 'Last 3 months' },
+  { preset: 'last-6-months', label: 'Last 6 months' },
+  { preset: 'ytd', label: 'Year to date' },
+  { preset: 'all-time', label: 'All time' },
+]
+
+const optionCls =
+  'flex h-11 items-center justify-center rounded-xl border px-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60'
+const optionActiveCls = 'border-primary bg-primary text-primary-foreground shadow-sm'
+const optionIdleCls = 'bg-background hover:bg-muted'
+
+export function PeriodSelector({ period, label, baseQuery }: PeriodSelectorProps) {
   const ui = useUiTranslation()
   const { locale } = useLanguage()
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [year, setYear] = useState(() => Number(month.slice(0, 4)))
+  const [year, setYear] = useState(() => Number(period.month.slice(0, 4)))
 
-  // Navigation is client-side, so this component survives it: re-seed the year
-  // grid from whatever the server actually applied, or stepping to 2025 and
-  // then picking a month from the *list* would leave the sheet on 2025.
-  // Adjusted during render rather than in an effect.
-  const [syncedMonth, setSyncedMonth] = useState(month)
-  if (month !== syncedMonth) {
-    setSyncedMonth(month)
-    setYear(Number(month.slice(0, 4)))
+  // A range being typed is staged here and only travels on Apply: a half-typed
+  // "From" would otherwise navigate on every keystroke.
+  const [customFrom, setCustomFrom] = useState(period.dateFrom)
+  const [customTo, setCustomTo] = useState(period.dateTo)
+  // The From/To pair only exists once Custom range is chosen — stacking it
+  // under every preset is what made the old filter sheet so tall.
+  const [customOpen, setCustomOpen] = useState(period.kind === 'custom')
+
+  // Navigation is client-side, so this component survives it: re-seed from what
+  // the server actually applied. Adjusted during render rather than in an
+  // effect, per https://react.dev/learn/you-might-not-need-an-effect.
+  const [syncedKey, setSyncedKey] = useState(periodKey(period))
+  if (periodKey(period) !== syncedKey) {
+    setSyncedKey(periodKey(period))
+    setYear(Number(period.month.slice(0, 4)))
+    setCustomFrom(period.dateFrom)
+    setCustomTo(period.dateTo)
+    setCustomOpen(period.kind === 'custom')
   }
 
   const monthNames = useMemo(() => {
@@ -78,10 +85,23 @@ export function PeriodSelector({
     )
   }, [locale])
 
-  function go(href: string) {
+  /** One place where a period becomes a URL — the same shape the server parses. */
+  function go(next: TransactionPeriod) {
     setOpen(false)
-    router.push(href)
+    const params = new URLSearchParams(baseQuery)
+    appendPeriodParams(params, next)
+    router.push(`/dashboard/transactions?${params.toString()}`)
   }
+
+  const customIsValid = customFrom !== '' && customTo !== '' && customFrom <= customTo
+
+  // Which preset, if any, is showing the same days as the applied period.
+  // A preset is the more specific statement, so when one matches, the month
+  // grid stands down — exactly one control is lit, never two and never none.
+  const matchedPreset =
+    PRESET_LABELS.find((option) =>
+      resolvesTheSame(period, presetPeriod(option.preset))
+    )?.preset ?? null
 
   return (
     <>
@@ -90,20 +110,16 @@ export function PeriodSelector({
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={`${ui('Period')}: ${label}`}
         className={cn(
-          // 32px tall to keep the title row short; the pseudo-element takes the
-          // tap target back out to 44px.
-          'relative inline-flex h-8 min-w-0 shrink items-center gap-1.5 rounded-full border bg-card px-2.5 text-sm font-medium text-foreground shadow-sm shadow-black/[0.03] transition-colors',
+          // No calendar icon: on a 320px line shared with the screen title,
+          // 16px of decoration is 16px the month name does not get.
+          'relative inline-flex h-8 min-w-0 max-w-full shrink items-center gap-1 rounded-full border bg-card px-3 text-sm font-medium text-foreground shadow-sm shadow-black/[0.03] transition-colors',
           "before:absolute before:inset-x-0 before:-top-1.5 before:-bottom-1.5 before:content-['']",
           'hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60'
         )}
       >
-        <CalendarDays
-          className="size-4 shrink-0 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <span className="truncate sm:hidden">{shortLabel}</span>
-        <span className="hidden truncate sm:inline">{label}</span>
+        <span className="truncate">{label}</span>
         <ChevronDown
           className="size-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
@@ -111,16 +127,93 @@ export function PeriodSelector({
       </button>
 
       <Drawer open={open} onOpenChange={setOpen}>
-        <DrawerContent className="pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <DrawerContent className="max-h-[92dvh]">
           <DrawerHeader className="pb-2">
             <DrawerTitle>{ui('Period')}</DrawerTitle>
             <DrawerDescription>
-              {ui('Pick the month you want to look at.')}
+              {ui('Everything on this screen is measured over this period.')}
             </DrawerDescription>
           </DrawerHeader>
 
-          <div className="mx-auto w-full max-w-md px-4 pb-4">
-            <div className="mb-3 flex items-center justify-between">
+          <div className="mx-auto w-full max-w-md overflow-y-auto overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="grid grid-cols-2 gap-2">
+              {PRESET_LABELS.map((option) => {
+                const isCurrent = matchedPreset === option.preset
+                return (
+                  <button
+                    key={option.preset}
+                    type="button"
+                    onClick={() => go(presetPeriod(option.preset))}
+                    aria-pressed={isCurrent}
+                    className={cn(
+                      optionCls,
+                      isCurrent ? optionActiveCls : optionIdleCls
+                    )}
+                  >
+                    {ui(option.label)}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* ── Custom range ─────────────────────────────────────────── */}
+            <button
+              type="button"
+              onClick={() => setCustomOpen((current) => !current)}
+              aria-expanded={customOpen}
+              className={cn(
+                optionCls,
+                'mt-2 w-full justify-between px-3',
+                period.kind === 'custom' && !matchedPreset
+                  ? optionActiveCls
+                  : optionIdleCls
+              )}
+            >
+              <span>{ui('Custom range')}</span>
+              <ChevronDown
+                className={cn(
+                  'size-4 shrink-0 transition-transform duration-200 motion-reduce:transition-none',
+                  customOpen && 'rotate-180'
+                )}
+                aria-hidden="true"
+              />
+            </button>
+
+            {customOpen ? (
+              <div className="mt-2 space-y-2 duration-200 animate-in fade-in-0 slide-in-from-top-1 motion-reduce:animate-none">
+                <DateField
+                  label={ui('From')}
+                  value={customFrom}
+                  onChange={setCustomFrom}
+                  locale={locale}
+                />
+                <DateField
+                  label={ui('To')}
+                  value={customTo}
+                  onChange={setCustomTo}
+                  locale={locale}
+                />
+                <button
+                  type="button"
+                  disabled={!customIsValid}
+                  onClick={() => go(customPeriod(customFrom, customTo))}
+                  className={cn(
+                    optionCls,
+                    'w-full border-primary bg-primary text-primary-foreground shadow-sm hover:opacity-90 disabled:pointer-events-none disabled:opacity-50'
+                  )}
+                >
+                  {ui('Apply range')}
+                </button>
+              </div>
+            ) : null}
+
+            {/* ── A specific month ─────────────────────────────────────── */}
+            {/* The presets only reach two months back; this is how the rest of
+                the history is reachable at all. */}
+            <p className="mb-2 mt-5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {ui('Pick a month')}
+            </p>
+            <div className="mb-2 flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => setYear((current) => current - 1)}
@@ -129,10 +222,7 @@ export function PeriodSelector({
               >
                 <ChevronLeft className="size-5" aria-hidden="true" />
               </button>
-              <span
-                aria-live="polite"
-                className="text-base font-semibold tabular-nums"
-              >
+              <span aria-live="polite" className="text-base font-semibold tabular-nums">
                 {year}
               </span>
               <button
@@ -144,22 +234,22 @@ export function PeriodSelector({
                 <ChevronRight className="size-5" aria-hidden="true" />
               </button>
             </div>
-
             <div className="grid grid-cols-3 gap-2">
               {monthNames.map((name, index) => {
                 const value = `${year}-${String(index + 1).padStart(2, '0')}`
-                const isCurrent = mode === 'month' && value === month
+                const candidate = monthPeriod(value)
+                const isCurrent =
+                  !matchedPreset && period.kind === 'month' && period.month === value
                 return (
                   <button
                     key={value}
                     type="button"
-                    onClick={() => go(monthHrefTemplate.replace(MONTH_TOKEN, value))}
+                    onClick={() => go(candidate)}
                     aria-pressed={isCurrent}
                     className={cn(
-                      'h-11 rounded-xl border text-sm font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
-                      isCurrent
-                        ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                        : 'bg-background hover:bg-muted'
+                      optionCls,
+                      'capitalize',
+                      isCurrent ? optionActiveCls : optionIdleCls
                     )}
                   >
                     {name}
@@ -167,25 +257,50 @@ export function PeriodSelector({
                 )
               })}
             </div>
-
-            {/* The one non-month period this screen understands. Anything finer
-                is a custom range, which lives with the other filters. */}
-            <button
-              type="button"
-              onClick={() => go(allTimeHref)}
-              aria-pressed={mode === 'all-time'}
-              className={cn(
-                'mt-2 h-11 w-full rounded-xl border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
-                mode === 'all-time'
-                  ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                  : 'bg-background hover:bg-muted'
-              )}
-            >
-              {ui('All time')}
-            </button>
           </div>
         </DrawerContent>
       </Drawer>
     </>
+  )
+}
+
+function periodKey(period: TransactionPeriod) {
+  return `${period.kind}|${period.preset ?? ''}|${period.month}|${period.dateFrom}|${period.dateTo}`
+}
+
+/**
+ * A date row that *reads* as a date.
+ *
+ * `<input type="date">` renders in the browser's locale, which on an English
+ * UI gives "01/09/2026" — a string that means two different days depending on
+ * where you are standing. The native control still does the picking (it is the
+ * only thing that opens the platform calendar), but it is laid over the row
+ * transparently and the row itself shows "Sep 1, 2026".
+ */
+function DateField({
+  label,
+  value,
+  onChange,
+  locale,
+}: {
+  label: string
+  value: string
+  onChange: (next: string) => void
+  locale: Parameters<typeof formatPeriodDate>[1]
+}) {
+  return (
+    <div className="relative flex h-13 items-center justify-between gap-3 rounded-xl border bg-background px-3 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/40">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="truncate text-sm font-medium text-foreground">
+        {value ? formatPeriodDate(value, locale) : '—'}
+      </span>
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label={label}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0 outline-none"
+      />
+    </div>
   )
 }

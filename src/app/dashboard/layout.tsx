@@ -15,6 +15,7 @@ import { TextSizeSync } from '@/components/text-size-sync'
 import { APP_SCROLL_ID } from '@/lib/app-scroll'
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
+import { getHouseholdContext } from '@/lib/households/server'
 import { getUiPreferences } from '@/lib/preferences/server'
 import { createClient } from '@/lib/supabase/server'
 
@@ -32,7 +33,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   // Read here rather than in the root layout: `<html>` lives up there, but so
   // does `/login`, and an unauthenticated page should not pay for a profile
   // query to learn a preference it cannot have.
-  const { textSize } = await getUiPreferences()
+  //
+  // In parallel with the households the app bar's selector offers: two
+  // independent reads, one round trip's worth of latency.
+  const [{ textSize }, householdContext] = await Promise.all([
+    getUiPreferences(),
+    getHouseholdContext(),
+  ])
 
   return (
     <LanguageProvider locale={locale}>
@@ -67,12 +74,21 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           */}
           <div className="flex h-dvh overflow-hidden">
           {/* Desktop sidebar */}
-          <AppSidebar className="hidden lg:flex" userEmail={userEmail} />
+          <AppSidebar
+            className="hidden lg:flex"
+            userEmail={userEmail}
+            households={householdContext.households}
+            currentHouseholdId={householdContext.currentId}
+          />
 
           {/* Main content area */}
           <div className="flex min-w-0 flex-1 flex-col">
             {/* Mobile top bar */}
-            <MobileNav className="lg:hidden" />
+            <MobileNav
+              className="lg:hidden"
+              households={householdContext.households}
+              currentHouseholdId={householdContext.currentId}
+            />
 
             {/* Tops up the household's FX rates once a day, so a
                 foreign-currency balance reads at today's rate without anyone

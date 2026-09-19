@@ -12,6 +12,10 @@ import { SubmitButton } from '@/components/submit-button'
 import { PhaseBadge } from '@/components/phase-badge'
 import { signOutAction } from '@/app/dashboard/session-actions'
 import { useLanguage } from '@/components/language-provider'
+import {
+  HouseholdSwitcher,
+  type HouseholdOption,
+} from '@/components/household-switcher'
 import { navGroups, PHASE_LABEL_KEY, type Phase } from '@/lib/nav/config'
 
 type SidebarLinkProps = {
@@ -76,9 +80,13 @@ function emailInitials(email: string | null | undefined) {
 export function AppSidebar({
   className,
   userEmail,
+  households = [],
+  currentHouseholdId = null,
 }: {
   className?: string
   userEmail?: string | null
+  households?: HouseholdOption[]
+  currentHouseholdId?: string | null
 }) {
   const pathname = usePathname()
   const { t } = useLanguage()
@@ -140,6 +148,18 @@ export function AppSidebar({
           )}
         </button>
       </div>
+
+      {/* The active household, same control as the mobile bar. Hidden when the
+          rail is collapsed: a name truncated to two letters says nothing. */}
+      {!collapsed ? (
+        <div className="shrink-0 border-b px-3 py-2">
+          <HouseholdSwitcher
+            households={households}
+            currentId={currentHouseholdId}
+            className="w-full justify-start"
+          />
+        </div>
+      ) : null}
 
       {/* Nav */}
       <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">

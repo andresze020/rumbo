@@ -140,14 +140,22 @@ export function MultiSelectChip({
               }
             : undefined
         }
-        className="flex h-11 cursor-pointer list-none items-center gap-1.5 rounded-xl border bg-background px-3 transition-colors hover:bg-muted/50 sm:h-9 sm:rounded-lg sm:px-2.5 [&::-webkit-details-marker]:hidden"
+        className="flex h-14 cursor-pointer list-none items-center gap-3 rounded-xl border bg-background px-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60 active:bg-muted sm:h-9 sm:gap-1.5 sm:rounded-lg sm:px-2.5 [&::-webkit-details-marker]:hidden"
       >
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground sm:max-w-[120px] sm:flex-none">
-          {summary}
+        {/* Two lines on a phone — a quiet label over the value it holds — and
+            back to one compact chip from `sm` up. Side by side at 320px the
+            label and a long account name fought for the same 200px and both
+            truncated; stacked, the value gets the whole width. */}
+        <span className="flex min-w-0 flex-1 flex-col justify-center sm:flex-none sm:flex-row sm:items-center sm:gap-1.5">
+          <span className="truncate text-xs font-medium text-muted-foreground">
+            {label}
+          </span>
+          <span className="min-w-0 truncate text-sm font-medium text-foreground sm:max-w-[120px]">
+            {summary}
+          </span>
         </span>
         <ChevronDown
-          className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+          className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none"
           aria-hidden="true"
         />
       </summary>

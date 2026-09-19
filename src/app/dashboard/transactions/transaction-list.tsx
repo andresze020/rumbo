@@ -1,15 +1,24 @@
 'use client'
 
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import Link from 'next/link'
 import {
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowUpRight,
   Check,
+  CheckSquare,
   ChevronDown,
   Copy,
   Flag,
+  MoreHorizontal,
   Pencil,
   RotateCcw,
   Tag,
@@ -341,6 +350,13 @@ export function TransactionList({
     setSelected(new Set())
   }
 
+  /** Long-press: enter selection mode with the pressed row already picked. */
+  function beginSelection(id: string) {
+    setSelectionMode(true)
+    setExpandedId(null)
+    setSelected(new Set([id]))
+  }
+
   const selectedIds = Array.from(selected)
 
   return (
@@ -461,12 +477,12 @@ export function TransactionList({
           surfaces to say one thing. */}
       <div className="@container">
         {/* ── List strip ──────────────────────────────────────────────── */}
-        {/* What used to be an "ACTIVITY" title bar. It holds only what has
-            nowhere else to go: how many rows the filters matched, and the way
-            into bulk selection. */}
-        <div className="flex min-h-7 items-center gap-3 px-1">
+        {/* What used to be an "ACTIVITY" title bar, and then a permanent
+            "Select" nobody needed on most visits. It carries the count; bulk
+            selection is a long-press on a row, or the overflow menu. */}
+        <div className="flex min-h-9 items-center gap-3 px-1">
           {selectionMode ? (
-            <label className="relative flex cursor-pointer items-center gap-2.5 text-xs font-medium text-muted-foreground before:absolute before:inset-x-0 before:-top-2 before:-bottom-2 before:content-['']">
+            <label className="relative flex cursor-pointer items-center gap-2.5 text-xs font-medium text-foreground before:absolute before:inset-x-0 before:-top-2 before:-bottom-2 before:content-['']">
               <input
                 type="checkbox"
                 checked={allSelected}
@@ -475,21 +491,26 @@ export function TransactionList({
                 aria-label={ui('Select all transactions')}
               />
               <span>
-                {allSelected
-                  ? t('transactionsList.deselectAll')
+                {selectedIds.length > 0
+                  ? ui(`${selectedIds.length} selected`)
                   : t('transactionsList.selectAll')}
               </span>
             </label>
           ) : (
             <span className="truncate text-xs text-muted-foreground">{meta}</span>
           )}
-          <button
-            type="button"
-            onClick={() => (selectionMode ? exitSelectionMode() : setSelectionMode(true))}
-            className="relative ml-auto shrink-0 rounded-md px-1 text-xs font-semibold text-muted-foreground transition-colors before:absolute before:inset-x-0 before:-top-2.5 before:-bottom-2.5 before:content-[''] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-          >
-            {selectionMode ? ui('Done') : ui('Select')}
-          </button>
+
+          {selectionMode ? (
+            <button
+              type="button"
+              onClick={exitSelectionMode}
+              className="relative ml-auto shrink-0 rounded-md px-1 text-xs font-semibold text-muted-foreground transition-colors before:absolute before:inset-x-0 before:-top-2.5 before:-bottom-2.5 before:content-[''] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+            >
+              {ui('Cancel')}
+            </button>
+          ) : (
+            <ListMenu onSelectTransactions={() => setSelectionMode(true)} />
+          )}
         </div>
 
         {groups.map((group) => (
@@ -526,8 +547,14 @@ export function TransactionList({
                     returnTo={returnTo}
                     onToggle={() => toggleRow(row.id)}
                     onToggleExpand={() =>
-                      setExpandedId((prev) => (prev === row.id ? null : row.id))
+                      // While triaging, a tap picks the row rather than opening
+                      // it — the native pattern, and the only one that does not
+                      // ask for a 16px checkbox to be hit repeatedly.
+                      selectionMode
+                        ? toggleRow(row.id)
+                        : setExpandedId((prev) => (prev === row.id ? null : row.id))
                     }
+                    onLongPress={() => beginSelection(row.id)}
                     onEdit={() => setEditingId(row.id)}
                   />
                 )
@@ -537,6 +564,66 @@ export function TransactionList({
         ))}
       </div>
     </div>
+  )
+}
+
+/**
+ * The list's own overflow menu.
+ *
+ * Bulk selection used to be a "Select" button pinned beside the count on every
+ * visit, for a job most visits never do. It is a long press on a row now, and
+ * this is the discoverable way to the same thing — and where the next
+ * list-level action will go rather than growing the strip again.
+ */
+function ListMenu({ onSelectTransactions }: { onSelectTransactions: () => void }) {
+  const ui = useUiTranslation()
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDetailsElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onClick = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null
+      if (target && rootRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('click', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('click', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <details ref={rootRef} open={open} className="relative ml-auto shrink-0">
+      <summary
+        onClick={(event) => {
+          event.preventDefault()
+          setOpen((current) => !current)
+        }}
+        aria-label={ui('List options')}
+        className="flex size-9 cursor-pointer list-none items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 [&::-webkit-details-marker]:hidden"
+      >
+        <MoreHorizontal className="size-4" aria-hidden="true" />
+      </summary>
+      <div className="absolute right-0 z-30 mt-1 w-56 rounded-xl border bg-popover p-1 shadow-md">
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false)
+            onSelectTransactions()
+          }}
+          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left text-sm transition-colors hover:bg-accent"
+        >
+          <CheckSquare className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          {ui('Select transactions')}
+        </button>
+      </div>
+    </details>
   )
 }
 
@@ -576,6 +663,7 @@ function DisplayRow({
   returnTo,
   onToggle,
   onToggleExpand,
+  onLongPress,
   onEdit,
 }: {
   row: TransactionListRow
@@ -586,10 +674,12 @@ function DisplayRow({
   returnTo: string
   onToggle: () => void
   onToggleExpand: () => void
+  onLongPress: () => void
   onEdit: () => void
 }) {
   const ui = useUiTranslation()
   const { openDialog } = useTransactionDialog()
+  const longPress = useLongPress(onLongPress)
   const showCheckbox = selectionMode || selected
   const amountClass = row.isVoided
     ? 'text-muted-foreground line-through'
@@ -631,7 +721,13 @@ function DisplayRow({
       <div
         role="button"
         tabIndex={0}
-        onClick={onToggleExpand}
+        {...longPress.handlers}
+        onClick={() => {
+          // A long press already did something; the click that follows it is
+          // the finger lifting, not a second intent.
+          if (longPress.consumeFired()) return
+          onToggleExpand()
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault()
@@ -691,6 +787,9 @@ function DisplayRow({
             >
               {row.title}
             </span>
+            {/* The strike-through and the muted colour carry this visually;
+                a screen reader gets nothing from either. */}
+            {row.isVoided ? <span className="sr-only">{ui('Voided')}</span> : null}
             {/* Wide rows have space for the payee beside the title; narrow ones
                 already spend their second line on account + category. It gives
                 up room three times faster than the title, so a tight row
@@ -936,6 +1035,66 @@ function DisplayRow({
       ) : null}
     </li>
   )
+}
+
+/**
+ * Press and hold to start selecting.
+ *
+ * Touch only: on a pointer device the row already reveals a checkbox on hover,
+ * and a mouse held still over a list is not a gesture. The press is abandoned
+ * the moment the finger travels — otherwise every flick-scroll that started on
+ * a row would drop the user into selection mode.
+ */
+function useLongPress(onLongPress: () => void, delayMs = 500) {
+  const state = useRef({
+    timer: undefined as ReturnType<typeof setTimeout> | undefined,
+    x: 0,
+    y: 0,
+    fired: false,
+  })
+
+  function cancel() {
+    if (state.current.timer) clearTimeout(state.current.timer)
+    state.current.timer = undefined
+  }
+
+  useEffect(() => cancel, [])
+
+  return {
+    handlers: {
+      onPointerDown(event: React.PointerEvent) {
+        if (event.pointerType === 'mouse') return
+        cancel()
+        state.current.x = event.clientX
+        state.current.y = event.clientY
+        state.current.fired = false
+        state.current.timer = setTimeout(() => {
+          state.current.fired = true
+          onLongPress()
+        }, delayMs)
+      },
+      onPointerMove(event: React.PointerEvent) {
+        if (!state.current.timer) return
+        const moved =
+          Math.abs(event.clientX - state.current.x) > 8 ||
+          Math.abs(event.clientY - state.current.y) > 8
+        if (moved) cancel()
+      },
+      onPointerUp: cancel,
+      onPointerCancel: cancel,
+      onContextMenu(event: React.MouseEvent) {
+        // Android fires the context menu at the same moment the press fires;
+        // letting it through would put a text-selection menu over the sheet.
+        if (state.current.fired) event.preventDefault()
+      },
+    },
+    /** True once per long press, for the click that follows it. */
+    consumeFired() {
+      if (!state.current.fired) return false
+      state.current.fired = false
+      return true
+    },
+  }
 }
 
 /** One `label: value` pair in the expanded panel. */

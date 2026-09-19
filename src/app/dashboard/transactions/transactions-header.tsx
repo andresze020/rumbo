@@ -1,53 +1,43 @@
 'use client'
 
-import { HouseholdChip } from '@/components/household-chip'
 import { useLanguage } from '@/components/language-provider'
-import { PeriodSelector, type PeriodMode } from './period-selector'
+import type { TransactionPeriod } from '@/lib/periods/transaction-period'
+import { PeriodSelector } from './period-selector'
 
 type TransactionsHeaderProps = {
-  householdName: string
+  period: TransactionPeriod
   periodLabel: string
-  periodShortLabel: string
-  periodMonth: string
-  periodMode: PeriodMode
-  monthHrefTemplate: string
-  allTimeHref: string
+  /** Every applied filter except the period, as a query string. */
+  periodBaseQuery: string
 }
 
 /**
- * Two short rows instead of the old eyebrow + title + description block: the
- * household became a chip, the description went (the list under it says what
- * this screen is), and the period moved up beside the title where it is both
- * visible and tappable.
+ * One line: the screen's name and the period it is showing.
+ *
+ * The household used to sit above this in a row of its own. It lives in the
+ * app's top bar now, beside the Rumbo mark, where it belongs — this screen is
+ * not the only one scoped to a household.
  */
 export function TransactionsHeader({
-  householdName,
+  period,
   periodLabel,
-  periodShortLabel,
-  periodMonth,
-  periodMode,
-  monthHrefTemplate,
-  allTimeHref,
+  periodBaseQuery,
 }: TransactionsHeaderProps) {
   const { t } = useLanguage()
 
   return (
-    <header className="space-y-1">
-      <HouseholdChip name={householdName} className="-ml-1.5" />
-
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <h1 className="min-w-0 shrink-0 truncate text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-          {t('nav.transactions')}
-        </h1>
-        <PeriodSelector
-          label={periodLabel}
-          shortLabel={periodShortLabel}
-          month={periodMonth}
-          mode={periodMode}
-          monthHrefTemplate={monthHrefTemplate}
-          allTimeHref={allTimeHref}
-        />
-      </div>
+    // Wraps rather than overflows: at 320px a long period label ("Last 6
+    // months") drops onto its own line under the title instead of colliding
+    // with it or pushing a horizontal scrollbar onto the page.
+    <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <h1 className="min-w-0 shrink-0 truncate text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+        {t('nav.transactions')}
+      </h1>
+      <PeriodSelector
+        period={period}
+        label={periodLabel}
+        baseQuery={periodBaseQuery}
+      />
     </header>
   )
 }

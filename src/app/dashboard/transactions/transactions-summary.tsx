@@ -35,7 +35,7 @@ export async function TransactionsSummary({
   return (
     <section
       aria-label={ui('Period totals')}
-      className="rounded-2xl border bg-card px-3 py-2.5 shadow-sm shadow-black/[0.03]"
+      className="rounded-2xl border bg-card px-3 py-2 shadow-sm shadow-black/[0.03]"
     >
       <p className="text-xs font-medium text-muted-foreground">
         {ui('Net')}
@@ -44,14 +44,14 @@ export async function TransactionsSummary({
       </p>
       <p
         className={cn(
-          'mt-0.5 text-2xl font-semibold tabular-nums leading-tight',
+          'text-[1.375rem] font-semibold tabular-nums leading-tight',
           netBase < 0 ? 'text-red-600 dark:text-red-400' : 'text-foreground'
         )}
       >
         {formatCurrency(netBase, baseCurrency, locale)}
       </p>
 
-      <dl className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+      <dl className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs">
         <div className="flex min-w-0 items-center gap-1.5">
           <ArrowDownLeft
             className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
