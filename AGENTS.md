@@ -57,7 +57,10 @@ The product is household-first. All financial data must belong to a household.
     nothing hidden — `sr-only` title/subtitle on phone, one date row instead
     of two, no separate tag label. The dialog is a full `h-dvh` screen with
     its own close button; Cancel is gone wherever the dialog already has
-    another way out (Back/Escape/X/backdrop); Create and Save-and-add-next
+    another way out (Escape/X/backdrop, plus Back in
+    `TransactionDialogProvider` only — the assistant's review dialog has no
+    Back handling and lost its Cancel, see `pending-work.md` §4.5); Create and
+    Save-and-add-next
     are one split button on mobile; the action bar hides while the keyboard
     is open.
   - **Review round: four P2 defects fixed**, all the same shape — a value the

@@ -35,8 +35,12 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
     missing in the first place: the drill-into-a-parent path, the most common
     way to pick a category, called `setCategoryId` directly and skipped the
     chain outright. Chain order: category → account → payee → description →
-    tags; it stops at the first field that already has a value, and Enter in
-    the description hands off to tags. Toggle: "Jump to the next field"
+    tags. It opens the first field *after* the current one that is both
+    rendered and still empty — it skips past the ones already filled rather
+    than stopping at them, so a half-finished entry keeps moving forward; when
+    every later field already has a value it opens nothing, which is what stops
+    a one-field correction from hijacking a complete entry. Enter in the
+    description hands off to tags. Toggle: "Jump to the next field"
     (`quickEntry.autoAdvance`).
   - **Optional autofill from the last entry in the category**, off by default
     (`quickEntry.autofillFromLastInCategory`). Picking a category seeds
@@ -86,9 +90,18 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
     showing above it), with its own header close button
     (`showCloseButton={false}` plus a dedicated `X` row) since the built-in
     one collided with the type selector's "Transfer" option on a phone.
-  - **Action bar.** Cancel is gone from every dialog caller — Back, Escape,
-    the header X and the backdrop all already cancel there; `cancelHref` still
-    renders one for the plain-page case, which has no other way out.
+  - **Action bar.** Cancel is gone from every dialog caller — Escape, the
+    header X and the backdrop all already cancel there, and `TransactionDialogProvider`
+    adds Android/browser Back via `useBackDismiss`; `cancelHref` still renders
+    one for the plain-page case, which has no other way out. **Back is the
+    provider's, not the form's:** the assistant's "Review transaction" dialog
+    (`assistant-chat.tsx`) builds its own `Dialog` and never calls
+    `useBackDismiss`, so there Back leaves the page instead of closing the
+    dialog. It keeps the default close X, Escape and the backdrop, so it is
+    still dismissable — but it also passes `onCancel`, and since this sprint
+    that prop only *suppresses* the Cancel link and is never invoked, so the
+    dialog lost its visible Cancel and gained nothing in its place. Listed in
+    `pending-work.md` §4.5.
     "Create"/"Create transfer" and "Save and add next" are one split button on
     mobile (shared shape and colour, a hairline divider, a `+` icon instead of
     the full label) and come apart into two separate buttons on desktop. The
