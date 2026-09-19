@@ -15,11 +15,12 @@ import {
 } from './transaction-list'
 import { TransactionToasts } from './transaction-toasts'
 import { RememberTransactionScope } from './remember-scope'
+import { TransactionsHeader } from './transactions-header'
+import { TransactionsSummary } from './transactions-summary'
+import { MONTH_TOKEN } from './period-selector'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
-import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
-import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { Callout } from '@/components/callout'
 import { createClient } from '@/lib/supabase/server'
 import { getUiPreferences } from '@/lib/preferences/server'
@@ -39,10 +40,12 @@ import { localizeSystemCategoryName } from '@/lib/i18n/system-category-names'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import {
   formatCurrency,
+  formatIsoDate,
   formatIsoDateRange,
   formatIsoTime,
   formatLabel as formatValue,
   formatMonthLabel,
+  formatMonthLabelShort,
   localeToBcp47,
 } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -407,22 +410,6 @@ function transactionsPath(
  */
 const CLEAR_FILTERS_HREF = `/dashboard/transactions?date_from=${ALL_TIME_FROM}&date_to=${ALL_TIME_TO}`
 
-/** One totals figure: a quiet label over a loud, tabular amount. */
-const totalCellCls = 'flex min-w-0 flex-col gap-0.5 px-3 py-2.5 sm:px-4 sm:py-3'
-
-const totalLabelCls =
-  'truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]'
-
-// Slightly under `text-sm` on phones so a six-figure amount still fits its
-// third of the row; `tabular-nums` keeps the three tiles optically aligned.
-const totalValueCls = (accent: string) =>
-  cn('truncate text-[15px] font-semibold tabular-nums sm:text-lg', accent)
-
-/**
- * BR-038 — every search param that means "the user (or a link) chose a view".
- * If any of these is present the URL is authoritative and the landing
- * preferences stay out of the way.
- */
 const FILTER_PARAM_KEYS = [
   'month',
   'date_from',
@@ -977,7 +964,7 @@ export default async function TransactionsPage({
       ? transaction.description || `Debt payment: ${transferFromAccountName} -> ${transferToAccountName}`
       : transaction.description || ''
     const accountName = isBalanceMovement
-      ? `${transferFromAccountName} -> ${transferToAccountName}`
+      ? `${transferFromAccountName} → ${transferToAccountName}`
       : entry
       ? (accountNamesById.get(entry.account_id) ?? 'Unknown account')
       : 'Unknown account'
@@ -1063,14 +1050,7 @@ export default async function TransactionsPage({
   // income/expense reporting.
   const filteredIncomeBase = totalIncomeBase
   const filteredExpenseBase = totalExpenseBase
-  const filteredNetBase = filteredIncomeBase - filteredExpenseBase
   const hasFilteredTotals = filteredIncomeBase > 0 || filteredExpenseBase > 0
-  // Net only exists when both sides do, so the mobile tiles split by however
-  // many figures are actually shown rather than always assuming three.
-  const filteredTotalsCount =
-    (filteredExpenseBase > 0 ? 1 : 0) +
-    (filteredIncomeBase > 0 ? 1 : 0) +
-    (filteredIncomeBase > 0 && filteredExpenseBase > 0 ? 1 : 0)
 
   const selectedEditRow = transactionRows.find(
     (row) => row.transaction.id === editTransactionId
@@ -1128,6 +1108,35 @@ export default async function TransactionsPage({
   const importedCount = totalImported
   const dateRangeLabel = formatDateRangeLabel(resolvedDateFrom, resolvedDateTo, locale)
 
+  // What used to be a full header row of its own, and before that the
+  // "ACTIVITY" title bar: how many rows the filters matched. It rides along
+  // the list's own strip now. Counts cover the whole filtered set (from the
+  // RPC), not just the current page.
+  const listMeta = (
+    <>
+      {t(
+        visibleCount === 1
+          ? 'transactionsList.countOne'
+          : 'transactionsList.countOther',
+        { count: visibleCount }
+      )}
+      {pendingCount > 0 ? (
+        <>
+          {' · '}
+          <span className="text-amber-600 dark:text-amber-400">
+            {t('transactionsList.pendingCount', { count: pendingCount })}
+          </span>
+        </>
+      ) : null}
+      {importedCount > 0 ? (
+        <>
+          {' · '}
+          {t('transactionsList.importedCount', { count: importedCount })}
+        </>
+      ) : null}
+    </>
+  )
+
   // BR-008 pagination: page links reuse the current filters and append ?page.
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const pageStart = totalCount === 0 ? 0 : pageOffset + 1
@@ -1137,6 +1146,32 @@ export default async function TransactionsPage({
     page <= 1
       ? listBasePath
       : `${listBasePath}${listBasePath.includes('?') ? '&' : '?'}page=${page}`
+
+  // ── The period control ───────────────────────────────────────────────────
+  // It rebuilds this URL with its own month, so every other applied filter
+  // survives the change. `date_from`/`date_to` are dropped on purpose: a month
+  // and an explicit range are two answers to the same question, and the range
+  // wins over the month further up, so leaving one in would make the control
+  // look inert.
+  const monthHrefParams = new URLSearchParams(
+    transactionsPath(filters).split('?')[1] ?? ''
+  )
+  monthHrefParams.delete('date_from')
+  monthHrefParams.delete('date_to')
+  monthHrefParams.set('month', MONTH_TOKEN)
+  const monthHrefTemplate = `/dashboard/transactions?${monthHrefParams.toString()}`
+  const isAllTimeRange =
+    resolvedDateFrom === ALL_TIME_FROM && resolvedDateTo === ALL_TIME_TO
+  const periodLabel = isAllTimeRange
+    ? ui('All time')
+    : hasCustomDateRange
+    ? dateRangeLabel
+    : formatMonthLabel(resolvedMonth, locale)
+  const periodShortLabel = isAllTimeRange
+    ? ui('All time')
+    : hasCustomDateRange
+    ? dateRangeLabel
+    : formatMonthLabelShort(resolvedMonth, locale)
 
   // Presets — computed server-side to bake in current non-date filters
   const todayStr = todayIsoDate()
@@ -1182,19 +1217,7 @@ export default async function TransactionsPage({
     isArchived: c.is_archived,
   }))
 
-  // ── Sprint 4: review chips + serialized rows for the client list ──────────
-  const reviewChips = [
-    { label: 'All', value: 'all' },
-    { label: 'To review', value: 'unreviewed' },
-    { label: 'Reviewed', value: 'reviewed' },
-    { label: 'Flagged', value: 'flagged' },
-  ].map((chip) => ({
-    label: chip.label,
-    value: chip.value,
-    href: transactionsPath({ ...filters, review: chip.value }),
-    isActive: selectedReview === chip.value,
-  }))
-
+  // ── Serialized rows for the client list ──────────────────────────────────
   const inlineCategories: TransactionListCategory[] = activeCategories.map((c) => ({
     id: c.id,
     name: c.name,
@@ -1283,6 +1306,16 @@ export default async function TransactionsPage({
         ? 'Debt payment'
         : formatValue(row.transaction.transaction_type),
       accountName: row.accountName,
+      // A transfer is one linked operation with two ends; the row and the
+      // detail panel name both rather than implying two transactions.
+      transferFromName: row.isBalanceMovement ? row.transferFromAccountName : null,
+      transferToName: row.isBalanceMovement ? row.transferToAccountName : null,
+      dateLabel: formatIsoDate(row.transaction.transaction_date, locale, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }),
       categoryName: row.categoryName,
       categoryLeafName: row.categoryLeafName,
       categoryIcon: row.categoryIcon,
@@ -1341,39 +1374,25 @@ export default async function TransactionsPage({
   ).sort((a, b) => a.localeCompare(b))
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
+    // `pb-20` on phones: the bottom nav is a real flex row under the scroller,
+    // but its centre "+" is lifted 12px above it and rings the background, so
+    // the last row still needs room to clear it.
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-3 pb-20 pt-3 sm:gap-4 sm:px-6 sm:pb-8 sm:pt-5">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <PageHeader
-        eyebrow={household.name}
-        title="Transactions"
-        description="Review and manage household transactions."
-        // Phones reach both actions from the bottom nav (the + button and the
-        // Money group's Import CSV), so the header stays title-only there.
-        compactOnMobile
-        actions={
-          <>
-            {/* The form starts empty by default. The one exception is context
-                the user has already given us: when the list is narrowed to a
-                single account, a new transaction almost certainly belongs to
-                it. Two or more filtered accounts is not a hint, so nothing is
-                pre-filled. */}
-            <GlobalAddTransactionButton
-              className={buttonVariants({ size: 'sm' })}
-              defaultAccountId={
-                selectedAccountIds.length === 1 ? selectedAccountIds[0] : undefined
-              }
-            >
-              {ui('Add transaction')}
-            </GlobalAddTransactionButton>
-            <Link
-              href="/dashboard/transactions/import"
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              {ui('Import CSV')}
-            </Link>
-          </>
-        }
+      {/* Was an eyebrow + 2xl title + description, then a separate row of
+          review tabs, then a count line. The household is a chip now, the
+          description is gone (the list says what this screen is) and the
+          period sits beside the title instead of being buried in the filter
+          sheet. */}
+      <TransactionsHeader
+        householdName={household.name}
+        periodLabel={periodLabel}
+        periodShortLabel={periodShortLabel}
+        periodMonth={resolvedMonth}
+        isCustomRange={hasCustomDateRange}
+        monthHrefTemplate={monthHrefTemplate}
+        allTimeHref={CLEAR_FILTERS_HREF}
       />
 
       {/* Keeps these filters for the next bare landing on this screen. */}
@@ -1402,10 +1421,10 @@ export default async function TransactionsPage({
       ) : null}
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      {/* No card chrome on phones: the control strip reads as part of the
-          screen, the way a native list header does, instead of a boxed panel
-          eating a border and 12px of padding on every side. */}
-      <div className="sm:rounded-xl sm:border sm:bg-card sm:p-3 sm:shadow-sm sm:shadow-black/[0.03]">
+      {/* No card chrome on any breakpoint now: the control strip reads as part
+          of the screen, the way a native list header does, instead of a boxed
+          panel eating a border and 12px of padding on every side. */}
+      <div>
         <TransactionFilters
           searchText={searchText}
           selectedTypes={selectedTypes}
@@ -1530,124 +1549,22 @@ export default async function TransactionsPage({
         </FormDialog>
       ) : null}
 
+      {/* ── Filtered totals (base currency) ───────────────────────────── */}
+      {/* Net first, income and expenses under it, the currency in the label.
+          The three tiles plus an "in CAD" caption underneath were four objects
+          saying one thing. Nothing is recomputed here: these are the RPC's
+          figures for the whole filtered set, with transfers, debt payments,
+          opening balances and voided rows already excluded server-side. */}
+      {hasFilteredTotals ? (
+        <TransactionsSummary
+          incomeBase={filteredIncomeBase}
+          expenseBase={filteredExpenseBase}
+          baseCurrency={household.base_currency}
+        />
+      ) : null}
+
       {/* ── Transaction list ───────────────────────────────────────────── */}
-      {/* The count line, the totals card, the view switch and the list are
-          four separate objects now, so they get room to read as four. */}
-      <section className="space-y-2.5">
-        <div className="flex items-center justify-between px-1">
-          <h2 className="flex flex-wrap items-center gap-x-1.5 text-sm font-medium text-muted-foreground">
-            <span>
-              {t(
-                visibleCount === 1
-                  ? 'transactionsList.countOne'
-                  : 'transactionsList.countOther',
-                { count: visibleCount }
-              )}
-            </span>
-            <span>·</span>
-            <span>{dateRangeLabel}</span>
-            {pendingCount > 0 ? (
-              <>
-                <span>·</span>
-                <span className="text-amber-600 dark:text-amber-400">
-                  {t('transactionsList.pendingCount', { count: pendingCount })}
-                </span>
-              </>
-            ) : null}
-            {importedCount > 0 ? (
-              <>
-                <span>·</span>
-                <span>{t('transactionsList.importedCount', { count: importedCount })}</span>
-              </>
-            ) : null}
-          </h2>
-          {/* No add button here: the page header already has one on desktop,
-              and the bottom nav's + covers phones. */}
-        </div>
-
-        {/* ── Filtered totals (base currency) ─────────────────────────── */}
-        {/* These three numbers are the answer to "how did this period go", so
-            they get their own card instead of a run of inline text: one tile
-            per total, label over amount, divided and tabular so the figures
-            line up and can be compared at a glance. Same shape on phones and
-            desktop - the previous inline row clipped the last total at the
-            screen edge and pushed the currency note off-screen entirely. */}
-        {hasFilteredTotals ? (
-          <div className="space-y-1">
-            <div
-              className="grid divide-x divide-border/70 overflow-hidden rounded-2xl border bg-card shadow-sm shadow-black/[0.03]"
-              style={{
-                gridTemplateColumns: `repeat(${filteredTotalsCount}, minmax(0, 1fr))`,
-              }}
-            >
-              {filteredExpenseBase > 0 ? (
-                <span className={totalCellCls}>
-                  <span className={totalLabelCls}>{ui('Expenses')}</span>
-                  <span
-                    className={totalValueCls('text-red-600 dark:text-red-400')}
-                  >
-                    {formatCurrency(filteredExpenseBase, household.base_currency, locale)}
-                  </span>
-                </span>
-              ) : null}
-              {filteredIncomeBase > 0 ? (
-                <span className={totalCellCls}>
-                  <span className={totalLabelCls}>{ui('Income')}</span>
-                  <span
-                    className={totalValueCls('text-emerald-600 dark:text-emerald-400')}
-                  >
-                    {formatCurrency(filteredIncomeBase, household.base_currency, locale)}
-                  </span>
-                </span>
-              ) : null}
-              {filteredIncomeBase > 0 && filteredExpenseBase > 0 ? (
-                <span className={totalCellCls}>
-                  <span className={totalLabelCls}>{ui('Net')}</span>
-                  <span
-                    className={totalValueCls(
-                      filteredNetBase < 0
-                        ? 'text-red-600 dark:text-red-400'
-                        : 'text-foreground'
-                    )}
-                  >
-                    {formatCurrency(filteredNetBase, household.base_currency, locale)}
-                  </span>
-                </span>
-              ) : null}
-            </div>
-            {/* Which "$" these are — the households here hold both CAD and
-                COP accounts, so the code is not decoration. */}
-            <p className="px-1 text-right text-[11px] text-muted-foreground">
-              {ui('in')} {household.base_currency}
-            </p>
-          </div>
-        ) : null}
-
-        {/* ── Review-status filter chips ──────────────────────────────── */}
-        {/* One segmented control rather than four separate buttons: these are
-            mutually exclusive views of the same list, and the raised active
-            segment says which one you are in without shouting. Still scrolls
-            as one line on phones rather than wrapping onto two. */}
-        <div className="-mx-1 overflow-x-auto px-1 pb-1">
-          <div className="inline-flex gap-1 rounded-xl border bg-muted/40 p-1">
-            {reviewChips.map((chip) => (
-              <Link
-                key={chip.value}
-                href={chip.href}
-                aria-current={chip.isActive ? 'page' : undefined}
-                className={cn(
-                  'shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
-                  chip.isActive
-                    ? 'bg-card text-foreground shadow-sm ring-1 ring-inset ring-black/[0.04] dark:ring-white/[0.06]'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {chip.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-
+      <section className="space-y-1.5">
         {transactionDetailsError ? (
           <Callout variant="error">{ui('Could not load transaction details.')}</Callout>
         ) : serializedGroups.length ? (
@@ -1657,6 +1574,7 @@ export default async function TransactionsPage({
             payeeSuggestions={payeeSuggestions}
             returnTo={returnTo}
             compact={preferences.transactions.compactList}
+            meta={listMeta}
           />
         ) : selectedReview === 'unreviewed' ? (
           <EmptyState
@@ -1664,6 +1582,13 @@ export default async function TransactionsPage({
             description="Nothing is waiting for review in this range. Widen the date range or view all transactions."
             actionHref={transactionsPath({ ...filters, review: 'all' })}
             actionLabel="View all transactions"
+          />
+        ) : searchText ? (
+          <EmptyState
+            title="No transactions match your search"
+            description="Try a shorter search, a different spelling, or a wider period."
+            actionHref={CLEAR_FILTERS_HREF}
+            actionLabel="Clear filters"
           />
         ) : (
           <EmptyState

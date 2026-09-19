@@ -90,6 +90,11 @@ export function AssistantDrawer() {
   const [, startTransition] = useTransition()
   const pathname = usePathname()
   const scrollingDown = useScrollingDown()
+  // One floating action per screen. On Transactions that is the bottom nav's
+  // "+": a second FAB hanging at the same right edge every amount is aligned
+  // to covered the figures and competed for the same thumb. The assistant is
+  // reachable there from More → AI Assistant, and from the sidebar on desktop.
+  const hideFab = pathname?.startsWith('/dashboard/transactions') ?? false
 
   useEffect(() => {
     if (open && !context) {
@@ -103,18 +108,20 @@ export function AssistantDrawer() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={ui('Open assistant')}
-        title={ui('AI Assistant')}
-        // Fades rather than moves: `vv-pin-corner` already owns this button's
-        // transform, and a second one would fight it while the page is zoomed.
-        data-away={scrollingDown && !open ? 'true' : undefined}
-        className="vv-pin-corner [--vv-pin-inset-x:1.5rem] [--vv-pin-inset-y:6rem] fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-6 z-50 flex size-12 items-center justify-center rounded-full bg-secondary text-secondary-foreground shadow-lg transition-opacity duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[away=true]:pointer-events-none data-[away=true]:opacity-0"
-      >
-        <Bot className="size-5" aria-hidden="true" />
-      </button>
+      {hideFab ? null : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={ui('Open assistant')}
+          title={ui('AI Assistant')}
+          // Fades rather than moves: `vv-pin-corner` already owns this button's
+          // transform, and a second one would fight it while the page is zoomed.
+          data-away={scrollingDown && !open ? 'true' : undefined}
+          className="vv-pin-corner [--vv-pin-inset-x:1.5rem] [--vv-pin-inset-y:6rem] fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-6 z-50 flex size-12 items-center justify-center rounded-full bg-secondary text-secondary-foreground shadow-lg transition-opacity duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[away=true]:pointer-events-none data-[away=true]:opacity-0"
+        >
+          <Bot className="size-5" aria-hidden="true" />
+        </button>
+      )}
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent

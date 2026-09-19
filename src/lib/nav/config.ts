@@ -216,11 +216,14 @@ export const navGroups: NavGroup[] = [
         phase: 'alpha',
       },
       {
-        href: '/dashboard/coming-soon/assistant',
+        // Shipped: `/dashboard/assistant` is the same chat the drawer hosts.
+        // Listing it here is what let the floating assistant button come off
+        // the Transactions screen — More is now a real way in on a phone.
+        href: '/dashboard/assistant',
         labelKey: 'nav.aiAssistant',
         icon: MessageCircle,
-        phase: 'soon',
-        descriptionKey: 'comingSoon.descriptions.aiAssistant',
+        phase: 'alpha',
+        hint: 'Ask about your finances, or log a transaction from a photo or a voice note',
       },
     ],
   },

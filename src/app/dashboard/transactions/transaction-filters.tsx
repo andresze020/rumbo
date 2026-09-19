@@ -92,8 +92,31 @@ const pillCls =
 
 const activePillCls = 'border-primary/40 bg-primary/10 text-primary'
 
-/** Repeated query params this bar owns. */
-type FilterParam = 'type' | 'status' | 'account_id' | 'category_id' | 'tag_id' | 'payee_id'
+/**
+ * BR-011 — the review states, as a filter rather than as navigation.
+ *
+ * They used to be a permanent segmented control above the list and a coloured
+ * dot on every collapsed row. Both are gone: triaging is one job this screen
+ * does, not the shape of the whole screen. The column, the RPC argument and
+ * the bulk actions are untouched — only where the state is offered moved, to
+ * "More filters" here and to the expanded row.
+ */
+const REVIEW_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'unreviewed', label: 'To review' },
+  { value: 'reviewed', label: 'Reviewed' },
+  { value: 'flagged', label: 'Flagged' },
+] as const
+
+/** Query params this bar owns. */
+type FilterParam =
+  | 'type'
+  | 'status'
+  | 'account_id'
+  | 'category_id'
+  | 'tag_id'
+  | 'payee_id'
+  | 'review'
 
 /** The multi-selects the chips drive, in the order they reach the query. */
 const DRAFT_PARAMS = [
@@ -116,6 +139,7 @@ const CHIP_PANEL: Record<
   null | 'account' | 'category' | 'tag' | 'payee' | 'status'
 > = {
   type: null,
+  review: null,
   status: 'status',
   account_id: 'account',
   category_id: 'category',
@@ -167,6 +191,7 @@ export function TransactionFilters({
   // on click, which applied a range the user had not confirmed — and dismissing
   // the sheet left it stuck on.
   const [types, setTypes] = useState<string[]>(selectedTypes)
+  const [review, setReview] = useState(selectedReview)
   const [dateFrom, setDateFrom] = useState(resolvedDateFrom)
   const [dateTo, setDateTo] = useState(resolvedDateTo)
   const [search, setSearch] = useState(searchText)
@@ -208,6 +233,7 @@ export function TransactionFilters({
   if (appliedScope !== syncedScope) {
     setSyncedScope(appliedScope)
     setTypes(selectedTypes)
+    setReview(selectedReview)
     setDateFrom(resolvedDateFrom)
     setDateTo(resolvedDateTo)
     setSearch(searchText)
@@ -228,6 +254,7 @@ export function TransactionFilters({
    */
   function buildQuery(source: {
     types: string[]
+    review: string
     drafts: Drafts
     dateFrom: string
     dateTo: string
@@ -238,7 +265,7 @@ export function TransactionFilters({
     for (const param of DRAFT_PARAMS) {
       for (const value of source.drafts[param]) params.append(param, value)
     }
-    if (selectedReview !== 'all') params.set('review', selectedReview)
+    if (source.review !== 'all') params.set('review', source.review)
     const trimmed = source.search.trim()
     if (trimmed) params.set('search', trimmed)
     if (source.dateFrom) params.set('date_from', source.dateFrom)
@@ -255,6 +282,7 @@ export function TransactionFilters({
   }
   const appliedQuery = buildQuery({
     types: selectedTypes,
+    review: selectedReview,
     drafts: appliedDrafts,
     dateFrom: resolvedDateFrom,
     dateTo: resolvedDateTo,
@@ -270,6 +298,7 @@ export function TransactionFilters({
     query: string
     from: string
     types: string[]
+    review: string
     drafts: Drafts
   }>(null)
   // Any move by the server ends the optimism, not just the answer we were
@@ -279,6 +308,7 @@ export function TransactionFilters({
 
   /** What the user should read as applied: the server's answer, or ours. */
   const shownTypes = pending?.types ?? selectedTypes
+  const shownReview = pending?.review ?? selectedReview
   const shownDrafts = pending?.drafts ?? appliedDrafts
 
   /** Every staged edit runs through here, so nothing can change unmarked. */
@@ -341,12 +371,14 @@ export function TransactionFilters({
     // Built from this component's state, never read back out of the form. The
     // controls all render from that state, so what the user sees staged and
     // what reaches the URL cannot drift apart.
-    const query = buildQuery({ types, drafts, dateFrom, dateTo, search })
+    const query = buildQuery({ types, review, drafts, dateFrom, dateTo, search })
 
     // Nothing to wait for when the staged set is already the applied one, and
     // marking it pending would leave the bar waiting for a change that is
     // never coming.
-    if (query !== appliedQuery) setPending({ query, from: appliedQuery, types, drafts })
+    if (query !== appliedQuery) {
+      setPending({ query, from: appliedQuery, types, review, drafts })
+    }
 
     // The mobile sheet owns a history entry so Android Back closes it, and it
     // reclaims that entry with history.back() when it closes. Closing it here
@@ -387,10 +419,9 @@ export function TransactionFilters({
     )
   }
 
-  const moreFiltersCount = DRAFT_PARAMS.reduce(
-    (total, param) => total + shownDrafts[param].length,
-    0
-  )
+  const moreFiltersCount =
+    DRAFT_PARAMS.reduce((total, param) => total + shownDrafts[param].length, 0) +
+    (shownReview === 'all' ? 0 : 1)
 
   /**
    * The applied filter state as a URL, minus one whole dimension. Powers the
@@ -404,9 +435,11 @@ export function TransactionFilters({
    * from before.
    */
   function hrefWithout(param: FilterParam) {
+    const isDraftParam = param !== 'type' && param !== 'review'
     const query = buildQuery({
       types: param === 'type' ? [] : shownTypes,
-      drafts: { ...shownDrafts, ...(param === 'type' ? {} : { [param]: [] }) },
+      review: param === 'review' ? 'all' : shownReview,
+      drafts: { ...shownDrafts, ...(isDraftParam ? { [param]: [] } : {}) },
       dateFrom: resolvedDateFrom,
       dateTo: resolvedDateTo,
       search: searchText,
@@ -457,6 +490,33 @@ export function TransactionFilters({
   )
 
   /**
+   * Same shape as the type toggle, two rows deep on a phone: four labels do not
+   * fit on one 320px line without truncating "To review" to nothing.
+   */
+  const reviewToggle = (
+    <div
+      role="group"
+      aria-label={ui('Filter by review status')}
+      className="grid w-full grid-cols-2 gap-0.5 rounded-xl border bg-background p-0.5"
+    >
+      {REVIEW_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => {
+            setReview(option.value)
+            setDirty(true)
+          }}
+          aria-pressed={review === option.value}
+          className={cn(typeButtonCls, review === option.value && typeButtonActiveCls)}
+        >
+          {ui(option.label)}
+        </button>
+      ))}
+    </div>
+  )
+
+  /**
    * One chip per filter *dimension* rather than per value. Five ticked accounts
    * used to be five chips wrapping over three lines, pushing the totals this
    * screen exists for below the fold. A lone value still shows its own name —
@@ -499,6 +559,9 @@ export function TransactionFilters({
     chipFor('status', shownDrafts.status, ui('Status'), (value) =>
       ui(labelOf(STATUS_OPTIONS, value, value))
     ),
+    chipFor('review', shownReview === 'all' ? [] : [shownReview], ui('Review'), (value) =>
+      ui(REVIEW_OPTIONS.find((option) => option.value === value)?.label ?? value)
+    ),
   ].filter((chip) => chip !== null)
 
   return (
@@ -513,9 +576,7 @@ export function TransactionFilters({
       {types.map((value) => (
         <input key={value} type="hidden" name="type" value={value} />
       ))}
-      {selectedReview !== 'all' ? (
-        <input type="hidden" name="review" value={selectedReview} />
-      ) : null}
+      {review !== 'all' ? <input type="hidden" name="review" value={review} /> : null}
 
       {/* ── Mobile: one line of pills ───────────────────────────────────
           Phones get a native-style control strip instead of the desktop
@@ -557,6 +618,19 @@ export function TransactionFilters({
             </>
           ) : null}
         </button>
+
+        {/* Getting back to an unfiltered list used to mean opening the sheet
+            to reach "Clear all". One tap now. */}
+        {hasActiveFilters ? (
+          <Link
+            href={clearHref}
+            onClick={closeSheet}
+            className={cn(pillCls, 'gap-1 text-muted-foreground')}
+          >
+            <X className="size-3.5 shrink-0" aria-hidden="true" />
+            {ui('Clear')}
+          </Link>
+        ) : null}
 
         {/* Two targets per chip: the label reopens the sheet at the section
             that set it, the × drops that dimension outright. Undoing or
@@ -744,6 +818,30 @@ export function TransactionFilters({
                 open={openChip === 'status'}
                 onOpenChange={(next) => setOpenChip(next ? 'status' : null)}
               />
+
+              {/* Review, on desktop only: it is one more filter among the
+                  others here. On a phone it lives under "More filters", which
+                  is where a secondary dimension belongs. */}
+              <label className={cn(fieldRowCls, 'hidden sm:flex')}>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {ui('Review')}
+                </span>
+                <select
+                  value={review}
+                  onChange={(event) => {
+                    setReview(event.target.value)
+                    setDirty(true)
+                  }}
+                  aria-label={ui('Filter by review status')}
+                  className="min-w-0 flex-1 bg-transparent text-sm font-medium text-foreground outline-none sm:flex-none"
+                >
+                  {REVIEW_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {ui(option.label)}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           </section>
 
@@ -826,6 +924,15 @@ export function TransactionFilters({
                 </label>
               </div>
             </div>
+          </section>
+
+          {/* ── More filters ─────────────────────────────────────────── */}
+          {/* Secondary by design: review state is something you go looking
+              for, not something the screen should be organised around. */}
+          <section className="space-y-2 sm:hidden">
+            <p className={sectionLabelCls}>{ui('More filters')}</p>
+            <p className="text-xs text-muted-foreground">{ui('Review status')}</p>
+            {reviewToggle}
           </section>
         </div>
 
