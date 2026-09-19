@@ -39,6 +39,13 @@
 > *identifiers* were updated even there, since a `rumbo-ledger-rules` path that
 > no longer resolves helps nobody.
 >
+> **Touched 2026-09-15** to record what PR #64 (category-first quick entry,
+> per-category autofill, the one-screen mobile form) left open: two things
+> reasoned from the code but not watched fail-then-pass on a device (§4.5),
+> the iPhone SE / 13 mini overflow (§4.5), and two UI ideas raised during
+> testing that were not decided (§5). Additive again — the last full pass over
+> every row is still 2026-08-16.
+>
 > Everything shipped is recorded in `AGENTS.md` → Current status and
 > [SPRINT-LOG.md](./SPRINT-LOG.md); this file only lists what is **not** done.
 
@@ -155,6 +162,20 @@ express in SQL without reimplementing the report query; then **BR-037**,
 automated rows. BR-044's RLS half needs a second household member and is better
 folded into a general RLS pass.
 
+### 4.5 Quick-entry transaction form (PR #64, 2026-09-15)
+
+Category-first field order, per-category autofill, and the one-screen mobile
+form (`docs/SPRINT-LOG.md` → "Ask for the category first…") were tested
+through eight rounds on a real Android device. Two things in the final two
+commits were reasoned from the code and pass the validation gate, but were not
+watched fail on the device and then pass there.
+
+| Area | State | Exact remaining action |
+|---|---|---|
+| Keyboard-open scroll no longer snapping back | Reasoned from code, not device-tested | Open the add-transaction form on the Android device used for the rest of this sprint, type into a field with the keyboard up, and scroll manually while the browser's URL bar collapses. The page must not jump back to the focused field. |
+| Review-round provenance fixes (re-picking a category, switching transaction type, typing over a seeded field, a tag created mid-tap) | Reasoned from code, not device-tested | Repeat each of the four scenarios in the PR's review-round commit message on the real device and confirm the seeded values behave as described (no stale autofill survives a category change or a type switch; typing or creating inline clears that field's autofill marker; a tag created mid-tap is not lost). |
+| iPhone SE / iPhone 13 mini overflow | Known, not a bug | The one-screen target still overflows by 127px (SE) and 51px (13 mini) per the commits' own Chromium measurements. Hiding Repeat, Notes and Status via the existing BR-032 preferences covers both; no further code is expected unless the user wants the default form fields changed. |
+
 ## 5. Open decisions across feature docs
 
 | Doc | Question |
@@ -162,6 +183,8 @@ folded into a general RLS pass.
 | [features/goals.md](./features/goals.md) | Whether a goal linked to an account should derive its progress from that account's real ledger balance instead of the manually-tracked `current_amount`. |
 | [features/month-start-day.md](./features/month-start-day.md) | What a stored `budgets.budget_month` / `month_closures` month **means** once a period no longer coincides with a calendar month. That is a data-model question, not arithmetic, and it deserves its own written decision the way BR-040 got one — it is the hard part of slice 2. |
 | [features/beginner-friendly-ux.md](./features/beginner-friendly-ux.md) | Idea #6: the AI assistant as the primary interface rather than a supplementary drawer. Out of scope of that doc; revisit only if assistant usage data supports it. |
+| [SPRINT-LOG.md](./SPRINT-LOG.md) → "Ask for the category first…" (2026-09-15) | Whether recent payees should be offered as one-tap chips in the quick-entry form, the same treatment PR #64 gave recent descriptions. Raised during device testing, not decided. |
+| [SPRINT-LOG.md](./SPRINT-LOG.md) → "Ask for the category first…" (2026-09-15) | Whether the icon-only `+` half of the mobile split button ("Save and add next") should become a "keep adding" checkbox instead, if the icon reads as ambiguous on-device. Raised during device testing, not decided. |
 
 ## 6. Deferred / parked (revisit only when triggered)
 

@@ -23,6 +23,51 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **The category moved to the top of the add-transaction form, and the form
+  now fits one phone screen** (2026-09-15, PR #64). Ten commits, eight rounds
+  of testing on a real Android device plus one review round. No migrations —
+  `profiles.ui_preferences` already stores the new shape as jsonb.
+  - **`quickEntry.fieldOrder`** (default `category_first`) puts the category
+    directly under the amount; the old `account_first` order is one select
+    away in Settings → Preferences → Quick entry. A single ordered chain
+    (`ENTRY_CHAINS` + `nextInChain` in `transaction-form.tsx`) now drives
+    "jump to the next empty field" from every entry point, including the
+    category drill-down that used to skip it.
+  - **Optional autofill from the last entry in the category**
+    (`quickEntry.autofillFromLastInCategory`, off by default): picking a
+    category seeds account, payee and tags from the household's most recent
+    transaction in it, only into empty fields, names what it filled and
+    offers Undo. New `src/lib/quick-entry/category-memory.ts`
+    (`loadCategoryEntryMemory`), one query over the last 400 non-transfer
+    transactions scoped by `household_id`, never run unless the preference is
+    on. Recent descriptions are offered as chips, never filled. **Note:** the
+    commits and code comments label this `BR-046` — that id already belongs
+    to the currency-change confirmation shipped 2026-07-28
+    (`docs/benchmark-review-mobile-money-managers.md` #17). Genuine id
+    collision, not a renumbering; flagged in `docs/SPRINT-LOG.md`, not
+    silently fixed.
+  - **The four selectors are full-screen on mobile** with the search pinned
+    under the header; `SelectorSheet` moved to `src/components/`,
+    `tag-multi-select.tsx` gained a controlled mode, and
+    `useIsMobile`/`useSoftKeyboardInset` are now shared hooks
+    (`src/lib/use-is-mobile.ts`, `src/lib/use-soft-keyboard.ts`).
+    `autoComplete="off"` on every search box and on payee/description stops
+    Android's own saved-address autofill strip.
+  - **Content dropped from 863px to 683px** (measured at 393px wide) with
+    nothing hidden — `sr-only` title/subtitle on phone, one date row instead
+    of two, no separate tag label. The dialog is a full `h-dvh` screen with
+    its own close button; Cancel is gone wherever the dialog already has
+    another way out (Back/Escape/X/backdrop); Create and Save-and-add-next
+    are one split button on mobile; the action bar hides while the keyboard
+    is open.
+  - **Review round: four P2 defects fixed**, all the same shape — a value the
+    autofill *guessed* was being treated as one the user *chose* (re-picking
+    a category, switching transaction type, typing over a seeded field, and
+    a tag created mid-tap).
+  - **Not yet confirmed on a device:** the keyboard-open scroll fix and the
+    four review-round fixes were reasoned from the code, not watched
+    fail-then-pass. iPhone SE / 13 mini still overflow the one-screen target
+    unless BR-032's Repeat/Notes/Status toggles are used.
 - **The rename finished, and the Tier-3/4 QA gate got smaller** (2026-09-03 →
   09-04). Docs, skills and two new SQL invariant files. No app code, no
   migrations.
@@ -49,118 +94,6 @@ The product is household-first. All financial data must belong to a household.
   - **BR-044 needs no pass for the half people worried about**: `public.notes`
     has no amount column and no foreign key into the ledger, so "no financial
     side effect" is structural. Its RLS half needs a second household session.
-- **The mobile chrome stopped being `fixed`, and the project became Rumbo**
-  (2026-08-24 → 2026-08-29, PRs #48–#61 straight onto `main`). UI and naming
-  only, no migrations. Twenty-one commits, most of them one long fight with
-  the same bug.
-  - **The app shell (#61) — read `docs/features/mobile-app-shell.md` before
-    touching the mobile chrome.** The dashboard is now a box exactly one
-    viewport tall (`h-dvh overflow-hidden`) that does not scroll; the top bar
-    and the bottom nav are ordinary flex rows in it, and `<main
-    id="app-scroll">` is the only scroller. This **replaces** the
-    `ViewportPin`-corrects-`fixed`-chrome approach described in the 2026-08-21
-    entry below, which failed in three different directions across #48–#59:
-    the bars sat low, then walked down the screen mid-scroll, then rode up off
-    it. Measuring the gap between the layout and visual viewports and
-    translating the bars to close it was the wrong shape of fix; the bars now
-    step out of the scrolling box instead.
-  - **`window.scrollY` is dead in the dashboard.** The document never scrolls.
-    Anything reading or resetting scroll position goes through
-    `src/lib/app-scroll.ts` (`APP_SCROLL_ID`, `getAppScroller()`). The
-    assistant FAB's hide-while-scrolling and the reset-to-top on route change
-    were both repointed at the new scroller; a `scroll` listener on `window`
-    now hears nothing.
-  - **`ViewportPin` survives, narrowed.** It still re-boxes the things that
-    really are `fixed` under pinch zoom: dialogs/sheets/drawers
-    (`.vv-pin-screen*`, not counter-scaled), the FABs (`.vv-pin-corner`) and
-    the toast stack (`.vv-pin-bottom`). `.vv-pin-top` had no consumers left
-    after #61 and was removed.
-  - **Renamed to Rumbo (#58).** `package.json`, `public/manifest.json`,
-    README, AGENTS.md, the scripts and the user-facing strings. The `docs/`
-    and skill halves followed on 2026-09-03 (entry below).
-  - **Install hint moved inside `main` (#60).** It was a sibling above it, so
-    it started at y=0 and rendered under the mobile top bar. Page content
-    belongs inside the scroller.
-  - **Also #59:** at scale 1 the pin's four deltas are clamped inward — a
-    correction may pull chrome onto the screen, never push it off. Safari pins
-    `fixed` to the visual viewport while `getBoundingClientRect` keeps
-    answering with the layout position, so the probes were correcting geometry
-    that was already right.
-- **Modal overlays, dashboard legibility, and a cheaper assistant**
-  (2026-08-22, branch `fix/mobile-ui-zoom-overlays-and-activity`). Closes the
-  P4/P3 mobile-UI gaps the viewport-pinning sprint (2026-08-21) deliberately
-  deferred, ships the text-size setting that sprint also scoped out, and
-  clears three more P3 rows from `docs/pending-work.md` §3 picked up in the
-  same branch. No migrations in any of it.
-  - **Overlays pinned to the visual viewport.** New `.vv-pin-screen`,
-    `.vv-pin-screen-center` and `.vv-pin-screen-edge` utilities in
-    `globals.css`, fed by new `--vv-width`/`--vv-height` on `ViewportPin`.
-    Unlike the chrome, an overlay is content — a zoom should magnify a
-    dialog, not shrink it back to size — so these are **not** counter-scaled
-    and get no transform or wrapper of their own, since every dialog, sheet
-    and drawer already owns one. Applied to `dialog`, `alert-dialog`,
-    `sheet`, `drawer`, `selector-sheet.tsx`, and the transactions filter
-    sheet, which shadows the pin variables off at `sm:` since it is a static
-    toolbar there, not a sheet.
-  - **Dashboard legibility.** Recent Activity's amount column is `auto`
-    instead of a fixed 88px — a six-figure COP amount didn't fit, and
-    truncating money is never right; the title wraps to two lines on phone;
-    the date is `shrink-0` on the secondary line so it survives instead of
-    losing to the subtitle. The assistant FAB now fades (opacity only —
-    `vv-pin-corner` already owns its transform) while the page scrolls down
-    and returns on scroll-up or a 1.2s pause. Not hidden on phone: it's the
-    only entry point to the assistant there.
-  - **In-app text size.** Settings gains `default`/`large`/`larger`, stored
-    in the existing `profiles.ui_preferences` jsonb (no migration), applied
-    as a `%` root `font-size` by new `TextSizeSync` — mounted in the
-    dashboard layout, not the root layout, so `/login` never pays for a
-    profile read to learn a preference it can't have. `%` and not `px` so a
-    reader's own browser zoom stacks instead of getting overridden. Also
-    fixed a real `audit-i18n.mjs` gap: it misses object values reached by
-    computed index, so `<select>` option labels (`PERIOD_LABELS` included)
-    were shipping untranslated despite a green i18n check.
-  - **CI on pull requests.** New `.github/workflows/ci.yml` — lint →
-    `tsc --noEmit` → `i18n:check` → build — since no `.github/` existed and
-    PRs merged with zero automated validation.
-  - **`npm run db:test`.** The three `supabase/tests/*.sql` ledger-invariant
-    files are runnable for the first time (`scripts/db-test.mjs` + shared
-    `scripts/lib/supabase-api.mjs`, also used by `db-push.mjs` now). Nothing
-    it runs writes, except `br_019`'s self-rolling-back transaction, which is
-    sent as one request on purpose so it can never half-commit into
-    production. Also fixed a latent Windows crash in `db-push`
-    (`process.exit()` with an open fetch socket died with `0xC0000409`
-    instead of exit code 1).
-  - **Assistant moved to Claude Haiku 4.5**, Anthropic's cheapest tier ($1/$5
-    per million tokens in/out vs Sonnet 5's $3/$15). Verified against the
-    Models API rather than assumed: `image_input` still works (receipts are
-    fine), but this tier has a 64K output cap and **no `output_config.effort`
-    — sending it is an outright error**, and neither call site sends one.
-    `max_tokens` also rose from 1024 (16000 for the assistant loop, 4096 for
-    receipt-draft extraction), which was silently truncating long replies
-    mid-sentence.
-  - **QA checklist scaffolding**: `docs/alpha/tier-3-4-authenticated-qa.md`,
-    eleven rows (the ten Tier-3/4 features plus BR-031, missing from the
-    original list despite shipping in Tier-3), all still `Untested` — the
-    doc exists, the pass has not been run.
-- **Chrome pinned to the visual viewport** (2026-08-21, branch
-  `claude/zoom-scroll-header-footer-53n6iv`). **⚠️ Superseded by the app shell
-  (#61, 2026-08-29) — the top bar and the bottom nav are no longer `fixed` and
-  are no longer pinned. Kept here for the history of why; the surviving parts
-  are listed in the entry above.** UI only, no migration. A fast
-  scroll on a phone occasionally picks up a stray second finger and pinch-zooms
-  the page a few percent. `position: fixed` anchors to the *layout* viewport,
-  which is then larger than the screen, so the mobile header and the bottom tab
-  bar hung off its edges and read as cut off — you lost one or the other
-  depending on where the visual viewport had been panned to. `ViewportPin`
-  (`src/components/viewport-pin.tsx`, mounted in the root layout) publishes the
-  visual viewport's geometry as CSS variables while the scale deviates from 1,
-  and the `.vv-pin-*` utilities in `globals.css` translate the chrome onto it
-  and counter-scale it by `1/scale`, so the bars keep their on-screen size at
-  the screen edges and the zoom magnifies only the content. All of it is scoped
-  to `[data-vv-zoomed]`: at rest there is no transform, and therefore no
-  containing block for anything `fixed` rendered inside the bars. **Pinch zoom
-  stays enabled on purpose** — see `docs/pending-work.md` §2 before disabling
-  it.
 
 > **Historia anterior:** las entradas de sprint previas viven en
 > `docs/SPRINT-LOG.md` (append-only, más reciente arriba). No se resumen aquí:
