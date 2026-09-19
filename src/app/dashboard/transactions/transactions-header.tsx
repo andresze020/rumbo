@@ -2,14 +2,14 @@
 
 import { HouseholdChip } from '@/components/household-chip'
 import { useLanguage } from '@/components/language-provider'
-import { PeriodSelector } from './period-selector'
+import { PeriodSelector, type PeriodMode } from './period-selector'
 
 type TransactionsHeaderProps = {
   householdName: string
   periodLabel: string
   periodShortLabel: string
   periodMonth: string
-  isCustomRange: boolean
+  periodMode: PeriodMode
   monthHrefTemplate: string
   allTimeHref: string
 }
@@ -25,7 +25,7 @@ export function TransactionsHeader({
   periodLabel,
   periodShortLabel,
   periodMonth,
-  isCustomRange,
+  periodMode,
   monthHrefTemplate,
   allTimeHref,
 }: TransactionsHeaderProps) {
@@ -43,7 +43,7 @@ export function TransactionsHeader({
           label={periodLabel}
           shortLabel={periodShortLabel}
           month={periodMonth}
-          isCustomRange={isCustomRange}
+          mode={periodMode}
           monthHrefTemplate={monthHrefTemplate}
           allTimeHref={allTimeHref}
         />

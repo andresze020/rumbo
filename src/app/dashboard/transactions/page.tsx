@@ -17,7 +17,7 @@ import { TransactionToasts } from './transaction-toasts'
 import { RememberTransactionScope } from './remember-scope'
 import { TransactionsHeader } from './transactions-header'
 import { TransactionsSummary } from './transactions-summary'
-import { MONTH_TOKEN } from './period-selector'
+import { MONTH_TOKEN, type PeriodMode } from './period-selector'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
@@ -1160,18 +1160,48 @@ export default async function TransactionsPage({
   monthHrefParams.delete('date_to')
   monthHrefParams.set('month', MONTH_TOKEN)
   const monthHrefTemplate = `/dashboard/transactions?${monthHrefParams.toString()}`
-  const isAllTimeRange =
-    resolvedDateFrom === ALL_TIME_FROM && resolvedDateTo === ALL_TIME_TO
-  const periodLabel = isAllTimeRange
-    ? ui('All time')
-    : hasCustomDateRange
-    ? dateRangeLabel
-    : formatMonthLabel(resolvedMonth, locale)
-  const periodShortLabel = isAllTimeRange
-    ? ui('All time')
-    : hasCustomDateRange
-    ? dateRangeLabel
-    : formatMonthLabelShort(resolvedMonth, locale)
+
+  // "All time" keeps every other filter, exactly as a month does. It used to
+  // reuse CLEAR_FILTERS_HREF, which drops the lot — picking a period should
+  // never clear an account or a search.
+  const allTimeHref = transactionsPath({
+    ...filters,
+    dateFrom: ALL_TIME_FROM,
+    dateTo: ALL_TIME_TO,
+  })
+
+  // What the control is actually showing, in its own terms. Three cases, and
+  // the second is easy to miss: a payee/tag URL with no month and no range is
+  // an all-time view (`applyDateWindow` sends null bounds to the RPC), so
+  // labelling it with the current month would have the button claim a period
+  // the results do not have.
+  const isAllTimeView =
+    !applyDateWindow ||
+    (resolvedDateFrom === ALL_TIME_FROM && resolvedDateTo === ALL_TIME_TO)
+  // A range that happens to span exactly one calendar month *is* that month —
+  // the "This month" preset produces one — so the grid should light it up
+  // rather than treat it as an arbitrary range.
+  const rangeIsWholeMonth =
+    hasCustomDateRange &&
+    resolvedDateFrom === monthFirstDay(resolvedMonth) &&
+    resolvedDateTo === monthLastDay(resolvedMonth)
+  const periodMode: PeriodMode = isAllTimeView
+    ? 'all-time'
+    : !hasCustomDateRange || rangeIsWholeMonth
+    ? 'month'
+    : 'custom'
+  const periodLabel =
+    periodMode === 'all-time'
+      ? ui('All time')
+      : periodMode === 'custom'
+      ? dateRangeLabel
+      : formatMonthLabel(resolvedMonth, locale)
+  const periodShortLabel =
+    periodMode === 'all-time'
+      ? ui('All time')
+      : periodMode === 'custom'
+      ? dateRangeLabel
+      : formatMonthLabelShort(resolvedMonth, locale)
 
   // Presets — computed server-side to bake in current non-date filters
   const todayStr = todayIsoDate()
@@ -1390,9 +1420,9 @@ export default async function TransactionsPage({
         periodLabel={periodLabel}
         periodShortLabel={periodShortLabel}
         periodMonth={resolvedMonth}
-        isCustomRange={hasCustomDateRange}
+        periodMode={periodMode}
         monthHrefTemplate={monthHrefTemplate}
-        allTimeHref={CLEAR_FILTERS_HREF}
+        allTimeHref={allTimeHref}
       />
 
       {/* Keeps these filters for the next bare landing on this screen. */}

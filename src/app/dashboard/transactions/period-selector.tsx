@@ -22,6 +22,14 @@ import { cn } from '@/lib/utils'
  */
 export const MONTH_TOKEN = '__month__'
 
+/**
+ * Which of the three things the applied period is. `custom` is a real state,
+ * not the absence of a month: an explicit range like "Last 3 months" leaves
+ * every tile here unselected, and reading it as "not a month, therefore all
+ * time" lit up the All time button for it.
+ */
+export type PeriodMode = 'month' | 'all-time' | 'custom'
+
 type PeriodSelectorProps = {
   /** What the button reads, already localized: "September 2026", "All time"… */
   label: string
@@ -29,10 +37,9 @@ type PeriodSelectorProps = {
       full month name beside the title, and a truncated "September 20…" is
       worse than a short one. */
   shortLabel: string
-  /** The applied month, `YYYY-MM`. */
+  /** The applied month, `YYYY-MM`. Also seeds the year the grid opens on. */
   month: string
-  /** True when an explicit date range is applied, so no month tile is current. */
-  isCustomRange: boolean
+  mode: PeriodMode
   monthHrefTemplate: string
   allTimeHref: string
 }
@@ -41,7 +48,7 @@ export function PeriodSelector({
   label,
   shortLabel,
   month,
-  isCustomRange,
+  mode,
   monthHrefTemplate,
   allTimeHref,
 }: PeriodSelectorProps) {
@@ -141,7 +148,7 @@ export function PeriodSelector({
             <div className="grid grid-cols-3 gap-2">
               {monthNames.map((name, index) => {
                 const value = `${year}-${String(index + 1).padStart(2, '0')}`
-                const isCurrent = !isCustomRange && value === month
+                const isCurrent = mode === 'month' && value === month
                 return (
                   <button
                     key={value}
@@ -166,10 +173,10 @@ export function PeriodSelector({
             <button
               type="button"
               onClick={() => go(allTimeHref)}
-              aria-pressed={isCustomRange}
+              aria-pressed={mode === 'all-time'}
               className={cn(
                 'mt-2 h-11 w-full rounded-xl border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
-                isCustomRange
+                mode === 'all-time'
                   ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                   : 'bg-background hover:bg-muted'
               )}
