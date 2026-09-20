@@ -248,7 +248,9 @@ export default async function SettingsPage({ searchParams }: Props) {
       </Card>
 
       {/* ── Household ───────────────────────────────────────────────── */}
-      <Card>
+      {/* The app bar's household selector links straight here with
+          `#household`; `scroll-mt` keeps the heading clear of the top bar. */}
+      <Card id="household" className="scroll-mt-20">
         <CardHeader>
           <CardTitle>Household</CardTitle>
           <CardDescription>Shared settings for your household.</CardDescription>

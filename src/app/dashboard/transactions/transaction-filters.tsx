@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, SlidersHorizontal, X } from 'lucide-react'
+import { ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { buttonVariants } from '@/components/ui/button'
 import { MultiSelectChip, type MultiSelectOption } from '@/components/multi-select-chip'
@@ -11,30 +11,9 @@ import { cn } from '@/lib/utils'
 import { useBackDismiss } from '@/lib/use-back-dismiss'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 
-type AccountOption = {
-  id: string
-  label: string
-  isArchived: boolean
-}
-
-type CategoryOption = {
-  id: string
-  label: string
-  isArchived: boolean
-}
-
-type TagOption = {
-  id: string
-  label: string
-  isArchived?: boolean
-}
-
-/** A date range the user can stage in the form; applied only on submit. */
-type PresetOption = {
-  label: string
-  dateFrom: string
-  dateTo: string
-}
+type AccountOption = { id: string; label: string; isArchived: boolean }
+type CategoryOption = { id: string; label: string; isArchived: boolean }
+type TagOption = { id: string; label: string; isArchived?: boolean }
 
 type TransactionFiltersProps = {
   searchText: string
@@ -43,31 +22,34 @@ type TransactionFiltersProps = {
   selectedReview: string
   selectedAccountIds: string[]
   selectedCategoryIds: string[]
-  resolvedDateFrom: string
-  resolvedDateTo: string
-  hasActiveFilters: boolean
   accountOptions: AccountOption[]
   categoryOptions: CategoryOption[]
   tagOptions: TagOption[]
   selectedTagIds: string[]
   payeeOptions: MultiSelectOption[]
   selectedPayeeIds: string[]
-  presetOptions: PresetOption[]
-  /** URL that drops every filter — see CLEAR_FILTERS_HREF on the page. */
+  /**
+   * The applied period, already serialized. This bar never reads it and never
+   * changes it — it only carries it through, so applying a filter cannot move
+   * the period and the header's period control cannot drop a filter.
+   */
+  periodQuery: string
+  /** Drops every general filter and the search. Keeps the period. */
   clearHref: string
 }
 
-/**
- * Multi-select, so "income + transfer" is expressible. Nothing selected means
- * every type, which is why there is no explicit "All" entry — the segmented
- * control's first cell clears the selection instead.
- */
 const TYPE_OPTIONS = [
   { value: 'income', label: 'Income' },
   { value: 'expense', label: 'Expense' },
   { value: 'transfer', label: 'Transfer' },
 ] as const
 
+/**
+ * BR-008 — the transaction's own lifecycle, which is a financial fact: a
+ * pending charge has not settled, a voided one has been reversed. Deliberately
+ * *not* the review state, which is a bookkeeping note about whether a human
+ * has looked at the row. Two different questions, two different controls.
+ */
 const STATUS_OPTIONS: MultiSelectOption[] = [
   { id: 'posted', label: 'Posted' },
   { id: 'pending', label: 'Pending' },
@@ -75,25 +57,39 @@ const STATUS_OPTIONS: MultiSelectOption[] = [
 ]
 
 /**
- * A labelled control that fills the width as a tappable row on phones and
- * shrinks back to a toolbar chip from `sm` up — matching MultiSelectChip, so
- * the sheet reads as one set of controls rather than several shapes.
+ * BR-011 — the review states, as an advanced filter rather than navigation.
+ * They used to be a permanent segmented control above the list; they live
+ * behind "More filters" now, and the data, the column and the bulk actions are
+ * untouched.
  */
-const fieldRowCls =
-  'flex h-11 w-full items-center gap-1.5 rounded-xl border bg-background px-3 sm:h-9 sm:w-auto sm:shrink-0 sm:rounded-lg sm:px-2.5'
+const REVIEW_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'unreviewed', label: 'To review' },
+  { value: 'reviewed', label: 'Reviewed' },
+  { value: 'flagged', label: 'Flagged' },
+] as const
 
-/** Section heading inside the mobile sheet; the desktop toolbar has no sections. */
-const sectionLabelCls =
-  'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:hidden'
-
-/** Mobile control-strip pill: one compact, tappable, horizontally scrolling unit. */
+/** Mobile control-strip pill: one compact, tappable unit. */
 const pillCls =
-  'flex h-8 shrink-0 items-center gap-1.5 rounded-full border bg-background px-3 text-xs font-medium text-foreground'
+  'flex h-9 shrink-0 items-center gap-1.5 rounded-full border bg-background px-3 text-xs font-medium text-foreground'
 
 const activePillCls = 'border-primary/40 bg-primary/10 text-primary'
 
+const typeButtonCls =
+  'flex h-10 items-center justify-center rounded-lg px-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:h-8 sm:px-3'
+
+const typeButtonActiveCls =
+  'bg-primary text-primary-foreground shadow-sm hover:text-primary-foreground'
+
 /** Repeated query params this bar owns. */
-type FilterParam = 'type' | 'status' | 'account_id' | 'category_id' | 'tag_id' | 'payee_id'
+type FilterParam =
+  | 'type'
+  | 'status'
+  | 'account_id'
+  | 'category_id'
+  | 'tag_id'
+  | 'payee_id'
+  | 'review'
 
 /** The multi-selects the chips drive, in the order they reach the query. */
 const DRAFT_PARAMS = [
@@ -107,26 +103,19 @@ const DRAFT_PARAMS = [
 type DraftParam = (typeof DRAFT_PARAMS)[number]
 type Drafts = Record<DraftParam, string[]>
 
-/**
- * The option list a summary chip reopens. `type` has none — it is the segmented
- * toggle at the top of the sheet, which needs no panel to be visible.
- */
+/** The option list a summary chip reopens. */
 const CHIP_PANEL: Record<
   FilterParam,
   null | 'account' | 'category' | 'tag' | 'payee' | 'status'
 > = {
   type: null,
+  review: null,
   status: 'status',
   account_id: 'account',
   category_id: 'category',
   tag_id: 'tag',
   payee_id: 'payee',
 }
-
-const typeButtonCls =
-  'flex-1 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:flex-none sm:rounded-md sm:py-1.5'
-
-const typeButtonActiveCls = 'bg-primary text-primary-foreground shadow-sm hover:text-primary-foreground'
 
 export function TransactionFilters({
   searchText,
@@ -135,16 +124,13 @@ export function TransactionFilters({
   selectedReview,
   selectedAccountIds,
   selectedCategoryIds,
-  resolvedDateFrom,
-  resolvedDateTo,
-  hasActiveFilters,
   accountOptions,
   categoryOptions,
   tagOptions,
   selectedTagIds,
   payeeOptions,
   selectedPayeeIds,
-  presetOptions,
+  periodQuery,
   clearHref,
 }: TransactionFiltersProps) {
   const ui = useUiTranslation()
@@ -157,41 +143,33 @@ export function TransactionFilters({
   const [openChip, setOpenChip] = useState<
     null | 'account' | 'category' | 'tag' | 'payee' | 'status'
   >(null)
-  // Nothing here reaches the list until Apply, so an edit the user has made but
-  // not yet applied is invisible: the controls and the results below them
-  // disagree with no way to tell. `dirty` is what puts that on screen.
-  const [dirty, setDirty] = useState(false)
+  // Review is secondary: the section starts closed unless it is doing something.
+  const [advancedOpen, setAdvancedOpen] = useState(selectedReview !== 'all')
 
-  // Every control is staged locally and only reaches the server on submit, so
-  // "Apply filters" means what it says. Presets used to be links that navigated
-  // on click, which applied a range the user had not confirmed — and dismissing
-  // the sheet left it stuck on.
-  const [types, setTypes] = useState<string[]>(selectedTypes)
-  const [dateFrom, setDateFrom] = useState(resolvedDateFrom)
-  const [dateTo, setDateTo] = useState(resolvedDateTo)
-  const [search, setSearch] = useState(searchText)
-  // The chips' selections live here rather than inside each chip. They used to
-  // keep their own draft while this component read the checkboxes back out of
-  // the form on submit — two sources of truth for one selection, and they could
-  // disagree: a ticked option showed in the chip summary and never reached the
-  // query. Now the summary and the query read the same state.
-  const [drafts, setDrafts] = useState<Drafts>(() => ({
+  const appliedDrafts: Drafts = {
     account_id: selectedAccountIds,
     category_id: selectedCategoryIds,
     payee_id: selectedPayeeIds,
     tag_id: selectedTagIds,
     status: selectedStatuses,
-  }))
+  }
+
+  // Every control in the sheet is staged locally and only reaches the server on
+  // Apply, so "Apply filters" means what it says — and dismissing the sheet
+  // means what *that* says: the draft goes back to whatever is applied.
+  const [types, setTypes] = useState<string[]>(selectedTypes)
+  const [review, setReview] = useState(selectedReview)
+  const [search, setSearch] = useState(searchText)
+  const [drafts, setDrafts] = useState<Drafts>(appliedDrafts)
+  // Nothing here reaches the list until Apply, so an edit the user has made but
+  // not yet applied is invisible. `dirty` is what puts that on screen.
+  const [dirty, setDirty] = useState(false)
 
   // Applying used to reload the document, which reset the staged values for
-  // free. Now that navigation is client-side this component survives it, so the
-  // staging has to be re-seeded from whatever the server actually applied —
-  // otherwise removing a chip would leave its type still lit in the toggle.
+  // free. Navigation is client-side now, so this component survives it and the
+  // staging has to be re-seeded from whatever the server actually applied.
   // Adjusted during render rather than in an effect, per
   // https://react.dev/learn/you-might-not-need-an-effect.
-  // Every applied filter is in the key, not just the staged ones: removing a
-  // chip or hitting Back is also a new applied state, and the "unapplied
-  // changes" mark has to clear when it lands.
   const appliedScope = [
     selectedTypes.join(','),
     selectedStatuses.join(','),
@@ -201,15 +179,13 @@ export function TransactionFilters({
     selectedPayeeIds.join(','),
     selectedReview,
     searchText,
-    resolvedDateFrom,
-    resolvedDateTo,
+    periodQuery,
   ].join('|')
   const [syncedScope, setSyncedScope] = useState(appliedScope)
   if (appliedScope !== syncedScope) {
     setSyncedScope(appliedScope)
     setTypes(selectedTypes)
-    setDateFrom(resolvedDateFrom)
-    setDateTo(resolvedDateTo)
+    setReview(selectedReview)
     setSearch(searchText)
     setDrafts({
       account_id: selectedAccountIds,
@@ -218,67 +194,59 @@ export function TransactionFilters({
       tag_id: selectedTagIds,
       status: selectedStatuses,
     })
+    setAdvancedOpen(selectedReview !== 'all')
     setDirty(false)
   }
 
   /**
-   * The query string for a set of filters. One builder for both sides so
-   * "what the server has" and "what Apply is about to send" are comparable as
-   * plain strings.
+   * The query string for a set of filters.
+   *
+   * It always starts from the applied period and never writes one, which is
+   * what keeps the two contexts from fighting: this bar can express any
+   * combination of filters and none of them is a date.
    */
   function buildQuery(source: {
     types: string[]
+    review: string
     drafts: Drafts
-    dateFrom: string
-    dateTo: string
     search: string
   }) {
-    const params = new URLSearchParams()
+    const params = new URLSearchParams(periodQuery)
     for (const value of source.types) params.append('type', value)
     for (const param of DRAFT_PARAMS) {
       for (const value of source.drafts[param]) params.append(param, value)
     }
-    if (selectedReview !== 'all') params.set('review', selectedReview)
+    if (source.review !== 'all') params.set('review', source.review)
     const trimmed = source.search.trim()
     if (trimmed) params.set('search', trimmed)
-    if (source.dateFrom) params.set('date_from', source.dateFrom)
-    if (source.dateTo) params.set('date_to', source.dateTo)
     return params.toString()
   }
 
-  const appliedDrafts: Drafts = {
-    account_id: selectedAccountIds,
-    category_id: selectedCategoryIds,
-    payee_id: selectedPayeeIds,
-    tag_id: selectedTagIds,
-    status: selectedStatuses,
-  }
   const appliedQuery = buildQuery({
     types: selectedTypes,
+    review: selectedReview,
     drafts: appliedDrafts,
-    dateFrom: resolvedDateFrom,
-    dateTo: resolvedDateTo,
     search: searchText,
   })
 
   // Applying is a round trip, and the chips and the badge are drawn from what
   // the *server* says is applied — so they sat on the previous filters for as
-  // long as the query took, which reads as "Apply did nothing" all over again.
-  // While a set is in flight they show that set instead. Cleared during render
-  // the moment the server agrees, rather than in an effect.
+  // long as the query took, which reads as "Apply did nothing". While a set is
+  // in flight they show that set instead.
   const [pending, setPending] = useState<null | {
     query: string
     from: string
     types: string[]
+    review: string
     drafts: Drafts
   }>(null)
   // Any move by the server ends the optimism, not just the answer we were
-  // waiting for: removing a chip mid-flight is a different navigation, and
-  // holding our guess past it would show a set nobody asked for.
+  // waiting for: removing a chip mid-flight is a different navigation.
   if (pending && appliedQuery !== pending.from) setPending(null)
 
   /** What the user should read as applied: the server's answer, or ours. */
   const shownTypes = pending?.types ?? selectedTypes
+  const shownReview = pending?.review ?? selectedReview
   const shownDrafts = pending?.drafts ?? appliedDrafts
 
   /** Every staged edit runs through here, so nothing can change unmarked. */
@@ -287,13 +255,41 @@ export function TransactionFilters({
     setDirty(true)
   }
 
+  /** Throw away anything staged and go back to what is applied. */
+  function resetDraft() {
+    setTypes(selectedTypes)
+    setReview(selectedReview)
+    setDrafts({
+      account_id: selectedAccountIds,
+      category_id: selectedCategoryIds,
+      payee_id: selectedPayeeIds,
+      tag_id: selectedTagIds,
+      status: selectedStatuses,
+    })
+    setAdvancedOpen(selectedReview !== 'all')
+    setDirty(false)
+  }
+
+  function openSheet() {
+    // Open on the applied set, never on a draft left over from a dismissal.
+    resetDraft()
+    setMoreOpen(true)
+  }
+
   /**
-   * The sheet and any option list opened inside it close together — a panel
-   * left open would still be open the next time the sheet is pulled up.
+   * Dismissing discards. The X, the backdrop, Escape and Android Back all land
+   * here, and all of them mean "I did not want that" — the alternative, where
+   * half-made edits survive out of sight and land on the next Apply, is the
+   * thing that makes a filter panel untrustworthy.
+   *
+   * The search box is deliberately not part of this: it lives on the strip
+   * outside the sheet, and wiping what someone typed there because they closed
+   * a different panel would be its own bug.
    */
   function closeSheet() {
     setMoreOpen(false)
     setOpenChip(null)
+    resetDraft()
   }
 
   // The sheet covers the screen; letting the list keep scrolling underneath it
@@ -307,21 +303,19 @@ export function TransactionFilters({
     }
   }, [moreOpen])
 
-  // Android Back closes the sheet instead of leaving Transactions, matching the
-  // picker sheets in the transaction form. Without it the only way out was the
-  // X, and Back discarded the whole screen.
+  // Android Back closes the sheet instead of leaving Transactions.
   const releaseSheetEntry = useBackDismiss(moreOpen, closeSheet)
 
-  // Escape is the desktop equivalent of the same escape hatch, and it unwinds
-  // one layer at a time: an open option list dismisses itself (the chip owns
-  // that), and only a second press closes the sheet around it.
+  // Escape unwinds one layer at a time: an open option list dismisses itself
+  // (the chip owns that), and only a second press closes the sheet around it.
   useEffect(() => {
     if (!moreOpen) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !openChip) setMoreOpen(false)
+      if (event.key === 'Escape' && !openChip) closeSheet()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moreOpen, openChip])
 
   /**
@@ -330,44 +324,28 @@ export function TransactionFilters({
    * Navigation goes through the router rather than a native GET submit: a form
    * submit is a full document load — blank screen, fonts and layout repainted,
    * scroll position lost — for what is only a change of query string.
-   *
-   * The button calls this directly instead of submitting the form, because a
-   * submit is the browser's to grant and it withholds one silently: a date
-   * input the UA considers incomplete is enough, and Apply then looks inert
-   * with nothing in the console to say why. The sr-only submit still routes
-   * Enter through here.
    */
   function apply() {
-    // Built from this component's state, never read back out of the form. The
-    // controls all render from that state, so what the user sees staged and
-    // what reaches the URL cannot drift apart.
-    const query = buildQuery({ types, drafts, dateFrom, dateTo, search })
+    const query = buildQuery({ types, review, drafts, search })
 
-    // Nothing to wait for when the staged set is already the applied one, and
-    // marking it pending would leave the bar waiting for a change that is
-    // never coming.
-    if (query !== appliedQuery) setPending({ query, from: appliedQuery, types, drafts })
+    // Nothing to wait for when the staged set is already the applied one.
+    if (query !== appliedQuery) {
+      setPending({ query, from: appliedQuery, types, review, drafts })
+    }
 
     // The mobile sheet owns a history entry so Android Back closes it, and it
-    // reclaims that entry with history.back() when it closes. Closing it here
-    // and navigating in the same breath fired that back() over the push below
-    // and snapped the URL to the previous filters — which is what made Apply
-    // look inert, or look like it had applied some older set. Hand the entry
+    // reclaims that entry with history.back() when it closes. Hand the entry
     // over first, and take it as the entry to navigate into.
     const replacingSheetEntry = releaseSheetEntry()
 
-    // Collapse everything the bar can have open. Navigation is client-side,
-    // so none of this unmounts on its own — an option list left open would
-    // sit on top of the results the user just asked for.
     setMoreOpen(false)
     setSearchOpen(false)
     setOpenChip(null)
     setDirty(false)
-    // Deliberately NOT wrapped in a transition. A transition keeps the current
-    // page on screen until the next one is fully ready, which suppresses this
-    // route's loading.tsx — Apply would close the sheet and leave the previous
-    // chips, counts and totals sitting there as if nothing had happened. The
-    // skeleton is the honest feedback here.
+
+    // Deliberately NOT wrapped in a transition: that would suppress this
+    // route's loading.tsx, and Apply would close the sheet leaving the previous
+    // chips, counts and totals sitting there as if nothing had happened.
     const href = `/dashboard/transactions?${query}`
     if (replacingSheetEntry) router.replace(href)
     else router.push(href)
@@ -387,28 +365,38 @@ export function TransactionFilters({
     )
   }
 
-  const moreFiltersCount = DRAFT_PARAMS.reduce(
-    (total, param) => total + shownDrafts[param].length,
-    0
-  )
+  /**
+   * How many *general* filters are on. Dimensions, not values: five ticked
+   * accounts is one filter, not five.
+   *
+   * The period is not counted — it is its own context, and "Filters 1" that
+   * silently meant "September" was the thing that made the badge useless. Nor
+   * is the search, which has its own pill, nor any dimension sitting on All.
+   */
+  const generalFilterCount =
+    (shownTypes.length > 0 ? 1 : 0) +
+    (shownReview !== 'all' ? 1 : 0) +
+    DRAFT_PARAMS.reduce(
+      (total, param) => total + (shownDrafts[param].length > 0 ? 1 : 0),
+      0
+    )
+  const hasAnythingToClear = generalFilterCount > 0 || searchText.length > 0
+
+  /** Same, for the draft the sheet is showing. */
+  const draftReviewLabel =
+    REVIEW_OPTIONS.find((option) => option.value === review)?.label ?? 'All'
 
   /**
    * The applied filter state as a URL, minus one whole dimension. Powers the
-   * mobile summary chips: on phones the secondary controls are behind a sheet,
-   * so without these you can see *that* something is filtered (the badge count)
-   * but not what — and undoing one would mean opening the sheet.
-   *
-   * Built from the shown state, not the staged one: a chip is a link, so it
-   * has to describe the view being looked at — including the one still in
-   * flight, or removing a filter right after applying would resurrect the set
-   * from before.
+   * mobile summary chips: without these you can see *that* something is
+   * filtered but not what, and undoing one would mean opening the sheet.
    */
   function hrefWithout(param: FilterParam) {
+    const isDraftParam = param !== 'type' && param !== 'review'
     const query = buildQuery({
       types: param === 'type' ? [] : shownTypes,
-      drafts: { ...shownDrafts, ...(param === 'type' ? {} : { [param]: [] }) },
-      dateFrom: resolvedDateFrom,
-      dateTo: resolvedDateTo,
+      review: param === 'review' ? 'all' : shownReview,
+      drafts: { ...shownDrafts, ...(isDraftParam ? { [param]: [] } : {}) },
       search: searchText,
     })
     return `/dashboard/transactions?${query}`
@@ -418,15 +406,63 @@ export function TransactionFilters({
     options.find((option) => option.id === id)?.label ?? fallback
 
   /**
-   * Multi-toggle segmented control, shared by the desktop toolbar and the
-   * mobile sheet so both offer the same thing. "All" is not a fourth value —
-   * it clears the selection, which is what an empty list already means.
+   * One chip per filter *dimension* rather than per value. Five ticked accounts
+   * used to be five chips wrapping over three lines. A lone value still shows
+   * its own name — that is the case where the detail earns the space.
+   */
+  function chipFor(
+    param: FilterParam,
+    values: string[],
+    groupLabel: string,
+    labelFor: (value: string) => string
+  ) {
+    if (values.length === 0) return null
+    return {
+      key: param,
+      panel: CHIP_PANEL[param],
+      label:
+        values.length === 1 ? labelFor(values[0]) : `${groupLabel} · ${values.length}`,
+      href: hrefWithout(param),
+    }
+  }
+
+  const activeChips = [
+    chipFor('type', shownTypes, ui('Type'), (value) =>
+      ui(TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value)
+    ),
+    chipFor('account_id', shownDrafts.account_id, ui('Accounts'), (id) =>
+      labelOf(accountOptions, id, ui('Account'))
+    ),
+    chipFor('category_id', shownDrafts.category_id, ui('Categories'), (id) =>
+      labelOf(categoryOptions, id, ui('Category'))
+    ),
+    chipFor('payee_id', shownDrafts.payee_id, ui('Payees'), (id) =>
+      labelOf(payeeOptions, id, ui('Payee'))
+    ),
+    chipFor('tag_id', shownDrafts.tag_id, ui('Tags'), (id) =>
+      labelOf(tagOptions, id, ui('Tags'))
+    ),
+    chipFor('status', shownDrafts.status, ui('Transaction status'), (value) =>
+      ui(labelOf(STATUS_OPTIONS, value, value))
+    ),
+    chipFor('review', shownReview === 'all' ? [] : [shownReview], ui('Review'), (value) =>
+      ui(REVIEW_OPTIONS.find((option) => option.value === value)?.label ?? value)
+    ),
+  ].filter((chip) => chip !== null)
+
+  /**
+   * Multi-toggle segmented control. "All" is not a fourth value — it clears the
+   * selection, which is what an empty list already means.
+   *
+   * Two columns on a phone: four cells on a 320px line truncate "Transfer" to
+   * nothing, and a horizontally scrolling segmented control hides options the
+   * user has no reason to suspect exist.
    */
   const typeToggle = (
     <div
       role="group"
       aria-label={ui('Filter by type')}
-      className="flex w-full rounded-xl border bg-background p-0.5 sm:w-auto sm:rounded-lg"
+      className="grid w-full grid-cols-2 gap-1 rounded-xl border bg-background p-1 sm:flex sm:w-auto sm:gap-0.5 sm:rounded-lg sm:p-0.5"
     >
       <button
         type="button"
@@ -456,73 +492,24 @@ export function TransactionFilters({
     </div>
   )
 
-  /**
-   * One chip per filter *dimension* rather than per value. Five ticked accounts
-   * used to be five chips wrapping over three lines, pushing the totals this
-   * screen exists for below the fold. A lone value still shows its own name —
-   * that is the case where the detail earns the space.
-   */
-  function chipFor(
-    param: FilterParam,
-    values: string[],
-    groupLabel: string,
-    labelFor: (value: string) => string
-  ) {
-    if (values.length === 0) return null
-    return {
-      key: param,
-      panel: CHIP_PANEL[param],
-      label:
-        values.length === 1
-          ? labelFor(values[0])
-          : `${groupLabel} · ${values.length}`,
-      href: hrefWithout(param),
-    }
-  }
-
-  const activeChips = [
-    chipFor('type', shownTypes, ui('Type'), (value) =>
-      ui(TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value)
-    ),
-    chipFor('account_id', shownDrafts.account_id, ui('Accounts'), (id) =>
-      labelOf(accountOptions, id, ui('Account'))
-    ),
-    chipFor('category_id', shownDrafts.category_id, ui('Categories'), (id) =>
-      labelOf(categoryOptions, id, ui('Category'))
-    ),
-    chipFor('payee_id', shownDrafts.payee_id, ui('Payees'), (id) =>
-      labelOf(payeeOptions, id, ui('Payee'))
-    ),
-    chipFor('tag_id', shownDrafts.tag_id, ui('Tags'), (id) =>
-      labelOf(tagOptions, id, ui('Tags'))
-    ),
-    chipFor('status', shownDrafts.status, ui('Status'), (value) =>
-      ui(labelOf(STATUS_OPTIONS, value, value))
-    ),
-  ].filter((chip) => chip !== null)
-
   return (
     <form
       method="get"
       action="/dashboard/transactions"
       onSubmit={applyFilters}
-      className="space-y-2.5"
+      className="space-y-2"
     >
-      {/* Staged type selection travels as one hidden input per value, so it
-          round-trips as repeated `type` params like every other multi-filter. */}
+      {/* The no-JS GET fallback has to carry the period too, or submitting the
+          form would silently reset it to the default month. */}
+      {Array.from(new URLSearchParams(periodQuery).entries()).map(([key, value]) => (
+        <input key={`${key}=${value}`} type="hidden" name={key} value={value} />
+      ))}
       {types.map((value) => (
         <input key={value} type="hidden" name="type" value={value} />
       ))}
-      {selectedReview !== 'all' ? (
-        <input type="hidden" name="review" value={selectedReview} />
-      ) : null}
+      {review !== 'all' ? <input type="hidden" name="review" value={review} /> : null}
 
-      {/* ── Mobile: one line of pills ───────────────────────────────────
-          Phones get a native-style control strip instead of the desktop
-          toolbar: search collapses to an icon, everything else lives in the
-          sheet, and whatever is applied shows as a removable chip.
-          Wraps rather than scrolls sideways: an off-screen filter is a filter
-          you forget you set. */}
+      {/* ── Mobile: one line of pills ─────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-1.5 sm:hidden">
         <button
           type="button"
@@ -537,37 +524,41 @@ export function TransactionFilters({
 
         <button
           type="button"
-          onClick={() => (moreOpen ? closeSheet() : setMoreOpen(true))}
+          onClick={() => (moreOpen ? closeSheet() : openSheet())}
           aria-expanded={moreOpen}
-          className={cn(pillCls, (moreFiltersCount > 0 || dirty) && activePillCls)}
+          className={cn(pillCls, generalFilterCount > 0 && activePillCls)}
         >
           <SlidersHorizontal className="size-3.5 shrink-0" aria-hidden="true" />
           {pending ? ui('Applying…') : ui('Filters')}
-          {moreFiltersCount > 0 ? (
+          {generalFilterCount > 0 ? (
             <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-              {moreFiltersCount}
+              {generalFilterCount}
             </span>
-          ) : null}
-          {/* The sheet can be dismissed with edits still staged in it — this is
-              the only thing left on screen that says so. */}
-          {dirty ? (
-            <>
-              <span aria-hidden="true" className="size-1.5 rounded-full bg-primary" />
-              <span className="sr-only">{ui('Unapplied changes')}</span>
-            </>
           ) : null}
         </button>
 
+        {/* Only when there is something to clear, and it never touches the
+            period — that is the header control's business. */}
+        {hasAnythingToClear ? (
+          <Link
+            href={clearHref}
+            className={cn(pillCls, 'gap-1 text-muted-foreground')}
+          >
+            <X className="size-3.5 shrink-0" aria-hidden="true" />
+            {ui('Clear')}
+          </Link>
+        ) : null}
+
         {/* Two targets per chip: the label reopens the sheet at the section
-            that set it, the × drops that dimension outright. Undoing or
-            adjusting a filter never means hunting for it. */}
+            that set it, the × drops that dimension outright. */}
         {activeChips.map((chip) => (
           <span key={chip.key} className={cn(pillCls, activePillCls, 'gap-0 pr-1')}>
             <button
               type="button"
               onClick={() => {
-                setMoreOpen(true)
+                openSheet()
                 setOpenChip(chip.panel)
+                if (chip.key === 'review') setAdvancedOpen(true)
               }}
               className="max-w-[150px] truncate pr-1.5"
             >
@@ -575,7 +566,6 @@ export function TransactionFilters({
             </button>
             <Link
               href={chip.href}
-              onClick={closeSheet}
               aria-label={ui('Remove filter')}
               className="flex size-5 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-primary/15"
             >
@@ -585,10 +575,9 @@ export function TransactionFilters({
         ))}
       </div>
 
-      {/* ── Type toggle (desktop) + search ──────────────────────────────
+      {/* ── Type toggle (desktop) + search ─────────────────────────────
           One search input for both breakpoints — duplicating it would submit
-          two `search` values. On phones it stays hidden until the pill above
-          expands it. */}
+          two `search` values. */}
       <div
         className={cn(
           'flex-wrap items-center gap-2',
@@ -618,8 +607,6 @@ export function TransactionFilters({
       </div>
 
       {/* ── Backdrop for the mobile filter sheet ───────────────────────── */}
-      {/* Above the bottom nav (z-40) and the assistant button (z-50), which
-          would otherwise punch through the sheet. */}
       {moreOpen ? (
         <div
           aria-hidden="true"
@@ -631,17 +618,14 @@ export function TransactionFilters({
       {/* ── Secondary controls: inline on desktop, bottom sheet on phones ─
           One DOM node, styled two ways, rather than two copies: these are real
           form controls, and a second copy would submit a second value for every
-          filter. Kept inside the <form> (no portal) for the same reason.
-          `sm:contents` unwraps the phone-only structure so the desktop toolbar
-          keeps its original flat rows. */}
+          filter. `sm:contents` unwraps the phone-only structure so the desktop
+          toolbar keeps its flat rows. */}
       <div
         {...(moreOpen
           ? {
               role: 'dialog' as const,
               'aria-modal': true,
               'aria-label': ui('Filters'),
-              // Which edge `vv-pin-screen-edge` should pin to while the page is
-              // pinch-zoomed. Same contract as a Base UI sheet.
               'data-side': 'bottom' as const,
             }
           : {})}
@@ -650,10 +634,8 @@ export function TransactionFilters({
           moreOpen
             ? 'vv-pin-screen-edge fixed inset-x-0 bottom-0 z-[61] flex max-h-[88dvh] rounded-t-2xl border-t bg-background shadow-2xl duration-300 animate-in slide-in-from-bottom-8'
             : 'hidden',
-          // This node is a sheet on phones and a plain static toolbar row from
-          // `sm:` up, so the zoom pin has to be switched off there — the width
-          // and max-height it sets would otherwise still apply to the static
-          // box. Shadowing the variables locally is the documented escape hatch.
+          // A sheet on phones and a plain static toolbar row from `sm:` up, so
+          // the zoom pin has to be switched off there.
           'sm:static sm:z-auto sm:flex sm:max-h-none sm:gap-2.5 sm:rounded-none sm:border-0 sm:bg-transparent sm:shadow-none sm:animate-none sm:[--vv-height:none] sm:[--vv-width:auto]'
         )}
       >
@@ -671,182 +653,182 @@ export function TransactionFilters({
               type="button"
               onClick={closeSheet}
               aria-label={ui('Close')}
-              className="-mr-2 flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
+              className="-mr-2 flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
             >
               <X className="size-5" aria-hidden="true" />
             </button>
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-4 sm:contents sm:space-y-0 sm:overflow-visible sm:p-0">
-          {/* ── Narrow down ──────────────────────────────────────────── */}
-          <section className="space-y-2 sm:contents">
-            <p className={sectionLabelCls}>{ui('Narrow down')}</p>
+        {/* The scroll area ends above the footer rather than behind it: the
+            padding is the footer's height plus the safe area. */}
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] pt-1 sm:contents sm:space-y-0 sm:overflow-visible sm:p-0">
+          {/* No "NARROW DOWN" heading: with the period gone there is only one
+              group of controls here, and a label over the only section labels
+              nothing. */}
+          <div className="sm:hidden">{typeToggle}</div>
 
-            {/* The type toggle lives in the sheet on phones and in the toolbar
-                on desktop — same control, rendered once per breakpoint. */}
-            <div className="sm:hidden">{typeToggle}</div>
+          <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+            <MultiSelectChip
+              label={ui('Account')}
+              name="account_id"
+              options={accountOptions}
+              selected={drafts.account_id}
+              onSelectedChange={(next) => stageDraft('account_id', next)}
+              open={openChip === 'account'}
+              onOpenChange={(next) => setOpenChip(next ? 'account' : null)}
+            />
 
-            <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+            <MultiSelectChip
+              label={ui('Category')}
+              name="category_id"
+              options={categoryOptions}
+              selected={drafts.category_id}
+              onSelectedChange={(next) => stageDraft('category_id', next)}
+              open={openChip === 'category'}
+              onOpenChange={(next) => setOpenChip(next ? 'category' : null)}
+            />
+
+            {payeeOptions.length > 0 || selectedPayeeIds.length > 0 ? (
               <MultiSelectChip
-                label={ui('Account')}
-                name="account_id"
-                options={accountOptions}
-                selected={drafts.account_id}
-                onSelectedChange={(next) => stageDraft('account_id', next)}
-                open={openChip === 'account'}
-                onOpenChange={(next) => setOpenChip(next ? 'account' : null)}
+                label={ui('Payee')}
+                name="payee_id"
+                options={payeeOptions}
+                selected={drafts.payee_id}
+                onSelectedChange={(next) => stageDraft('payee_id', next)}
+                open={openChip === 'payee'}
+                onOpenChange={(next) => setOpenChip(next ? 'payee' : null)}
               />
+            ) : null}
 
+            {tagOptions.length > 0 || selectedTagIds.length > 0 ? (
               <MultiSelectChip
-                label={ui('Category')}
-                name="category_id"
-                options={categoryOptions}
-                selected={drafts.category_id}
-                onSelectedChange={(next) => stageDraft('category_id', next)}
-                open={openChip === 'category'}
-                onOpenChange={(next) => setOpenChip(next ? 'category' : null)}
+                label={ui('Tags')}
+                name="tag_id"
+                options={tagOptions}
+                selected={drafts.tag_id}
+                onSelectedChange={(next) => stageDraft('tag_id', next)}
+                open={openChip === 'tag'}
+                onOpenChange={(next) => setOpenChip(next ? 'tag' : null)}
               />
+            ) : null}
 
-              {payeeOptions.length > 0 || selectedPayeeIds.length > 0 ? (
-                <MultiSelectChip
-                  label={ui('Payee')}
-                  name="payee_id"
-                  options={payeeOptions}
-                  selected={drafts.payee_id}
-                  onSelectedChange={(next) => stageDraft('payee_id', next)}
-                  open={openChip === 'payee'}
-                  onOpenChange={(next) => setOpenChip(next ? 'payee' : null)}
-                />
+            {/* Named in full: "Status" next to a review filter read as the same
+                thing, and they are not. */}
+            <MultiSelectChip
+              label={ui('Transaction status')}
+              name="status"
+              options={STATUS_OPTIONS.map((option) => ({
+                ...option,
+                label: ui(option.label),
+              }))}
+              selected={drafts.status}
+              onSelectedChange={(next) => stageDraft('status', next)}
+              open={openChip === 'status'}
+              onOpenChange={(next) => setOpenChip(next ? 'status' : null)}
+            />
+          </div>
+
+          {/* ── More filters ─────────────────────────────────────────────
+              Closed by default. Review state is something you go looking for,
+              not something the panel should open on. */}
+          <div className="rounded-xl border sm:hidden">
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((current) => !current)}
+              aria-expanded={advancedOpen}
+              className="flex h-13 w-full items-center gap-2 px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60"
+            >
+              <span className="text-sm font-medium">{ui('More filters')}</span>
+              {/* The summary is what makes a closed section safe: a review
+                  filter can never be on without the row that hides it saying so. */}
+              {review !== 'all' ? (
+                <span className="truncate text-sm text-primary">
+                  · {ui(draftReviewLabel)}
+                </span>
               ) : null}
-
-              {tagOptions.length > 0 || selectedTagIds.length > 0 ? (
-                <MultiSelectChip
-                  label={ui('Tags')}
-                  name="tag_id"
-                  options={tagOptions}
-                  selected={drafts.tag_id}
-                  onSelectedChange={(next) => stageDraft('tag_id', next)}
-                  open={openChip === 'tag'}
-                  onOpenChange={(next) => setOpenChip(next ? 'tag' : null)}
-                />
-              ) : null}
-
-              <MultiSelectChip
-                label={ui('Status')}
-                name="status"
-                options={STATUS_OPTIONS.map((option) => ({
-                  ...option,
-                  label: ui(option.label),
-                }))}
-                selected={drafts.status}
-                onSelectedChange={(next) => stageDraft('status', next)}
-                open={openChip === 'status'}
-                onOpenChange={(next) => setOpenChip(next ? 'status' : null)}
+              <ChevronDown
+                className={cn(
+                  'ml-auto size-4 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none',
+                  advancedOpen && 'rotate-180'
+                )}
+                aria-hidden="true"
               />
-            </div>
-          </section>
+            </button>
 
-          {/* ── Period ───────────────────────────────────────────────── */}
-          <section className="space-y-2 sm:contents">
-            <p className={sectionLabelCls}>{ui('Period')}</p>
-
-            {/* Presets and the custom range share one row on desktop, as
-                before, and stack on phones. */}
-            <div className="space-y-2 sm:flex sm:flex-wrap sm:items-center sm:gap-1.5 sm:space-y-0">
-              {/* An even two-column grid on phones instead of a ragged wrap.
-                  Buttons, not links: a preset stages the range in the From/To
-                  fields and waits for Apply, like everything else here. */}
-              <div className="grid grid-cols-2 gap-2 sm:contents">
-                {presetOptions.map((preset) => {
-                  const isActive =
-                    dateFrom === preset.dateFrom && dateTo === preset.dateTo
-                  return (
+            {advancedOpen ? (
+              <div className="space-y-2 border-t px-3 py-3 duration-200 animate-in fade-in-0 motion-reduce:animate-none">
+                <p className="text-xs text-muted-foreground">{ui('Review status')}</p>
+                <div
+                  role="group"
+                  aria-label={ui('Filter by review status')}
+                  className="grid grid-cols-2 gap-1 rounded-xl border bg-background p-1"
+                >
+                  {REVIEW_OPTIONS.map((option) => (
                     <button
-                      key={preset.label}
+                      key={option.value}
                       type="button"
                       onClick={() => {
-                        setDateFrom(preset.dateFrom)
-                        setDateTo(preset.dateTo)
+                        setReview(option.value)
                         setDirty(true)
                       }}
-                      aria-pressed={isActive}
+                      aria-pressed={review === option.value}
                       className={cn(
-                        buttonVariants({
-                          // Solid primary fill for the staged preset (matching
-                          // the type toggle) so the chosen range is obvious,
-                          // not a faint tint.
-                          variant: isActive ? 'default' : 'outline',
-                          size: 'sm',
-                        }),
-                        'h-10 w-full rounded-xl sm:h-8 sm:w-auto sm:rounded-lg'
+                        typeButtonCls,
+                        review === option.value && typeButtonActiveCls
                       )}
                     >
-                      {ui(preset.label)}
+                      {ui(option.label)}
                     </button>
-                  )
-                })}
+                  ))}
+                </div>
               </div>
+            ) : null}
+          </div>
 
-              {/* Controlled, so a preset click is reflected here immediately and
-                  the pair always submits exactly what the user sees. */}
-              <div className="grid grid-cols-2 gap-2 sm:contents">
-                <label className={fieldRowCls}>
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {ui('From')}
-                  </span>
-                  <input
-                    type="date"
-                    name="date_from"
-                    value={dateFrom}
-                    onChange={(event) => {
-                      setDateFrom(event.target.value)
-                      setDirty(true)
-                    }}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none sm:flex-none"
-                    aria-label={ui('From date')}
-                  />
-                </label>
-
-                <label className={fieldRowCls}>
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {ui('To')}
-                  </span>
-                  <input
-                    type="date"
-                    name="date_to"
-                    value={dateTo}
-                    onChange={(event) => {
-                      setDateTo(event.target.value)
-                      setDirty(true)
-                    }}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none sm:flex-none"
-                    aria-label={ui('To date')}
-                  />
-                </label>
-              </div>
-            </div>
-          </section>
+          {/* Desktop keeps review as one more field among the others: a
+              segmented strip up there would read as tabs over the list, which
+              is exactly what this screen stopped having. */}
+          <label className="hidden h-9 w-auto shrink-0 items-center gap-1.5 self-start rounded-lg border bg-background px-2.5 sm:flex">
+            <span className="text-xs font-medium text-muted-foreground">
+              {ui('Review')}
+            </span>
+            <select
+              value={review}
+              onChange={(event) => {
+                setReview(event.target.value)
+                setDirty(true)
+              }}
+              aria-label={ui('Filter by review status')}
+              className="min-w-0 bg-transparent text-sm font-medium text-foreground outline-none"
+            >
+              {REVIEW_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {ui(option.label)}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {/* ── Actions ────────────────────────────────────────────────────
             Pinned footer on phones so Apply stays in thumb reach no matter how
             far the body has scrolled. */}
-        <div className="flex shrink-0 items-center gap-2 border-t bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:ml-auto sm:border-0 sm:p-0">
-          {hasActiveFilters ? (
-            <Link
-              href={clearHref}
-              onClick={closeSheet}
-              className={cn(
-                buttonVariants({ variant: 'ghost', size: 'sm' }),
-                'h-11 flex-1 rounded-xl sm:h-8 sm:flex-none sm:rounded-lg'
-              )}
-            >
-              {ui('Clear all')}
-            </Link>
-          ) : null}
-          {/* Spelled out where there is room for it; the dot on the button
-              carries the same message on a phone. */}
+        <div className="absolute inset-x-0 bottom-0 flex shrink-0 items-center gap-2 border-t bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:ml-auto sm:border-0 sm:p-0">
+          {/* Resets the draft, not the URL: this is a control inside a
+              provisional panel, so like every other one it waits for Apply —
+              and closing without applying puts it back. It never touches the
+              period, which is not this panel's to change. */}
+          <button
+            type="button"
+            onClick={resetDraft}
+            className={cn(
+              buttonVariants({ variant: 'ghost', size: 'sm' }),
+              'h-11 flex-1 rounded-xl sm:h-8 sm:flex-none sm:rounded-lg'
+            )}
+          >
+            {ui('Clear all')}
+          </button>
           {dirty ? (
             <span role="status" className="hidden text-xs text-muted-foreground sm:inline">
               {ui('Unapplied changes')}

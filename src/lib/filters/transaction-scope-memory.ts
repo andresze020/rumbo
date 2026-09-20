@@ -27,6 +27,7 @@ export const TRANSACTION_SCOPE_MAX_LENGTH = 1200
  * — `created`, `error`, `edit`, `mode` — which belong to one navigation only.
  */
 export const TRANSACTION_SCOPE_KEYS = [
+  'period',
   'month',
   'date_from',
   'date_to',

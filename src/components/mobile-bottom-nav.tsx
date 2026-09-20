@@ -36,7 +36,7 @@ type Tab = {
 // Two tabs on each side of the central FAB.
 const leftTabs: Tab[] = [
   { href: '/dashboard', labelKey: 'nav.home', icon: Home },
-  { href: '/dashboard/transactions', labelKey: 'nav.movements', icon: ArrowLeftRight },
+  { href: '/dashboard/transactions', labelKey: 'nav.transactions', icon: ArrowLeftRight },
 ]
 
 const rightTabs: Tab[] = [
