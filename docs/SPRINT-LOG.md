@@ -15,6 +15,128 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Ask for the category first, fill the rest in from it, and fit the form on one screen (2026-09-15)
+- Goal: PR #64, ten commits on `claude/transaction-form-reorder-autofill-xrof2v`
+  squashed into `e25d8af`. Started from a phone report that entering a
+  transaction that repeats every week (same category, same account, same
+  payee, same tags) still took five deliberate taps, then grew through eight
+  rounds of testing on a real Android device plus one review round, all under
+  the same PR.
+- Shipped:
+  - **The category moves up, under the amount.** New `quickEntry.fieldOrder`
+    preference in `profiles.ui_preferences` (`src/lib/preferences/shared.ts`),
+    default `category_first`. Picking a category is what makes the autofill
+    below worth having, so it has to come first to be useful. `account_first`
+    (the previous order) is one select away in Settings → Preferences → Quick
+    entry.
+  - **The fill-fast chain now walks one ordered list** (`ENTRY_CHAINS` +
+    `nextInChain`, `transaction-form.tsx`) instead of an ad-hoc branch per
+    selection handler — the old shape is how the category → payee hop went
+    missing in the first place: the drill-into-a-parent path, the most common
+    way to pick a category, called `setCategoryId` directly and skipped the
+    chain outright. Chain order: category → account → payee → description →
+    tags. It opens the first field *after* the current one that is both
+    rendered and still empty — it skips past the ones already filled rather
+    than stopping at them, so a half-finished entry keeps moving forward; when
+    every later field already has a value it opens nothing, which is what stops
+    a one-field correction from hijacking a complete entry. Enter in the
+    description hands off to tags. Toggle: "Jump to the next field"
+    (`quickEntry.autoAdvance`).
+  - **Optional autofill from the last entry in the category**, off by default
+    (`quickEntry.autofillFromLastInCategory`). Picking a category seeds
+    account, payee and tags from the household's most recent income/expense in
+    that category, writes only into fields left empty, names what it filled
+    and offers Undo. Each of the three fields can be excluded individually
+    (`quickEntry.autofillFields`). New `src/lib/quick-entry/category-memory.ts`
+    (`loadCategoryEntryMemory`) reduces the household's last 400 non-transfer,
+    non-voided transactions into one row per category in a single query,
+    explicitly scoped by `household_id`, and is not run at all unless the
+    preference is on. Recent descriptions per category are offered as one-tap
+    chips instead of filled — a description is genuinely different most times,
+    so guessing one is wrong more often than right.
+    - **Note for whoever reads this next:** the commits and the code comments
+      label this feature `BR-046`. That id is already spent — `BR-046` is
+      "confirmation warning when changing an account's currency"
+      (`docs/benchmark-review-mobile-money-managers.md` #17), shipped and
+      closed in the mobile-capture-parity sprint (2026-07-28; see this log's
+      entry below and `docs/pending-work.md` §"What's already done"). Nothing
+      in this diff is about currency changes, so this is a genuine id
+      collision, not a renumbering. Flagged here rather than silently
+      relabeled — inventing a new BR number is not this document's call to
+      make.
+  - **The four selectors (account, category, payee, tags) are full-screen on
+    mobile**, with the search pinned under the header instead of scrolling
+    with the list — a real category or payee list is long, and the previous
+    inline/bottom-sheet layout let the search box scroll out of view under an
+    open keyboard. `SelectorSheet` moved from
+    `src/app/dashboard/transactions/` to `src/components/` now that two
+    features share it; `tag-multi-select.tsx` gained a controlled
+    `value`/`onValueChange`/`open`/`onOpenChange` mode so the form can drive
+    it the same way. New shared hooks `src/lib/use-is-mobile.ts`
+    (`useIsMobile`) and `src/lib/use-soft-keyboard.ts`
+    (`useSoftKeyboardInset`), both extracted from code that used to live only
+    in `transaction-dialog-provider.tsx`.
+  - **`autoComplete="off"`** on every picker's search box and on the payee and
+    description inputs — `payee_name` was being read as a person-name field,
+    so Android was offering its own saved-address/card autofill strip over the
+    household's own payee list.
+  - **The form fits one phone screen.** Measured against the compiled
+    Tailwind at 393px wide: content dropped from 863px to 683px with nothing
+    hidden or moved behind a disclosure — the dialog title/subtitle go
+    `sr-only` on every phone (not just under the keyboard), the date row
+    merged with its relative-date chips, the tag field dropped its redundant
+    label row, and rows went from `py-3` to `py-2.5`. The dialog itself became
+    a full `h-dvh` screen instead of a 92dvh sheet (no more strip of dashboard
+    showing above it), with its own header close button
+    (`showCloseButton={false}` plus a dedicated `X` row) since the built-in
+    one collided with the type selector's "Transfer" option on a phone.
+  - **Action bar.** Cancel is gone from every dialog caller — Escape, the
+    header X and the backdrop all already cancel there, and `TransactionDialogProvider`
+    adds Android/browser Back via `useBackDismiss`; `cancelHref` still renders
+    one for the plain-page case, which has no other way out. **Back is the
+    provider's, not the form's:** the assistant's "Review transaction" dialog
+    (`assistant-chat.tsx`) builds its own `Dialog` and never calls
+    `useBackDismiss`, so there Back leaves the page instead of closing the
+    dialog. It keeps the default close X, Escape and the backdrop, so it is
+    still dismissable — but it also passes `onCancel`, and since this sprint
+    that prop only *suppresses* the Cancel link and is never invoked, so the
+    dialog lost its visible Cancel and gained nothing in its place. Listed in
+    `pending-work.md` §4.5.
+    "Create"/"Create transfer" and "Save and add next" are one split button on
+    mobile (shared shape and colour, a hairline divider, a `+` icon instead of
+    the full label) and come apart into two separate buttons on desktop. The
+    whole bar unmounts while the soft keyboard is open, handing that space to
+    the fields.
+  - **Review round (Codex): four P2 defects fixed**, all in the autofill's
+    provenance tracking (the `autofilled` list that drives the Undo notice) —
+    same root cause every time: a value the autofill *guessed* was being
+    treated as a value the user *chose*. Re-picking a category no longer
+    strands the previous category's seeded values; switching transaction type
+    now undoes the seeded values instead of carrying them into the new type;
+    typing in the mobile payee search or creating an account inline now clears
+    that field's autofill marker so Undo can't later erase what the user
+    actually typed; and a tag created mid-tap no longer loses taps made while
+    the create request was in flight.
+- Migrations added: none. `profiles.ui_preferences` is already `jsonb`, and
+  `parseUiPreferences` (`src/lib/preferences/shared.ts`) falls back to
+  defaults for any object saved before this shipped.
+- Tables changed: none.
+- Follow-ups / known gaps:
+  - Two things were reasoned from the code and passed lint/typecheck/i18n/build
+    at every commit, but were not watched fail-then-pass on a device: (a) the
+    fix for the keyboard-open scroll that snapped back to the focused field —
+    it needs a real keyboard plus a collapsing browser URL bar to trigger; (b)
+    the four review-round provenance fixes, which are state-machine bugs. Both
+    need confirming on the real Android device the rest of this sprint was
+    tested on.
+  - iPhone SE and iPhone 13 mini still overflow the one-screen target (127px
+    and 51px respectively, per the commit's own measurements) unless the user
+    hides Repeat, Notes and Status via the existing BR-032 preferences.
+  - Two ideas raised during testing were offered but not decided: showing
+    recent payees as one-tap chips (the same treatment as recent
+    descriptions), and replacing the icon-only `+` half of the mobile split
+    button with a "keep adding" checkbox if it reads as ambiguous on-device.
+
 ## Finishing the rename, and shrinking the Tier-3/4 QA gate (2026-09-03 → 2026-09-04)
 - Goal: close the two items `docs/pending-work.md` had been carrying since the
   previous sprint close — the half-finished rename to Rumbo, and the eleven-row
