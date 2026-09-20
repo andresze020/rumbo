@@ -15,6 +15,121 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Rebuild the Transactions screen for a phone, and give the period one owner (2026-09-19 → 2026-09-20)
+- Goal: PR #66, three commits on the Transactions screen squashed into
+  `d102a8c`, merged 2026-09-20. Started from the screen spending its first
+  ~300px of a phone on chrome before showing a single transaction — an
+  eyebrow, a 2xl title and description, a control strip, a three-tile totals
+  card with an "in CAD" caption, a row of review tabs, then a bordered card
+  whose first row was the word ACTIVITY, plus two floating buttons at the same
+  edge every amount aligns to. Three rows of transactions fit on a 375×812
+  phone before this; six do now, with nothing removed from the model.
+- Shipped:
+  - **Review state stopped being the shape of the screen.** The
+    All/To review/Reviewed/Flagged tab strip and the amber dot on every
+    collapsed row are gone. The review column, the RPC argument, the bulk
+    actions and the filter itself are unchanged — the state moved to the
+    expanded row and to a "More filters" accordion in the filter sheet, with a
+    plain Review select in the desktop toolbar instead of a strip that read as
+    tabs again.
+  - **Totals: Net first**, income/expenses under it, currency in the label
+    instead of an "in CAD" caption. Still the RPC's figures for the whole
+    filtered set — transfers, debt payments, opening balances and voided rows
+    stay out, same as before.
+  - **The list lost its card.** Sticky date headers inside `#app-scroll`.
+    Amounts carry direction — green in, red out, blue sideways, neutral
+    otherwise. **This reverses the earlier "only inflows are tinted" decision**
+    recorded for this screen; the change was explicit and requested by the
+    user, not a regression to silently "fix" back.
+  - **The assistant's floating button left this screen.** The bottom nav's
+    "+" is the only FAB on Transactions now (`assistant-drawer.tsx` hides its
+    button when `pathname` starts with `/dashboard/transactions`). For that to
+    be a real way in, `nav.aiAssistant` was repointed from
+    `/dashboard/coming-soon/assistant` to `/dashboard/assistant` — already
+    shipped, just unlisted — and its nav phase moved from `soon` to `alpha`.
+    The bottom-nav tab reads "Transactions"; the `nav.movements` dictionary
+    key was deleted (not left as a second word for the one tab) across all
+    three locales (en/es/fr).
+  - **Three P2 findings from Codex on #66, all fixed in the second commit:**
+    "All time" no longer reuses `CLEAR_FILTERS_HREF` (which dropped account,
+    search, type, payee and tag filters along with the date — every other
+    period tile preserved them); a payee-/tag-only URL with no month and no
+    range no longer gets mislabelled "September 2026" while the RPC actually
+    receives null bounds (all of history); and an explicit range like Last 3
+    months no longer lights the All time button, which came from inferring
+    "all time" from "not a month". That third fix landed as a `PeriodMode` of
+    `month | all-time | custom`, which the next commit folded into
+    `TransactionPeriod` — **do not go looking for `PeriodMode`, it is not in
+    the tree.** A range spanning exactly one calendar month (what "This month"
+    produces) collapses to that month rather than reading as an arbitrary
+    custom range, and a preset lights by *resolved range* rather than
+    identity, so `month=2026-09` in September lights "This month" and the
+    September tile stands down — exactly one control lit, never two or none.
+  - **The period got one owner.** Previously a `month` the header controlled
+    and a `date_from`/`date_to` pair the filter sheet controlled were two
+    independent pieces of state, reconciled by an invisible precedence rule.
+    New `src/lib/periods/transaction-period.ts` parses the URL once into a
+    single `TransactionPeriod`, which now drives the RPC bounds, the totals,
+    the count, the date headers and the control's own label. The filter sheet
+    has no date fields at all — no period section, no presets, no From/To —
+    so "Clear all" in the sheet cannot move the period.
+    - URL shape the screen writes: `period=this-month|last-month|` `last-3-months|last-6-months|ytd|all-time`.
+      `month=` and `date_from`/`date_to` are still **read** (not written) for
+      backward compatibility — a dozen links elsewhere (calendar, a budget
+      row, a note's date, the dashboard's review queue) point here with those
+      params, and `appendPeriodParams` writes exactly what
+      `parseTransactionPeriod` reads, so both forms resolve identically.
+    - A preset lights up by **resolved range**, not identity: `month=2026-09`
+      in September is the same view as "This month", so exactly one control is
+      ever lit.
+    - `transaction-scope-memory.ts`'s `TRANSACTION_SCOPE_KEYS` gained `period`
+      alongside the existing `month`/`date_from`/`date_to`.
+  - **The household moved off this screen and into the app bar.** It used to
+    be a standalone row on Transactions linking to Settings. New
+    `src/lib/households/server.ts` (`getHouseholdContext`) reads the user's
+    active memberships and their `profiles.default_household_id` in the
+    dashboard layout, in parallel with `getUiPreferences`; `MobileNav` (phone)
+    and `AppSidebar` (desktop) now render a selector fed by that context:
+    lists households the user is an active member of, marks the current one,
+    and offers "Manage households" to `/dashboard/settings#household` (that
+    heading got `id="household"` and `scroll-mt-20`). Switching goes through
+    new `src/app/dashboard/household-actions.ts`
+    (`switchHouseholdAction`), a server action that re-checks active
+    membership before writing `profiles.default_household_id` and then
+    `revalidatePath('/dashboard', 'layout')`. This is a profile preference,
+    not a policy change — RLS and household isolation are untouched.
+    - **Real cost, not free:** the dashboard layout now runs one more query
+      per request (`getHouseholdContext`, alongside `getUiPreferences`)
+      because the selector renders on every screen, not just Transactions.
+  - **The filter sheet**: "NARROW DOWN" heading removed, rows are 56px
+    two-line, "More filters" is a closed-by-default accordion carrying a
+    summary when review state is not "All", type is a 2×2 grid at phone width,
+    and "Status" is relabelled "Transaction status" (posted/pending/voided is
+    a financial fact; review state is a bookkeeping note, and the two read as
+    one thing under a shared label). Opening the sheet copies applied filters
+    into a draft; the X, backdrop, Escape and Android Back all discard it;
+    "Clear all" resets the draft instead of navigating. The filter-count badge
+    counts general-filter dimensions only, never the period.
+  - **Bulk selection** is no longer a permanent "Select" button beside the
+    count. It is now a long-press on a row, or the list's overflow menu.
+- Migrations added: none.
+- Tables changed: none. No schema, RLS, ledger, transfer, opening-balance,
+  void or currency change of any kind.
+- Validation: `npm run lint`, `npx tsc --noEmit`, `npm run i18n:check` (1244
+  phrases checked against en across es/fr, 21 new), `npm run build` (39/39
+  routes) all green. No automated test beyond `db:test` (needs a live
+  Supabase, not run here); the repo has no formatter config.
+- Follow-ups / known gaps: nothing in this sprint was exercised against live
+  data — there were no Supabase credentials in the environment it was built
+  in, so everything was verified with Playwright against a disposable preview
+  route seeded with fake data, deleted before the commit. Three things are
+  therefore untested in real use:
+  1. The household switch (the action revalidates the whole dashboard
+     layout).
+  2. The period sheet over a URL already filtered by payee or tag.
+  3. Long-press on a real touch device — the 8px movement threshold that
+     tells a press from a scroll was tuned by eye, not measured on hardware.
+
 ## Ask for the category first, fill the rest in from it, and fit the form on one screen (2026-09-15)
 - Goal: PR #64, ten commits on `claude/transaction-form-reorder-autofill-xrof2v`
   squashed into `e25d8af`. Started from a phone report that entering a

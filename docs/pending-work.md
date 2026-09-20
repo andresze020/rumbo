@@ -46,6 +46,12 @@
 > testing that were not decided (§5). Additive again — the last full pass over
 > every row is still 2026-08-16.
 >
+> **Touched 2026-09-20** to record what PR #66 (Transactions rebuilt as a
+> phone list, the period given one owner, the household moved to the app bar)
+> left open (§4.6). No prior row in this file closed — the redesign did not
+> touch anything already listed here. Additive again — the last full pass over
+> every row is still 2026-08-16.
+>
 > Everything shipped is recorded in `AGENTS.md` → Current status and
 > [SPRINT-LOG.md](./SPRINT-LOG.md); this file only lists what is **not** done.
 
@@ -176,6 +182,20 @@ watched fail on the device and then pass there.
 | Review-round provenance fixes (re-picking a category, switching transaction type, typing over a seeded field, a tag created mid-tap) | Reasoned from code, not device-tested | Repeat each of the four scenarios in the PR's review-round commit message on the real device and confirm the seeded values behave as described (no stale autofill survives a category change or a type switch; typing or creating inline clears that field's autofill marker; a tag created mid-tap is not lost). |
 | iPhone SE / iPhone 13 mini overflow | Known, not a bug | The one-screen target still overflows by 127px (SE) and 51px (13 mini) per the commits' own Chromium measurements. Hiding Repeat, Notes and Status via the existing BR-032 preferences covers both; no further code is expected unless the user wants the default form fields changed. |
 | The assistant's "Review transaction" dialog lost its Cancel | Regression from PR #64, found in review of the sprint-close PR | Removing Cancel from dialog callers assumed every dialog has Back/Escape/X/backdrop. `assistant-chat.tsx` builds its own `Dialog` and never calls `useBackDismiss`, so Back leaves the page there; it also passes `onCancel`, which since PR #64 only *suppresses* the Cancel link (`transaction-form.tsx` declares the prop and never invokes it). The dialog is still dismissable via its default close X, Escape and the backdrop, so this is a papercut, not a trap. Pick one: wire `useBackDismiss` in `assistant-chat.tsx` and keep Cancel hidden, or make `TransactionForm` actually call `onCancel` from a rendered Cancel button in that caller. |
+
+### 4.6 Transactions mobile redesign (PR #66, 2026-09-19 → 09-20)
+
+The Transactions screen rebuild, the single-owner period and the app-bar
+household selector (`docs/SPRINT-LOG.md` → "Rebuild the Transactions screen
+for a phone…") were verified with Playwright against a disposable preview
+route seeded with fake data — there were no Supabase credentials in the build
+environment. Nothing here was exercised against live data or a real device.
+
+| Area | State | Exact remaining action |
+|---|---|---|
+| Household switch | Reasoned from code, not tested live | Switch households from the app-bar selector against a real account with more than one active membership and confirm every dashboard screen re-renders scoped to the new household (`switchHouseholdAction` calls `revalidatePath('/dashboard', 'layout')`). |
+| Period sheet over a payee-/tag-filtered URL | Reasoned from code, not tested live | Open Transactions with a URL that sets only `payee_id` or `tag_id` (no `period`/`month`/`date_from`/`date_to`), open the period sheet, and confirm it reads as "All time" rather than mislabelling the current month while the other filter stays applied. |
+| Long-press to select, on a real touch device | Not tested on hardware | Long-press a transaction row on an actual phone and confirm it enters bulk-selection mode without also triggering a scroll or opening the row. The 8px movement threshold that distinguishes a press from a scroll was tuned by eye in Chromium, not measured on a touchscreen. |
 
 ## 5. Open decisions across feature docs
 

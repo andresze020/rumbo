@@ -23,6 +23,44 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **The Transactions screen was rebuilt as a phone list, and the period got
+  one owner** (2026-09-19 → 09-20, PR #66). Three commits, one review round
+  from Codex. No migrations, no schema/RLS/ledger change.
+  - **Chrome cut, not content**: the eyebrow/title/description block, the
+    three-tile totals card with its "in CAD" caption, the All/To review/
+    Reviewed/Flagged tab strip and the amber review dot are gone. Review
+    state moved to the expanded row and to a "More filters" accordion; the
+    review column, RPC argument, bulk actions and filter are unchanged. Three
+    rows fit on a 375×812 phone before this; six do now.
+  - **Amounts are colored by direction again** — green in, red out, blue
+    sideways. **This reverses the earlier "only inflows are tinted" call**,
+    on explicit user request; do not "fix" it back.
+  - **The period has one owner.** New `src/lib/periods/transaction-period.ts`
+    parses the URL once into a single `TransactionPeriod` that drives RPC
+    bounds, totals, date headers and the control's label — replacing a
+    `month` (header) / `date_from`+`date_to` (filter sheet) pair that used to
+    disagree silently. The filter sheet has no date fields at all. URL writes
+    `period=this-month|last-month|last-3-months|last-6-months|ytd|all-time`;
+    `month=`/`date_from`/`date_to` are still **read** for the dozen existing
+    links elsewhere (calendar, budget rows, notes, dashboard review queue)
+    that point here with them.
+  - **The household moved into the app bar.** New
+    `src/lib/households/server.ts` (`getHouseholdContext`) feeds a selector in
+    `MobileNav`/`AppSidebar` on every dashboard screen; switching goes through
+    `src/app/dashboard/household-actions.ts` (`switchHouseholdAction`), which
+    re-checks active membership before writing
+    `profiles.default_household_id`. A profile preference, not a policy — RLS
+    untouched. **Cost:** the dashboard layout now runs one extra query per
+    request (`getHouseholdContext` alongside `getUiPreferences`).
+  - **The assistant FAB left this screen**; the bottom nav's "+" is the only
+    floating action on Transactions. `nav.aiAssistant` now points at
+    `/dashboard/assistant` (shipped, previously unlisted) at phase `alpha`;
+    `nav.movements` was deleted, the tab reads "Transactions".
+  - **Not yet exercised against live data** (no Supabase credentials in the
+    build environment — verified with Playwright on a disposable preview
+    route, deleted before commit): the household switch, the period sheet
+    over a payee-/tag-filtered URL, and long-press-to-select on a real touch
+    device (the 8px threshold was tuned by eye).
 - **The category moved to the top of the add-transaction form, and the form
   now fits one phone screen** (2026-09-15, PR #64). Ten commits, eight rounds
   of testing on a real Android device plus one review round. No migrations —
@@ -71,32 +109,6 @@ The product is household-first. All financial data must belong to a household.
     four review-round fixes were reasoned from the code, not watched
     fail-then-pass. iPhone SE / 13 mini still overflow the one-screen target
     unless BR-032's Repeat/Notes/Status toggles are used.
-- **The rename finished, and the Tier-3/4 QA gate got smaller** (2026-09-03 →
-  09-04). Docs, skills and two new SQL invariant files. No app code, no
-  migrations.
-  - **The ten skills are `rumbo-*`.** Directories, `name:` frontmatter and
-    every cross-reference in `.claude/`, `AGENTS.md`, the docs and the Stop
-    hook. Skill identifiers were updated in the frozen records too — an
-    identifier is a path, not a historical claim. The product name moved only
-    in live docs; `docs/design/handoff-2026-06/`, the two benchmark reviews
-    and past SPRINT-LOG entries keep "App Finanzas" because that is what was
-    delivered and reviewed under that name. The Windows checkout path
-    (`…\Projects\app-finanzas`) is a real directory and was left alone.
-  - **A desk audit of `docs/alpha/tier-3-4-authenticated-qa.md` found a wrong
-    row.** BR-035 claimed balances stay unchanged "until an individual
-    instalment is actually posted". `create_installment_plan` inserts **all N
-    instalments as `posted`** in the same call, each with its own entry and
-    allocation. What BR-035 actually protects is that no parent transaction
-    carries the total on top of them. Row rewritten.
-  - **Four of the eleven rows now run under `npm run db:test`.** BR-040 and
-    BR-039 were already covered by `br_040_refund_invariants.sql` and by
-    `br_003_006`'s "transfers have no reporting allocations" — nobody had
-    cross-linked them. Added `br_035_installment_invariants.sql` and
-    `uc_009_recurring_transfer_invariants.sql`. UC-9's cross-currency refusal
-    is app-layer, not a DB constraint, so only real data can prove it held.
-  - **BR-044 needs no pass for the half people worried about**: `public.notes`
-    has no amount column and no foreign key into the ledger, so "no financial
-    side effect" is structural. Its RLS half needs a second household session.
 
 > **Historia anterior:** las entradas de sprint previas viven en
 > `docs/SPRINT-LOG.md` (append-only, más reciente arriba). No se resumen aquí:
@@ -173,8 +185,15 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
   `analysis/server.ts` + `analysis/report-query.ts` (shared data helpers for the
   analysis screens; Reports and Calendar read the same rows),
   `cards/cycle.ts` (BR-030 statement-cycle dates), `installments/shared.ts`
-  (BR-035 split + dates), `periods/month.ts` (BR-036 — **the** period resolver;
-  do not re-derive period boundaries anywhere else).
+  (BR-035 split + dates), `periods/month.ts` (BR-036 — the calendar/custom
+  month-start-day resolver used by budgets, month closures and the dashboard;
+  do not re-derive month boundaries anywhere else), `periods/transaction-period.ts`
+  (PR #66 — the Transactions screen's own period parser: one `TransactionPeriod`
+  from the URL feeds the RPC bounds, totals, date headers and the period
+  control's label; a separate concern from `periods/month.ts`, not a
+  duplicate), `households/server.ts` (`getHouseholdContext`, PR #66 — read
+  once in the dashboard layout to feed the app-bar household selector on every
+  screen).
 - `src/components/ui/` — `alert-dialog.tsx` (Sprint 13) alongside the existing
   `dialog.tsx`; use for destructive-action confirms instead of an inline
   confirm-state pattern.
