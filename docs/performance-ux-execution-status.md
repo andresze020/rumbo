@@ -8,20 +8,26 @@
 > Este archivo registra *qué pasó*. El backlog registra *qué hay que hacer*. No
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
-> **Creado 2026-09-21.** Último trabajo: **RUM-005** (orquestación del
-> Dashboard, parcial — ver abajo), sobre la base de **RUM-006** (balances
-> multi-fecha, cerrado). **RUM-001** midió contra producción que
-> `get_account_balances` era el **71 % de toda la base de datos** y escalaba
-> con el historial del household; RUM-006 corta las 7+2 llamadas redundantes
-> de Net worth y Dashboard a una sola llamada cada una. Accounts se intentó
-> llevar a 1 llamada también, pero review de Codex encontró que eso excluía
-> silenciosamente transacciones con fecha futura del saldo de "hoy" — se
-> revirtió a sus 2 llamadas originales; ver "Corrección post-review" en la
-> entrada de RUM-006. RUM-005 unió los 13 `await` independientes de
-> `dashboard/page.tsx` en un solo `Promise.all` y encontró el mismo patrón
-> N+1 de RUM-006 escondido en `trend-actions.ts` (6 llamadas de balance por
-> mes → 1). **RUM-005 sigue abierto**: streaming con `Suspense` y cache no
-> se hicieron.
+> **Creado 2026-09-21.** Último trabajo: **RUM-005** (orquestación +
+> streaming con `Suspense` del Dashboard — ver abajo), sobre la base de
+> **RUM-006** (balances multi-fecha, cerrado). **RUM-001** midió contra
+> producción que `get_account_balances` era el **71 % de toda la base de
+> datos** y escalaba con el historial del household; RUM-006 corta las 7+2
+> llamadas redundantes de Net worth y Dashboard a una sola llamada cada una.
+> Accounts se intentó llevar a 1 llamada también, pero review de Codex
+> encontró que eso excluía silenciosamente transacciones con fecha futura del
+> saldo de "hoy" — se revirtió a sus 2 llamadas originales; ver "Corrección
+> post-review" en la entrada de RUM-006. RUM-005 unió los 13 `await`
+> independientes de `dashboard/page.tsx` en un solo `Promise.all`, encontró
+> el mismo patrón N+1 de RUM-006 escondido en `trend-actions.ts` (6 llamadas
+> de balance por mes → 1), y ahora además hace streaming: todo lo que está
+> debajo del fold (Budget, categorías, próximos cobros, Insights, Deudas,
+> Metas, Actividad reciente) vive en un componente nuevo
+> (`secondary-widgets.tsx`) detrás de un único `<Suspense>` — el primero de
+> este repositorio — mientras el top-of-fold (net worth, cifras del mes) se
+> pinta sin esperarlo. **RUM-005 sigue sin cerrar del todo**: cache/
+> invalidación selectiva queda fuera, deferida a una decisión propia — ver la
+> entrada de RUM-005 en §4 para el porqué.
 
 ---
 
@@ -34,7 +40,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | RUM-010a — Stack de tests | P0 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | [#68](https://github.com/andresze020/rumbo/pull/68) | 2026-09-21 |
 | RUM-001 — Instrumentación y baseline | P0 | **Hecho** (capa B pendiente) | `claude/backlog-rum-10a-tmlee1` | [#69](https://github.com/andresze020/rumbo/pull/69) | 2026-09-21 |
 | RUM-002 — Reconciliar net worth | P0 | Pendiente | — | — | — |
-| RUM-005 — Carga del Dashboard | P0 | **🟡 Orquestación hecha** (streaming/cache pendientes) | `claude/rum-005-dashboard-load` | — | — |
+| RUM-005 — Carga del Dashboard | P0 | **🟡 Orquestación + streaming hechos** (cache/invalidación deferida) | `claude/rum-005-suspense-streaming` | — | — |
 | RUM-003 — Periodos, FX y decimales | P0 | Pendiente | — | — | — |
 | RUM-006 — Balances repetidos | P1 | **Hecho** (contrato de RUM-002 pendiente) | `claude/backlog-rum-10a-tmlee1` | — | 2026-09-21 |
 | RUM-007 — Cache, prefetch y loading | P1 | Pendiente | — | — | — |
@@ -108,6 +114,167 @@ quedaban cortos.
 
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
+
+### RUM-005 — Streaming con Suspense para el Dashboard · 2026-09-21 · rama `claude/rum-005-suspense-streaming` · PR pendiente
+
+**Estado: streaming hecho; cache/invalidación queda fuera, deferida a
+propósito.** Sobre la orquestación ya cerrada (entrada de abajo, PR #71,
+fusionado): ahora Budget, el desglose por categoría, próximos cobros,
+Insights, Deudas, Metas y Actividad reciente — todo lo que el propio ticket
+llama "debajo del fold" — vive en un Server Component nuevo y **streamea**
+detrás de un único `<Suspense>`, en vez de bloquear el render completo del
+Dashboard como hasta ahora. Es el primer uso de `<Suspense>` en este
+repositorio.
+
+**Honestidad antes que nada, porque importa más que el propio cambio:**
+RUM-001 midió que todas las queries de esta pantalla cuestan "~0" salvo la de
+balances (~207-247 ms, dominante). Esto significa que este cambio **no
+reduce tiempo real de reloj de forma medible** — las queries debajo del fold
+ya resolvían casi instantáneo, y ya estaban en paralelo desde PR #71. Su
+valor es (a) cumplir literalmente el criterio de aceptación del ticket, (b)
+percepción de velocidad (revelado progresivo: lo de arriba aparece sin
+esperar a lo de abajo), (c) aislamiento de fallos (una query rota debajo del
+fold ya no deja la pantalla entera en blanco). No es un segundo hallazgo del
+tamaño de RUM-001 — no se presenta como tal.
+
+**Diseño: dos niveles, un solo límite de Suspense.**
+- **Nivel 1 (eager, en `DashboardPage`, sin cambios de forma):** cadena de
+  identidad, balances, resumen mensual (actual + anterior), **detalle de
+  presupuesto** (`budgetRows` → `hasBudget`/`totalBudgetPercent`/
+  `budgetLines`/`budgetCurrency`), `nonOpeningTransactionCount`,
+  `netWorthTrend`, `homeChecklist`. Pinta `PageHeader`, `HomeChecklist`,
+  estados de error/vacío, `FinancialHeroCard` (con el badge de salud
+  incluido), la grilla de métricas mensuales, la tarjeta de salud mobile —
+  exactamente igual que antes.
+- **Nivel 2 (un componente nuevo, un solo `<Suspense>`):** todo lo demás.
+  Hace su propio `Promise.all` de lo que **solo** se necesita debajo del
+  fold (`categoryLookupRows`, `expenseCategoryRows`, `recurringRows`,
+  `debtRows`, `goalRows`, `recentTxRows`, `needsReviewCount`, más el par
+  dependiente `recentEntries`/`recentAllocations`) y recibe los datos ya
+  resueltos del Nivel 1 como props simples (`balances`, `budgetLines`,
+  `hasBudget`, `totalLiabilities`, `prevLiabilities`, etc.) — sin
+  volver a pedir el presupuesto.
+
+**Dos decisiones deliberadas, no obvias — la razón importa más que la
+elección:**
+- **`budgetRows` se queda eager**, aunque "Budget" es un widget debajo del
+  fold según la propia tabla del ticket. `computeHealthScore`
+  (`src/lib/health/score.ts`, puro/síncrono) necesita
+  `hasBudget`/`totalBudgetPercent`, y ese resultado se pinta en la hero card
+  — que sí es top-of-fold. Partir `FinancialHeroCard` para diferir solo el
+  badge de salud sería cirugía real sobre un componente compartido y ya
+  probado, por cero beneficio de latencia (la query es gratis según RUM-001).
+  No valía la pena.
+- **`homeChecklist` se queda eager**, no se difiere. No está nombrado en
+  ningún criterio de aceptación, y hoy se pinta *antes* de la hero card
+  (justo después de `PageHeader`) — diferirlo habría invertido visualmente
+  el orden actual de la pantalla, un cambio de UX no discutido para un
+  ticket cuyo contrato es "no refactorizar todo". Una advertencia que vale
+  la pena dejar escrita: `getHomeChecklist` hace hasta 5 round-trips propios
+  cuando está en fase "routine" — un costo preexistente, no introducido
+  aquí, pero significa que el Nivel 1 no es literalmente gratis, solo más
+  barato que el fan-in del Nivel 2.
+
+**Manejo de errores: se reutilizan los checks que ya existían, no se inventó
+uno nuevo.** El código ya comprobaba `!budgetError`/`!expenseCategoriesError`
+de forma independiente en cada sitio de su propio JSX — eso ya daba
+aislamiento de fallos entre Budget y el donut. Se mantiene igual dentro del
+componente nuevo; no se añadió un `Callout` agregado nuevo para "todo el
+nivel 2 falló". `hasLoadError` en `page.tsx` se reduce a
+`accountBalancesError || monthlySummaryError` (los otros dos, del Nivel 2,
+se quedan como variables locales junto a su propio fetch).
+
+**Un solo skeleton, no siete.** Como todas las queries del Nivel 2 resuelven
+en el mismo instante según RUM-001, siete límites de Suspense por-widget no
+habrían escalonado nada visible — solo habrían multiplicado código de
+skeleton sin beneficio perceptible. `SecondaryWidgetsSkeleton`
+(`src/app/dashboard/secondary-widgets-skeleton.tsx`) es un solo placeholder
+que imita la grilla real (columna principal + rail + actividad reciente) con
+el primitivo `Skeleton` ya existente — sin texto, sin claves de i18n nuevas.
+Deliberadamente no se reutilizó `src/app/dashboard/loading.tsx` (confirmado
+obsoleto: modela el layout de antes del split en widgets, sin hero card, sin
+rail) ni `src/components/page-loading.tsx` (demasiado genérico, trae su
+propio header de página que no encaja a mitad de pantalla) — queda anotado
+como problema preexistente separado, no se corrigió aquí.
+
+**Archivos:**
+- `src/app/dashboard/secondary-widgets.tsx` — nuevo. `async function
+  DashboardSecondaryWidgets(props)`. Se movieron aquí, sin reescribir: los
+  tipos que solo se usan debajo del fold (`MonthlyExpenseCategory`,
+  `CategoryLookup`, `Recurring`, `Debt`, `Goal`, `RecentTransaction`,
+  `RecentEntry`, `RecentAllocation`), `SERIES`/`ROSE`, `getCategoryPath`, y
+  todo el cómputo de vista (donut, filas de presupuesto, insights, próximos
+  cobros, resumen de deudas, metas, filas de actividad reciente) más el JSX
+  correspondiente — mismo markup, mismas clases, mismas claves de i18n, nada
+  nuevo acuñado.
+- `src/app/dashboard/secondary-widgets-skeleton.tsx` — nuevo.
+  `SecondaryWidgetsSkeleton()`.
+- `src/app/dashboard/page.tsx` — exporta ahora `AccountBalance`,
+  `BudgetDetailRow` y `getDisplayedLiabilityBalance` (los usa el archivo
+  nuevo). El `Promise.all` baja de 13 lecturas a 6. El JSX del "Main + right
+  rail" y "Recent activity" se reemplaza por el bloque `<Suspense>`.
+
+**Verificación:** `npm run lint` · `npx tsc --noEmit` · `npm test` (52,
+sin cambio) · `npm run i18n:check` (sin claves nuevas, confirmado, no
+asumido) · `npm run build` — la comprobación automática más importante
+aquí: primer uso de `<Suspense>` en este repositorio, y es donde una firma
+de componente async mal construida se habría manifestado. Las 7 pruebas
+manuales del checklist de abajo **no se corrieron en esta sesión** — esta
+sandbox no tiene `NEXT_PUBLIC_SUPABASE_*`/credenciales de un household real
+(el mismo bloqueo B-5 documentado desde RUM-001), así que quedan para que el
+usuario las corra localmente antes de fusionar.
+
+**Lo que sigue sin hacer, a propósito:**
+- **Cache e invalidación selectiva por mutación** — el otro criterio de
+  aceptación de RUM-005. Investigado antes de escribir código: esta app no
+  tiene hoy ninguna capa de cache de datos — solo `revalidatePath`, usado de
+  forma consistente pero gruesa en ~90 sitios de 18 archivos de acciones,
+  siempre seguido de `redirect()`. No hay `unstable_cache`, `revalidateTag`,
+  SWR ni React Query en ningún lado. Introducir una capa de cache sobre
+  datos de saldo de una app financiera es una decisión arquitectónica real
+  (riesgo de datos obsoletos vs. velocidad) que merece su propia propuesta
+  deliberada — no se mete de contrabando en este PR.
+- El contrato de valoración autoritativo de RUM-002 sigue sin existir — sin
+  cambios aquí.
+- Los otros cinco sitios con `get_account_balances` de una sola fecha, y
+  `auth.getUser()` ×4/`profiles` ×2 por navegación (RUM-001 §3.2) — sin
+  tocar, mismo alcance que el cierre de la orquestación.
+
+**Checklist manual de revisión (pendiente — correr localmente, no en esta
+sandbox):**
+1. `/dashboard` con datos en cada widget (presupuesto, deudas activas, metas
+   activas, próximos cobros, transacciones recientes, sin revisar) → cada
+   número/etiqueta en Budget, Donut, Próximos cobros, Insights, Deudas,
+   Metas, Actividad reciente coincide exacto con antes del cambio.
+2. Confirmar que el top-of-fold se pinta antes de que el skeleton del Nivel
+   2 resuelva — estrangular red (Slow 3G) o meter un delay artificial
+   temporal en una query del Nivel 2, porque en conexión normal la brecha
+   real será imperceptible (ver nota de honestidad arriba).
+3. Cambiar de mes con `MonthNav` varias veces → ambos niveles se actualizan
+   consistentes; vigilar específicamente bugs de props obsoletas entre lo
+   que Nivel 1 computa (`selectedMonth`/`totalLiabilities`/`prevLiabilities`)
+   y Nivel 2, ahora que viajan como props en vez de clausura compartida.
+4. Forzar un error de query del Nivel 2 (renombrar temporalmente un RPC) →
+   Nivel 1 sigue pintando completo; solo la tarjeta afectada del Nivel 2
+   muestra su estado de error/vacío ya existente; nada revienta a un límite
+   de error de página completa.
+5. Rutas de "sin cuentas" y "sin presupuesto" siguen filtrando bien ahora
+   que `budgetError`/`hasBudget` son props en vez de clausura.
+6. Viewport mobile — tarjeta de salud mobile (Nivel 1) y el grid responsive
+   del Nivel 2 sin afectar por el movimiento.
+7. `RUMBO_PERF=1 npm run dev`: el batch del Nivel 1 debería loguear 6
+   queries (no 13), el Nivel 2 su propia línea para su batch — confirma que
+   no se reintrodujo ningún await secuencial dentro de ninguno de los dos
+   niveles.
+
+**¿Lista para PR?:** sí, para el alcance que cubre (orquestación +
+streaming). El ticket completo (cache/invalidación) sigue abierto,
+deliberadamente — no cerrar RUM-005 en el tablero como "Hecho" todavía.
+
+**Correcciones al backlog:** fila de RUM-005 en el tablero pasa a
+"🟡 Orquestación + streaming hechos (cache/invalidación deferida)".
+
+---
 
 ### RUM-005 — Descomponer y optimizar carga del Dashboard (orquestación) · 2026-09-21 · rama `claude/rum-005-dashboard-load` · PR pendiente
 
@@ -710,6 +877,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-21 | **RUM-005: streaming con `Suspense` (parcial, sobre la orquestación ya fusionada en #71).** Todo lo debajo del fold (Budget, categorías, próximos cobros, Insights, Deudas, Metas, Actividad reciente) se movió a `src/app/dashboard/secondary-widgets.tsx`, un Server Component nuevo detrás de un único `<Suspense>` — primer uso de `Suspense` en el repo. `budgetRows` y `homeChecklist` se quedan eager a propósito (el primero porque `healthScore` lo necesita y se pinta en la hero card top-of-fold; el segundo porque no está en el criterio de aceptación y diferirlo invertiría el orden visual actual). RUM-001 ya había medido que estas queries cuestan ~0 — este cambio no reduce tiempo de reloj medible, su valor es percepción de velocidad, aislamiento de fallos y cumplir el criterio literal del ticket, no un segundo hallazgo de latencia. Cache/invalidación selectiva queda fuera, deferida a propósito: no existe ninguna capa de cache hoy (solo `revalidatePath`, ~90 sitios), introducir una es una decisión arquitectónica separada. `npm run lint/tsc/test/i18n:check/build` todos pasan; el checklist manual de 7 pasos queda pendiente para el usuario — esta sandbox no tiene credenciales de Supabase para correrlo. |
 | 2026-09-21 | **RUM-005: orquestación del Dashboard (parcial).** Los 7 `await` secuenciales + los 5 en `Promise.all` + `netWorthTrend` (antes al final, sin motivo — solo depende de `selectedMonth`) de `dashboard/page.tsx` se unieron en un solo `Promise.all` de 13 lecturas independientes; solo `recentEntries`/`allocations` (necesitan IDs del batch) y `homeChecklist` (necesita resultados del batch) siguen secuenciales, con el motivo comentado. Segundo hallazgo: el mismo N+1 de balances que RUM-006 corrigió estaba escondido en `trend-actions.ts` — `getDashboardTrend()` hacía 6 llamadas a `get_account_balances` (una por mes) para las métricas de tipo balance; ahora es 1 llamada a `get_account_balances_as_of_many`. Beneficia también a `/dashboard/trends`, que reusa la misma función. Streaming con `Suspense` y cache/invalidación — el resto del alcance de RUM-005 — quedan sin hacer; no se marca "Hecho" en el tablero. |
 | 2026-09-21 | **RUM-006 cerrado y fusionado (PR #70), con una corrección post-review.** Codex marcó P1: el nuevo call único de Accounts pasaba `today` a `get_account_balances_as_of_many`, que siempre acota por `transaction_date <= as_of_date` — excluía silenciosamente transacciones con fecha futura del saldo de "hoy" (un caso real y soportado, ver `transaction-form.tsx`). Revertido solo el call de Accounts a sus 2 llamadas originales (`get_account_balances(household)` sin cota + `get_account_balances(household, prevMonthEnd)`); Net worth y Dashboard no se tocan, solo usaron siempre el overload ya acotado por fecha. Hilo de review respondido y resuelto, CI verde, `mergeable_state: clean`, PR #70 fusionado a `main`. |
 | 2026-09-21 | **RUM-006: migración aplicada, un segundo bug real encontrado y corregido, `npm run db:test` desbloqueado para toda la suite.** A petición del usuario se aplicó `20260921120000_multi_date_account_balances.sql` (`node scripts/db-push.mjs push --apply`, 60/60). La primera aplicación falló: `account_id` es también una columna del `returns table`, así que dentro de la función es una variable en ámbito, y una referencia sin calificar es ambigua para Postgres (`plpgsql.variable_conflict` es `error` por defecto) — invisible mientras la query solo se validó suelta, fuera de una función real. Corregido calificando cada referencia con su alias de CTE; re-aplicado con `create or replace function` antes de fusionar. Nuevo flag `--user=<uuid>` en `scripts/db-test.mjs`: el runner conectaba como `postgres`, que salta RLS de tabla pero no satisface el `auth.uid()` que una función `SECURITY DEFINER` comprueba por su cuenta, así que toda función gateada por `is_household_member()` fallaba siempre. Con el fix, las 5 pruebas de RUM-006 pasan, y de paso corrió por primera vez `br_003_006_money_invariants.sql` completo: 8 de 9 pasan, y el que falla (`BR-006 official balances match posted/pending entries only`) es un hallazgo real y preexistente, sin relación con este ticket — registrado en `docs/pending-work.md` §7, sin investigar aquí. |
