@@ -7,8 +7,11 @@
 > [pending-work.md](./pending-work.md); este documento es la fuente de verdad
 > **solo** para los tickets RUM-*.
 >
-> **Estado de ejecución:** RUM-010a hecho (stack de tests). El avance se
-> registra en
+> **Estado de ejecución:** RUM-010a y RUM-001 hechos. **El baseline cambió las
+> prioridades**: `get_account_balances` es el 71 % de toda la base de datos y
+> escala con el historial del household, mientras que el resto de queries está
+> en el ruido. Lee [`performance-baseline.md`](./performance-baseline.md) §3
+> antes de tomar RUM-004, RUM-005 o RUM-006. El avance se registra en
 > [performance-ux-execution-status.md](./performance-ux-execution-status.md).
 >
 > **Creado 2026-09-21** sobre `main` después de PR #66. Las hipótesis del
@@ -154,7 +157,7 @@ seguirlas produciría trabajo desperdiciado.
 | 4 | No hay N+1 en ningún lado | **Falso — hay N+1 por mes** | `net-worth/page.tsx:288-302` llama `get_account_balances` **7 veces** (mes + 6 de evolución) dentro de un `Promise.all`; el Dashboard la llama 2 veces (`page.tsx:276`, `:297`) |
 | 5 | Transactions descarga el historial completo y filtra en el navegador | **Falso** | RPC única `search_household_transactions` con `p_limit`/`p_offset`, `PAGE_SIZE = 50` (`src/app/dashboard/transactions/page.tsx:715-742`); el rango de fechas va en SQL vía `src/lib/periods/transaction-period.ts` |
 | 6 | List, summary y count son llamadas separadas | **Falso** | `total_count` viene en la misma fila del RPC (`transactions/page.tsx:759`); los cuatro lookups (accounts/categories/payees/tags) van en **una sola ola concurrente, pero son cuatro requests HTTP** (`Promise.all` de cuatro builders en `:596-631`; el comentario del código dice "one round trip" y es impreciso) |
-| 7 | El Dashboard bloquea el top-of-fold con módulos secundarios | **Confirmado, y peor de lo supuesto** | `src/app/dashboard/page.tsx` es un único Server Component sin `Suspense`. ~16 round-trips por carga; **8 son `await` estrictamente secuenciales** (`:276-310`); solo 5 están paralelizados (`:312-318`) |
+| 7 | El Dashboard bloquea el top-of-fold con módulos secundarios | **Confirmado, y peor de lo supuesto** — conteo corregido por RUM-001 | `src/app/dashboard/page.tsx` es un único Server Component sin `Suspense`. **~24 round-trips por carga** (18 de la ruta + 6 del layout que paga toda navegación) y **11 `await` estrictamente secuenciales**, líneas 254-305, no 8: la ventana `:276-310` de la primera lectura se dejó fuera el preámbulo de `auth.getUser()` (`:254`), `profiles` (`:257`) y `households` (`:264`). Solo 5 están paralelizados (`:312-318`). Reproducible con `npm run perf:census`; detalle en [`performance-baseline.md`](./performance-baseline.md) §2 |
 | 8 | `Month health` no tiene fórmula | **Falso** | `src/lib/health/score.ts` documenta la fórmula (líneas 1-18), exporta pesos `HEALTH_SAVINGS_WEIGHT = 0.65` / `HEALTH_BUDGET_WEIGHT = 0.35`, umbrales de savings y budget, y grados en `healthGrade()`. Hay tooltip (`page.tsx:811`). **El problema real es que no se muestra el desglose, no que la fórmula no exista.** |
 | 9 | El redondeo financiero debe centralizarse en `src/lib/calc.ts` | **Falso** | `calc.ts` es el evaluador de la calculadora del teclado numérico, sin relación con montos. La suma de dinero vive en las RPC de SQL |
 | 10 | La precisión decimal se pierde en JS | **Parcial** | No hay `decimal.js` / `big.js`. `src/lib/fx.ts` usa `number` nativo en todo. Falta confirmar si los agregados de SQL usan `numeric` |
@@ -284,13 +287,13 @@ se movió respecto de la propuesta original.
 | ID | Ticket | Prioridad | Tamaño | Dependencias | Cambio |
 |---|---|---|---:|---|---|
 | RUM-010a | Elegir e instalar el stack de tests + fixture mínimo | **P0** | M | Ninguna | ✅ **Hecho 2026-09-21** — Vitest, `npm test`, en CI. Ver [`testing.md`](./testing.md) |
-| RUM-001 | Instrumentar baseline y trazabilidad de performance | P0 | M | Ninguna | Sin cambio |
+| RUM-001 | Instrumentar baseline y trazabilidad de performance | P0 | M | Ninguna | ✅ **Hecho 2026-09-21** (capa de servidor pendiente, B-5). Ver [`performance-baseline.md`](./performance-baseline.md) |
 | RUM-002 | Reconciliar Net worth, Assets, Liabilities y Accounts total | P0 | L | RUM-010a (para tests) | Causa raíz ya localizada (§3.4 #1) |
-| RUM-005 | Descomponer y optimizar carga del Dashboard | **P0** | M/L | RUM-001, RUM-002 | **Sube de P1** — 8 awaits secuenciales, causa confirmada |
+| RUM-005 | Descomponer y optimizar carga del Dashboard | **P0** | M/L | RUM-001, RUM-002 | **Sube de P1** — **11** awaits secuenciales (no 8). Medido: es orquestación, no SQL — sus queries cuestan ~0 salvo las dos de balances |
 | RUM-003 | Formalizar periodos históricos, FX y precisión decimal | P0 | L | RUM-002 | Re-enfocado al fallback del CDN de FX (§3.4 #11) |
-| RUM-006 | Reducir llamadas repetidas de balances (Accounts y Net worth) | P1 | M | RUM-001, RUM-002 | **Re-scope** — no es N+1 por cuenta sino 7× por mes |
+| RUM-006 | Reducir llamadas repetidas de balances (Accounts y Net worth) | **P0** | M/L | RUM-001, RUM-002 | **Re-scope otra vez, y sube de P1.** Son dos problemas: 7 llamadas *y* cada llamada cuesta O(historial del household). `get_account_balances` = 71 % de toda la base ([baseline §3.1](./performance-baseline.md)) |
 | RUM-007 | Cache, prefetch y continuidad de loading states | P1 | M | RUM-001; coordinar 004–006 | Sin cambio |
-| RUM-004 | Optimizar consultas de Transactions | **P2** | M | RUM-001 | **Baja de P1** — hipótesis principal refutada (§3.4 #5, #6) |
+| RUM-004 | Optimizar consultas de Transactions | **P1** | M | RUM-001 | **Re-scope, no descarte.** `search_household_transactions` cuesta 22 ms sobre un mes pero **190 ms y 34.791 buffers sobre all-time**, y el offset no influye ([baseline §5.4.1](./performance-baseline.md)) |
 | RUM-008 | Simplificar arquitectura de información del Dashboard | P2 | M | RUM-002 | Sin cambio |
 | RUM-009 | Corregir semántica de Month health, Insights y secundarios | P2 | M | RUM-002, RUM-008 | Re-enfocado: la fórmula existe (§3.4 #8) |
 | RUM-010b | Suite de regresión, carga y release gate | P0 transversal | M/L | Todos | Resto de RUM-010 |
@@ -458,6 +461,14 @@ este ticket.
 ---
 
 ### RUM-001 — Instrumentar baseline y trazabilidad de performance
+
+> ✅ **Hecho el 2026-09-21.** Instrumentación, censo estático y medición contra
+> producción en [`performance-baseline.md`](./performance-baseline.md).
+> **Resultado que cambia el backlog:** `get_account_balances` es el 71 % de todo
+> el tiempo de base de datos y su costo escala con el historial completo del
+> household; el resto de las queries está en el ruido del transporte. Queda
+> pendiente solo la capa de timings de servidor (`RUMBO_PERF=1`), registrada
+> como B-5, que ya no bloquea a RUM-005 ni a RUM-006.
 
 **Prioridad:** P0 · **Tipo:** Investigación/observabilidad · **Tamaño:** M · **Dependencias:** ninguna
 **Bloquea:** RUM-004, RUM-005, RUM-006 y las decisiones grandes de RUM-007

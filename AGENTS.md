@@ -199,7 +199,10 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
   control's label; a separate concern from `periods/month.ts`, not a
   duplicate), `households/server.ts` (`getHouseholdContext`, PR #66 — read
   once in the dashboard layout to feed the app-bar household selector on every
-  screen).
+  screen), `perf/` (RUM-001 — query instrumentation, **off unless
+  `RUMBO_PERF=1`**; `collector.ts` wraps the Supabase client's `fetch`, so no
+  call site needs editing to be measured, and `label.ts` drops filter values
+  before anything is logged. See `docs/performance-baseline.md`).
 - `src/components/ui/` — `alert-dialog.tsx` (Sprint 13) alongside the existing
   `dialog.tsx`; use for destructive-action confirms instead of an inline
   confirm-state pattern.
@@ -232,6 +235,10 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 Two suites, no overlap. Full conventions and the stack decision live in
 `docs/testing.md`.
 
+- **Performance — `npm run perf:census`** (static round-trip count per route, no
+  credentials) and **`npm run perf:baseline`** (database timings, read-only,
+  runs against the live project). Neither is part of the gate. Method, findings
+  and the tables they fill: `docs/performance-baseline.md`.
 - **Vitest unit suite — `npm test`** (RUM-010a, 2026-09-21). Pure logic only:
   no database, no credentials, no browser. Part of the gate above and of
   `.github/workflows/ci.yml`. `npm run test:watch` while working.

@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react'
+import { after } from 'next/server'
 import { Plus } from 'lucide-react'
 import { AppSidebar } from '@/components/app-sidebar'
 import { MobileNav } from '@/components/mobile-nav'
@@ -16,10 +17,16 @@ import { APP_SCROLL_ID } from '@/lib/app-scroll'
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { getHouseholdContext } from '@/lib/households/server'
+import { reportPerfAfterResponse } from '@/lib/perf/collector'
 import { getUiPreferences } from '@/lib/preferences/server'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
+  // RUM-001. No-op unless RUMBO_PERF=1. Registered here rather than per page so
+  // one hook covers every dashboard route, and it runs after the response, by
+  // which time the page's own queries have been recorded too.
+  reportPerfAfterResponse(after)
+
   const locale = await getLocale()
   const ui = createUiTranslator(locale)
 

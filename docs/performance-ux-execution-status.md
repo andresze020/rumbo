@@ -9,6 +9,8 @@
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
 > **Creado 2026-09-21.** Último ticket cerrado: **RUM-010a** (stack de tests).
+> **RUM-001** medido contra producción: `get_account_balances` es el **71 % de
+> toda la base de datos** y escala con el historial del household.
 
 ---
 
@@ -19,7 +21,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | Ticket | Prioridad | Estado | Rama | PR | Cerrado |
 |---|---|---|---|---|---|
 | RUM-010a — Stack de tests | P0 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | [#68](https://github.com/andresze020/rumbo/pull/68) | 2026-09-21 |
-| RUM-001 — Instrumentación y baseline | P0 | Pendiente | — | — | — |
+| RUM-001 — Instrumentación y baseline | P0 | **Hecho** (capa B pendiente) | `claude/backlog-rum-10a-tmlee1` | [#69](https://github.com/andresze020/rumbo/pull/69) | 2026-09-21 |
 | RUM-002 — Reconciliar net worth | P0 | Pendiente | — | — | — |
 | RUM-005 — Carga del Dashboard | P0 | Pendiente | — | — | — |
 | RUM-003 — Periodos, FX y decimales | P0 | Pendiente | — | — | — |
@@ -38,6 +40,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 |---|---|---|---|
 | B-2 | No hay baseline de performance atribuido por etapa | RUM-004, RUM-005, RUM-006 y las decisiones grandes de RUM-007 | RUM-001 |
 | B-3 | No hay contrato autoritativo de valoración | RUM-003, RUM-005, RUM-006, RUM-008, RUM-009 | RUM-002 |
+| B-5 | Falta la capa B del baseline (timings de servidor): necesita la app corriendo con `NEXT_PUBLIC_SUPABASE_*`. Las capas A y C ya están medidas, así que esto ya no bloquea a RUM-005/006 — solo impide separar red+PostgREST del render | RUM-007 (decisiones de cache) | Que el usuario corra `RUMBO_PERF=1 npm run dev`, navegue y pegue las líneas `[rumbo-perf]` |
 | B-4 | El invariante de net worth no está decidido. El código hace `Total assets + Signed liabilities`; la cifra de Liabilities mostrada es `max(0, -balance)`. Es una decisión de producto, no un bug de cálculo | RUM-002, RUM-010b | Decisión del usuario dentro de RUM-002 |
 
 ### 2.1 Bloqueos cerrados
@@ -69,11 +72,24 @@ de un ticket; sirven únicamente para saber si vamos en la dirección correcta.
 
 Conteo estático del barrido de código del 2026-09-21, no medido en ejecución.
 
+**Actualizado por RUM-001 (2026-09-21)** con `npm run perf:census`, que cuenta
+la ruta *y* el layout. Los números anteriores miraban una ventana de líneas y se
+quedaban cortos.
+
 | Pantalla | Round-trips | De ellos secuenciales | Después |
 |---|---:|---:|---:|
-| Dashboard | ~16 | 8 (`page.tsx:276-310`) | — |
-| Net worth | 7× `get_account_balances` | 0 (en `Promise.all`) | — |
-| Transactions | 1 RPC + 1 ronda de lookups | — | — |
+| Layout (lo paga toda navegación) | 6 | 4 | — |
+| Dashboard (ruta) | 18 | 11 (`page.tsx:254-305`) | — |
+| Dashboard (ruta + layout) | **~24** | **15** | — |
+| Net worth | 5 en código → **7× `get_account_balances` en ejecución** | 5 | — |
+| Transactions | 12 | 5 | — |
+| Accounts | 11 | 5 | — |
+
+`auth.getUser()` se llama **4 veces por navegación** (`layout.tsx:30`,
+`households/server.ts:27`, `preferences/server.ts:19`, `page.tsx:254`) y
+`profiles` se lee **2 veces** (`households/server.ts:32`,
+`preferences/server.ts:23`). Detalle y método en
+[`performance-baseline.md`](./performance-baseline.md).
 
 ---
 
@@ -81,6 +97,124 @@ Conteo estático del barrido de código del 2026-09-21, no medido en ejecución.
 
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
+
+### RUM-001 — Instrumentar baseline · 2026-09-21 · rama `claude/backlog-rum-10a-tmlee1` · PR pendiente
+
+**Estado: parcial y honesto.** La instrumentación está entregada; los números no.
+
+**Causa raíz confirmada:** ninguna hipótesis de §3.4 se refutó, pero **dos
+conteos se quedaron cortos** por haberse leído sobre una ventana de líneas en
+vez de la ruta entera:
+- §3.4 #7 decía 8 `await` secuenciales en el Dashboard (`:276-310`). Son **11**
+  (líneas 254, 257, 264, 276, 280, 284, 288, 293, 297, 301, 305): faltaba el
+  preámbulo `auth.getUser()` → `profiles` → `households`.
+- §3.2 decía ~16 round-trips. Son **~24**, porque el layout y sus helpers gastan
+  6 en toda navegación y nadie los estaba contando.
+
+**Hallazgos nuevos, no previstos por el backlog:**
+- `auth.getUser()` se llama **4 veces por navegación**. Cada helper hace su
+  propio `createClient()`, y `getUser()` siempre revalida contra el servidor de
+  Auth — no lee la cookie. Cuatro round-trips para la misma pregunta.
+- `profiles` se lee **dos veces** en el mismo `Promise.all` del layout. Van en
+  paralelo, así que no cuesta latencia; cuesta una query y esconde el
+  desperdicio.
+- El censo estático **no puede ver bucles**: `net-worth` muestra
+  `get_account_balances ×2` en código y hace **7** en ejecución
+  (`getPreviousMonths(selectedMonth, 6)` en `:266`). Esa es precisamente la
+  brecha que cubre la instrumentación en runtime.
+
+**Archivos modificados:**
+- `src/lib/perf/label.ts` — nuevo. URL → etiqueta segura, con allowlist.
+- `src/lib/perf/stats.ts` — nuevo. Percentiles, `serialRatio`, rollup, repetidos.
+- `src/lib/perf/collector.ts` — nuevo. `fetch` instrumentado + colector por petición.
+- `src/lib/perf/{label,stats,collector}.test.ts` — nuevos. 33 tests.
+- `src/lib/supabase/server.ts` — 3 líneas: extiende el cliente cuando el switch está on.
+- `src/app/dashboard/layout.tsx` — 1 línea: registra el volcado en `after()`.
+- `scripts/perf-census.mjs` — nuevo. Capa A, sin credenciales.
+- `scripts/perf-baseline.mjs` — nuevo. Capa C, solo lectura por construcción.
+- `package.json` — `perf:census`, `perf:baseline`.
+- `docs/performance-baseline.md` — nuevo. El informe, el método y las tablas.
+
+**Antes / después:** antes no había forma de saber en qué se iban los 4,25 s.
+Después: `npm run perf:census` da la forma sin credenciales, y `RUMBO_PERF=1`
+da un JSON por petición con duración, filas, bytes, repetidos y `serialRatio`.
+
+**Métricas (capa C, medida contra producción el 2026-09-21, RLS aplicada):**
+
+`get_account_balances` es el **71 % de todo el tiempo de base de datos** del
+proyecto: 2.101 s de 2.976 s en una ventana de 112 días de `pg_stat_statements`.
+36.778 buffers (~287 MB) para devolver 22 filas; 192 ms directos, 620 ms de
+media en producción.
+
+**Y escala con el historial completo del household, no con la fecha de corte:**
+
+| Household | Transacciones | Buffers | Exec |
+|---|---:|---:|---:|
+| grande | 4.688 | 36.778 | 194,9 ms |
+| pequeño | 231 | 4.058 | 30,2 ms |
+| mínimo | 121 | 3.188 | 17,1 ms |
+
+Todas las demás queries están en el ruido del transporte (~285 ms de piso de la
+Management API, medido con un probe `select 1`):
+`search_household_transactions` **12 ms**, `get_monthly_dashboard_summary`
+9,45 ms, `get_monthly_expenses_by_category` 6,99 ms, lookups 0-53 ms netos.
+
+Capa B (servidor) sigue sin medir — ver B-5.
+
+**Comandos ejecutados:** `npm run lint` · `npx tsc --noEmit` · `npm test` (44) ·
+`npm run i18n:check` · `npm run build` · `npm run perf:census`
+
+**Migraciones o pasos pendientes:** ninguna. Sin esquema, RLS, ledger ni caching.
+
+**Riesgos residuales:**
+- El instrumento añade un wrapper de `fetch` **solo** con `RUMBO_PERF=1`; sin la
+  variable, `perfClientOptions()` devuelve `{}` y el cliente es el de siempre.
+  Hay un test que lo fija.
+- Fuera de un render, `cache()` de React no memoiza y el colector cae a uno
+  compartido por proceso: bajo carga concurrente mezclaría peticiones. Es la
+  razón de que el switch sea opt-in. Documentado en §7 del informe.
+- `logPerfSnapshot` resuelve el nombre de ruta a partir de cabeceras que Next no
+  promete; puede salir `(unknown route)`. Por eso el método mide una ruta a la vez.
+- El arnés de la capa C corre contra **producción** (no hay staging). Es solo
+  lectura por construcción y las funciones que ejecuta son las que la app llama
+  en cada carga, pero conviene correrlo fuera de hora punta.
+- No se mide el tamaño de payload si falta `content-length`: clonar la respuesta
+  consumiría el stream que el llamante va a parsear. Se reporta `null`, no 0.
+
+**Checklist manual de revisión:**
+1. `npm run dev` sin `RUMBO_PERF` → ninguna línea `[rumbo-perf]` en el log.
+2. `RUMBO_PERF=1 npm run dev`, abrir `/dashboard` → una línea `[rumbo-perf]` con
+   `queries` ≈ 24 y `serialRatio` alto.
+3. Comprobar que ninguna línea del log contiene una descripción, un email o un
+   nombre de payee.
+4. `npm run perf:census` → la tabla de §2 del informe.
+5. Con credenciales: `npm run perf:baseline -- --household=<uuid> --user=<uuid>`.
+
+**Hallazgos que reescriben otros tickets:**
+- **RUM-006 cambia de forma.** No es "reducir llamadas repetidas": cada llamada
+  a `get_account_balances` cuesta O(historial). El número de llamadas y el costo
+  por llamada son dos problemas, y el segundo crece solo cada mes.
+- **RUM-005 es orquestación, no SQL.** Las queries del Dashboard cuestan ~0 en la
+  base salvo las dos de balances. Lo caro es esperarlas de una en una.
+- **RUM-004 sigue vivo** (corregido tras la revisión de Codex en PR #69). El
+  primer probe midió solo un mes — 15 filas, 22 ms — y de ahí salió un "queda
+  refutado" que no estaba respaldado. Sobre all-time son **190 ms y 34.791
+  buffers**, a la par de `get_account_balances`, y **el offset no cambia los
+  buffers**: la RPC materializa todo el conjunto antes del `LIMIT`, así que el
+  costo es O(filas que casan), no O(offset).
+- **Falta un ticket**: `get_card_cycle_summaries` hace 52.846 buffers y 911 ms de
+  media — la peor query por llamada del sistema, y no está en el backlog.
+- **Corrección al propio arnés**: suponía que `postgres` daría números
+  optimistas. Falso — las RPC comprueban `is_household_member()` en su cuerpo y
+  fallan sin `--user`. El aislamiento por household está aplicado dos veces.
+
+**¿Lista para PR?:** sí. Las capas A y C están medidas; la B queda como B-5 y ya
+no bloquea a RUM-005/006.
+
+**Correcciones al backlog:** §3.4 #7 (8 → 11 secuenciales, ~16 → ~24
+round-trips) y §3.2 de este documento. Nada se refutó.
+
+---
 
 ### RUM-010a — Elegir e instalar el stack de tests · 2026-09-21 · rama `claude/backlog-rum-10a-tmlee1` · PR #68
 
@@ -192,6 +326,9 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-21 | **Revisión de Codex en PR #69: dos hallazgos, ambos correctos.** (P1) `reportPerfAfterResponse` resolvía el colector dentro del callback de `after()`, donde `cache()` ya no memoiza: habría construido uno vacío y **no habría emitido ninguna línea**. Ahora se captura en el registro; test de regresión en `collector.after.test.ts`, que mockea `cache` para reproducir la transición render→after. (P2) El probe de `search_household_transactions` medía solo un mes (15 filas), así que el "RUM-004 refutado" no estaba respaldado: sobre all-time son 190 ms y 34.791 buffers. RUM-004 vuelve a P1, re-scoped. |
+| 2026-09-21 | **RUM-001 medido contra producción.** `get_account_balances` = **71 % de toda la base** (2.101 s de 2.976 s en 112 días), 36.778 buffers para 22 filas, y escala con el historial del household, no con la fecha de corte. Todo lo demás está en el ruido: `search_household_transactions` 12 ms. Reescribe RUM-006, reenfoca RUM-005 a orquestación, permite descartar RUM-004 y destapa `get_card_cycle_summaries` (52.846 buffers/llamada) sin ticket. |
+| 2026-09-21 | **RUM-001: instrumentación entregada, medición pendiente.** Nuevo módulo `src/lib/perf/` (switch `RUMBO_PERF=1`), `npm run perf:census` (capa A, sin credenciales) y `npm run perf:baseline` (capa C, solo lectura). Informe en `docs/performance-baseline.md`. Corregidos dos conteos de §3.4 #7 y §3.2. Hallazgos nuevos: `auth.getUser()` ×4 y `profiles` ×2 por navegación. Nuevo bloqueo B-5. |
 | 2026-09-21 | Documento creado junto al backlog. Ningún ticket iniciado. |
 | 2026-09-21 | **RUM-010a cerrado.** Vitest instalado (`npm test`, 11 tests semilla sobre `src/lib/health/score.ts`), integrado en el gate de `rumbo-verify`, `AGENTS.md` y CI. Convenciones en `docs/testing.md`. Bloqueo B-1 cerrado. `@types/node` subió de `^20` a `^22` (requisito de Vitest 5, y lo que ya corría CI). |
 | 2026-09-21 | Revisión de Codex en PR #67. **Causa raíz de la discrepancia de net worth encontrada antes de empezar RUM-002**: un pasivo con saldo a favor suma al net worth y muestra `0` en Liabilities; cuadra al centavo en los tres meses. Corregidas cuatro afirmaciones del backlog (invariante, política de FX de saldos, cuatro round trips en Transactions, alcance del mes personalizado). Nuevo bloqueo B-4. |
