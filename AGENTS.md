@@ -119,6 +119,12 @@ The product is household-first. All financial data must belong to a household.
   `docs/alpha-readiness-checklist.md` for the readiness gate, and
   `docs/pending-work.md` for a single index of every open feature, BR
   backlog item, and cross-feature Open Decision.
+- **Backlog RUM-001…RUM-010b** (performance e integridad financiera):
+  `docs/performance-ux-backlog.md` es la fuente de verdad, con un prompt
+  listo por ticket y un contrato de ejecución compartido en su §4. El avance
+  vive en `docs/performance-ux-execution-status.md`. Antes de trabajar
+  cualquier RUM-*, lee la §3.4 del backlog: varias hipótesis del diagnóstico
+  original resultaron falsas contra el código.
 - Benchmarks: `docs/benchmark-review-monarch-ynab-copilot.md` (web/product
   competitors, source of BR-001…BR-029) and
   `docs/benchmark-review-mobile-money-managers.md` (mobile capture

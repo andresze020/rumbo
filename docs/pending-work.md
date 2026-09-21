@@ -52,6 +52,12 @@
 > touch anything already listed here. Additive again — the last full pass over
 > every row is still 2026-08-16.
 >
+> **Touched 2026-09-21** to add the RUM-001…RUM-010b performance and
+> financial-trust backlog to §3, with its own status file. That backlog was
+> written from a mobile screen recording and then checked against the code;
+> its §3.4 records which hypotheses survived. Additive again — the last full
+> pass over every row is still 2026-08-16.
+>
 > Everything shipped is recorded in `AGENTS.md` → Current status and
 > [SPRINT-LOG.md](./SPRINT-LOG.md); this file only lists what is **not** done.
 
@@ -89,11 +95,19 @@ decision first.
 |---|---:|---|---|---|
 | BF-022 | P3 | Transactions | Reconciliation flow — mark transactions "cleared" against a bank statement. Needs a schema migration (`reconciled_at`). Deferred to Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
 | Tap payment capture | — | Capture / automation | Design only, **no code**. A tap cannot be detected by the PWA on any platform; detection has to come from the phone's automation layer posting to an ingest endpoint that stages captures in a `capture_inbox` and auto-posts only above a confidence threshold. | [features/tap-payment-capture.md](./features/tap-payment-capture.md) |
+| RUM-001…RUM-010b | P0–P2 | Performance / integridad financiera | Backlog de 11 tickets: reconciliar net worth, instrumentar el baseline, descomponer la carga del Dashboard (8 `await` secuenciales), reducir llamadas repetidas de balances, cache/loading, y montar el primer runner de tests de JS/TS del repo. Prioridades y prompts por ticket en el doc. | [performance-ux-backlog.md](./performance-ux-backlog.md) · [estado](./performance-ux-execution-status.md) |
 
 > **Tap capture is gated.** The Phase 0 device spike is a hard gate — no code
 > until a real tap is proven to emit a machine-readable event on the user's own
 > phone and card. The run book is ready to execute:
 > [alpha/tap-capture-phase-0-spike.md](./alpha/tap-capture-phase-0-spike.md).
+
+> **El backlog RUM-* tiene su propio ciclo.** Un ticket se trabaja por sesión
+> aislada, con el prompt ya escrito en su sección. El avance no se registra
+> aquí sino en
+> [performance-ux-execution-status.md](./performance-ux-execution-status.md).
+> **RUM-010a bloquea a casi todos los demás**: hoy el repositorio no tiene
+> runner de tests de JS/TS y varios tickets prometen cobertura.
 
 ## 4. Manual QA gates (no code required)
 
