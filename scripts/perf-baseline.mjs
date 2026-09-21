@@ -77,8 +77,8 @@ const PROBES = [
     sql: `select * from get_monthly_budget_details('${HOUSEHOLD}'::uuid, '${MONTH}'::date)`,
   },
   {
-    name: 'rpc:search_household_transactions (page 1)',
-    where: 'transactions/page.tsx:721 · PAGE_SIZE 50',
+    name: 'rpc:search_household_transactions (one month)',
+    where: 'transactions/page.tsx:721 · PAGE_SIZE 50 · default period',
     // Every null is cast: PostgreSQL cannot infer a bare null's type for an
     // array parameter, and an uncast one fails to resolve the signature.
     sql: `select * from search_household_transactions(
@@ -88,6 +88,32 @@ const PROBES = [
             null::text[], null::text[], null::text, null::text,
             null::uuid[], null::uuid[], null::uuid[], null::uuid[],
             50, 0)`,
+  },
+  {
+    // The month probe above only proves the month case. RUM-004's premise is
+    // about YEARS of data, so this pages the household's whole history: no
+    // lower bound, a full 50-row page. Without it, "Transactions is fast"
+    // is a claim about September, not about the 4.25 s in the recording.
+    name: 'rpc:search_household_transactions (ALL TIME, page 1)',
+    where: 'transactions/page.tsx:721 with period=all-time',
+    sql: `select * from search_household_transactions(
+            '${HOUSEHOLD}'::uuid,
+            '1900-01-01'::date, current_date,
+            null::text[], null::text[], null::text, null::text,
+            null::uuid[], null::uuid[], null::uuid[], null::uuid[],
+            50, 0)`,
+  },
+  {
+    // OFFSET pagination degrades with depth: the database still walks the rows
+    // it skips. This is the worst case a real user can reach by scrolling.
+    name: 'rpc:search_household_transactions (ALL TIME, offset 4000)',
+    where: 'transactions/page.tsx:719 — deep pagination',
+    sql: `select * from search_household_transactions(
+            '${HOUSEHOLD}'::uuid,
+            '1900-01-01'::date, current_date,
+            null::text[], null::text[], null::text, null::text,
+            null::uuid[], null::uuid[], null::uuid[], null::uuid[],
+            50, 4000)`,
   },
   {
     name: 'from:accounts (lookup)',

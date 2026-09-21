@@ -293,7 +293,7 @@ se movió respecto de la propuesta original.
 | RUM-003 | Formalizar periodos históricos, FX y precisión decimal | P0 | L | RUM-002 | Re-enfocado al fallback del CDN de FX (§3.4 #11) |
 | RUM-006 | Reducir llamadas repetidas de balances (Accounts y Net worth) | **P0** | M/L | RUM-001, RUM-002 | **Re-scope otra vez, y sube de P1.** Son dos problemas: 7 llamadas *y* cada llamada cuesta O(historial del household). `get_account_balances` = 71 % de toda la base ([baseline §3.1](./performance-baseline.md)) |
 | RUM-007 | Cache, prefetch y continuidad de loading states | P1 | M | RUM-001; coordinar 004–006 | Sin cambio |
-| RUM-004 | Optimizar consultas de Transactions | **Candidato a descartar** | M | RUM-001 | **Refutado por medición**: `search_household_transactions` tarda **12 ms** en paginar 50 de 4.688 transacciones ([baseline §5.4](./performance-baseline.md)) |
+| RUM-004 | Optimizar consultas de Transactions | **P1** | M | RUM-001 | **Re-scope, no descarte.** `search_household_transactions` cuesta 22 ms sobre un mes pero **190 ms y 34.791 buffers sobre all-time**, y el offset no influye ([baseline §5.4.1](./performance-baseline.md)) |
 | RUM-008 | Simplificar arquitectura de información del Dashboard | P2 | M | RUM-002 | Sin cambio |
 | RUM-009 | Corregir semántica de Month health, Insights y secundarios | P2 | M | RUM-002, RUM-008 | Re-enfocado: la fórmula existe (§3.4 #8) |
 | RUM-010b | Suite de regresión, carga y release gate | P0 transversal | M/L | Todos | Resto de RUM-010 |

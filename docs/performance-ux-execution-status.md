@@ -196,7 +196,12 @@ Capa B (servidor) sigue sin medir — ver B-5.
   por llamada son dos problemas, y el segundo crece solo cada mes.
 - **RUM-005 es orquestación, no SQL.** Las queries del Dashboard cuestan ~0 en la
   base salvo las dos de balances. Lo caro es esperarlas de una en una.
-- **RUM-004 puede descartarse**: 12 ms para paginar 50 de 4.688 transacciones.
+- **RUM-004 sigue vivo** (corregido tras la revisión de Codex en PR #69). El
+  primer probe midió solo un mes — 15 filas, 22 ms — y de ahí salió un "queda
+  refutado" que no estaba respaldado. Sobre all-time son **190 ms y 34.791
+  buffers**, a la par de `get_account_balances`, y **el offset no cambia los
+  buffers**: la RPC materializa todo el conjunto antes del `LIMIT`, así que el
+  costo es O(filas que casan), no O(offset).
 - **Falta un ticket**: `get_card_cycle_summaries` hace 52.846 buffers y 911 ms de
   media — la peor query por llamada del sistema, y no está en el backlog.
 - **Corrección al propio arnés**: suponía que `postgres` daría números
@@ -321,6 +326,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-21 | **Revisión de Codex en PR #69: dos hallazgos, ambos correctos.** (P1) `reportPerfAfterResponse` resolvía el colector dentro del callback de `after()`, donde `cache()` ya no memoiza: habría construido uno vacío y **no habría emitido ninguna línea**. Ahora se captura en el registro; test de regresión en `collector.after.test.ts`, que mockea `cache` para reproducir la transición render→after. (P2) El probe de `search_household_transactions` medía solo un mes (15 filas), así que el "RUM-004 refutado" no estaba respaldado: sobre all-time son 190 ms y 34.791 buffers. RUM-004 vuelve a P1, re-scoped. |
 | 2026-09-21 | **RUM-001 medido contra producción.** `get_account_balances` = **71 % de toda la base** (2.101 s de 2.976 s en 112 días), 36.778 buffers para 22 filas, y escala con el historial del household, no con la fecha de corte. Todo lo demás está en el ruido: `search_household_transactions` 12 ms. Reescribe RUM-006, reenfoca RUM-005 a orquestación, permite descartar RUM-004 y destapa `get_card_cycle_summaries` (52.846 buffers/llamada) sin ticket. |
 | 2026-09-21 | **RUM-001: instrumentación entregada, medición pendiente.** Nuevo módulo `src/lib/perf/` (switch `RUMBO_PERF=1`), `npm run perf:census` (capa A, sin credenciales) y `npm run perf:baseline` (capa C, solo lectura). Informe en `docs/performance-baseline.md`. Corregidos dos conteos de §3.4 #7 y §3.2. Hallazgos nuevos: `auth.getUser()` ×4 y `profiles` ×2 por navegación. Nuevo bloqueo B-5. |
 | 2026-09-21 | Documento creado junto al backlog. Ningún ticket iniciado. |

@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { isPerfEnabled, perfClientOptions, perfSnapshot } from './collector'
+import {
+  isPerfEnabled,
+  perfClientOptions,
+  perfSnapshot,
+  reportPerfAfterResponse,
+} from './collector'
 
 const ORIGINAL = process.env.RUMBO_PERF
 
@@ -111,5 +116,57 @@ describe('the instrumented fetch', () => {
     )
 
     expect(JSON.stringify(perfSnapshot())).not.toContain('alimony')
+  })
+})
+
+describe('reportPerfAfterResponse', () => {
+  beforeEach(() => {
+    process.env.RUMBO_PERF = '1'
+  })
+
+  it('reports the collector captured at registration, not one resolved later', async () => {
+    // The whole point of the capture. `after()` runs once the response is done,
+    // where React's `cache()` no longer reliably memoises; resolving the
+    // collector there yields a fresh empty one, the snapshot finds nothing, and
+    // the log line silently never appears.
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }))
+
+    let flush: (() => Promise<void>) | null = null
+    reportPerfAfterResponse((task) => {
+      flush = task
+    })
+    expect(flush).toBeTypeOf('function')
+
+    // Queries happen after registration, as they do in a real render. A table
+    // no other test in this file touches, because outside a render `cache()`
+    // does not memoise and every test here shares one collector — the very
+    // limitation this module documents.
+    const perfFetch = perfClientOptions().global!.fetch
+    await perfFetch('https://p.supabase.co/rest/v1/goals?select=id')
+
+    await flush!()
+
+    expect(log).toHaveBeenCalledOnce()
+    const line = log.mock.calls[0][0] as string
+    expect(line.startsWith('[rumbo-perf] ')).toBe(true)
+    expect(JSON.parse(line.slice('[rumbo-perf] '.length)).byLabel).toContainEqual(
+      expect.objectContaining({ label: 'from:goals', calls: 1 }),
+    )
+  })
+
+  it('registers nothing when the switch is off', () => {
+    delete process.env.RUMBO_PERF
+    const after = vi.fn()
+    reportPerfAfterResponse(after)
+    expect(after).not.toHaveBeenCalled()
+  })
+
+  it('never lets an unavailable after() break the render', () => {
+    expect(() =>
+      reportPerfAfterResponse(() => {
+        throw new Error('after() is not available in this context')
+      }),
+    ).not.toThrow()
   })
 })

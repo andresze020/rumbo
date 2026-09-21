@@ -135,11 +135,15 @@ export function perfClientOptions(): { global?: { fetch: typeof fetch } } {
 }
 
 /**
- * Everything measured for the current request, as plain data. Safe to log: the
- * labels went through `labelFromUrl`, which drops filter values.
+ * Everything measured, as plain data. Safe to log: the labels went through
+ * `labelFromUrl`, which drops filter values.
+ *
+ * Pass the collector explicitly when reading it outside the render that filled
+ * it — see `reportPerfAfterResponse`. Resolving it again at that point would
+ * hand back a different one.
  */
-export function perfSnapshot() {
-  const entries = getCollector().entries
+export function perfSnapshot(collector: Collector = getCollector()) {
+  const entries = collector.entries
   return {
     concurrency: summarizeConcurrency(entries),
     byLabel: rollupByLabel(entries),
@@ -176,10 +180,13 @@ async function resolveRoute(): Promise<string> {
  * off or nothing was measured, and it never throws: instrumentation must not be
  * the reason a page fails.
  */
-export async function logPerfSnapshot(route?: string): Promise<void> {
+export async function logPerfSnapshot(
+  route?: string,
+  collector: Collector = getCollector(),
+): Promise<void> {
   if (!isPerfEnabled()) return
 
-  const snapshot = perfSnapshot()
+  const snapshot = perfSnapshot(collector)
   if (snapshot.entries.length === 0) return
 
   const payload = {
@@ -208,13 +215,25 @@ export async function logPerfSnapshot(route?: string): Promise<void> {
 /**
  * The one line a layout needs. Registers the flush to run after the response,
  * so it sees every query the page made, not just the layout's own.
+ *
+ * **The collector is captured here, not inside the callback.** This function
+ * runs during the render, where `cache()` memoises and `getCollector()` returns
+ * the collector the page's fetches will fill. The callback runs after the
+ * response, where that is no longer guaranteed: resolving it there would build
+ * a fresh empty collector, `logPerfSnapshot` would find nothing to report and
+ * return silently, and the instrumentation would look like it simply does not
+ * work. Worse, with a concurrent request in flight it could pick up that
+ * request's collector instead. Closing over the instance removes both.
  */
 export function reportPerfAfterResponse(after: (task: () => Promise<void>) => void): void {
   if (!isPerfEnabled()) return
+
+  const collector = getCollector()
+
   try {
     after(async () => {
       try {
-        await logPerfSnapshot()
+        await logPerfSnapshot(undefined, collector)
       } catch {
         // Never surface an instrumentation failure to the request.
       }

@@ -95,7 +95,7 @@ bucle. La capa B sí.
 
 ---
 
-## 3. Los cinco cuellos, con evidencia medida
+## 3. Los cuellos, con evidencia medida
 
 Reordenados tras medir. La capa A (conteo) y la capa C (tiempo) no coinciden en
 el orden, y esa discrepancia es el resultado más útil del ticket: **el problema
@@ -134,13 +134,20 @@ Medido, el costo de cada uno en la base es ~0 salvo los dos de balances (§5.3).
 Es decir: el Dashboard no es lento por sus queries, es lento por **esperarlas de
 una en una**. Eso hace de RUM-005 un problema de orquestación, no de SQL.
 
-### 3.4 `get_card_cycle_summaries` — la peor query por llamada del sistema
+### 3.4 `search_household_transactions` sobre all-time
+
+190 ms y 34.791 buffers para una página de 50, frente a 22 ms y 2.780 sobre un
+mes (§5.4.1). El offset es irrelevante — el costo es O(filas que casan con el
+filtro). Hoy no duele porque el periodo por defecto es el mes, pero cualquier
+usuario que elija `all-time` paga lo mismo que una carga de Net worth.
+
+### 3.5 `get_card_cycle_summaries` — la peor query por llamada del sistema
 
 52.846 buffers y 911 ms de media (§5.6). Solo 160 llamadas, así que hoy no
 duele, pero es peor por llamada que `get_account_balances` y **no está en el
 backlog**. Misma forma de problema. Merece ticket propio.
 
-### 3.5 `profiles` leída dos veces por navegación
+### 3.6 `profiles` leída dos veces por navegación
 
 `households/server.ts:32` y `preferences/server.ts:23`, misma tabla, misma fila,
 dentro del mismo `Promise.all` del layout (`layout.tsx:38-41`). Van en paralelo,
@@ -148,12 +155,17 @@ así que no cuesta latencia: cuesta una query y esconde el desperdicio.
 
 ### Lo que la medición sacó de la lista
 
-- **`search_household_transactions`: 12 ms** para paginar 50 de 4.688 (§5.4).
-  RUM-004 queda refutado por medición, no solo por lectura de código.
 - **Los cuatro lookups de Transactions** (accounts/categories/payees/tags) están
   todos en el ruido del transporte. No son un cuello.
 - **`/dashboard/accounts` con 11 round-trips** baja de prioridad: 9 de ellos no
   cuestan nada medible; los que importan son sus 2 de balances.
+
+### Lo que la medición NO sacó, aunque la primera versión lo afirmó
+
+**`search_household_transactions` sigue en la lista.** Ver §5.4.1: medirlo solo
+sobre un mes dio 22 ms y llevó a declarar RUM-004 refutado; sobre el historial
+completo son **190 ms y 34.791 buffers**, a la par de `get_account_balances`.
+La conclusión anterior venía de un probe que no ejercitaba el caso del ticket.
 
 > **Ninguno de estos se arregla en RUM-001.** Son la entrada de RUM-005
 > (orquestación del Dashboard), RUM-006 (`get_account_balances`) y RUM-007
@@ -248,17 +260,42 @@ es el ruido del transporte. **Solo `get_account_balances` sobresale.**
 | Query | Exec time | Buffers |
 |---|---:|---:|
 | **`get_account_balances`** | **192,16 ms** | **36.778** |
-| `search_household_transactions` | 12,02 ms | 2.768 |
+| **`search_household_transactions` (all-time)** | **190,07 ms** | **34.791** |
+| `search_household_transactions` (un mes) | 22,39 ms | 2.780 |
 | `get_monthly_dashboard_summary` | 9,45 ms | 1.800 |
 | `get_monthly_expenses_by_category` | 6,99 ms | 1.572 |
 | `from:categories` | 3,57 ms | 523 |
 
-16× más lenta y 13× más buffers que la siguiente. 36.778 buffers son ~287 MB de
-tráfico para devolver **22 filas**.
+36.778 buffers son ~287 MB de tráfico para devolver **22 filas**.
 
-Nota para RUM-004: `search_household_transactions` tarda **12 ms** en paginar 50
-de 4.688 transacciones. La premisa original de ese ticket queda enterrada por
-medición, no solo por lectura de código.
+### 5.4.1 El periodo de Transactions decide el costo
+
+**Corrección, tras la revisión de Codex en PR #69.** La primera versión de este
+informe midió `search_household_transactions` solo sobre **un mes**, que devolvió
+**15 filas** — ni el historial completo ni una página llena — y concluyó que
+RUM-004 quedaba refutado. **Esa conclusión no estaba respaldada.** Medido bien:
+
+| Periodo | Offset | Exec | Buffers | Filas |
+|---|---:|---:|---:|---:|
+| un mes (2026-09) | 0 | 22,4 ms | 2.780 | 15 |
+| **all-time** | 0 | **190,1 ms** | **34.791** | 50 |
+| all-time | 2.000 | 190,7 ms | 34.791 | 50 |
+| all-time | 4.000 | 185,1 ms | 34.791 | 50 |
+
+Dos cosas:
+
+1. **All-time cuesta 12,5× más buffers que un mes**, y queda a la par de
+   `get_account_balances`. El periodo por defecto de la pantalla es lo que hoy
+   la mantiene barata.
+2. **El offset no cambia nada**: 34.791 buffers para la página 1, la 40 y la 80.
+   La RPC materializa el conjunto completo antes de aplicar `LIMIT`/`OFFSET`, así
+   que el costo es O(filas que casan con el filtro), no O(offset). Paginación
+   por keyset no ayudaría; acotar el conjunto sí.
+
+**RUM-004 no queda refutado.** Cambia de forma: no es "Transactions baja años de
+datos al cliente" (eso sigue siendo falso, §3.4 #5), sino que **la RPC hace
+trabajo proporcional al historial que el filtro abarca**, igual que
+`get_account_balances`.
 
 ### 5.5 El costo escala con el historial, no con la fecha
 
@@ -382,7 +419,7 @@ Verificadas contra el código de `main` el 2026-09-21:
 | §3.4 #7 | "8 son `await` estrictamente secuenciales (`:276-310`)" | **11**, líneas 254-305: la ventana original se dejó fuera auth, profiles y households |
 | §3.2 (estado) | Dashboard ~16 round-trips | **~24**, contando los 6 del layout que paga toda navegación |
 | §3.4 #4 | "el Dashboard la llama 2 veces" | Correcto, y además `from:transactions` ×3 en la misma carga |
-| §3.4 #5 y #6 | RUM-004 "queda subordinado a la evidencia de RUM-001" | **Evidencia entregada: `search_household_transactions` tarda 12 ms.** RUM-004 puede cerrarse como descartado |
+| §3.4 #5 y #6 | RUM-004 "queda subordinado a la evidencia de RUM-001" | **Evidencia entregada, y no lo refuta.** Sobre un mes son 22 ms; sobre all-time, **190 ms y 34.791 buffers** (§5.4.1). RUM-004 sigue vivo, re-scoped |
 | — | El arnés de este ticket suponía que `postgres` daría números optimistas | **Falso**: las RPC comprueban `is_household_member()` en su propio cuerpo y fallan sin `--user`. Corregido en el script |
 
 Nada de §3.4 se refutó: lo que cambia son conteos que se quedaron cortos por
@@ -396,7 +433,9 @@ mirar una ventana de líneas en vez de la ruta completa.
   crece solo con el tiempo.
 - **RUM-005 es orquestación, no SQL.** Las queries del Dashboard cuestan ~0 en
   la base salvo las dos de balances. Lo caro es esperarlas de una en una.
-- **RUM-004 puede descartarse.** 12 ms.
+- **RUM-004 sigue vivo**, re-scoped: la RPC hace trabajo proporcional al
+  historial que abarca el filtro (190 ms all-time vs 22 ms un mes), y el offset
+  no influye.
 - **Falta un ticket para `get_card_cycle_summaries`** (52.846 buffers, 911 ms de
   media por llamada). Es la peor query por llamada del sistema y no está en el
   backlog.
