@@ -18,7 +18,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 
 | Ticket | Prioridad | Estado | Rama | PR | Cerrado |
 |---|---|---|---|---|---|
-| RUM-010a — Stack de tests | P0 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | — | 2026-09-21 |
+| RUM-010a — Stack de tests | P0 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | [#68](https://github.com/andresze020/rumbo/pull/68) | 2026-09-21 |
 | RUM-001 — Instrumentación y baseline | P0 | Pendiente | — | — | — |
 | RUM-002 — Reconciliar net worth | P0 | Pendiente | — | — | — |
 | RUM-005 — Carga del Dashboard | P0 | Pendiente | — | — | — |
@@ -82,7 +82,7 @@ Conteo estático del barrido de código del 2026-09-21, no medido en ejecución.
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
 
-### RUM-010a — Elegir e instalar el stack de tests · 2026-09-21 · rama `claude/backlog-rum-10a-tmlee1` · PR pendiente
+### RUM-010a — Elegir e instalar el stack de tests · 2026-09-21 · rama `claude/backlog-rum-10a-tmlee1` · PR #68
 
 **Causa raíz confirmada:** exactamente la que decía §3.4 #16 — el repositorio no
 tenía runner de JS/TS. Ninguna sorpresa contra el código. Sí apareció un
