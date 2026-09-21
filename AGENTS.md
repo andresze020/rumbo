@@ -164,10 +164,15 @@ The product is household-first. All financial data must belong to a household.
 - notes (BR-044)
 - installment_plans (BR-035)
 
-All migrations are applied. `npx supabase migration list --linked`
-reported 59/59 on 2026-08-21 (58/58 on 2026-08-12, the day Tier-3 and
-Tier-4 were merged and pushed, plus `20260817120000_balance_fx_revaluation.sql`
-confirmed applied since). Nothing is pending.
+`npx supabase migration list --linked` reported 59/59 on 2026-08-21 (58/58 on
+2026-08-12, the day Tier-3 and Tier-4 were merged and pushed, plus
+`20260817120000_balance_fx_revaluation.sql` confirmed applied since).
+**One migration is pending**: `20260921120000_multi_date_account_balances.sql`
+(RUM-006) is written, additive, and validated as loose read-only SQL against
+production, but has never been applied — creating a function is DDL, and no
+session has had permission to run it. Check `npx supabase migration list
+--linked` before assuming it landed; the manual apply command lives in the
+migration's own header comment.
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
@@ -202,7 +207,10 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
   screen), `perf/` (RUM-001 — query instrumentation, **off unless
   `RUMBO_PERF=1`**; `collector.ts` wraps the Supabase client's `fetch`, so no
   call site needs editing to be measured, and `label.ts` drops filter values
-  before anything is logged. See `docs/performance-baseline.md`).
+  before anything is logged. See `docs/performance-baseline.md`), `balances/`
+  (RUM-006 — `groupByAsOfDate()`, the one place Dashboard, Net worth and
+  Accounts turn `get_account_balances_as_of_many`'s flat rows into per-date
+  arrays; don't re-duplicate this loop in a fourth call site).
 - `src/components/ui/` — `alert-dialog.tsx` (Sprint 13) alongside the existing
   `dialog.tsx`; use for destructive-action confirms instead of an inline
   confirm-state pattern.

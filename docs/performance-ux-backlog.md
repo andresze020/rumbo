@@ -291,7 +291,7 @@ se movió respecto de la propuesta original.
 | RUM-002 | Reconciliar Net worth, Assets, Liabilities y Accounts total | P0 | L | RUM-010a (para tests) | Causa raíz ya localizada (§3.4 #1) |
 | RUM-005 | Descomponer y optimizar carga del Dashboard | **P0** | M/L | RUM-001, RUM-002 | **Sube de P1** — **11** awaits secuenciales (no 8). Medido: es orquestación, no SQL — sus queries cuestan ~0 salvo las dos de balances |
 | RUM-003 | Formalizar periodos históricos, FX y precisión decimal | P0 | L | RUM-002 | Re-enfocado al fallback del CDN de FX (§3.4 #11) |
-| RUM-006 | Reducir llamadas repetidas de balances (Accounts y Net worth) | **P0** | M/L | RUM-001, RUM-002 | **Re-scope otra vez, y sube de P1.** Son dos problemas: 7 llamadas *y* cada llamada cuesta O(historial del household). `get_account_balances` = 71 % de toda la base ([baseline §3.1](./performance-baseline.md)) |
+| RUM-006 | Reducir llamadas repetidas de balances (Accounts y Net worth) | **✅ Hecho 2026-09-21** (performance; contrato de RUM-002 pendiente) | M/L | RUM-001, RUM-002 | 7+2+2 llamadas → 1+1+1, cada una al costo de una sola fecha. Ver [`performance-ux-execution-status.md`](./performance-ux-execution-status.md) §4 |
 | RUM-007 | Cache, prefetch y continuidad de loading states | P1 | M | RUM-001; coordinar 004–006 | Sin cambio |
 | RUM-004 | Optimizar consultas de Transactions | **P1** | M | RUM-001 | **Re-scope, no descarte.** `search_household_transactions` cuesta 22 ms sobre un mes pero **190 ms y 34.791 buffers sobre all-time**, y el offset no influye ([baseline §5.4.1](./performance-baseline.md)) |
 | RUM-008 | Simplificar arquitectura de información del Dashboard | P2 | M | RUM-002 | Sin cambio |
@@ -948,6 +948,17 @@ modificados, cualquier propuesta de migración y riesgos residuales.
 ---
 
 ### RUM-006 — Reducir llamadas repetidas de balances (Accounts y Net worth)
+
+> ✅ **Performance hecha el 2026-09-21.** Nueva función
+> `get_account_balances_as_of_many` (migración aditiva sin aplicar), y las tres
+> pantallas movidas a ella: Net worth 7→1 llamadas, Dashboard 2→1, Accounts
+> 2→1. Medido contra producción, verificado fila por fila contra ambos
+> overloads existentes. Registro completo en
+> [`performance-ux-execution-status.md`](./performance-ux-execution-status.md)
+> §4. **No cerrado del todo**: el criterio "reconcilia con el contrato de
+> RUM-002" sigue abierto porque RUM-002 no ha corrido — este ticket
+> deliberadamente no tocó el invariante de net worth ni ninguna fórmula de
+> presentación, solo cuántas veces y a qué costo se piden los datos.
 
 **Prioridad:** P1 · **Tipo:** Backend/performance · **Tamaño:** M · **Dependencias:** RUM-001, RUM-002
 
