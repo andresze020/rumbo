@@ -13,6 +13,7 @@ import {
   TrendingDown,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { groupByAsOfDate } from '@/lib/balances/multi-date'
 import { buttonVariants } from '@/components/ui/button'
 import {
   Card,
@@ -74,6 +75,9 @@ type AccountBalance = {
   pending_balance_base_currency: number | string
   projected_balance_base_currency: number | string
 }
+
+// RUM-006: one row per (as_of_date, account) from get_account_balances_as_of_many.
+type MultiDateAccountBalance = AccountBalance & { as_of_date: string }
 
 type DashboardPageProps = {
   searchParams: Promise<{ month?: string }>
@@ -273,10 +277,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const prevMonthEndDate = getMonthEndDate(prevMonthDate.slice(0, 7))
   const today = new Date().toISOString().slice(0, 10)
 
-  const { data: accountBalances, error: accountBalancesError } = await supabase.rpc('get_account_balances', {
-    p_household_id: household.id,
-    p_as_of_date: selectedMonthEndDate,
-  })
+  // RUM-006: this month + the previous month used to be 2 separate calls to
+  // get_account_balances, each re-aggregating the whole ledger from scratch
+  // (it has no lower date bound — RUM-001 measured its cost as flat regardless
+  // of as_of_date). One call to get_account_balances_as_of_many answers both
+  // dates from a single pass. See docs/performance-baseline.md.
+  const { data: multiDateBalances, error: accountBalancesError } = await supabase.rpc(
+    'get_account_balances_as_of_many',
+    { p_household_id: household.id, p_as_of_dates: [selectedMonthEndDate, prevMonthEndDate] }
+  )
+  const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as MultiDateAccountBalance[])
+  const accountBalances = balancesByDate.get(selectedMonthEndDate) ?? []
   const { data: monthlySummaryRows, error: monthlySummaryError } = await supabase.rpc('get_monthly_dashboard_summary', {
     p_household_id: household.id,
     p_month: selectedMonthDate,
@@ -294,10 +305,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     p_household_id: household.id,
     p_month: prevMonthDate,
   })
-  const { data: prevBalanceRows } = await supabase.rpc('get_account_balances', {
-    p_household_id: household.id,
-    p_as_of_date: prevMonthEndDate,
-  })
+  const prevBalanceRows = balancesByDate.get(prevMonthEndDate) ?? []
   const { data: budgetRows, error: budgetError } = await supabase.rpc('get_monthly_budget_details', {
     p_household_id: household.id,
     p_budget_month: selectedMonthDate,
@@ -377,7 +385,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     recentAllocations = (allocationRows ?? []) as RecentAllocation[]
   }
 
-  const balances = (accountBalances ?? []) as AccountBalance[]
+  const balances = accountBalances
   const monthlySummary = ((monthlySummaryRows ?? [])[0] as MonthlyDashboardSummary | undefined) ?? null
   const expenseCategories = (expenseCategoryRows ?? []) as MonthlyExpenseCategory[]
   const categoriesById = new Map(
@@ -441,7 +449,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const projectedNetWorth = projectedAssets + signedProjectedLiabilities
 
   // Previous month-end position → net-worth delta + debt-down insight.
-  const prevBalances = (prevBalanceRows ?? []) as AccountBalance[]
+  const prevBalances = prevBalanceRows
   const prevIncluded = prevBalances.filter((a) => a.include_in_net_worth)
   const prevNetWorth = prevIncluded.reduce((s, a) => s + Number(a.posted_balance_base_currency), 0)
   const netWorthDeltaPct = prevNetWorth !== 0 ? (netWorth - prevNetWorth) / Math.abs(prevNetWorth) : null

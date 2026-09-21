@@ -67,6 +67,7 @@ type AccountBalance = {
   account_class: string
   currency_code: string
   include_in_net_worth: boolean
+  is_archived: boolean
   posted_balance_account_currency: number | string
   pending_balance_account_currency: number | string
   projected_balance_account_currency: number | string
@@ -229,6 +230,7 @@ function emptyBalance(account: AccountMetadata): AccountBalance {
     account_class: account.account_class,
     currency_code: account.currency_code,
     include_in_net_worth: account.include_in_net_worth,
+    is_archived: account.is_archived,
     posted_balance_account_currency: 0,
     pending_balance_account_currency: 0,
     projected_balance_account_currency: 0,
@@ -707,7 +709,6 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     d.setDate(0)
     return d.toISOString().slice(0, 10)
   })()
-
   // Six independent reads, one round trip. They were sequential awaits, so the
   // page paid the network latency six times over before it could render a
   // single row; none of them depends on another's result.
@@ -727,13 +728,20 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       .select('code, name')
       .eq('is_active', true)
       .order('code', { ascending: true }),
+    // This screen's primary balance is deliberately the *unbounded* one-arg
+    // overload, not get_account_balances_as_of_many: that function always
+    // applies `transaction_date <= as_of_date`, which would silently drop
+    // future-dated posted/pending entries from "today"'s balance (the
+    // transaction form explicitly supports booking future-dated entries).
+    // The one-arg overload has no date filter at all and always includes
+    // archived accounts, matching this page's own display.
     supabase.rpc('get_account_balances', {
       p_household_id: household.id,
     }),
-    // The "vs. previous month" figure used to pull every posted entry in the
-    // household's history over the wire and sum it in JS. The same function
-    // that already computes today's balances takes an as-of date and returns
-    // one row per account, so Postgres does the adding.
+    // The previous month-end figure ("vs. previous month") only ever needs a
+    // real as-of snapshot, so the already-bounded two-arg overload (which
+    // excludes archived accounts) is correct here and unaffected by the
+    // future-dated-entry issue above.
     supabase.rpc('get_account_balances', {
       p_household_id: household.id,
       p_as_of_date: prevMonthEnd,

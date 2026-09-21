@@ -23,10 +23,23 @@
 //   node scripts/db-test.mjs                       # every file in supabase/tests/
 //   node scripts/db-test.mjs --household=<uuid>    # pick the household to test
 //   node scripts/db-test.mjs --file=br_040         # only files matching a substring
+//   node scripts/db-test.mjs --user=<uuid>         # run as that member, not postgres
 //
 // Env: SUPABASE_ACCESS_TOKEN (personal access token, sbp_…)
 //      SUPABASE_PROJECT_REF  (optional; defaults to supabase/.temp/project-ref)
 //      SUPABASE_TEST_HOUSEHOLD_ID (optional; same as --household)
+//
+// --user matters for any check that calls an RPC gated by
+// is_household_member() — get_account_balances, get_exchange_rate(_as_of),
+// and any future one shaped like them. The Management API connects as
+// `postgres`, which bypasses table RLS as the owner, but a SECURITY DEFINER
+// function that calls auth.uid() itself does not read that role at all — with
+// no JWT set, auth.uid() is null and the guard raises "Not authorized",
+// regardless of role. Pass --user=<a member of --household's uuid> to run
+// each check as `authenticated` with that user's JWT claims set, which is
+// what the app actually does. Without it, any such check fails outright
+// rather than running under relaxed permissions — there is no silent
+// "postgres sees more" mode to worry about here, only "doesn't run at all".
 //
 // This runs against production. There is no staging copy of this database.
 // ============================================================
@@ -40,14 +53,14 @@ const HOUSEHOLD_PLACEHOLDER = '__HOUSEHOLD_ID__'
 
 // ── CLI plumbing ────────────────────────────────────────────────────────────
 
-const KNOWN_FLAGS = new Set(['household', 'file'])
+const KNOWN_FLAGS = new Set(['household', 'file', 'user'])
 
 function parseArgs(argv) {
   const options = {}
   for (const token of argv) {
     const match = token.match(/^--([a-z-]+)(?:=(.*))?$/)
     if (!match || !KNOWN_FLAGS.has(match[1])) {
-      fail(`Unrecognised argument: ${token}\n  Usage: node scripts/db-test.mjs [--household=<uuid>] [--file=<substring>]`)
+      fail(`Unrecognised argument: ${token}\n  Usage: node scripts/db-test.mjs [--household=<uuid>] [--file=<substring>] [--user=<uuid>]`)
     }
     options[match[1]] = match[2] ?? true
   }
@@ -228,7 +241,22 @@ function testFiles(filter) {
   return files
 }
 
-async function runFile(context, file, householdId) {
+/**
+ * Prefixed onto every chunk when --user is given. `set local` scopes to the
+ * current transaction, and the Management API already runs everything in one
+ * request as a single implicit transaction (see runSql's own comment) — so
+ * this affects exactly the chunk it is prepended to, whether that chunk is a
+ * plain check or a whole `begin; … rollback;` block.
+ */
+function asMember(chunk, userId) {
+  if (!userId) return chunk
+  const claims = JSON.stringify({ sub: userId, role: 'authenticated' })
+  return `set local role authenticated;
+set local request.jwt.claims = '${claims}';
+${chunk}`
+}
+
+async function runFile(context, file, householdId, userId) {
   const raw = readFileSync(`${TESTS_DIR}/${file}`, 'utf8')
 
   if (!raw.includes(HOUSEHOLD_PLACEHOLDER)) {
@@ -241,7 +269,7 @@ async function runFile(context, file, householdId) {
   for (const chunk of splitStatements(sql)) {
     let rows
     try {
-      rows = await runSql(context, chunk, { throwOnError: true })
+      rows = await runSql(context, asMember(chunk, userId), { throwOnError: true })
     } catch (error) {
       // A raised assert inside a `do` block lands here, and so does a genuine
       // SQL error. Both are failures; the message says which.
@@ -264,17 +292,24 @@ async function runFile(context, file, householdId) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2))
+  if (options.user && !UUID_RE.test(options.user)) {
+    fail(`--user must be a uuid, got: ${options.user}`)
+  }
   const context = apiContext()
   const householdId = await resolveHousehold(context, options.household)
 
-  log(`\nLedger invariants — project ${context.ref}, household ${householdId}\n`)
+  const mode = options.user
+    ? `authenticated as ${options.user}`
+    : 'postgres — checks gated by is_household_member() WILL fail outright'
+  log(`\nLedger invariants — project ${context.ref}, household ${householdId}`)
+  log(`  role: ${mode}\n`)
 
   let failed = 0
   let passed = 0
 
   for (const file of testFiles(options.file)) {
     log(file)
-    const results = await runFile(context, file, householdId)
+    const results = await runFile(context, file, householdId, options.user)
 
     if (results.length === 0) {
       log('  (no checks reported a passed column)')

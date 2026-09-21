@@ -164,10 +164,18 @@ The product is household-first. All financial data must belong to a household.
 - notes (BR-044)
 - installment_plans (BR-035)
 
-All migrations are applied. `npx supabase migration list --linked`
-reported 59/59 on 2026-08-21 (58/58 on 2026-08-12, the day Tier-3 and
-Tier-4 were merged and pushed, plus `20260817120000_balance_fx_revaluation.sql`
-confirmed applied since). Nothing is pending.
+`npx supabase migration list --linked` reported 59/59 on 2026-08-21 (58/58 on
+2026-08-12, the day Tier-3 and Tier-4 were merged and pushed, plus
+`20260817120000_balance_fx_revaluation.sql` confirmed applied since).
+`20260921120000_multi_date_account_balances.sql` (RUM-006) applied 2026-09-21
+— `npm run db:status` reports 60/60, nothing pending. It shipped with one real
+bug caught only by applying it: `account_id` is also an OUT-parameter name in
+the function's `returns table`, so a bare (unqualified) reference to it inside
+the query body raised `column reference "account_id" is ambiguous` — invisible
+while the SQL was only validated loose, outside a real PL/pgSQL function. Every
+reference to any OUT column is now qualified with its CTE's alias; see the
+migration's own comment at the `running` CTE. `npm run db:test -- --file=rum_006`
+passes all 5 checks against production.
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
@@ -202,7 +210,10 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
   screen), `perf/` (RUM-001 — query instrumentation, **off unless
   `RUMBO_PERF=1`**; `collector.ts` wraps the Supabase client's `fetch`, so no
   call site needs editing to be measured, and `label.ts` drops filter values
-  before anything is logged. See `docs/performance-baseline.md`).
+  before anything is logged. See `docs/performance-baseline.md`), `balances/`
+  (RUM-006 — `groupByAsOfDate()`, the one place Dashboard, Net worth and
+  Accounts turn `get_account_balances_as_of_many`'s flat rows into per-date
+  arrays; don't re-duplicate this loop in a fourth call site).
 - `src/components/ui/` — `alert-dialog.tsx` (Sprint 13) alongside the existing
   `dialog.tsx`; use for destructive-action confirms instead of an inline
   confirm-state pattern.
@@ -250,10 +261,22 @@ Two suites, no overlap. Full conventions and the stack decision live in
     test. Confirm a new test fails when you break the code it covers.
   - Config: `vitest.config.mts` (`@/…` → `src/…`, node environment, no globals).
   - Seeded with 11 tests over `src/lib/health/score.ts`.
-- **SQL invariants — `npm run db:test`**. The 5 files in `supabase/tests/`,
+- **SQL invariants — `npm run db:test`**. The 6 files in `supabase/tests/`,
   run against the **live** project via the Management API. Run when the change
   touches the ledger, transfers, refunds, installments or goals. Not in CI:
   there is no staging copy of that database.
+  - **Pass `--user=<a member's uuid>` for any check that calls an
+    `is_household_member()`-gated RPC** (`get_account_balances`,
+    `get_exchange_rate(_as_of)`, `get_account_balances_as_of_many`). Without
+    it the runner connects as `postgres`, which bypasses table RLS as the
+    owner but does not satisfy a `SECURITY DEFINER` function's own
+    `auth.uid()` check — that check fails outright, not permissively, with no
+    JWT set. `br_003_006_money_invariants.sql` had been silently unrunnable
+    this way since it was written; found and fixed 2026-09-21 (RUM-006).
+    Every check in the suite ran successfully for the first time that day:
+    31 passed, 1 failed (`BR-006 official balances match posted/pending
+    entries only` — pre-existing, unrelated to RUM-006, not yet
+    investigated).
 
 ## Git rules
 

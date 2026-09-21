@@ -16,6 +16,7 @@ import { AccountsViewToggle } from '@/components/accounts-view-toggle'
 import { getAccountsView, type AccountsView } from '@/lib/accounts-view/server'
 import { groupAccountsByType } from '@/lib/accounts-view/group'
 import { createClient } from '@/lib/supabase/server'
+import { groupByAsOfDate } from '@/lib/balances/multi-date'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import { formatCurrency, formatLabel as formatValue, formatMonthLabel } from '@/lib/format'
@@ -41,6 +42,9 @@ type AccountBalance = {
   pending_balance_base_currency: number | string
   projected_balance_base_currency: number | string
 }
+
+// RUM-006: one row per (as_of_date, account) from get_account_balances_as_of_many.
+type MultiDateAccountBalance = AccountBalance & { as_of_date: string }
 
 type NetWorthSummary = {
   totalAssets: number
@@ -285,23 +289,36 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
     .single()
   if (householdError || !household) redirect('/onboarding')
 
-  const { data: selectedBalances, error: selectedBalancesError } = await supabase.rpc(
-    'get_account_balances',
-    { p_household_id: household.id, p_as_of_date: selectedMonthEndDate }
-  )
+  // RUM-006: the selected month plus 6 evolution months used to be 7 separate
+  // RPC calls, each re-aggregating the household's entire ledger from scratch
+  // (get_account_balances has no lower date bound — RUM-001 measured its cost
+  // as flat regardless of as_of_date, ~192 ms/36 778 buffers per call on this
+  // household). get_account_balances_as_of_many aggregates the ledger once and
+  // answers every requested date from that single pass: the same 7 dates
+  // measured at 207-247 ms/~34 800 buffers TOTAL — the cost of roughly one
+  // single-date call, not seven. See docs/performance-baseline.md.
+  const evolutionMonthEndDates = evolutionMonths.map(getMonthEndDate)
+  const requestedDates = [selectedMonthEndDate, ...evolutionMonthEndDates]
 
-  const evolutionResults = await Promise.all(
-    evolutionMonths.map(async (month) => {
-      const { data, error } = await supabase.rpc('get_account_balances', {
-        p_household_id: household.id,
-        p_as_of_date: getMonthEndDate(month),
-      })
-      const summary = summarizeBalances((data ?? []) as AccountBalance[])
-      return { month, monthEndDate: getMonthEndDate(month), hasError: Boolean(error), ...summary }
-    })
+  const { data: allBalances, error: balancesError } = await supabase.rpc(
+    'get_account_balances_as_of_many',
+    { p_household_id: household.id, p_as_of_dates: requestedDates }
   )
+  const balancesByDate = groupByAsOfDate((allBalances ?? []) as MultiDateAccountBalance[])
+  const selectedBalances = balancesByDate.get(selectedMonthEndDate) ?? []
+  const selectedBalancesError = balancesError
 
-  const balances = (selectedBalances ?? []) as AccountBalance[]
+  // A single call means a single pass/fail for the whole page, which is more
+  // honest than before: with 7 independent network calls, one transient
+  // failure could silently drop one evolution point while the rest rendered
+  // fine. Now either every date has data or the page says so once.
+  const evolutionResults = evolutionMonths.map((month) => {
+    const monthEndDate = getMonthEndDate(month)
+    const summary = summarizeBalances(balancesByDate.get(monthEndDate) ?? [])
+    return { month, monthEndDate, hasError: Boolean(balancesError), ...summary }
+  })
+
+  const balances = selectedBalances
   const summary = summarizeBalances(balances)
   const includedAssets = balances.filter(
     (a) => a.include_in_net_worth && a.account_class === 'asset'

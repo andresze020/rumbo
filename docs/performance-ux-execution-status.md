@@ -8,9 +8,16 @@
 > Este archivo registra *qué pasó*. El backlog registra *qué hay que hacer*. No
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
-> **Creado 2026-09-21.** Último ticket cerrado: **RUM-010a** (stack de tests).
-> **RUM-001** medido contra producción: `get_account_balances` es el **71 % de
-> toda la base de datos** y escala con el historial del household.
+> **Creado 2026-09-21.** Último ticket cerrado: **RUM-006** (balances
+> multi-fecha). **RUM-001** midió contra producción que `get_account_balances`
+> era el **71 % de toda la base de datos** y escalaba con el historial del
+> household; RUM-006 corta las 7+2 llamadas redundantes de Net worth y
+> Dashboard a una sola llamada cada una, con el mismo costo total que ANTES
+> tenía una sola llamada de un solo día. Accounts se intentó llevar a 1
+> llamada también, pero review de Codex encontró que eso excluía
+> silenciosamente transacciones con fecha futura del saldo de "hoy" — se
+> revirtió a sus 2 llamadas originales; ver "Corrección post-review" en la
+> entrada de RUM-006 abajo.
 
 ---
 
@@ -25,7 +32,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | RUM-002 — Reconciliar net worth | P0 | Pendiente | — | — | — |
 | RUM-005 — Carga del Dashboard | P0 | Pendiente | — | — | — |
 | RUM-003 — Periodos, FX y decimales | P0 | Pendiente | — | — | — |
-| RUM-006 — Balances repetidos | P1 | Pendiente | — | — | — |
+| RUM-006 — Balances repetidos | P1 | **Hecho** (contrato de RUM-002 pendiente) | `claude/backlog-rum-10a-tmlee1` | — | 2026-09-21 |
 | RUM-007 — Cache, prefetch y loading | P1 | Pendiente | — | — | — |
 | RUM-004 — Consultas de Transactions | P2 | Pendiente | — | — | — |
 | RUM-008 — IA del Dashboard | P2 | Pendiente | — | — | — |
@@ -97,6 +104,223 @@ quedaban cortos.
 
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
+
+### RUM-006 — Balances multi-fecha (Accounts y Net worth) · 2026-09-21 · rama `claude/backlog-rum-10a-tmlee1` · PR pendiente
+
+**Estado: performance hecha, migración aplicada y verificada contra producción
+con `npm run db:test`; el contrato de RUM-002 sigue pendiente.**
+RUM-006 depende formalmente de RUM-002 (bloqueado por B-4, una decisión de
+producto pendiente). Este ticket **no toca el invariante de net worth**: la
+fórmula (`totalAssets + signedLiabilities`, con `Liabilities` mostradas como
+`max(0, -balance)`) queda exactamente igual, en los mismos tres sitios. Solo
+cambia CUÁNTAS VECES y a qué costo se piden los saldos. El criterio de
+aceptación "reconcilia con el contrato de RUM-002" queda abierto hasta que
+RUM-002 exista — no hay contrato todavía con el que reconciliar.
+
+**Causa raíz confirmada (medida contra producción, no solo leída en código):**
+`get_account_balances(household, as_of_date)` no tiene cota inferior de
+fecha — RUM-001 ya lo había medido — así que cada llamada reagrega el ledger
+completo del household, sin importar la fecha. Net worth pedía 7 snapshots
+(mes elegido + 6 de evolución) con 7 llamadas independientes; Dashboard 2
+(mes actual + anterior); Accounts 2 (hoy con archivadas + mes anterior sin
+archivadas). Cada llamada pagaba el escaneo completo del ledger otra vez.
+
+**La solución no es cachear ni paralelizar mejor: es agregar una vez.** La
+nueva función `get_account_balances_as_of_many(household, dates[],
+include_archived)` calcula un saldo acumulado por cuenta en **un solo pase**
+ordenado por fecha (`sum(...) over (partition by account_id order by
+transaction_date)`), y cada fecha solicitada es una lectura de esa misma
+serie acumulada — no un escaneo nuevo. El costo ya no depende de cuántas
+fechas se piden, depende del tamaño del ledger, una vez.
+
+**Medido contra producción (household de 4.688 transacciones, RLS aplicada,
+`EXPLAIN (ANALYZE, BUFFERS)`, promedio de varias corridas):**
+
+| Sitio | Antes (N llamadas independientes) | Después (1 llamada) |
+|---|---|---|
+| Net worth (7 fechas) | ~1.344 ms / ~257.446 buffers (7 × 192 ms / 36.778) | **207-247 ms / ~34.800 buffers** |
+| Dashboard (2 fechas) | ~384 ms / ~73.556 buffers | **207-211 ms / 34.812 buffers** |
+| Accounts (2 fechas, con archivadas) | ~384-400 ms / ~73.000 buffers | ~~203,5 ms / 35.593 buffers~~ — **revertido, ver corrección post-review abajo** |
+
+En Net worth y Dashboard, el costo de N llamadas se convirtió en,
+aproximadamente, **el costo de una sola llamada de una fecha** — porque
+efectivamente ahora es una sola agregación del ledger, sea cual sea N.
+Accounts se revirtió a 2 llamadas independientes por un bug de corrección
+encontrado en review — ver la sección "Corrección post-review" más abajo.
+
+**Verificación de corrección, no solo de velocidad — cada fila comparada,
+no solo el total:**
+- **Contra el overload de 2 argumentos** (el que usan Net worth y Dashboard,
+  excluye archivadas): 7 fechas y 2 fechas, cuenta por cuenta,
+  `posted`/`pending`/`projected` en moneda de cuenta y en moneda base — **coincide
+  exacto** con `get_account_balances(household, date)`, incluida la revaluación
+  FX por fecha (verificado con una cuenta cuyo saldo en moneda de cuenta es 0
+  pero cuyo histórico sin revaluar no lo es — la revaluación por fecha tenía que
+  estar bien para que diera 0, y dio 0).
+- **Contra el overload de 1 argumento** (el que usa Accounts para "hoy",
+  incluye archivadas): coincide exacto en las 26 cuentas (22 activas + 4
+  archivadas), `posted`/`projected` en ambas monedas.
+- **Cuenta sin ningún movimiento jamás**: da 0 en todo, en ambos overloads y en
+  el nuevo — no aparece como fila faltante.
+- **Bug real encontrado y corregido durante el desarrollo, no en producción:**
+  la primera versión de la query dejaba fuera una cuenta de una fecha si esa
+  fecha era anterior a su primer movimiento — en vez de leer 0, la cuenta
+  simplemente no aparecía en el resultado para esa fecha. En la evolución de
+  Net worth eso se habría visto como "el household tenía menos cuentas hace
+  unos meses", no como "el saldo era 0". Corregido con una fila explícita de
+  saldo cero por cuenta, fechada en el epoch (`0001-01-01`), unida antes que
+  los movimientos reales — así toda fecha solicitada, por temprana que sea,
+  encuentra al menos esa fila. Verificado pidiendo una fecha anterior a
+  cualquier actividad del household: las 22 cuentas activas responden 0, en vez
+  de que solo aparezcan las cuentas realmente vacías.
+- **Segundo bug real, este solo visible al aplicar la migración de verdad:**
+  `account_id` es también el nombre de una columna del `returns table` de la
+  función, así que dentro del cuerpo PL/pgSQL se convierte en variable en
+  ámbito durante toda la función. Una referencia sin calificar a `account_id`
+  en `running`, `matched`/`picked` y el subquery de `rates` es ambigua —
+  `plpgsql.variable_conflict` viene en `error` por defecto, así que Postgres se
+  niega a adivinar y lanza `column reference "account_id" is ambiguous`. Esto
+  era **invisible validando la query como SQL suelto** (que fue toda la
+  validación de la sección anterior): fuera de una función, no hay variable
+  `account_id` con la que competir. Solo apareció al crear la función de
+  verdad. Corregido calificando cada referencia con el alias de su CTE
+  (`ed.account_id`, `r.account_id`, `m.account_id`, `p2.account_id`). Exactamente
+  el riesgo que la sección de riesgos residuales de la versión anterior de esta
+  entrada advertía y no podía descartar sin aplicar.
+
+**Archivos modificados:**
+- `supabase/migrations/20260921120000_multi_date_account_balances.sql` — nuevo.
+  Aditiva: no toca `get_account_balances(uuid, date)` ni `get_account_balances(uuid)`,
+  que siguen sirviendo a `plan`, `debts`, `debt-planner`, `export`,
+  `trend-actions` y la herramienta del asistente de IA sin cambios.
+- `src/lib/balances/multi-date.ts` — nuevo. `groupByAsOfDate()`, la única
+  lógica de agrupar filas por fecha, compartida por los tres sitios en vez de
+  triplicada.
+- `src/lib/balances/multi-date.test.ts` — nuevo. 4 tests.
+- `src/app/dashboard/net-worth/page.tsx` — 7 llamadas → 1. Un solo
+  pass/fail para toda la carga en vez de 7 independientes (antes, un fallo
+  transitorio en una de las 7 podía tumbar silenciosamente un punto de la
+  evolución mientras el resto renderizaba bien).
+- `src/app/dashboard/page.tsx` — 2 llamadas → 1.
+- `src/app/dashboard/accounts/page.tsx` — **revertido a las 2 llamadas
+  originales** (`get_account_balances(household)` sin cota de fecha para
+  "hoy" + `get_account_balances(household, prevMonthEnd)` para "mes
+  anterior") tras el hallazgo de Codex review — ver "Corrección post-review".
+- `supabase/tests/rum_006_multi_date_balances_invariants.sql` — nuevo. 5
+  checks: coincidencia exacta contra ambos overloads existentes (2 fechas y
+  1 fecha), fecha-cero-para-todas-las-cuentas antes de cualquier actividad,
+  `p_include_archived` añade exactamente las cuentas archivadas, y las
+  cláusulas de guarda rechazan un array vacío o con `null`. **Las 5 pasan**
+  contra producción tras aplicar la migración.
+- `scripts/db-test.mjs` — nuevo flag `--user=<uuid>`. El runner conectaba
+  siempre como `postgres`, que salta RLS de tabla por ser el owner pero no
+  satisface el `auth.uid()` que una función `SECURITY DEFINER` comprueba por
+  su cuenta — sin JWT, `auth.uid()` es null y la guarda de
+  `is_household_member()` falla siempre, sin importar el rol. Con `--user` el
+  runner antepone `set local role authenticated; set local request.jwt.claims
+  = '...'` a cada statement. **Hallazgo lateral importante:** esto también
+  desbloqueó `br_003_006_money_invariants.sql`, que llevaba **sin poder
+  correr nunca** desde que se escribió (todos sus checks contra
+  `get_account_balances` fallaban igual). Con el fix, 31 de 32 checks de toda
+  la suite pasan — el único que falla (`BR-006 official balances match
+  posted/pending entries only`) es una discrepancia real y preexistente, no
+  causada por este ticket. Ver `docs/pending-work.md` §7 — no se investigó
+  aquí, es un tema de RUM-002/exactitud financiera, no de performance.
+
+**Antes / después:** antes, cargar Net worth costaba 7 agregaciones completas
+del ledger; Dashboard y Accounts, 2 cada una. Después, Net worth y Dashboard
+hacen exactamente 1 llamada a balances, al costo de una sola agregación — el
+mismo costo que antes tenía pedir el saldo de un único día. Accounts se
+quedó en 2 llamadas, igual que antes de este ticket (ver corrección abajo).
+
+**Corrección post-review (2026-09-21, mismo día, mismo PR):** el review
+automático de Codex sobre el PR marcó P1 que la llamada única de Accounts
+rompía un caso real: `get_account_balances_as_of_many` siempre aplica
+`transaction_date <= as_of_date`, así que al pedir el saldo de "hoy" con esa
+función se excluían silenciosamente las transacciones con fecha futura —
+algo que la app soporta explícitamente (`transaction-form.tsx` tiene texto
+de UI para "sin tasa disponible para fechas futuras, usando la última tasa
+de mercado"). El overload de 1 argumento que Accounts usaba antes de este
+ticket no tiene ninguna cota de fecha — es intencional, no un descuido — y
+por eso incluía esas transacciones futuras en el saldo de "hoy". Verificado
+leyendo el cuerpo SQL del overload de 1 argumento
+(`20260817120000_balance_fx_revaluation.sql`): no hay predicado de fecha en
+ningún join ni where. **Corregido revirtiendo únicamente la llamada de
+Accounts** a las dos llamadas originales — `get_account_balances(household)`
+sin fecha para "hoy" (con archivadas) y `get_account_balances(household,
+prevMonthEnd)` para "mes anterior" (sin archivadas) — exactamente el código
+que existía antes de este ticket. Net worth y Dashboard no se tocan: ambos
+solo usaron siempre el overload de 2 argumentos, ya acotado por fecha, así
+que no tienen este bug y conservan la ganancia de 7→1 y 2→1 llamadas.
+`src/lib/balances/multi-date.ts` (`groupByAsOfDate`) sigue en uso por Net
+worth y Dashboard; Accounts ya no lo importa.
+
+**Comandos ejecutados:** `npm run lint` · `npx tsc --noEmit` · `npm test` (52) ·
+`npm run i18n:check` · `npm run build`
+
+**Migraciones o pasos pendientes:** ninguno. La migración se aplicó el
+2026-09-21 con autorización explícita del usuario
+(`node scripts/db-push.mjs push --apply`; `npm run db:status` → 60/60,
+0 pendientes). La primera versión aplicada falló por el bug de `account_id`
+ambiguo (arriba); se corrigió el archivo de migración y se re-aplicó con
+`create or replace function` (idempotente) antes de fusionar el PR, así que
+lo que está en `main` y lo que corre en producción son el mismo texto —
+verificado con un diff programático entre el archivo y lo último aplicado.
+`npm run db:test -- --user=<uuid> --file=rum_006` → 5/5 `passed = true`.
+
+**Riesgos residuales:**
+- **Cerrado, no residual:** la diferencia entre "SQL suelto validado" y "función
+  PL/pgSQL real" que esta sección advertía sí importó — es exactamente el bug
+  de `account_id` ambiguo de arriba. Ya no es un riesgo teórico: se manifestó,
+  se corrigió, y `npm run db:test` confirma la función real, no solo la query.
+- `p_include_archived` es un parámetro nuevo en la superficie pública de la
+  API. Cualquier otro llamador futuro que use el nombre por defecto (`false`)
+  obtiene el comportamiento del overload de 2 argumentos (excluye archivadas);
+  quien necesite el de 1 argumento debe pasar `true` explícitamente.
+- El criterio de aceptación "Total balance reconcilia... con el contrato de
+  RUM-002" no se puede cerrar todavía — no existe ese contrato. Cuando RUM-002
+  decida el invariante (B-4), puede que summarizeBalances() cambie, pero eso
+  es independiente de esta función: ella solo trae los datos, no decide cómo
+  sumarlos.
+- Los otros cinco sitios que llaman `get_account_balances` de una sola fecha
+  (`plan`, `debts`, `debt-planner`, `export/download`, la herramienta de IA) y
+  el patrón idéntico de N+1-por-mes en `trend-actions.ts` (un `get_account_balances`
+  por cada mes del rango de Trends) **no se tocaron**. `trend-actions.ts` es
+  exactamente el mismo problema que este ticket arregla y podría migrarse a la
+  misma función nueva sin riesgo adicional — queda como oportunidad explícita,
+  no como parte de este cierre, para no ampliar el diff de un ticket que ya
+  toca tres pantallas.
+
+**Checklist manual de revisión:**
+1. ~~Aplicar la migración~~ — hecho. `npm run db:test -- --user=<uuid>
+   --file=rum_006` → 5 checks, todos `passed = true` (confirmado 2026-09-21).
+2. Abrir `/dashboard/net-worth`, cambiar de mes varias veces → los totales y
+   la evolución de 6 meses se ven idénticos a antes del cambio.
+3. Abrir `/dashboard` → el mes actual y la comparación con el mes anterior
+   (delta de net worth, insight de "deuda bajando") se ven idénticos.
+4. Abrir `/dashboard/accounts`, alternar activas/archivadas → los saldos, el
+   total y "vs. mes anterior" se ven idénticos; el orden manual (`@dnd-kit`)
+   se conserva.
+5. Con una cuenta en COP o CAD: confirmar que el saldo en moneda base no
+   cambió respecto a antes del cambio.
+6. `RUMBO_PERF=1 npm run dev`, abrir Net worth y Dashboard → cada una debería
+   mostrar **una sola** entrada `rpc:get_account_balances_as_of_many` en el
+   log `[rumbo-perf]`, no varias. Accounts muestra 2 entradas
+   `rpc:get_account_balances` (una sin fecha, una con `prevMonthEnd`) — es
+   el comportamiento correcto tras la corrección post-review, no una
+   regresión.
+
+**¿Lista para PR?:** sí. Migración aplicada, función corregida y re-aplicada,
+gate de base de datos en verde (5/5), gate de app en verde.
+
+**Correcciones al backlog:** ninguna hipótesis de §3.4 se tocó. §6.1 y la
+entrada de RUM-006 en el tablero pasan a "Hecho (contrato de RUM-002
+pendiente)". Nuevo hallazgo, fuera del alcance de RUM-006, registrado en
+`docs/pending-work.md` §7: `BR-006 official balances match posted/pending
+entries only` falla contra datos reales — la primera vez que ese check pudo
+correr nunca.
+
+---
 
 ### RUM-001 — Instrumentar baseline · 2026-09-21 · rama `claude/backlog-rum-10a-tmlee1` · PR pendiente
 
@@ -326,6 +550,8 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-21 | **RUM-006: migración aplicada, un segundo bug real encontrado y corregido, `npm run db:test` desbloqueado para toda la suite.** A petición del usuario se aplicó `20260921120000_multi_date_account_balances.sql` (`node scripts/db-push.mjs push --apply`, 60/60). La primera aplicación falló: `account_id` es también una columna del `returns table`, así que dentro de la función es una variable en ámbito, y una referencia sin calificar es ambigua para Postgres (`plpgsql.variable_conflict` es `error` por defecto) — invisible mientras la query solo se validó suelta, fuera de una función real. Corregido calificando cada referencia con su alias de CTE; re-aplicado con `create or replace function` antes de fusionar. Nuevo flag `--user=<uuid>` en `scripts/db-test.mjs`: el runner conectaba como `postgres`, que salta RLS de tabla pero no satisface el `auth.uid()` que una función `SECURITY DEFINER` comprueba por su cuenta, así que toda función gateada por `is_household_member()` fallaba siempre. Con el fix, las 5 pruebas de RUM-006 pasan, y de paso corrió por primera vez `br_003_006_money_invariants.sql` completo: 8 de 9 pasan, y el que falla (`BR-006 official balances match posted/pending entries only`) es un hallazgo real y preexistente, sin relación con este ticket — registrado en `docs/pending-work.md` §7, sin investigar aquí. |
+| 2026-09-21 | **RUM-006 cerrado (performance; el contrato de RUM-002 queda pendiente).** Nueva función `get_account_balances_as_of_many(household, dates[], include_archived)`: agrega el ledger una vez y responde N fechas desde esa misma serie acumulada, en vez de N agregaciones completas independientes. Net worth pasa de 7 llamadas a 1 (~1.344 ms/~257k buffers → 207-247 ms/~34,8k buffers medido contra producción), Dashboard de 2 a 1, Accounts de 2 a 1 unificando sus dos overloads distintos con un parámetro `include_archived`. Verificado fila por fila contra ambos overloads existentes, que quedan intactos para sus otros 5 llamadores. Un bug real encontrado y corregido en desarrollo: sin una fila de saldo cero explícita por cuenta, una fecha anterior al primer movimiento de una cuenta la dejaba fuera del resultado en vez de mostrar 0. Migración aditiva sin aplicar — queda para que el usuario la aplique y corra `npm run db:test -- --file=rum_006`. |
 | 2026-09-21 | **Revisión de Codex en PR #69: dos hallazgos, ambos correctos.** (P1) `reportPerfAfterResponse` resolvía el colector dentro del callback de `after()`, donde `cache()` ya no memoiza: habría construido uno vacío y **no habría emitido ninguna línea**. Ahora se captura en el registro; test de regresión en `collector.after.test.ts`, que mockea `cache` para reproducir la transición render→after. (P2) El probe de `search_household_transactions` medía solo un mes (15 filas), así que el "RUM-004 refutado" no estaba respaldado: sobre all-time son 190 ms y 34.791 buffers. RUM-004 vuelve a P1, re-scoped. |
 | 2026-09-21 | **RUM-001 medido contra producción.** `get_account_balances` = **71 % de toda la base** (2.101 s de 2.976 s en 112 días), 36.778 buffers para 22 filas, y escala con el historial del household, no con la fecha de corte. Todo lo demás está en el ruido: `search_household_transactions` 12 ms. Reescribe RUM-006, reenfoca RUM-005 a orquestación, permite descartar RUM-004 y destapa `get_card_cycle_summaries` (52.846 buffers/llamada) sin ticket. |
 | 2026-09-21 | **RUM-001: instrumentación entregada, medición pendiente.** Nuevo módulo `src/lib/perf/` (switch `RUMBO_PERF=1`), `npm run perf:census` (capa A, sin credenciales) y `npm run perf:baseline` (capa C, solo lectura). Informe en `docs/performance-baseline.md`. Corregidos dos conteos de §3.4 #7 y §3.2. Hallazgos nuevos: `auth.getUser()` ×4 y `profiles` ×2 por navegación. Nuevo bloqueo B-5. |
