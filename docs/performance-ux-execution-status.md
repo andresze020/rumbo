@@ -90,8 +90,8 @@ quedaban cortos.
 | Pantalla | Round-trips | De ellos secuenciales | Después |
 |---|---:|---:|---:|
 | Layout (lo paga toda navegación) | 6 | 4 | — |
-| Dashboard (ruta) | 18 | 11 (`page.tsx:254-305`) | **RUM-005 (2026-09-21):** 6 etapas secuenciales (identidad: user→profile→household, encadenadas de verdad; el batch de 13 lecturas independientes, antes 7 secuenciales + 5 en paralelo + `netWorthTrend` al final; `recentEntries`/`allocations`, dependen de `recentTxRows`; `homeChecklist`, depende del batch). Ver entrada RUM-005 en §4 |
-| Dashboard (ruta + layout) | **~24** | **15** | ~9, misma razón |
+| Dashboard (ruta) | 18 (bajó a 17 cuando RUM-006 fusionó 2 llamadas de balance en 1) | 11 (bajó a 10 por la misma razón) | **RUM-005 (2026-09-21): 17 / 3** — `npm run perf:census --path=dashboard/page.tsx`, medido antes y después contra este mismo archivo. El total **no baja**: `Promise.all` cambia el orden de los requests, no la cantidad — sigue siendo el mismo número de round-trips. Lo que baja de verdad es cuántos son bloqueantes: de 10 a 3 (la cadena de identidad `auth.getUser()` → `profiles` → `households`, la única que encadena de verdad). Ver entrada RUM-005 en §4 — corregido tras un hallazgo P2 de Codex en PR #71 (una versión anterior de esta fila decía "~9" confundiendo "etapas secuenciales" con "round-trips totales") |
+| Dashboard (ruta + layout) | 24 → 23 | 15 → 14 | **23 / 7** tras RUM-005 — mismo motivo que arriba, más el layout (6 round-trips, 4 secuenciales, sin tocar) |
 | Net worth | 5 en código → **7× `get_account_balances` en ejecución** | 5 | — |
 | Transactions | 12 | 5 | — |
 | Accounts | 11 | 5 | — |
@@ -143,6 +143,16 @@ secuencial, con el motivo comentado en el código:
 - La cadena de identidad al principio (`auth.getUser()` → `profiles` →
   `households`) es secuencial por necesidad real: cada paso necesita el id que
   devuelve el anterior. No se tocó — no es el hallazgo de este ticket.
+
+**Importante, para no confundir "round-trips" con "etapas bloqueantes":** este
+`Promise.all` **no reduce el número de requests** que `page.tsx` hace —
+`npm run perf:census --path=dashboard/page.tsx` mide **17 antes y 17
+después**, sin cambio. Lo que cambia es que 7 de esos 17 dejan de esperarse
+uno a uno y se disparan junto con los otros 10, así que el total de **etapas
+bloqueantes** baja de 10 a 3. Menos tiempo de espera, no menos tráfico. La
+única reducción real de *cantidad* de llamadas está en el segundo hallazgo de
+abajo (`trend-actions.ts`), que este censo estático no ve porque solo escanea
+archivos `page.tsx`, no los helpers que importan.
 
 **Segundo hallazgo, no listado en el conteo original: un N+1 de balances
 escondido dentro de `trend-actions.ts`.** `getDashboardTrend()` para métricas
