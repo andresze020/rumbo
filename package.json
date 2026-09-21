@@ -10,6 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "i18n:check": "node scripts/check-i18n-coverage.mjs",
+    "perf:census": "node scripts/perf-census.mjs",
+    "perf:baseline": "node scripts/perf-baseline.mjs",
     "db:status": "node scripts/db-push.mjs status",
     "db:push": "node scripts/db-push.mjs push",
     "db:test": "node scripts/db-test.mjs"

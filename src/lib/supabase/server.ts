@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+import { perfClientOptions } from "@/lib/perf/collector";
+
 export async function createClient() {
   const cookieStore = await cookies();
 
@@ -23,6 +25,9 @@ export async function createClient() {
           }
         },
       },
+      // RUM-001: an empty object unless RUMBO_PERF=1, so the client is
+      // unchanged in normal runs. See src/lib/perf/collector.ts.
+      ...perfClientOptions(),
     }
   );
 }
