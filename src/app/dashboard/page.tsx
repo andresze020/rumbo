@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { groupByAsOfDate } from '@/lib/balances/multi-date'
+import { computeValuation, selectNetWorthAccounts } from '@/lib/net-worth/valuation'
 import { buttonVariants } from '@/components/ui/button'
 import {
   Card,
@@ -145,10 +146,6 @@ function parseDashboardMonth(month: string | undefined) {
   return month
 }
 
-export function getDisplayedLiabilityBalance(value: number | string) {
-  return Math.max(0, -Number(value))
-}
-
 function getMonthEndDate(month: string) {
   const [year, monthNumber] = month.split('-').map(Number)
   return new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10)
@@ -281,30 +278,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     Number(monthlySummary?.income_transaction_count ?? 0) > 0 ||
     Number(monthlySummary?.expense_transaction_count ?? 0) > 0
 
-  const includedBalances = balances.filter((a) => a.include_in_net_worth)
-  const sumBase = (rows: AccountBalance[], field: keyof AccountBalance) =>
-    rows.reduce((s, a) => s + Number(a[field]), 0)
-  const assetRows = includedBalances.filter((a) => a.account_class === 'asset')
-  const liabilityRows = includedBalances.filter((a) => a.account_class === 'liability')
-  const totalAssets = sumBase(assetRows, 'posted_balance_base_currency')
-  const signedLiabilities = sumBase(liabilityRows, 'posted_balance_base_currency')
-  const totalLiabilities = liabilityRows.reduce(
-    (s, a) => s + getDisplayedLiabilityBalance(a.posted_balance_base_currency),
-    0
-  )
-  const projectedAssets = sumBase(assetRows, 'projected_balance_base_currency')
-  const signedProjectedLiabilities = sumBase(liabilityRows, 'projected_balance_base_currency')
-  const netWorth = totalAssets + signedLiabilities
-  const projectedNetWorth = projectedAssets + signedProjectedLiabilities
+  const valuation = computeValuation(selectNetWorthAccounts(balances))
+  const { totalAssets, totalLiabilities, netWorth, projectedNetWorth } = valuation
 
   // Previous month-end position → net-worth delta + debt-down insight.
-  const prevBalances = prevBalanceRows
-  const prevIncluded = prevBalances.filter((a) => a.include_in_net_worth)
-  const prevNetWorth = prevIncluded.reduce((s, a) => s + Number(a.posted_balance_base_currency), 0)
+  const prevValuation = computeValuation(selectNetWorthAccounts(prevBalanceRows))
+  const { netWorth: prevNetWorth, totalLiabilities: prevLiabilities } = prevValuation
   const netWorthDeltaPct = prevNetWorth !== 0 ? (netWorth - prevNetWorth) / Math.abs(prevNetWorth) : null
-  const prevLiabilities = prevIncluded
-    .filter((a) => a.account_class === 'liability')
-    .reduce((s, a) => s + getDisplayedLiabilityBalance(a.posted_balance_base_currency), 0)
 
   const incomeTransactionCount = Number(monthlySummary?.income_transaction_count ?? 0)
   const expenseTransactionCount = Number(monthlySummary?.expense_transaction_count ?? 0)

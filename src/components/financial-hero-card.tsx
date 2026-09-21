@@ -173,7 +173,10 @@ export function FinancialHeroCard({
           </p>
         </div>
         <div className="text-right">
-          <p className="mb-1 text-[10.5px] text-muted-foreground">{labels.liabilities}</p>
+          <p className="mb-1 flex items-center justify-end gap-1 text-[10.5px] text-muted-foreground">
+            {labels.liabilities}
+            <InfoTooltip term="liabilities" label={labels.liabilities} />
+          </p>
           <p className="whitespace-nowrap text-[17px] font-semibold tabular-nums text-rose-600 dark:text-rose-400">
             {formatCurrency(liabilities, currency)}
           </p>

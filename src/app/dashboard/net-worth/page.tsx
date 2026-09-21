@@ -17,6 +17,11 @@ import { getAccountsView, type AccountsView } from '@/lib/accounts-view/server'
 import { groupAccountsByType } from '@/lib/accounts-view/group'
 import { createClient } from '@/lib/supabase/server'
 import { groupByAsOfDate } from '@/lib/balances/multi-date'
+import {
+  computeValuation,
+  selectNetWorthAccounts,
+  type ValuationSummary,
+} from '@/lib/net-worth/valuation'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import { formatCurrency, formatLabel as formatValue, formatMonthLabel } from '@/lib/format'
@@ -46,16 +51,7 @@ type AccountBalance = {
 // RUM-006: one row per (as_of_date, account) from get_account_balances_as_of_many.
 type MultiDateAccountBalance = AccountBalance & { as_of_date: string }
 
-type NetWorthSummary = {
-  totalAssets: number
-  totalLiabilities: number
-  netWorth: number
-  projectedAssets: number
-  projectedLiabilities: number
-  projectedNetWorth: number
-}
-
-type EvolutionPoint = NetWorthSummary & {
+type EvolutionPoint = ValuationSummary & {
   month: string
   monthEndDate: string
   hasError: boolean
@@ -90,41 +86,6 @@ function getPreviousMonths(selectedMonth: string, count: number) {
     months.push(`${monthYear}-${month}`)
   }
   return months
-}
-
-function getDisplayedLiabilityBalance(value: number | string) {
-  return Math.max(0, -Number(value))
-}
-
-function summarizeBalances(balances: AccountBalance[]): NetWorthSummary {
-  const included = balances.filter((a) => a.include_in_net_worth)
-  const totalAssets = included
-    .filter((a) => a.account_class === 'asset')
-    .reduce((sum, a) => sum + Number(a.posted_balance_base_currency), 0)
-  const totalLiabilities = included
-    .filter((a) => a.account_class === 'liability')
-    .reduce((sum, a) => sum + getDisplayedLiabilityBalance(a.posted_balance_base_currency), 0)
-  const signedLiabilities = included
-    .filter((a) => a.account_class === 'liability')
-    .reduce((sum, a) => sum + Number(a.posted_balance_base_currency), 0)
-  const projectedAssets = included
-    .filter((a) => a.account_class === 'asset')
-    .reduce((sum, a) => sum + Number(a.projected_balance_base_currency), 0)
-  const projectedLiabilities = included
-    .filter((a) => a.account_class === 'liability')
-    .reduce((sum, a) => sum + getDisplayedLiabilityBalance(a.projected_balance_base_currency), 0)
-  const signedProjectedLiabilities = included
-    .filter((a) => a.account_class === 'liability')
-    .reduce((sum, a) => sum + Number(a.projected_balance_base_currency), 0)
-
-  return {
-    totalAssets,
-    totalLiabilities,
-    netWorth: totalAssets + signedLiabilities,
-    projectedAssets,
-    projectedLiabilities,
-    projectedNetWorth: projectedAssets + signedProjectedLiabilities,
-  }
 }
 
 function AccountRow({
@@ -314,12 +275,14 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
   // fine. Now either every date has data or the page says so once.
   const evolutionResults = evolutionMonths.map((month) => {
     const monthEndDate = getMonthEndDate(month)
-    const summary = summarizeBalances(balancesByDate.get(monthEndDate) ?? [])
+    const summary = computeValuation(
+      selectNetWorthAccounts(balancesByDate.get(monthEndDate) ?? [])
+    )
     return { month, monthEndDate, hasError: Boolean(balancesError), ...summary }
   })
 
   const balances = selectedBalances
-  const summary = summarizeBalances(balances)
+  const summary = computeValuation(selectNetWorthAccounts(balances))
   const includedAssets = balances.filter(
     (a) => a.include_in_net_worth && a.account_class === 'asset'
   )
@@ -394,8 +357,9 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
         <Callout variant="error">Could not load every monthly evolution point.</Callout>
       ) : null}
       <Callout variant="info">
-        Net worth uses each ledger entry&apos;s stored historical exchange rate.
-        It does not revalue foreign-currency balances with month-end market rates yet.
+        Account balances are revalued at the exchange rate in effect on the
+        selected date, falling back to each entry&apos;s own historical rate only
+        when your household has no rate on file for that currency pair.
       </Callout>
 
       {/* ── Net-worth hero ─────────────────────────────────────────────── */}

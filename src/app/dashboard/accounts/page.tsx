@@ -22,6 +22,7 @@ import { FormDialog } from '@/components/form-dialog'
 import { AccountsViewToggle } from '@/components/accounts-view-toggle'
 import { getAccountsView } from '@/lib/accounts-view/server'
 import { createClient } from '@/lib/supabase/server'
+import { getDisplayedLiabilityBalance } from '@/lib/net-worth/valuation'
 import { formatCurrency, formatIsoDate, formatLabel } from '@/lib/format'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -216,10 +217,6 @@ function accountsPath({
   const queryString = params.toString()
 
   return `/dashboard/accounts${queryString ? `?${queryString}` : ''}`
-}
-
-function liabilityDisplay(value: number | string) {
-  return Math.abs(Number(value))
 }
 
 function emptyBalance(account: AccountMetadata): AccountBalance {
@@ -907,7 +904,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     const { balance, metadata } = row
     const isLiability = metadata.account_class === 'liability'
     const displayAmount = (value: number | string) =>
-      isLiability ? liabilityDisplay(value) : Number(value)
+      isLiability ? getDisplayedLiabilityBalance(value) : Number(value)
     // Summary balance + group subtotals show the raw signed value: liabilities
     // are stored negative when owed, so they render as e.g. −US$10.00 (rose chip).
     const signedPosted = Number(balance.posted_balance_account_currency)
@@ -966,6 +963,14 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
         .map((row) => row.metadata.currency_code)
     ),
   ].sort()
+  // RUM-002: "Total balance" is deliberately NOT computeValuation() over
+  // selectNetWorthAccounts() — it answers a different question than net
+  // worth does. This sums every account this screen is currently showing
+  // (the archived-toggle population), include_in_net_worth or not, because
+  // it's "what does this screen show", not "what is my net worth". Those
+  // are legitimately different numbers for a household with any account
+  // excluded from net worth, and the UI already labels them differently
+  // ("Total balance" here vs "Net worth" on /dashboard and /dashboard/net-worth).
   const totalBalance = accountRowVMs.reduce((sum, row) => sum + row.baseAmount, 0)
   const prevMonthDelta =
     prevMonthBalance !== null && prevMonthBalance !== 0
@@ -1168,7 +1173,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
             accountCurrency={selectedAdjustBalanceRow.metadata.currency_code}
             currentBalanceDisplay={
               selectedAdjustBalanceRow.metadata.account_class === 'liability'
-                ? liabilityDisplay(selectedAdjustBalanceRow.balance.posted_balance_account_currency)
+                ? getDisplayedLiabilityBalance(selectedAdjustBalanceRow.balance.posted_balance_account_currency)
                 : Number(selectedAdjustBalanceRow.balance.posted_balance_account_currency)
             }
             defaultDate={todayIsoDate()}
