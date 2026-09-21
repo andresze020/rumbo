@@ -949,16 +949,20 @@ modificados, cualquier propuesta de migración y riesgos residuales.
 
 ### RUM-006 — Reducir llamadas repetidas de balances (Accounts y Net worth)
 
-> ✅ **Performance hecha el 2026-09-21.** Nueva función
-> `get_account_balances_as_of_many` (migración aditiva sin aplicar), y las tres
-> pantallas movidas a ella: Net worth 7→1 llamadas, Dashboard 2→1, Accounts
-> 2→1. Medido contra producción, verificado fila por fila contra ambos
-> overloads existentes. Registro completo en
+> ✅ **Performance hecha y migración aplicada el 2026-09-21.** Nueva función
+> `get_account_balances_as_of_many`, y las tres pantallas movidas a ella: Net
+> worth 7→1 llamadas, Dashboard 2→1, Accounts 2→1. Medido contra producción,
+> verificado fila por fila contra ambos overloads existentes —
+> `npm run db:test -- --file=rum_006` pasa 5/5 contra la función real, ya
+> aplicada. Registro completo en
 > [`performance-ux-execution-status.md`](./performance-ux-execution-status.md)
 > §4. **No cerrado del todo**: el criterio "reconcilia con el contrato de
 > RUM-002" sigue abierto porque RUM-002 no ha corrido — este ticket
 > deliberadamente no tocó el invariante de net worth ni ninguna fórmula de
-> presentación, solo cuántas veces y a qué costo se piden los datos.
+> presentación, solo cuántas veces y a qué costo se piden los datos. De paso,
+> desbloqueó `npm run db:test` para toda la suite (nuevo flag `--user`), lo
+> que reveló un hallazgo preexistente y no relacionado —
+> `docs/pending-work.md` §7.
 
 **Prioridad:** P1 · **Tipo:** Backend/performance · **Tamaño:** M · **Dependencias:** RUM-001, RUM-002
 

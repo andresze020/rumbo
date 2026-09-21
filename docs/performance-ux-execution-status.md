@@ -103,7 +103,8 @@ quedaban cortos.
 
 ### RUM-006 — Balances multi-fecha (Accounts y Net worth) · 2026-09-21 · rama `claude/backlog-rum-10a-tmlee1` · PR pendiente
 
-**Estado: performance hecha y verificada; el contrato de RUM-002 sigue pendiente.**
+**Estado: performance hecha, migración aplicada y verificada contra producción
+con `npm run db:test`; el contrato de RUM-002 sigue pendiente.**
 RUM-006 depende formalmente de RUM-002 (bloqueado por B-4, una decisión de
 producto pendiente). Este ticket **no toca el invariante de net worth**: la
 fórmula (`totalAssets + signedLiabilities`, con `Liabilities` mostradas como
@@ -166,6 +167,20 @@ no solo el total:**
   encuentra al menos esa fila. Verificado pidiendo una fecha anterior a
   cualquier actividad del household: las 22 cuentas activas responden 0, en vez
   de que solo aparezcan las cuentas realmente vacías.
+- **Segundo bug real, este solo visible al aplicar la migración de verdad:**
+  `account_id` es también el nombre de una columna del `returns table` de la
+  función, así que dentro del cuerpo PL/pgSQL se convierte en variable en
+  ámbito durante toda la función. Una referencia sin calificar a `account_id`
+  en `running`, `matched`/`picked` y el subquery de `rates` es ambigua —
+  `plpgsql.variable_conflict` viene en `error` por defecto, así que Postgres se
+  niega a adivinar y lanza `column reference "account_id" is ambiguous`. Esto
+  era **invisible validando la query como SQL suelto** (que fue toda la
+  validación de la sección anterior): fuera de una función, no hay variable
+  `account_id` con la que competir. Solo apareció al crear la función de
+  verdad. Corregido calificando cada referencia con el alias de su CTE
+  (`ed.account_id`, `r.account_id`, `m.account_id`, `p2.account_id`). Exactamente
+  el riesgo que la sección de riesgos residuales de la versión anterior de esta
+  entrada advertía y no podía descartar sin aplicar.
 
 **Archivos modificados:**
 - `supabase/migrations/20260921120000_multi_date_account_balances.sql` — nuevo.
@@ -189,7 +204,22 @@ no solo el total:**
   checks: coincidencia exacta contra ambos overloads existentes (2 fechas y
   1 fecha), fecha-cero-para-todas-las-cuentas antes de cualquier actividad,
   `p_include_archived` añade exactamente las cuentas archivadas, y las
-  cláusulas de guarda rechazan un array vacío o con `null`.
+  cláusulas de guarda rechazan un array vacío o con `null`. **Las 5 pasan**
+  contra producción tras aplicar la migración.
+- `scripts/db-test.mjs` — nuevo flag `--user=<uuid>`. El runner conectaba
+  siempre como `postgres`, que salta RLS de tabla por ser el owner pero no
+  satisface el `auth.uid()` que una función `SECURITY DEFINER` comprueba por
+  su cuenta — sin JWT, `auth.uid()` es null y la guarda de
+  `is_household_member()` falla siempre, sin importar el rol. Con `--user` el
+  runner antepone `set local role authenticated; set local request.jwt.claims
+  = '...'` a cada statement. **Hallazgo lateral importante:** esto también
+  desbloqueó `br_003_006_money_invariants.sql`, que llevaba **sin poder
+  correr nunca** desde que se escribió (todos sus checks contra
+  `get_account_balances` fallaban igual). Con el fix, 31 de 32 checks de toda
+  la suite pasan — el único que falla (`BR-006 official balances match
+  posted/pending entries only`) es una discrepancia real y preexistente, no
+  causada por este ticket. Ver `docs/pending-work.md` §7 — no se investigó
+  aquí, es un tema de RUM-002/exactitud financiera, no de performance.
 
 **Antes / después:** antes, cargar Net worth costaba 7 agregaciones completas
 del ledger; Dashboard y Accounts, 2 cada una. Después, cada pantalla hace
@@ -199,25 +229,21 @@ costo que antes tenía pedir el saldo de un único día.
 **Comandos ejecutados:** `npm run lint` · `npx tsc --noEmit` · `npm test` (52) ·
 `npm run i18n:check` · `npm run build`
 
-**Migraciones o pasos pendientes:** una migración nueva, aditiva, sin aplicar
-contra el proyecto remoto (ver §"Comandos manuales de Supabase" del cierre).
-El SQL fue validado exhaustivamente como consultas sueltas de solo lectura
-contra producción (mismo mecanismo que RUM-001) — pero la función en sí, tal
-como queda en el archivo de migración, **no se ha ejecutado nunca** contra
-Postgres, porque crearla es DDL y este ticket no tiene permiso para aplicar
-migraciones. `supabase/tests/rum_006_multi_date_balances_invariants.sql`
-tampoco se ha corrido — necesita la función ya aplicada. Ambos quedan para que
-el usuario los ejecute tras aplicar la migración.
+**Migraciones o pasos pendientes:** ninguno. La migración se aplicó el
+2026-09-21 con autorización explícita del usuario
+(`node scripts/db-push.mjs push --apply`; `npm run db:status` → 60/60,
+0 pendientes). La primera versión aplicada falló por el bug de `account_id`
+ambiguo (arriba); se corrigió el archivo de migración y se re-aplicó con
+`create or replace function` (idempotente) antes de fusionar el PR, así que
+lo que está en `main` y lo que corre en producción son el mismo texto —
+verificado con un diff programático entre el archivo y lo último aplicado.
+`npm run db:test -- --user=<uuid> --file=rum_006` → 5/5 `passed = true`.
 
 **Riesgos residuales:**
-- La función en el archivo de migración es sintácticamente idéntica a la
-  consulta validada, pero no es *literalmente* la misma ejecución: la validé
-  como SQL suelto, no como el cuerpo de una función PL/pgSQL creada de verdad.
-  El patrón (CTEs `materialized`, `window`, `lateral`) es el mismo que ya usan
-  `get_account_balances` y `get_exchange_rate_as_of` en este esquema, así que
-  el riesgo de una diferencia de comportamiento entre "SQL suelto" y "dentro de
-  una función" es bajo, pero no es cero hasta que alguien la aplique y corra
-  `npm run db:test -- --file=rum_006`.
+- **Cerrado, no residual:** la diferencia entre "SQL suelto validado" y "función
+  PL/pgSQL real" que esta sección advertía sí importó — es exactamente el bug
+  de `account_id` ambiguo de arriba. Ya no es un riesgo teórico: se manifestó,
+  se corrigió, y `npm run db:test` confirma la función real, no solo la query.
 - `p_include_archived` es un parámetro nuevo en la superficie pública de la
   API. Cualquier otro llamador futuro que use el nombre por defecto (`false`)
   obtiene el comportamiento del overload de 2 argumentos (excluye archivadas);
@@ -237,8 +263,8 @@ el usuario los ejecute tras aplicar la migración.
   toca tres pantallas.
 
 **Checklist manual de revisión:**
-1. Aplicar la migración (comando abajo), luego
-   `npm run db:test -- --file=rum_006` → 5 checks, todos `passed = true`.
+1. ~~Aplicar la migración~~ — hecho. `npm run db:test -- --user=<uuid>
+   --file=rum_006` → 5 checks, todos `passed = true` (confirmado 2026-09-21).
 2. Abrir `/dashboard/net-worth`, cambiar de mes varias veces → los totales y
    la evolución de 6 meses se ven idénticos a antes del cambio.
 3. Abrir `/dashboard` → el mes actual y la comparación con el mes anterior
@@ -252,13 +278,15 @@ el usuario los ejecute tras aplicar la migración.
    mostrar **una sola** entrada `rpc:get_account_balances_as_of_many` en el
    log `[rumbo-perf]`, no varias.
 
-**¿Lista para PR?:** sí, con la migración sin aplicar (pasos manuales abajo).
-El código de la app puede revisarse y mergearse; el gate de base de datos
-(`npm run db:test`) queda pendiente de que el usuario aplique la migración.
+**¿Lista para PR?:** sí. Migración aplicada, función corregida y re-aplicada,
+gate de base de datos en verde (5/5), gate de app en verde.
 
 **Correcciones al backlog:** ninguna hipótesis de §3.4 se tocó. §6.1 y la
 entrada de RUM-006 en el tablero pasan a "Hecho (contrato de RUM-002
-pendiente)".
+pendiente)". Nuevo hallazgo, fuera del alcance de RUM-006, registrado en
+`docs/pending-work.md` §7: `BR-006 official balances match posted/pending
+entries only` falla contra datos reales — la primera vez que ese check pudo
+correr nunca.
 
 ---
 
@@ -490,6 +518,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-21 | **RUM-006: migración aplicada, un segundo bug real encontrado y corregido, `npm run db:test` desbloqueado para toda la suite.** A petición del usuario se aplicó `20260921120000_multi_date_account_balances.sql` (`node scripts/db-push.mjs push --apply`, 60/60). La primera aplicación falló: `account_id` es también una columna del `returns table`, así que dentro de la función es una variable en ámbito, y una referencia sin calificar es ambigua para Postgres (`plpgsql.variable_conflict` es `error` por defecto) — invisible mientras la query solo se validó suelta, fuera de una función real. Corregido calificando cada referencia con su alias de CTE; re-aplicado con `create or replace function` antes de fusionar. Nuevo flag `--user=<uuid>` en `scripts/db-test.mjs`: el runner conectaba como `postgres`, que salta RLS de tabla pero no satisface el `auth.uid()` que una función `SECURITY DEFINER` comprueba por su cuenta, así que toda función gateada por `is_household_member()` fallaba siempre. Con el fix, las 5 pruebas de RUM-006 pasan, y de paso corrió por primera vez `br_003_006_money_invariants.sql` completo: 8 de 9 pasan, y el que falla (`BR-006 official balances match posted/pending entries only`) es un hallazgo real y preexistente, sin relación con este ticket — registrado en `docs/pending-work.md` §7, sin investigar aquí. |
 | 2026-09-21 | **RUM-006 cerrado (performance; el contrato de RUM-002 queda pendiente).** Nueva función `get_account_balances_as_of_many(household, dates[], include_archived)`: agrega el ledger una vez y responde N fechas desde esa misma serie acumulada, en vez de N agregaciones completas independientes. Net worth pasa de 7 llamadas a 1 (~1.344 ms/~257k buffers → 207-247 ms/~34,8k buffers medido contra producción), Dashboard de 2 a 1, Accounts de 2 a 1 unificando sus dos overloads distintos con un parámetro `include_archived`. Verificado fila por fila contra ambos overloads existentes, que quedan intactos para sus otros 5 llamadores. Un bug real encontrado y corregido en desarrollo: sin una fila de saldo cero explícita por cuenta, una fecha anterior al primer movimiento de una cuenta la dejaba fuera del resultado en vez de mostrar 0. Migración aditiva sin aplicar — queda para que el usuario la aplique y corra `npm run db:test -- --file=rum_006`. |
 | 2026-09-21 | **Revisión de Codex en PR #69: dos hallazgos, ambos correctos.** (P1) `reportPerfAfterResponse` resolvía el colector dentro del callback de `after()`, donde `cache()` ya no memoiza: habría construido uno vacío y **no habría emitido ninguna línea**. Ahora se captura en el registro; test de regresión en `collector.after.test.ts`, que mockea `cache` para reproducir la transición render→after. (P2) El probe de `search_household_transactions` medía solo un mes (15 filas), así que el "RUM-004 refutado" no estaba respaldado: sobre all-time son 190 ms y 34.791 buffers. RUM-004 vuelve a P1, re-scoped. |
 | 2026-09-21 | **RUM-001 medido contra producción.** `get_account_balances` = **71 % de toda la base** (2.101 s de 2.976 s en 112 días), 36.778 buffers para 22 filas, y escala con el historial del household, no con la fecha de corte. Todo lo demás está en el ruido: `search_household_transactions` 12 ms. Reescribe RUM-006, reenfoca RUM-005 a orquestación, permite descartar RUM-004 y destapa `get_card_cycle_summaries` (52.846 buffers/llamada) sin ticket. |

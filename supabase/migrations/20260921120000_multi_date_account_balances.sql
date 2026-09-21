@@ -151,15 +151,22 @@ begin
   -- answer is a lookup into the same cumulative series.
   running as materialized (
     select
-      account_id,
-      transaction_date,
-      sum(coalesce(posted_account, 0)) over w as cum_posted_account,
-      sum(coalesce(pending_account, 0)) over w as cum_pending_account,
-      sum(coalesce(posted_base_historical, 0)) over w as cum_posted_base_historical,
-      sum(coalesce(pending_base_historical, 0)) over w as cum_pending_base_historical
-    from entry_days
+      ed.account_id,
+      ed.transaction_date,
+      sum(coalesce(ed.posted_account, 0)) over w as cum_posted_account,
+      sum(coalesce(ed.pending_account, 0)) over w as cum_pending_account,
+      sum(coalesce(ed.posted_base_historical, 0)) over w as cum_posted_base_historical,
+      sum(coalesce(ed.pending_base_historical, 0)) over w as cum_pending_base_historical
+    from entry_days ed
+    -- Bare `account_id` here would be ambiguous: `returns table (…,
+    -- account_id uuid, …)` makes it a PL/pgSQL variable in scope through the
+    -- whole function body, and plpgsql.variable_conflict defaults to `error`
+    -- rather than silently guessing which one a bare reference means. Every
+    -- reference in this function is qualified with its CTE's alias for
+    -- exactly this reason — caught only once this ran as a real function,
+    -- not as the loose SQL it was validated against beforehand.
     window w as (
-      partition by account_id order by transaction_date
+      partition by ed.account_id order by ed.transaction_date
       rows between unbounded preceding and current row
     )
   ),
@@ -185,16 +192,16 @@ begin
   ),
   picked as (
     select
-      as_of_date,
-      account_id,
-      cum_posted_account as posted_account,
-      cum_pending_account as pending_account,
-      cum_posted_account + cum_pending_account as projected_account,
-      cum_posted_base_historical as posted_base_historical,
-      cum_pending_base_historical as pending_base_historical,
-      cum_posted_base_historical + cum_pending_base_historical as projected_base_historical
-    from matched
-    where rn = 1
+      m.as_of_date,
+      m.account_id,
+      m.cum_posted_account as posted_account,
+      m.cum_pending_account as pending_account,
+      m.cum_posted_account + m.cum_pending_account as projected_account,
+      m.cum_posted_base_historical as posted_base_historical,
+      m.cum_pending_base_historical as pending_base_historical,
+      m.cum_posted_base_historical + m.cum_pending_base_historical as projected_base_historical
+    from matched m
+    where m.rn = 1
   ),
   -- One rate lookup per (currency, requested date) actually in use, not per
   -- account — the same de-duplication the single-date function already does.
@@ -204,7 +211,7 @@ begin
       a.currency_code,
       fx.rate,
       fx.rate_date
-    from (select distinct as_of_date, account_id from picked) p
+    from (select distinct p2.as_of_date, p2.account_id from picked p2) p
     join public.accounts a on a.id = p.account_id
     left join lateral public.get_exchange_rate_as_of(
       p_household_id, a.currency_code, v_base_currency, p.as_of_date
