@@ -11,9 +11,13 @@
 > **Creado 2026-09-21.** Último ticket cerrado: **RUM-006** (balances
 > multi-fecha). **RUM-001** midió contra producción que `get_account_balances`
 > era el **71 % de toda la base de datos** y escalaba con el historial del
-> household; RUM-006 corta las 7+2+2 llamadas redundantes de Net worth,
-> Dashboard y Accounts a una sola llamada cada una, con el mismo costo total
-> que ANTES tenía una sola llamada de un solo día.
+> household; RUM-006 corta las 7+2 llamadas redundantes de Net worth y
+> Dashboard a una sola llamada cada una, con el mismo costo total que ANTES
+> tenía una sola llamada de un solo día. Accounts se intentó llevar a 1
+> llamada también, pero review de Codex encontró que eso excluía
+> silenciosamente transacciones con fecha futura del saldo de "hoy" — se
+> revirtió a sus 2 llamadas originales; ver "Corrección post-review" en la
+> entrada de RUM-006 abajo.
 
 ---
 
@@ -136,11 +140,13 @@ fechas se piden, depende del tamaño del ledger, una vez.
 |---|---|---|
 | Net worth (7 fechas) | ~1.344 ms / ~257.446 buffers (7 × 192 ms / 36.778) | **207-247 ms / ~34.800 buffers** |
 | Dashboard (2 fechas) | ~384 ms / ~73.556 buffers | **207-211 ms / 34.812 buffers** |
-| Accounts (2 fechas, con archivadas) | ~384-400 ms / ~73.000 buffers | **203,5 ms / 35.593 buffers** |
+| Accounts (2 fechas, con archivadas) | ~384-400 ms / ~73.000 buffers | ~~203,5 ms / 35.593 buffers~~ — **revertido, ver corrección post-review abajo** |
 
-En los tres casos, el costo de N llamadas se convirtió en, aproximadamente,
-**el costo de una sola llamada de una fecha** — porque efectivamente ahora es
-una sola agregación del ledger, sea cual sea N.
+En Net worth y Dashboard, el costo de N llamadas se convirtió en,
+aproximadamente, **el costo de una sola llamada de una fecha** — porque
+efectivamente ahora es una sola agregación del ledger, sea cual sea N.
+Accounts se revirtió a 2 llamadas independientes por un bug de corrección
+encontrado en review — ver la sección "Corrección post-review" más abajo.
 
 **Verificación de corrección, no solo de velocidad — cada fila comparada,
 no solo el total:**
@@ -196,10 +202,10 @@ no solo el total:**
   transitorio en una de las 7 podía tumbar silenciosamente un punto de la
   evolución mientras el resto renderizaba bien).
 - `src/app/dashboard/page.tsx` — 2 llamadas → 1.
-- `src/app/dashboard/accounts/page.tsx` — 2 llamadas → 1, con
-  `p_include_archived` unificando los dos overloads distintos que usaba
-  (hoy con archivadas, mes anterior sin ellas); el filtro de archivadas para
-  "vs. mes anterior" se aplica ahora en el cliente, sobre el mismo resultado.
+- `src/app/dashboard/accounts/page.tsx` — **revertido a las 2 llamadas
+  originales** (`get_account_balances(household)` sin cota de fecha para
+  "hoy" + `get_account_balances(household, prevMonthEnd)` para "mes
+  anterior") tras el hallazgo de Codex review — ver "Corrección post-review".
 - `supabase/tests/rum_006_multi_date_balances_invariants.sql` — nuevo. 5
   checks: coincidencia exacta contra ambos overloads existentes (2 fechas y
   1 fecha), fecha-cero-para-todas-las-cuentas antes de cualquier actividad,
@@ -222,9 +228,32 @@ no solo el total:**
   aquí, es un tema de RUM-002/exactitud financiera, no de performance.
 
 **Antes / después:** antes, cargar Net worth costaba 7 agregaciones completas
-del ledger; Dashboard y Accounts, 2 cada una. Después, cada pantalla hace
-exactamente 1 llamada a balances, al costo de una sola agregación — el mismo
-costo que antes tenía pedir el saldo de un único día.
+del ledger; Dashboard y Accounts, 2 cada una. Después, Net worth y Dashboard
+hacen exactamente 1 llamada a balances, al costo de una sola agregación — el
+mismo costo que antes tenía pedir el saldo de un único día. Accounts se
+quedó en 2 llamadas, igual que antes de este ticket (ver corrección abajo).
+
+**Corrección post-review (2026-09-21, mismo día, mismo PR):** el review
+automático de Codex sobre el PR marcó P1 que la llamada única de Accounts
+rompía un caso real: `get_account_balances_as_of_many` siempre aplica
+`transaction_date <= as_of_date`, así que al pedir el saldo de "hoy" con esa
+función se excluían silenciosamente las transacciones con fecha futura —
+algo que la app soporta explícitamente (`transaction-form.tsx` tiene texto
+de UI para "sin tasa disponible para fechas futuras, usando la última tasa
+de mercado"). El overload de 1 argumento que Accounts usaba antes de este
+ticket no tiene ninguna cota de fecha — es intencional, no un descuido — y
+por eso incluía esas transacciones futuras en el saldo de "hoy". Verificado
+leyendo el cuerpo SQL del overload de 1 argumento
+(`20260817120000_balance_fx_revaluation.sql`): no hay predicado de fecha en
+ningún join ni where. **Corregido revirtiendo únicamente la llamada de
+Accounts** a las dos llamadas originales — `get_account_balances(household)`
+sin fecha para "hoy" (con archivadas) y `get_account_balances(household,
+prevMonthEnd)` para "mes anterior" (sin archivadas) — exactamente el código
+que existía antes de este ticket. Net worth y Dashboard no se tocan: ambos
+solo usaron siempre el overload de 2 argumentos, ya acotado por fecha, así
+que no tienen este bug y conservan la ganancia de 7→1 y 2→1 llamadas.
+`src/lib/balances/multi-date.ts` (`groupByAsOfDate`) sigue en uso por Net
+worth y Dashboard; Accounts ya no lo importa.
 
 **Comandos ejecutados:** `npm run lint` · `npx tsc --noEmit` · `npm test` (52) ·
 `npm run i18n:check` · `npm run build`
@@ -274,9 +303,12 @@ verificado con un diff programático entre el archivo y lo último aplicado.
    se conserva.
 5. Con una cuenta en COP o CAD: confirmar que el saldo en moneda base no
    cambió respecto a antes del cambio.
-6. `RUMBO_PERF=1 npm run dev`, abrir las tres pantallas → cada una debería
+6. `RUMBO_PERF=1 npm run dev`, abrir Net worth y Dashboard → cada una debería
    mostrar **una sola** entrada `rpc:get_account_balances_as_of_many` en el
-   log `[rumbo-perf]`, no varias.
+   log `[rumbo-perf]`, no varias. Accounts muestra 2 entradas
+   `rpc:get_account_balances` (una sin fecha, una con `prevMonthEnd`) — es
+   el comportamiento correcto tras la corrección post-review, no una
+   regresión.
 
 **¿Lista para PR?:** sí. Migración aplicada, función corregida y re-aplicada,
 gate de base de datos en verde (5/5), gate de app en verde.

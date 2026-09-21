@@ -22,7 +22,6 @@ import { FormDialog } from '@/components/form-dialog'
 import { AccountsViewToggle } from '@/components/accounts-view-toggle'
 import { getAccountsView } from '@/lib/accounts-view/server'
 import { createClient } from '@/lib/supabase/server'
-import { groupByAsOfDate } from '@/lib/balances/multi-date'
 import { formatCurrency, formatIsoDate, formatLabel } from '@/lib/format'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -63,8 +62,6 @@ type AccountsPageProps = {
 
 type AccountBalance = {
   account_id: string
-  // RUM-006: this row's date, from get_account_balances_as_of_many.
-  as_of_date: string
   account_name: string
   account_type: string
   account_class: string
@@ -228,9 +225,6 @@ function liabilityDisplay(value: number | string) {
 function emptyBalance(account: AccountMetadata): AccountBalance {
   return {
     account_id: account.id,
-    // Synthetic — this account has no row from the RPC at all, so there is no
-    // real as-of date to attach. Never read as a Map key.
-    as_of_date: '',
     account_name: account.name,
     account_type: account.account_type,
     account_class: account.account_class,
@@ -715,14 +709,13 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     d.setDate(0)
     return d.toISOString().slice(0, 10)
   })()
-  const today = new Date().toISOString().slice(0, 10)
-
   // Six independent reads, one round trip. They were sequential awaits, so the
   // page paid the network latency six times over before it could render a
   // single row; none of them depends on another's result.
   const [
     { data: currencies, error: currenciesError },
-    { data: multiDateBalances, error: accountBalancesError },
+    { data: accountBalances, error: accountBalancesError },
+    { data: prevBalanceRows },
     { data: accountMetadata, error: accountMetadataError },
     // BR-030: one call for every configured card, not one per card. A failure
     // here is not fatal — the cycle is an extra reading of data the balances
@@ -735,19 +728,23 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       .select('code, name')
       .eq('is_active', true)
       .order('code', { ascending: true }),
-    // RUM-006: today (archived accounts included, matching this page's own
-    // display) and the previous month-end (for the "vs. previous month"
-    // figure, which excludes archived accounts) used to be two separate calls
-    // to get_account_balances, each re-aggregating the whole ledger from
-    // scratch. One call to get_account_balances_as_of_many with both dates
-    // answers both from a single pass — see docs/performance-baseline.md.
-    // The "vs. previous month" figure used to pull every posted entry in the
-    // household's history over the wire and sum it in JS; the archived-account
-    // filter for it is applied client-side below, on this same result.
-    supabase.rpc('get_account_balances_as_of_many', {
+    // This screen's primary balance is deliberately the *unbounded* one-arg
+    // overload, not get_account_balances_as_of_many: that function always
+    // applies `transaction_date <= as_of_date`, which would silently drop
+    // future-dated posted/pending entries from "today"'s balance (the
+    // transaction form explicitly supports booking future-dated entries).
+    // The one-arg overload has no date filter at all and always includes
+    // archived accounts, matching this page's own display.
+    supabase.rpc('get_account_balances', {
       p_household_id: household.id,
-      p_as_of_dates: [today, prevMonthEnd],
-      p_include_archived: true,
+    }),
+    // The previous month-end figure ("vs. previous month") only ever needs a
+    // real as-of snapshot, so the already-bounded two-arg overload (which
+    // excludes archived accounts) is correct here and unaffected by the
+    // future-dated-entry issue above.
+    supabase.rpc('get_account_balances', {
+      p_household_id: household.id,
+      p_as_of_date: prevMonthEnd,
     }),
     supabase
       .from('accounts')
@@ -777,18 +774,12 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     throw new Error('Could not load active currencies.')
   }
 
-  const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as AccountBalance[])
-  const accountBalances = balancesByDate.get(today) ?? []
-  // The 2-arg overload this replaced excluded archived accounts; the combined
-  // call includes them (to also serve `accountBalances` above), so the
-  // exclusion moves here, applied to the same rows.
-  const prevBalanceRows = (balancesByDate.get(prevMonthEnd) ?? []).filter(
-    (row) => !row.is_archived
-  )
-
   const allAccounts = (accountMetadata ?? []) as AccountMetadata[]
   const accountBalancesById = new Map(
-    accountBalances.map((balance) => [balance.account_id, balance])
+    ((accountBalances ?? []) as AccountBalance[]).map((balance) => [
+      balance.account_id,
+      balance,
+    ])
   )
 
   // get_account_balances only reports active accounts, so archived ones fall
@@ -822,7 +813,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     accountEntriesError = Boolean(entriesError)
   }
 
-  const prevBalances = prevBalanceRows
+  const prevBalances = (prevBalanceRows ?? []) as AccountBalance[]
   const prevMonthBalance = prevBalances.length
     ? prevBalances.reduce(
         (sum, balance) => sum + Number(balance.posted_balance_base_currency),
