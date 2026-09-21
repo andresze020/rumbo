@@ -7,10 +7,11 @@
 > [pending-work.md](./pending-work.md); este documento es la fuente de verdad
 > **solo** para los tickets RUM-*.
 >
-> **Estado de ejecución:** RUM-010a hecho (stack de tests); RUM-001 con la
-> instrumentación entregada y la medición pendiente de credenciales
-> ([`performance-baseline.md`](./performance-baseline.md)). El avance se
-> registra en
+> **Estado de ejecución:** RUM-010a y RUM-001 hechos. **El baseline cambió las
+> prioridades**: `get_account_balances` es el 71 % de toda la base de datos y
+> escala con el historial del household, mientras que el resto de queries está
+> en el ruido. Lee [`performance-baseline.md`](./performance-baseline.md) §3
+> antes de tomar RUM-004, RUM-005 o RUM-006. El avance se registra en
 > [performance-ux-execution-status.md](./performance-ux-execution-status.md).
 >
 > **Creado 2026-09-21** sobre `main` después de PR #66. Las hipótesis del
@@ -286,13 +287,13 @@ se movió respecto de la propuesta original.
 | ID | Ticket | Prioridad | Tamaño | Dependencias | Cambio |
 |---|---|---|---:|---|---|
 | RUM-010a | Elegir e instalar el stack de tests + fixture mínimo | **P0** | M | Ninguna | ✅ **Hecho 2026-09-21** — Vitest, `npm test`, en CI. Ver [`testing.md`](./testing.md) |
-| RUM-001 | Instrumentar baseline y trazabilidad de performance | P0 | M | Ninguna | 🟡 **Instrumentación hecha 2026-09-21**, medición bloqueada por credenciales. Ver [`performance-baseline.md`](./performance-baseline.md) |
+| RUM-001 | Instrumentar baseline y trazabilidad de performance | P0 | M | Ninguna | ✅ **Hecho 2026-09-21** (capa de servidor pendiente, B-5). Ver [`performance-baseline.md`](./performance-baseline.md) |
 | RUM-002 | Reconciliar Net worth, Assets, Liabilities y Accounts total | P0 | L | RUM-010a (para tests) | Causa raíz ya localizada (§3.4 #1) |
-| RUM-005 | Descomponer y optimizar carga del Dashboard | **P0** | M/L | RUM-001, RUM-002 | **Sube de P1** — 8 awaits secuenciales, causa confirmada |
+| RUM-005 | Descomponer y optimizar carga del Dashboard | **P0** | M/L | RUM-001, RUM-002 | **Sube de P1** — **11** awaits secuenciales (no 8). Medido: es orquestación, no SQL — sus queries cuestan ~0 salvo las dos de balances |
 | RUM-003 | Formalizar periodos históricos, FX y precisión decimal | P0 | L | RUM-002 | Re-enfocado al fallback del CDN de FX (§3.4 #11) |
-| RUM-006 | Reducir llamadas repetidas de balances (Accounts y Net worth) | P1 | M | RUM-001, RUM-002 | **Re-scope** — no es N+1 por cuenta sino 7× por mes |
+| RUM-006 | Reducir llamadas repetidas de balances (Accounts y Net worth) | **P0** | M/L | RUM-001, RUM-002 | **Re-scope otra vez, y sube de P1.** Son dos problemas: 7 llamadas *y* cada llamada cuesta O(historial del household). `get_account_balances` = 71 % de toda la base ([baseline §3.1](./performance-baseline.md)) |
 | RUM-007 | Cache, prefetch y continuidad de loading states | P1 | M | RUM-001; coordinar 004–006 | Sin cambio |
-| RUM-004 | Optimizar consultas de Transactions | **P2** | M | RUM-001 | **Baja de P1** — hipótesis principal refutada (§3.4 #5, #6) |
+| RUM-004 | Optimizar consultas de Transactions | **Candidato a descartar** | M | RUM-001 | **Refutado por medición**: `search_household_transactions` tarda **12 ms** en paginar 50 de 4.688 transacciones ([baseline §5.4](./performance-baseline.md)) |
 | RUM-008 | Simplificar arquitectura de información del Dashboard | P2 | M | RUM-002 | Sin cambio |
 | RUM-009 | Corregir semántica de Month health, Insights y secundarios | P2 | M | RUM-002, RUM-008 | Re-enfocado: la fórmula existe (§3.4 #8) |
 | RUM-010b | Suite de regresión, carga y release gate | P0 transversal | M/L | Todos | Resto de RUM-010 |
@@ -461,12 +462,13 @@ este ticket.
 
 ### RUM-001 — Instrumentar baseline y trazabilidad de performance
 
-> 🟡 **Parcial, 2026-09-21.** El código de instrumentación, el censo estático y
-> el arnés de medición están entregados y documentados en
-> [`performance-baseline.md`](./performance-baseline.md). Faltan los números de
-> runtime: requieren credenciales de app y acceso de lectura a producción, que
-> la sesión que lo implementó no tenía. Las tablas están construidas y traen el
-> comando que las llena.
+> ✅ **Hecho el 2026-09-21.** Instrumentación, censo estático y medición contra
+> producción en [`performance-baseline.md`](./performance-baseline.md).
+> **Resultado que cambia el backlog:** `get_account_balances` es el 71 % de todo
+> el tiempo de base de datos y su costo escala con el historial completo del
+> household; el resto de las queries está en el ruido del transporte. Queda
+> pendiente solo la capa de timings de servidor (`RUMBO_PERF=1`), registrada
+> como B-5, que ya no bloquea a RUM-005 ni a RUM-006.
 
 **Prioridad:** P0 · **Tipo:** Investigación/observabilidad · **Tamaño:** M · **Dependencias:** ninguna
 **Bloquea:** RUM-004, RUM-005, RUM-006 y las decisiones grandes de RUM-007

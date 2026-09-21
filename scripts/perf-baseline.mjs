@@ -14,11 +14,16 @@
 //
 // !! It runs against the live project. There is no staging copy. !!
 //
-// RLS: the Management API connects as `postgres`, which BYPASSES row-level
-// security, so the default numbers are a floor — the app pays RLS predicates on
-// top. Pass --user=<auth-user-uuid> to run as `authenticated` with that user's
-// JWT claims set, which is what the app actually does. Always report which mode
-// produced a number.
+// --user IS EFFECTIVELY REQUIRED. The Management API connects as `postgres`,
+// which bypasses row-level security — but every RPC here checks
+// `is_household_member()` in its own body and RAISEs, so as `postgres` they do
+// not run at all; they fail with "Not authorized to read ... for this
+// household". (Household isolation is enforced twice over: in the policy and in
+// the function. Verified 2026-09-21.) Only the plain table lookups will produce
+// a number without --user, and that number has no RLS predicate in it.
+//
+// Pass --user=<auth-user-uuid> to run as `authenticated` with that user's JWT
+// claims set, which is what the app actually does. Always report the mode.
 //
 // Usage:
 //   node scripts/perf-baseline.mjs --household=<uuid>
@@ -27,6 +32,7 @@
 //   node scripts/perf-baseline.mjs --household=<uuid> --explain
 //   node scripts/perf-baseline.mjs --household=<uuid> --stat-statements
 //   node scripts/perf-baseline.mjs --household=<uuid> --json
+//   node scripts/perf-baseline.mjs --household=<uuid> --pace=500   # if 429s persist
 //
 // Env: SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF (or supabase/.temp/project-ref),
 //      SUPABASE_TEST_HOUSEHOLD_ID (same as --household)
@@ -40,6 +46,16 @@ const MONTH = '__MONTH__'
 // Every probe is a SELECT and every one mirrors a call the app makes. `where`
 // names the call site so a slow row leads straight back to the code.
 const PROBES = [
+  {
+    // Not a query: `select 1` measures what every other row below also pays —
+    // HTTPS to api.supabase.com, auth, connection, and the API's own overhead.
+    // Subtract this from every other probe to get the query's real cost. Without
+    // it a 270 ms lookup of 26 rows reads as a slow query when it is in fact a
+    // fast query behind a slow transport, and the whole table is misleading.
+    name: 'TRANSPORT FLOOR (select 1)',
+    where: 'not a call site — the measurement overhead of this harness',
+    sql: `select 1 as one`,
+  },
   {
     name: 'rpc:get_account_balances (today)',
     where: 'dashboard/page.tsx:276 · accounts/page.tsx:730 · net-worth/page.tsx:288',
@@ -95,10 +111,41 @@ const PROBES = [
   },
 ]
 
-const KNOWN_FLAGS = new Set(['household', 'user', 'runs', 'month', 'explain', 'stat-statements', 'json'])
+const KNOWN_FLAGS = new Set([
+  'household', 'user', 'runs', 'month', 'explain', 'stat-statements', 'json', 'pace',
+])
+
+/**
+ * The Management API throttles, and a tight loop of probes trips it — the last
+ * two probes of a 15-run pass came back 429. A pause between calls keeps the
+ * run under the limit; it costs wall-clock time and nothing else, because each
+ * probe is timed individually.
+ */
+const sleep = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs))
+
+/**
+ * The API answers 429 for a while once the per-token budget is spent, and a run
+ * that reports "FAILED: 429" for every probe tells you nothing about the
+ * database. Backs off and retries so a throttled run finishes late instead of
+ * finishing wrong.
+ *
+ * A retried call's own duration is discarded by the caller, never averaged in:
+ * waiting on a rate limit is not query time.
+ */
+async function withRetry(task, { attempts = 5, baseDelayMs = 4_000 } = {}) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await task()
+    } catch (error) {
+      const throttled = /429|ThrottlerException|Too Many Requests/i.test(error.message)
+      if (!throttled || attempt >= attempts - 1) throw error
+      await sleep(baseDelayMs * 2 ** attempt)
+    }
+  }
+}
 
 function parseArgs(argv) {
-  const options = { runs: 7, json: false, explain: false, statStatements: false }
+  const options = { runs: 7, pace: 250, json: false, explain: false, statStatements: false }
   for (const token of argv) {
     const match = token.match(/^--([a-z-]+)(?:=(.*))?$/)
     if (!match || !KNOWN_FLAGS.has(match[1])) {
@@ -113,6 +160,7 @@ function parseArgs(argv) {
     else if (flag === 'explain') options.explain = true
     else if (flag === 'stat-statements') options.statStatements = true
     else if (flag === 'runs') options.runs = Number.parseInt(value, 10)
+    else if (flag === 'pace') options.pace = Number.parseInt(value, 10)
     else if (flag === 'household') options.household = value
     else if (flag === 'user') options.user = value
     else if (flag === 'month') options.month = value
@@ -131,6 +179,9 @@ function parseArgs(argv) {
   }
   if (!Number.isFinite(options.runs) || options.runs < 1 || options.runs > 100) {
     fail('--runs must be between 1 and 100.')
+  }
+  if (!Number.isFinite(options.pace) || options.pace < 0 || options.pace > 10_000) {
+    fail('--pace must be between 0 and 10000 (milliseconds between calls).')
   }
   options.month ??= new Date().toISOString().slice(0, 8) + '01'
   if (!/^\d{4}-\d{2}-\d{2}$/.test(options.month)) fail('--month must be YYYY-MM-DD.')
@@ -181,10 +232,22 @@ async function timeProbe(context, probe, options) {
   let failure = null
 
   for (let run = 0; run < options.runs; run += 1) {
+    if (run > 0 && options.pace > 0) await sleep(options.pace)
+
+    let throttled = false
     const startedAt = performance.now()
     try {
-      const result = await runSql(context, asRole(sql, options), { throwOnError: true })
-      durations.push(performance.now() - startedAt)
+      const result = await withRetry(async () => {
+        try {
+          return await runSql(context, asRole(sql, options), { throwOnError: true })
+        } catch (error) {
+          throttled = true
+          throw error
+        }
+      })
+      // A sample that had to wait on a 429 measures the rate limiter, not the
+      // query, so it is dropped rather than folded into the percentiles.
+      if (!throttled) durations.push(performance.now() - startedAt)
       if (rows == null) rows = Array.isArray(result) ? result.length : null
     } catch (error) {
       failure = error.message
@@ -218,22 +281,33 @@ async function explainProbe(context, probe, options) {
   }
 }
 
+/**
+ * PostgREST wraps every call in the same `WITH pgrst_source AS (...)` preamble,
+ * so a truncated `query` column is 90 identical characters for a dozen
+ * different RPCs. This pulls the actual target — `rpc:<fn>` or `from:<table>` —
+ * out of the statement text so the top-N is readable.
+ */
 async function statStatements(context) {
   const sql = `
     select calls,
            round(total_exec_time::numeric, 1) as total_ms,
            round(mean_exec_time::numeric, 2)  as mean_ms,
-           round(max_exec_time::numeric, 2)   as max_ms,
            rows,
-           shared_blks_hit, shared_blks_read,
-           left(query, 90) as query
+           shared_blks_hit,
+           coalesce(
+             'rpc:'  || substring(query from '"public"\\."([a-z_]+)"\\('),
+             'from:' || substring(query from 'FROM "public"\\."([a-z_]+)"'),
+             left(regexp_replace(query, '\\s+', ' ', 'g'), 60)
+           ) as target
     from pg_stat_statements
     where query not ilike '%pg_stat_statements%'
+      and query not ilike '%pg_timezone_names%'
+      and query not ilike '%pg_walfile_name_offset%'
     order by total_exec_time desc
-    limit 15;`
+    limit 20;`
   try {
     const rows = await runSql(context, sql, { throwOnError: true })
-    return rows.map((row) => ({ ...row, query: redactPlan(row.query) }))
+    return rows.map((row) => ({ ...row, target: redactPlan(row.target) }))
   } catch (error) {
     return { error: error.message }
   }
@@ -243,10 +317,15 @@ runScript(async () => {
   const options = parseArgs(process.argv.slice(2))
   const context = apiContext()
 
-  const mode = options.user ? 'authenticated (RLS enforced)' : 'postgres (RLS BYPASSED — a floor)'
+  const mode = options.user
+    ? 'authenticated (RLS enforced)'
+    : 'postgres — RPC probes WILL FAIL, they check membership themselves'
 
   const results = []
-  for (const probe of PROBES) results.push(await timeProbe(context, probe, options))
+  for (const probe of PROBES) {
+    results.push(await timeProbe(context, probe, options))
+    if (options.pace > 0) await sleep(options.pace)
+  }
 
   if (options.json) {
     const payload = { mode, month: options.month, runs: options.runs, results }
@@ -268,7 +347,11 @@ runScript(async () => {
 
   for (const result of results) {
     if (result.failure) {
-      log(`${result.name.padEnd(44)}  FAILED: ${result.failure}`)
+      const notMember = /Not authorized to read/i.test(result.failure)
+      const reason = notMember && !options.user
+        ? 'needs --user: the function checks household membership itself'
+        : result.failure
+      log(`${result.name.padEnd(44)}  FAILED: ${reason}`)
       continue
     }
     log(
@@ -285,6 +368,24 @@ runScript(async () => {
   log('Call sites:')
   for (const result of results) log(`  ${result.name.padEnd(44)} ${result.where}`)
 
+  const floor = results.find((result) => result.name.startsWith('TRANSPORT FLOOR'))
+  if (floor?.p50 != null) {
+    log('')
+    log(`Net of the ${floor.p50.toFixed(0)} ms transport floor (p50):`)
+    log('')
+    log('probe'.padEnd(44) + 'p50 net'.padStart(10) + 'p75 net'.padStart(10) + '× floor'.padStart(10))
+    log('-'.repeat(74))
+    for (const result of results) {
+      if (result === floor || result.p50 == null) continue
+      log(
+        result.name.padEnd(44) +
+          `${Math.max(0, result.p50 - floor.p50).toFixed(0)} ms`.padStart(10) +
+          `${Math.max(0, (result.p75 ?? 0) - floor.p50).toFixed(0)} ms`.padStart(10) +
+          `${(result.p50 / floor.p50).toFixed(2)}×`.padStart(10),
+      )
+    }
+  }
+
   log('')
   log('These are database timings only: they exclude PostgREST, TLS, the network')
   log('between Vercel and Supabase, React rendering and the browser. Pair them with')
@@ -292,7 +393,7 @@ runScript(async () => {
 
   if (options.explain) {
     const slowest = [...results]
-      .filter((result) => result.p75 != null)
+      .filter((result) => result.p75 != null && !result.name.startsWith('TRANSPORT FLOOR'))
       .sort((a, b) => b.p75 - a.p75)
       .slice(0, 5)
     for (const result of slowest) {
@@ -305,9 +406,24 @@ runScript(async () => {
   if (options.statStatements) {
     log(`\n${'='.repeat(78)}\npg_stat_statements — top 15 by total time\n${'='.repeat(78)}`)
     const rows = await statStatements(context)
-    if (rows.error) log(`unavailable: ${rows.error}`)
-    else for (const row of rows) {
-      log(`${String(row.calls).padStart(8)} calls · ${String(row.mean_ms).padStart(9)} ms mean · ${row.query}`)
+    if (rows.error) {
+      log(`unavailable: ${rows.error}`)
+    } else {
+      log(
+        'target'.padEnd(42) + 'calls'.padStart(8) + 'mean'.padStart(11) +
+          'total'.padStart(12) + 'buffers/call'.padStart(14),
+      )
+      log('-'.repeat(87))
+      for (const row of rows) {
+        const perCall = row.calls > 0 ? Math.round(row.shared_blks_hit / row.calls) : 0
+        log(
+          String(row.target).slice(0, 41).padEnd(42) +
+            String(row.calls).padStart(8) +
+            `${row.mean_ms} ms`.padStart(11) +
+            `${Math.round(row.total_ms / 1000)} s`.padStart(12) +
+            String(perCall).padStart(14),
+        )
+      }
     }
   }
 })

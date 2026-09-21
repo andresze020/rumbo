@@ -2,20 +2,24 @@
 
 ## Status
 
-**Instrumentación implementada; medición parcial.** El ticket
-[RUM-001](./performance-ux-backlog.md) pide evidencia, no optimización, y nada
-aquí cambia comportamiento financiero, esquema, RLS ni caching.
+**Capas A y C medidas contra producción el 2026-09-21. Capa B pendiente.** El
+ticket [RUM-001](./performance-ux-backlog.md) pide evidencia, no optimización, y
+nada aquí cambia comportamiento financiero, esquema, RLS ni caching.
 
-Lo que **sí** está cerrado: el censo estático de round-trips (reproducible con
-`npm run perf:census`), la instrumentación en runtime (`RUMBO_PERF=1`) y el
-arnés de medición contra la base (`npm run perf:baseline`).
+**Titular:** `get_account_balances` es el **71 % de todo el tiempo de base de
+datos** del proyecto (2.101 s de 2.976 s, ventana de 112 días en
+`pg_stat_statements`), y su costo escala con el **historial completo** del
+household, no con la fecha de corte. Es la única query del sistema con costo
+medible; todas las demás están en el ruido.
 
-Lo que **no**: los números. Esta sesión no tiene credenciales de app
-(`NEXT_PUBLIC_SUPABASE_*` no están definidas, así que la app no arranca contra
-datos reales) y las lecturas contra producción quedaron bloqueadas a mitad del
-trabajo. Las tablas de §4 y §5 están construidas pero vacías, con el comando
-exacto que las llena. **Ningún número de este documento está inventado: lo que
-no se midió aparece como `—`.**
+Falta la capa B (timings de servidor con `RUMBO_PERF=1`): necesita la app
+corriendo con credenciales, y esta sesión no las tiene. Su tabla está construida
+y trae el comando que la llena. **Ningún número de este documento está
+inventado: lo que no se midió aparece como `—`.**
+
+Household de referencia: 4.688 transacciones, 2022-06-12 → 2026-09-20, 26
+cuentas, 158 categorías, 74 payees, 5.524 entries. Los UUIDs no se registran
+aquí a propósito.
 
 ---
 
@@ -91,46 +95,69 @@ bucle. La capa B sí.
 
 ---
 
-## 3. Los cinco cuellos, con evidencia
+## 3. Los cinco cuellos, con evidencia medida
 
-Ordenados por round-trips evitables, no por sospecha.
+Reordenados tras medir. La capa A (conteo) y la capa C (tiempo) no coinciden en
+el orden, y esa discrepancia es el resultado más útil del ticket: **el problema
+del Dashboard es el número de round-trips; el problema de Net worth y Accounts
+es una sola query cara.**
 
-### 3.1 `auth.getUser()` cuatro veces por navegación
+### 3.1 `get_account_balances` — el 71 % de toda la base de datos
+
+2.101 s de 2.976 s en 112 días. 36.778 buffers (~287 MB) para devolver 22 filas,
+192 ms directos y 620 ms de media en producción. **Y escala con el historial
+completo del household, no con la fecha de corte** (§5.5): 20× más
+transacciones → 6,5× más tiempo.
+
+Llamada 2× en Dashboard (`page.tsx:276`, `:297`), 2× en Accounts (`:730`,
+`:737`) y 7× en Net worth (`:288` + seis en el `Promise.all` de `:293-302`).
+En este household, Net worth cuesta ~1,4 s de trabajo de base por carga.
+
+**Esto reescribe RUM-006.** No es "reducir llamadas repetidas": cada llamada es
+O(historial), así que el número de llamadas y el costo por llamada son dos
+problemas distintos y el segundo es el que crece solo.
+
+### 3.2 `auth.getUser()` cuatro veces por navegación
 
 `layout.tsx:30`, `households/server.ts:27`, `preferences/server.ts:19` y
 `dashboard/page.tsx:254`. Cada helper llama a `createClient()` por su cuenta, y
 `getUser()` **siempre** revalida el token contra el servidor de Auth — no es un
-`getSession()` que lee la cookie. Son cuatro round-trips para responder cuatro
-veces la misma pregunta.
-
-### 3.2 `profiles` leída dos veces por navegación
-
-`households/server.ts:32` y `preferences/server.ts:23`, en la misma tabla, en la
-misma fila, dentro del mismo `Promise.all` del layout (`layout.tsx:38-41`). Que
-vayan en paralelo esconde el desperdicio: no cuesta latencia, cuesta una query.
+`getSession()` que lee la cookie. Cuatro round-trips para la misma pregunta.
 
 ### 3.3 Once `await` estrictamente secuenciales en el Dashboard
 
 `dashboard/page.tsx` líneas 254, 257, 264, 276, 280, 284, 288, 293, 297, 301,
-305. Cada uno espera al anterior antes de empezar. Solo después llega el
-`Promise.all` de `:318`. **§3.4 #7 del backlog dice 8** porque miró la ventana
-`:276-310` y se dejó fuera el preámbulo de auth/profiles/households.
+305. Cada uno espera al anterior. **§3.4 #7 del backlog dice 8** porque miró la
+ventana `:276-310` y se dejó fuera el preámbulo de auth/profiles/households.
 
-### 3.4 Siete `get_account_balances` en Net worth
+Medido, el costo de cada uno en la base es ~0 salvo los dos de balances (§5.3).
+Es decir: el Dashboard no es lento por sus queries, es lento por **esperarlas de
+una en una**. Eso hace de RUM-005 un problema de orquestación, no de SQL.
 
-`net-worth/page.tsx:288` más seis dentro del `Promise.all` de `:293-302`. Van en
-paralelo, así que el costo no es latencia de pared sino siete ejecuciones de la
-RPC más cara del sistema. Confirmado: `getPreviousMonths(selectedMonth, 6)` en
-`:266`.
+### 3.4 `get_card_cycle_summaries` — la peor query por llamada del sistema
 
-### 3.5 `/dashboard/accounts`: 11 round-trips para una lista
+52.846 buffers y 911 ms de media (§5.6). Solo 160 llamadas, así que hoy no
+duele, pero es peor por llamada que `get_account_balances` y **no está en el
+backlog**. Misma forma de problema. Merece ticket propio.
 
-Con `transaction_entries` leída tres veces (`:755`, `:795`, `:977`) y
-`get_account_balances` dos (`:730`, `:737`).
+### 3.5 `profiles` leída dos veces por navegación
 
-> **Ninguno de estos cinco se arregla en RUM-001.** Son la entrada de RUM-005
-> (Dashboard), RUM-006 (balances) y RUM-007 (cache). Este ticket solo tenía que
-> demostrarlos.
+`households/server.ts:32` y `preferences/server.ts:23`, misma tabla, misma fila,
+dentro del mismo `Promise.all` del layout (`layout.tsx:38-41`). Van en paralelo,
+así que no cuesta latencia: cuesta una query y esconde el desperdicio.
+
+### Lo que la medición sacó de la lista
+
+- **`search_household_transactions`: 12 ms** para paginar 50 de 4.688 (§5.4).
+  RUM-004 queda refutado por medición, no solo por lectura de código.
+- **Los cuatro lookups de Transactions** (accounts/categories/payees/tags) están
+  todos en el ruido del transporte. No son un cuello.
+- **`/dashboard/accounts` con 11 round-trips** baja de prioridad: 9 de ellos no
+  cuestan nada medible; los que importan son sus 2 de balances.
+
+> **Ninguno de estos se arregla en RUM-001.** Son la entrada de RUM-005
+> (orquestación del Dashboard), RUM-006 (`get_account_balances`) y RUM-007
+> (cache). Este ticket solo tenía que demostrarlos.
 
 ---
 
@@ -173,42 +200,120 @@ server; caliente = segunda navegación a la misma ruta.
 
 ---
 
-## 5. Capa C — timings de base (pendiente de medir)
+## 5. Capa C — timings de base (medida 2026-09-21)
 
 ```bash
-npm run perf:baseline -- --household=<uuid> --user=<auth-user-uuid> --runs=7
+npm run perf:baseline -- --household=<uuid> --user=<auth-user-uuid> --runs=9 --pace=700
 npm run perf:baseline -- --household=<uuid> --user=<uuid> --explain
-npm run perf:baseline -- --household=<uuid> --stat-statements
+npm run perf:baseline -- --household=<uuid> --user=<uuid> --stat-statements
 ```
 
-**`--user` importa.** Sin él, la Management API conecta como `postgres` y **RLS
-no se aplica**: los números salen optimistas porque la app sí paga los
-predicados de las policies. Con `--user=<uuid>` el script hace
-`set local role authenticated` y fija `request.jwt.claims`, que es lo que
-realmente ocurre en producción. Anota siempre en qué modo mediste.
+### 5.1 `--user` no es opcional
 
-| Probe | Filas | Frío | p50 | p75 | p95 |
-|---|---:|---:|---:|---:|---:|
-| `rpc:get_account_balances` | — | — | — | — | — |
-| `rpc:get_monthly_dashboard_summary` | — | — | — | — | — |
-| `rpc:get_monthly_expenses_by_category` | — | — | — | — | — |
-| `rpc:get_monthly_budget_details` | — | — | — | — | — |
-| `rpc:search_household_transactions` | — | — | — | — | — |
-| `from:accounts` / `categories` / `payees` / `tags` | — | — | — | — | — |
+Sin él, la Management API conecta como `postgres`, y **las RPC fallan**: cada
+una comprueba `is_household_member()` en su propio cuerpo y lanza
+`Not authorized to read ... for this household`. El aislamiento por household
+está aplicado **dos veces** — en la policy y dentro de la función. Es una buena
+noticia de seguridad y una corrección a la suposición inicial de este arnés, que
+decía que `postgres` solo daría números optimistas. No da ninguno.
 
-`pg_stat_statements` **está instalado** en el proyecto (verificado el
-2026-09-21), así que `--stat-statements` funciona sin habilitar nada.
+### 5.2 El piso de transporte
 
-### Seguridad del arnés
+**Cada probe paga ~285 ms que no son PostgreSQL**: HTTPS a `api.supabase.com`,
+auth, conexión y el overhead de la propia API. Sin restarlo, leer 26 cuentas
+parece una query de 273 ms. La primera fila de la tabla lo mide con `select 1`,
+y sin ella la tabla entera engaña.
 
-- **Solo lectura por construcción.** La lista de probes es fija y todas son
-  `SELECT`; no hay forma de pasar SQL arbitrario por CLI. Las funciones que
-  ejecuta son las mismas que la app llama en cada carga de página, así que
-  correrlo es tan seguro como abrir el Dashboard.
-- **Corre contra producción.** No hay copia de staging. No hace DDL ni DML.
-- `EXPLAIN` imprime los literales por los que filtró un plan. El script enmascara
-  UUIDs y cualquier literal de texto antes de imprimir, para que un nombre de
-  payee o una descripción no acabe en una terminal, un log o este documento.
+### 5.3 Resultados (9 corridas, RLS aplicada, mes 2026-09)
+
+| Probe | Filas | p50 | p50 neto | × piso |
+|---|---:|---:|---:|---:|
+| **PISO DE TRANSPORTE** (`select 1`) | 1 | 287 ms | — | 1,00× |
+| `rpc:get_account_balances` | 22 | 478 ms | **190 ms** | **1,66×** |
+| `rpc:get_monthly_dashboard_summary` | 1 | 340 ms | 52 ms | 1,18× |
+| `rpc:get_monthly_budget_details` | 0 | 321 ms | 33 ms | 1,12× |
+| `from:payees` | 74 | 340 ms | 53 ms | 1,18× |
+| `from:accounts` | 26 | 341 ms | 53 ms | 1,19× |
+| `rpc:get_monthly_expenses_by_category` | 4 | 270 ms | 0 ms | 0,94× |
+| `rpc:search_household_transactions` | 15 | 277 ms | 0 ms | 0,96× |
+| `from:categories` | 158 | 260 ms | 0 ms | 0,91× |
+| `from:tags` | 51 | 294 ms | 6 ms | 1,02× |
+
+Dos pasadas independientes dieron 171 ms y 190 ms netos para
+`get_account_balances`; el resto varía entre 0 y 53 ms de una pasada a otra, que
+es el ruido del transporte. **Solo `get_account_balances` sobresale.**
+
+### 5.4 `EXPLAIN (ANALYZE, BUFFERS)`
+
+| Query | Exec time | Buffers |
+|---|---:|---:|
+| **`get_account_balances`** | **192,16 ms** | **36.778** |
+| `search_household_transactions` | 12,02 ms | 2.768 |
+| `get_monthly_dashboard_summary` | 9,45 ms | 1.800 |
+| `get_monthly_expenses_by_category` | 6,99 ms | 1.572 |
+| `from:categories` | 3,57 ms | 523 |
+
+16× más lenta y 13× más buffers que la siguiente. 36.778 buffers son ~287 MB de
+tráfico para devolver **22 filas**.
+
+Nota para RUM-004: `search_household_transactions` tarda **12 ms** en paginar 50
+de 4.688 transacciones. La premisa original de ese ticket queda enterrada por
+medición, no solo por lectura de código.
+
+### 5.5 El costo escala con el historial, no con la fecha
+
+Misma función, mismo `current_date`, tres households:
+
+| Household | Transacciones | Cuentas | Buffers | Exec |
+|---|---:|---:|---:|---:|
+| grande | 4.688 | 22 | 36.778 | 194,9 ms |
+| pequeño | 231 | 13 | 4.058 | 30,2 ms |
+| mínimo | 121 | 11 | 3.188 | 17,1 ms |
+
+20× más transacciones → 9× más buffers y 6,5× más tiempo. La función
+(`20260817120000_balance_fx_revaluation.sql:152`) es un CTE que une
+`accounts ⋈ transaction_entries ⋈ transactions` y agrega con seis `filter`, sin
+acotar por fecha inferior: **lee el historial completo en cada llamada**.
+
+Consecuencia: este household se vuelve más lento cada mes, para siempre, en toda
+pantalla que muestre un saldo. Y la app la llama **2× en Dashboard, 2× en
+Accounts y 7× en Net worth**.
+
+### 5.6 `pg_stat_statements` — top por tiempo total
+
+Ventana de 2.694 h (112 días). Total del sistema: **2.976 s**.
+
+| Target | Llamadas | Media | Total | Buffers/llamada |
+|---|---:|---:|---:|---:|
+| **`rpc:get_account_balances`** | 2.996 | 619,82 ms | **1.857 s** | 28.258 |
+| `rpc:get_card_cycle_summaries` | 160 | 911,67 ms | 146 s | **52.846** |
+| `rpc:get_account_balances` (otro household) | 5.610 | 24,65 ms | 138 s | 1.658 |
+| `rpc:get_monthly_dashboard_summary` | 3.638 | 23,45 ms | 85 s | 2.357 |
+| `from:transactions` | 1.017 | 60,92 ms | 62 s | 3.644 |
+| `rpc:search_household_transactions` | 431 | 80,47 ms | 35 s | 9.051 |
+| `rpc:create_manual_transaction` | 4.520 | 5,74 ms | 26 s | 247 |
+
+**`get_account_balances` suma 2.101 s: el 71 % de toda la base.**
+
+Y un hallazgo que el backlog no tenía: **`get_card_cycle_summaries` es la peor
+query por llamada de todo el sistema** — 52.846 buffers y 911 ms de media. Solo
+160 llamadas, así que no duele hoy, pero es la misma forma de problema que
+`get_account_balances` y merece entrar al backlog.
+
+La media de producción (620 ms) es ~3× la medición directa (190 ms) porque
+PostgREST añade su envoltorio y la serialización a JSON, y porque producción
+tiene concurrencia.
+
+### 5.7 Límites del arnés
+
+- **Rate limit.** La Management API responde 429 al encadenar probes. El script
+  pacea (`--pace`, 250 ms por defecto) y reintenta con backoff exponencial;
+  una muestra que tuvo que esperar un 429 **se descarta** en vez de promediarse,
+  porque mediría al limitador y no a la query.
+- **Solo lectura por construcción.** Lista fija de probes, todas `SELECT`, sin
+  SQL arbitrario por CLI. Corre contra producción: no hay staging.
+- `EXPLAIN` imprime los literales por los que filtró; el script enmascara UUIDs
+  y literales de texto antes de imprimir.
 
 ---
 
@@ -277,9 +382,24 @@ Verificadas contra el código de `main` el 2026-09-21:
 | §3.4 #7 | "8 son `await` estrictamente secuenciales (`:276-310`)" | **11**, líneas 254-305: la ventana original se dejó fuera auth, profiles y households |
 | §3.2 (estado) | Dashboard ~16 round-trips | **~24**, contando los 6 del layout que paga toda navegación |
 | §3.4 #4 | "el Dashboard la llama 2 veces" | Correcto, y además `from:transactions` ×3 en la misma carga |
+| §3.4 #5 y #6 | RUM-004 "queda subordinado a la evidencia de RUM-001" | **Evidencia entregada: `search_household_transactions` tarda 12 ms.** RUM-004 puede cerrarse como descartado |
+| — | El arnés de este ticket suponía que `postgres` daría números optimistas | **Falso**: las RPC comprueban `is_household_member()` en su propio cuerpo y fallan sin `--user`. Corregido en el script |
 
 Nada de §3.4 se refutó: lo que cambia son conteos que se quedaron cortos por
 mirar una ventana de líneas en vez de la ruta completa.
+
+### 9.1 Lo que la medición añade al backlog
+
+- **RUM-006 cambia de forma.** No es "reducir llamadas repetidas de balances":
+  cada llamada a `get_account_balances` cuesta O(historial del household). El
+  número de llamadas y el costo por llamada son dos problemas, y el segundo
+  crece solo con el tiempo.
+- **RUM-005 es orquestación, no SQL.** Las queries del Dashboard cuestan ~0 en
+  la base salvo las dos de balances. Lo caro es esperarlas de una en una.
+- **RUM-004 puede descartarse.** 12 ms.
+- **Falta un ticket para `get_card_cycle_summaries`** (52.846 buffers, 911 ms de
+  media por llamada). Es la peor query por llamada del sistema y no está en el
+  backlog.
 
 ---
 
@@ -293,4 +413,4 @@ mirar una ventana de líneas en vez de la ruta completa.
 | `src/lib/supabase/server.ts` | Tres líneas: extiende el cliente cuando el switch está encendido. |
 | `src/app/dashboard/layout.tsx` | Una línea: registra el volcado en `after()`. |
 | `scripts/perf-census.mjs` | Capa A. |
-| `scripts/perf-baseline.mjs` | Capa C. |
+| `scripts/perf-baseline.mjs` | Capa C. Incluye el piso de transporte, pacing y backoff ante 429. |
