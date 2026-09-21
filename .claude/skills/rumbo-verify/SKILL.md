@@ -10,23 +10,38 @@ point here instead of repeating (and drifting on) validation steps.
 
 ## The real scripts
 
-`package.json` defines only: `dev`, `build`, `start`, `lint`. There is **no
-`typecheck` script** — typecheck via the compiler directly. Do not instruct anyone
-to run `npm run typecheck`.
+`package.json` defines: `dev`, `build`, `start`, `lint`, `test`, `test:watch`,
+`i18n:check`, `db:status`, `db:push`, `db:test`. There is **no `typecheck`
+script** — typecheck via the compiler directly. Do not instruct anyone to run
+`npm run typecheck`.
 
 ## Validation gate (run in order)
 
 ```powershell
 npm run lint          # ESLint (eslint-config-next)
 npx tsc --noEmit      # TypeScript typecheck — no npm script exists for this
+npm test              # Vitest unit suite — no database, ~200 ms (RUM-010a)
 npm run build         # Next build — run when feasible; catches RSC/route errors
 ```
 
-- Lint and typecheck are mandatory before declaring a task done.
+- Lint, typecheck and `npm test` are mandatory before declaring a task done.
 - `npm run build` is mandatory before a sprint merge; for small in-progress edits
   it may be deferred if clearly stated.
 - If you cannot run a step, say so explicitly and give the user the exact command —
   never silently skip it.
+
+### Tests
+
+- `npm test` runs Vitest over pure logic. It needs no database, no credentials
+  and no browser, so there is never a reason to skip it.
+- If the change touched logic that has a `*.test.ts` sibling, update it. If it
+  touched pure logic with no test yet, add one — the runner exists now.
+- `npm run db:test` (the 5 SQL invariant files in `supabase/tests/`) is a
+  separate suite that runs against the **live** project. Run it when the change
+  touches the ledger, transfers, refunds, installments or goals — never as a
+  routine step, and never in CI.
+- Conventions, the stack decision and what belongs in which suite:
+  `docs/testing.md`.
 
 ## DB-touching changes
 
@@ -54,6 +69,7 @@ End with:
 Verification
 - npm run lint:      <pass/fail + summary>
 - npx tsc --noEmit:  <pass/fail + summary>
+- npm test:          <pass/fail + N tests>
 - npm run build:     <pass/fail/deferred>
 - Manual smoke:      <what the user must click>
 ```

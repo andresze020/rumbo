@@ -7,7 +7,8 @@
 > [pending-work.md](./pending-work.md); este documento es la fuente de verdad
 > **solo** para los tickets RUM-*.
 >
-> **Estado de ejecución:** ningún ticket implementado. El avance se registra en
+> **Estado de ejecución:** RUM-010a hecho (stack de tests). El avance se
+> registra en
 > [performance-ux-execution-status.md](./performance-ux-execution-status.md).
 >
 > **Creado 2026-09-21** sobre `main` después de PR #66. Las hipótesis del
@@ -162,14 +163,16 @@ seguirlas produciría trabajo desperdiciado.
 | 13 | `monthStartDay` aplica en todas las pantallas | **Falso** | `month.ts:27-30`: solo lo usa `/dashboard/reports`; las **RPC mensuales** (dashboard, budgets, month closures) usan `date_trunc('month', ...)`. **Transactions no entra aquí**: no tiene un solo `date_trunc`, resuelve sus límites con `transaction-period.ts` a partir de la URL, y `AGENTS.md` lo registra como *a separate concern, not a duplicate* de `periods/month.ts` |
 | 14 | Existe una capa de cache (React Query/SWR/`unstable_cache`) | **Falso** | Ninguna de las tres está en el repo. Solo `revalidatePath` en los `actions.ts` (patrón estándar de server actions) |
 | 15 | Todas las rutas tienen `loading.tsx` | **Falso** | Existen 17. **Faltan** en `assistant/`, `cash-flow/`, `debt-planner/`, `coming-soon/`, `help/`, `month-review/`, `more/`, `plan/`, `reports/`, `settings/`, `trends/` |
-| 16 | Se pueden "añadir tests" en cada ticket | **Falso — bloqueante** | **No hay runner de JS/TS**: ni Vitest, ni Jest, ni Playwright, ni archivos `*.test.*`, ni fixtures. La única cobertura automatizada son 5 archivos SQL de solo lectura en `supabase/tests/` vía `npm run db:test` |
+| 16 | Se pueden "añadir tests" en cada ticket | **Era falso — resuelto por RUM-010a (2026-09-21)** | Al escribir esta tabla no había runner de JS/TS: ni Vitest, ni Jest, ni Playwright, ni archivos `*.test.*`, ni fixtures. **Ya lo hay**: Vitest, `npm test`, `vitest.config.mts`, tests co-localizados `<módulo>.test.ts`, fixtures en `tests/fixtures/`, integrado en CI. Convenciones y decisión de stack en [`testing.md`](./testing.md). Los 5 archivos SQL de `supabase/tests/` siguen intactos y conviven vía `npm run db:test` |
 | 17 | `Net worth = Assets - Liabilities` es el invariante vigente | **Falso — y explica §3.3** | `net-worth/page.tsx:90-119`: `netWorth = totalAssets + signedLiabilities`, mientras que el total de Liabilities mostrado es `Math.max(0, -balance)`. Un pasivo con saldo a favor suma al net worth y muestra `0` en Liabilities |
 | 18 | Los saldos usan la tasa histórica congelada por entry | **Falso** | `supabase/migrations/20260817120000_balance_fx_revaluation.sql` (aplicada) revalúa los **stocks** a la tasa vigente en la fecha del snapshot, con fallback a la suma histórica solo si no hay tasa. `features/net-worth-fx-policy.md` quedó desactualizado |
 
 **Consecuencia de #16 en la priorización:** casi todos los tickets piden "add
-tests" y hoy no hay dónde escribirlos. Por eso RUM-010 se parte en dos y su
-primera mitad (**RUM-010a**, elegir e instalar el stack de tests) sube a P0 y se
-ejecuta antes que cualquier ticket que prometa cobertura.
+tests" y no había dónde escribirlos. Por eso RUM-010 se partió en dos y su
+primera mitad (**RUM-010a**, elegir e instalar el stack de tests) subió a P0 y
+se ejecutó antes que cualquier ticket que prometa cobertura. **Hecho el
+2026-09-21**: la excusa de "no hay runner" del §5 (Definition of Done) ya no
+aplica — un ticket que promete tests ahora debe traerlos.
 
 **Consecuencia de #5 y #6 en la priorización:** la causa raíz asumida para
 RUM-004 quedó refutada. Los 4.25 s de Transactions no vienen de traer años de
@@ -258,8 +261,9 @@ Un ticket no está terminado porque "se siente más rápido". Debe cumplir:
 - Causa raíz o decisión documentada.
 - Métrica before/after.
 - Criterios de aceptación verificados.
-- Tests nuevos o actualizados (o justificación explícita si RUM-010a aún no ha
-  aterrizado el runner).
+- Tests nuevos o actualizados. **RUM-010a ya aterrizó el runner** (`npm test`,
+  Vitest; ver [`testing.md`](./testing.md)), así que "no hay dónde escribirlos"
+  dejó de ser justificación válida.
 - `npm run lint`, `npx tsc --noEmit` y `npm run build` exitosos.
 - Sin regresiones en ledger, transfers, voids, opening balances y multi-currency.
 - Sin debilitamiento de RLS y sin datos cruzados entre households.
@@ -279,7 +283,7 @@ se movió respecto de la propuesta original.
 
 | ID | Ticket | Prioridad | Tamaño | Dependencias | Cambio |
 |---|---|---|---:|---|---|
-| RUM-010a | Elegir e instalar el stack de tests + fixture mínimo | **P0** | M | Ninguna | **Nuevo** — extraído de RUM-010 porque bloquea a todos |
+| RUM-010a | Elegir e instalar el stack de tests + fixture mínimo | **P0** | M | Ninguna | ✅ **Hecho 2026-09-21** — Vitest, `npm test`, en CI. Ver [`testing.md`](./testing.md) |
 | RUM-001 | Instrumentar baseline y trazabilidad de performance | P0 | M | Ninguna | Sin cambio |
 | RUM-002 | Reconciliar Net worth, Assets, Liabilities y Accounts total | P0 | L | RUM-010a (para tests) | Causa raíz ya localizada (§3.4 #1) |
 | RUM-005 | Descomponer y optimizar carga del Dashboard | **P0** | M/L | RUM-001, RUM-002 | **Sube de P1** — 8 awaits secuenciales, causa confirmada |
@@ -371,12 +375,19 @@ ejecuta seguirá el Contrato de ejecución de §4 de este mismo documento.
 
 ### RUM-010a — Elegir e instalar el stack de tests
 
+> ✅ **Hecho el 2026-09-21.** Stack elegido: **Vitest**. Decisión, alternativas
+> descartadas y convenciones en [`testing.md`](./testing.md); registro de
+> ejecución en
+> [performance-ux-execution-status.md](./performance-ux-execution-status.md).
+> El texto de abajo se conserva como el enunciado original del ticket.
+
 **Prioridad:** P0 · **Tipo:** Tooling/QA · **Tamaño:** M · **Dependencias:** ninguna
 **Bloquea:** la cobertura prometida por RUM-002…RUM-009 y toda RUM-010b
+**Desbloqueado:** el bloqueo B-1 queda cerrado
 
 #### Problema
 
-El repo no tiene runner de tests de JS/TS (§3.4 #16). `docs/features/financial-correctness-checks.md`
+El repo no tenía runner de tests de JS/TS (§3.4 #16). `docs/features/financial-correctness-checks.md`
 ya registra este vacío como follow-up pendiente: *"A future BR should add a real
 automated runner, either SQL-based or Vitest-based, once the project chooses a
 test stack."* Hasta resolverlo, cualquier ticket que diga "añade tests" no puede
