@@ -8,16 +8,20 @@
 > Este archivo registra *qué pasó*. El backlog registra *qué hay que hacer*. No
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
-> **Creado 2026-09-21.** Último ticket cerrado: **RUM-006** (balances
-> multi-fecha). **RUM-001** midió contra producción que `get_account_balances`
-> era el **71 % de toda la base de datos** y escalaba con el historial del
-> household; RUM-006 corta las 7+2 llamadas redundantes de Net worth y
-> Dashboard a una sola llamada cada una, con el mismo costo total que ANTES
-> tenía una sola llamada de un solo día. Accounts se intentó llevar a 1
-> llamada también, pero review de Codex encontró que eso excluía
+> **Creado 2026-09-21.** Último trabajo: **RUM-005** (orquestación del
+> Dashboard, parcial — ver abajo), sobre la base de **RUM-006** (balances
+> multi-fecha, cerrado). **RUM-001** midió contra producción que
+> `get_account_balances` era el **71 % de toda la base de datos** y escalaba
+> con el historial del household; RUM-006 corta las 7+2 llamadas redundantes
+> de Net worth y Dashboard a una sola llamada cada una. Accounts se intentó
+> llevar a 1 llamada también, pero review de Codex encontró que eso excluía
 > silenciosamente transacciones con fecha futura del saldo de "hoy" — se
 > revirtió a sus 2 llamadas originales; ver "Corrección post-review" en la
-> entrada de RUM-006 abajo.
+> entrada de RUM-006. RUM-005 unió los 13 `await` independientes de
+> `dashboard/page.tsx` en un solo `Promise.all` y encontró el mismo patrón
+> N+1 de RUM-006 escondido en `trend-actions.ts` (6 llamadas de balance por
+> mes → 1). **RUM-005 sigue abierto**: streaming con `Suspense` y cache no
+> se hicieron.
 
 ---
 
@@ -30,7 +34,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | RUM-010a — Stack de tests | P0 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | [#68](https://github.com/andresze020/rumbo/pull/68) | 2026-09-21 |
 | RUM-001 — Instrumentación y baseline | P0 | **Hecho** (capa B pendiente) | `claude/backlog-rum-10a-tmlee1` | [#69](https://github.com/andresze020/rumbo/pull/69) | 2026-09-21 |
 | RUM-002 — Reconciliar net worth | P0 | Pendiente | — | — | — |
-| RUM-005 — Carga del Dashboard | P0 | Pendiente | — | — | — |
+| RUM-005 — Carga del Dashboard | P0 | **🟡 Orquestación hecha** (streaming/cache pendientes) | `claude/rum-005-dashboard-load` | — | — |
 | RUM-003 — Periodos, FX y decimales | P0 | Pendiente | — | — | — |
 | RUM-006 — Balances repetidos | P1 | **Hecho** (contrato de RUM-002 pendiente) | `claude/backlog-rum-10a-tmlee1` | — | 2026-09-21 |
 | RUM-007 — Cache, prefetch y loading | P1 | Pendiente | — | — | — |
@@ -86,8 +90,8 @@ quedaban cortos.
 | Pantalla | Round-trips | De ellos secuenciales | Después |
 |---|---:|---:|---:|
 | Layout (lo paga toda navegación) | 6 | 4 | — |
-| Dashboard (ruta) | 18 | 11 (`page.tsx:254-305`) | — |
-| Dashboard (ruta + layout) | **~24** | **15** | — |
+| Dashboard (ruta) | 18 (bajó a 17 cuando RUM-006 fusionó 2 llamadas de balance en 1) | 11 (bajó a 10 por la misma razón) | **RUM-005 (2026-09-21): 17 / 3** — `npm run perf:census --path=dashboard/page.tsx`, medido antes y después contra este mismo archivo. El total **no baja**: `Promise.all` cambia el orden de los requests, no la cantidad — sigue siendo el mismo número de round-trips. Lo que baja de verdad es cuántos son bloqueantes: de 10 a 3 (la cadena de identidad `auth.getUser()` → `profiles` → `households`, la única que encadena de verdad). Ver entrada RUM-005 en §4 — corregido tras un hallazgo P2 de Codex en PR #71 (una versión anterior de esta fila decía "~9" confundiendo "etapas secuenciales" con "round-trips totales") |
+| Dashboard (ruta + layout) | 24 → 23 | 15 → 14 | **23 / 7** tras RUM-005 — mismo motivo que arriba, más el layout (6 round-trips, 4 secuenciales, sin tocar) |
 | Net worth | 5 en código → **7× `get_account_balances` en ejecución** | 5 | — |
 | Transactions | 12 | 5 | — |
 | Accounts | 11 | 5 | — |
@@ -104,6 +108,162 @@ quedaban cortos.
 
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
+
+### RUM-005 — Descomponer y optimizar carga del Dashboard (orquestación) · 2026-09-21 · rama `claude/rum-005-dashboard-load` · PR pendiente
+
+**Estado: orquestación hecha — solo esa parte.** RUM-005 formalmente depende de
+RUM-002 (contrato de valoración, B-3/B-4 abiertos), pero esa dependencia solo
+aplica a la parte del ticket que unifica el cálculo de net worth en un servicio
+en `src/lib/`. Esta entrada **no toca esa parte**: cubre únicamente paralelizar
+los awaits independientes y cerrar un N+1 de balances escondido, sin tocar
+ninguna fórmula financiera. Streaming con `Suspense`, granularidad de cache e
+invalidación selectiva por mutación — el resto del alcance de RUM-005 — quedan
+sin hacer, documentados como pendientes abajo, no como bloqueados por RUM-002.
+
+**Causa raíz confirmada (§3.4 #7 del backlog, re-verificada contra el archivo
+actual, no contra la descripción vieja):** `src/app/dashboard/page.tsx` es un
+único Server Component sin `Suspense`. Antes de este cambio tenía 7 `await`
+estrictamente secuenciales (`get_account_balances_as_of_many`,
+`get_monthly_dashboard_summary` ×2, `get_monthly_expenses_by_category`,
+`categories`, `get_monthly_budget_details`, un `count` de transactions),
+seguidos de un `Promise.all` de 5 más (recurring, debts, recent transactions,
+goals, review queue), seguidos de `getDashboardTrend('net-worth', ...)` **al
+final de todo, después de que todo lo demás ya había terminado** — pese a no
+depender de nada calculado entre medias, solo de `selectedMonth`, conocido
+desde el principio de la función. Ninguna de estas 13 lecturas depende del
+resultado de otra: comparten household y fechas ya calculadas, nada más.
+
+**El fix: un solo `Promise.all` de 13.** Las 13 lecturas independientes se
+unieron en un único `Promise.all`. Lo que sí depende de verdad se queda
+secuencial, con el motivo comentado en el código:
+- `recentEntries`/`recentAllocations` — necesitan los IDs de `recentTxRows`,
+  que solo existen tras resolver el batch.
+- `homeChecklist` — necesita `balances`, `nonOpeningTransactionCount` y
+  `hasBudget`, todos derivados del batch.
+- La cadena de identidad al principio (`auth.getUser()` → `profiles` →
+  `households`) es secuencial por necesidad real: cada paso necesita el id que
+  devuelve el anterior. No se tocó — no es el hallazgo de este ticket.
+
+**Importante, para no confundir "round-trips" con "etapas bloqueantes":** este
+`Promise.all` **no reduce el número de requests** que `page.tsx` hace —
+`npm run perf:census --path=dashboard/page.tsx` mide **17 antes y 17
+después**, sin cambio. Lo que cambia es que 7 de esos 17 dejan de esperarse
+uno a uno y se disparan junto con los otros 10, así que el total de **etapas
+bloqueantes** baja de 10 a 3. Menos tiempo de espera, no menos tráfico. La
+única reducción real de *cantidad* de llamadas está en el segundo hallazgo de
+abajo (`trend-actions.ts`), que este censo estático no ve porque solo escanea
+archivos `page.tsx`, no los helpers que importan.
+
+**Segundo hallazgo, no listado en el conteo original: un N+1 de balances
+escondido dentro de `trend-actions.ts`.** `getDashboardTrend()` para métricas
+de tipo balance (`net-worth`, `total-assets`, `total-liabilities`,
+`projected-net-worth`) hacía **una llamada a `get_account_balances` por cada
+mes solicitado** — 6 llamadas independientes vía `Promise.all` para los 6
+meses de evolución del Dashboard, cada una reagregando el ledger completo
+(RUM-001: `get_account_balances(household, as_of_date)` no tiene cota
+inferior de fecha, cuesta igual sin importar qué tan angosta sea la fecha).
+Es **exactamente** el patrón que RUM-006 corrigió en Net worth, Dashboard y
+Accounts — y que la propia entrada de cierre de RUM-006 en este documento
+había marcado como "encontrado pero no tocado, oportunidad explícita, no
+parte de ese cierre" para no ampliar el diff de un ticket que ya tocaba tres
+pantallas. Corregido aquí: `trend-actions.ts` ahora llama
+`get_account_balances_as_of_many` una sola vez con las 6 fechas de fin de mes,
+agrupa con el mismo `groupByAsOfDate()` que ya usan Net worth, Dashboard y
+Accounts (`src/lib/balances/multi-date.ts`), y el resto del cálculo
+(assets/liabilities por cuenta, filtrado por `include_in_net_worth`) queda
+igual. Esto beneficia también a `/dashboard/trends`, que llama a la misma
+función — sin tocar esa pantalla.
+
+**Estimación de impacto, no medición fresca contra producción.** No tengo el
+UUID del household de prueba en este contexto (deliberadamente nunca se
+commitea al repo — ver `docs/performance-baseline.md`), así que no repetí el
+`EXPLAIN (ANALYZE, BUFFERS)` que RUM-001/RUM-006 sí corrieron. Extrapolando de
+esos números medidos, sobre el mismo household y la misma función: 6 llamadas
+independientes a `get_account_balances` (~192 ms / 36.778 buffers cada una,
+medido en RUM-001) frente a 1 llamada a `get_account_balances_as_of_many` para
+6 fechas (~207-247 ms total, medido en RUM-006 para 7 fechas sobre el mismo
+household) — el mismo salto de "N veces el costo de una agregación completa"
+a "una vez", ya verificado con `EXPLAIN ANALYZE` real para este mecanismo. Si
+el usuario quiere el número fresco, `node scripts/perf-baseline.mjs
+--household=<uuid> --user=<uuid> --explain` lo da directamente.
+
+**Verificación de corrección — no se tocó ninguna fórmula:** el cálculo de
+`assets`/`signedLiabilities`/`projectedAssets`/`signedProjectedLiabilities`
+en `trend-actions.ts` es el mismo código, solo cambia de dónde saca las filas
+(`balancesByDate.get(monthEndDate)` en vez de `result.data` de una llamada
+propia). El filtro `include_in_net_worth && !is_archived` se conserva
+literal. `groupByAsOfDate` ya tiene sus propios tests
+(`src/lib/balances/multi-date.test.ts`) y `get_account_balances_as_of_many`
+ya tiene los suyos contra producción
+(`supabase/tests/rum_006_multi_date_balances_invariants.sql`, 5/5). No se
+escribieron tests nuevos para este ticket: la lógica que cambió es la misma
+lógica ya cubierta por esos dos, solo reconectada a una fuente de datos
+distinta — no hay cómputo nuevo que probar de forma aislada.
+
+**Archivos modificados:**
+- `src/app/dashboard/page.tsx` — las 7 lecturas secuenciales + las 5 en
+  paralelo + `netWorthTrend` (antes al final) se unieron en un `Promise.all`
+  de 13. Ningún cálculo cambia; solo el orden y agrupamiento de los `await`.
+- `src/app/dashboard/trend-actions.ts` — la rama de métricas de tipo balance
+  de `getDashboardTrend()` pasa de N llamadas a `get_account_balances` a 1
+  llamada a `get_account_balances_as_of_many` con las N fechas.
+
+**Lo que este ticket NO hace, a propósito — alcance restante de RUM-005:**
+- **Streaming con `Suspense`** para los módulos por debajo del fold (Budget,
+  Insights, Debts, Goals, Recent activity) — el criterio de aceptación
+  "el top-of-fold no espera a Budget/Insights/Debts/Goals/Recent activity"
+  sigue sin cumplirse: la función sigue siendo un único Server Component, así
+  que aunque ya casi todo se resuelve en un solo `Promise.all`, la respuesta
+  completa sigue esperando a que termine el batch entero antes de renderizar
+  cualquier cosa. Paralelizar no es lo mismo que hacer streaming.
+- **Granularidad de cache e invalidación selectiva por mutación** — no
+  implementado. Este ticket no introdujo ningún cache nuevo.
+- **El contrato de valoración autoritativo de RUM-002** — `trend-actions.ts`
+  sigue con su propio cálculo inline de assets/liabilities, igual que
+  Dashboard, Net worth y Accounts cada uno con el suyo (B-3, sin resolver).
+- **`auth.getUser()` ×4 y `profiles` ×2 por navegación** (RUM-001, §3.2) — no
+  tocado; `getDashboardTrend()` sigue haciendo su propia resolución de
+  usuario/household en vez de recibir el `householdId` ya resuelto por
+  `DashboardPage`. Es la misma duplicación que ya existía, no una nueva.
+- El resto de sitios con `get_account_balances` de una sola fecha (`plan`,
+  `debts`, `debt-planner`, `export/download`, la herramienta de IA) — sin
+  tocar, igual que en el cierre de RUM-006.
+
+**Comandos ejecutados:** `npm run lint` · `npx tsc --noEmit` · `npm test` (52,
+sin cambio — no se añadieron tests nuevos, ver arriba) · `npm run i18n:check` ·
+`npm run build`
+
+**Migraciones o pasos pendientes:** ninguno. No hay migración: reutiliza
+`get_account_balances_as_of_many`, ya aplicado y verificado por RUM-006.
+
+**Riesgos residuales:**
+- El punto de entrada a `trend-actions.ts` desde `/dashboard/trends/page.tsx`
+  (línea 64, `range` variable en vez de fijo en 6) también se beneficia de
+  este fix automáticamente — no se probó manualmente esa pantalla en esta
+  sesión, solo se verificó que compila y tipa.
+- Ningún dato nuevo se expone: `p_include_archived` se deja en su default
+  (`false`), igual que el filtro `!is_archived` que ya existía en JS.
+- La estimación de impacto de arriba no es una medición fresca — ver nota.
+
+**Checklist manual de revisión:**
+1. Abrir `/dashboard`, cambiar de mes varias veces → totales, gráfico de
+   evolución de net worth (sparkline), Insights, Budget, Debts, Goals y
+   Recent activity se ven idénticos a antes del cambio.
+2. Abrir `/dashboard/trends`, cambiar el rango → la serie de net worth se ve
+   idéntica.
+3. `RUMBO_PERF=1 npm run dev`, abrir `/dashboard` → debería verse un solo
+   `Promise.all` resolviendo todas las llamadas de balances/summary/budget en
+   paralelo en vez de una tras otra en el log `[rumbo-perf]`.
+
+**¿Lista para PR?:** sí, para el alcance que cubre (orquestación). El ticket
+completo (Suspense/streaming/cache) sigue abierto — no cerrar RUM-005 en el
+tablero como "Hecho" hasta que esa parte también se entregue.
+
+**Correcciones al backlog:** tabla de round-trips de §3.2 actualizada con la
+columna "Después" para Dashboard. Fila de RUM-005 en el tablero pasa a
+"🟡 Orquestación hecha (streaming/cache pendientes)", no a "Hecho".
+
+---
 
 ### RUM-006 — Balances multi-fecha (Accounts y Net worth) · 2026-09-21 · rama `claude/backlog-rum-10a-tmlee1` · PR pendiente
 
@@ -550,6 +710,8 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-21 | **RUM-005: orquestación del Dashboard (parcial).** Los 7 `await` secuenciales + los 5 en `Promise.all` + `netWorthTrend` (antes al final, sin motivo — solo depende de `selectedMonth`) de `dashboard/page.tsx` se unieron en un solo `Promise.all` de 13 lecturas independientes; solo `recentEntries`/`allocations` (necesitan IDs del batch) y `homeChecklist` (necesita resultados del batch) siguen secuenciales, con el motivo comentado. Segundo hallazgo: el mismo N+1 de balances que RUM-006 corrigió estaba escondido en `trend-actions.ts` — `getDashboardTrend()` hacía 6 llamadas a `get_account_balances` (una por mes) para las métricas de tipo balance; ahora es 1 llamada a `get_account_balances_as_of_many`. Beneficia también a `/dashboard/trends`, que reusa la misma función. Streaming con `Suspense` y cache/invalidación — el resto del alcance de RUM-005 — quedan sin hacer; no se marca "Hecho" en el tablero. |
+| 2026-09-21 | **RUM-006 cerrado y fusionado (PR #70), con una corrección post-review.** Codex marcó P1: el nuevo call único de Accounts pasaba `today` a `get_account_balances_as_of_many`, que siempre acota por `transaction_date <= as_of_date` — excluía silenciosamente transacciones con fecha futura del saldo de "hoy" (un caso real y soportado, ver `transaction-form.tsx`). Revertido solo el call de Accounts a sus 2 llamadas originales (`get_account_balances(household)` sin cota + `get_account_balances(household, prevMonthEnd)`); Net worth y Dashboard no se tocan, solo usaron siempre el overload ya acotado por fecha. Hilo de review respondido y resuelto, CI verde, `mergeable_state: clean`, PR #70 fusionado a `main`. |
 | 2026-09-21 | **RUM-006: migración aplicada, un segundo bug real encontrado y corregido, `npm run db:test` desbloqueado para toda la suite.** A petición del usuario se aplicó `20260921120000_multi_date_account_balances.sql` (`node scripts/db-push.mjs push --apply`, 60/60). La primera aplicación falló: `account_id` es también una columna del `returns table`, así que dentro de la función es una variable en ámbito, y una referencia sin calificar es ambigua para Postgres (`plpgsql.variable_conflict` es `error` por defecto) — invisible mientras la query solo se validó suelta, fuera de una función real. Corregido calificando cada referencia con su alias de CTE; re-aplicado con `create or replace function` antes de fusionar. Nuevo flag `--user=<uuid>` en `scripts/db-test.mjs`: el runner conectaba como `postgres`, que salta RLS de tabla pero no satisface el `auth.uid()` que una función `SECURITY DEFINER` comprueba por su cuenta, así que toda función gateada por `is_household_member()` fallaba siempre. Con el fix, las 5 pruebas de RUM-006 pasan, y de paso corrió por primera vez `br_003_006_money_invariants.sql` completo: 8 de 9 pasan, y el que falla (`BR-006 official balances match posted/pending entries only`) es un hallazgo real y preexistente, sin relación con este ticket — registrado en `docs/pending-work.md` §7, sin investigar aquí. |
 | 2026-09-21 | **RUM-006 cerrado (performance; el contrato de RUM-002 queda pendiente).** Nueva función `get_account_balances_as_of_many(household, dates[], include_archived)`: agrega el ledger una vez y responde N fechas desde esa misma serie acumulada, en vez de N agregaciones completas independientes. Net worth pasa de 7 llamadas a 1 (~1.344 ms/~257k buffers → 207-247 ms/~34,8k buffers medido contra producción), Dashboard de 2 a 1, Accounts de 2 a 1 unificando sus dos overloads distintos con un parámetro `include_archived`. Verificado fila por fila contra ambos overloads existentes, que quedan intactos para sus otros 5 llamadores. Un bug real encontrado y corregido en desarrollo: sin una fila de saldo cero explícita por cuenta, una fecha anterior al primer movimiento de una cuenta la dejaba fuera del resultado en vez de mostrar 0. Migración aditiva sin aplicar — queda para que el usuario la aplique y corra `npm run db:test -- --file=rum_006`. |
 | 2026-09-21 | **Revisión de Codex en PR #69: dos hallazgos, ambos correctos.** (P1) `reportPerfAfterResponse` resolvía el colector dentro del callback de `after()`, donde `cache()` ya no memoiza: habría construido uno vacío y **no habría emitido ninguna línea**. Ahora se captura en el registro; test de regresión en `collector.after.test.ts`, que mockea `cache` para reproducir la transición render→after. (P2) El probe de `search_household_transactions` medía solo un mes (15 filas), así que el "RUM-004 refutado" no estaba respaldado: sobre all-time son 190 ms y 34.791 buffers. RUM-004 vuelve a P1, re-scoped. |

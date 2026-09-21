@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { groupByAsOfDate } from '@/lib/balances/multi-date'
 
 export type TrendMetric =
   | 'monthly-income'
@@ -45,6 +46,7 @@ function formatMonthLabel(monthDate: string): string {
 }
 
 type AccountBalanceRow = {
+  as_of_date: string
   account_class: string
   include_in_net_worth: boolean
   is_archived: boolean
@@ -111,18 +113,22 @@ export async function getDashboardTrend(
     return { ok: true, data }
   }
 
-  // Balance-type metrics: one get_account_balances call per month-end
-  const results = await Promise.all(
-    monthDates.map((d) =>
-      supabase.rpc('get_account_balances', {
-        p_household_id: householdId,
-        p_as_of_date: getMonthEndDate(d),
-      })
-    )
-  )
+  // Balance-type metrics: one aggregation for every requested month-end date,
+  // not one get_account_balances call per month. get_account_balances(household,
+  // as_of_date) has no lower date bound (RUM-001), so each of those N calls
+  // re-aggregated the whole ledger from scratch; get_account_balances_as_of_many
+  // (RUM-006) answers every requested date from a single pass instead. This
+  // exact N+1 pattern was found and deliberately deferred out of RUM-006's
+  // scope (three other call sites only) — see docs/performance-ux-execution-status.md.
+  const monthEndDates = monthDates.map((d) => getMonthEndDate(d))
+  const { data: multiDateBalances } = await supabase.rpc('get_account_balances_as_of_many', {
+    p_household_id: householdId,
+    p_as_of_dates: monthEndDates,
+  })
+  const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as AccountBalanceRow[])
 
-  const data: TrendPoint[] = results.map((result, i) => {
-    const balances = ((result.data ?? []) as AccountBalanceRow[]).filter(
+  const data: TrendPoint[] = monthDates.map((d, i) => {
+    const balances = (balancesByDate.get(monthEndDates[i]) ?? []).filter(
       (a) => a.include_in_net_worth && !a.is_archived
     )
     const assets = balances
@@ -144,7 +150,7 @@ export async function getDashboardTrend(
     else if (metric === 'total-liabilities') value = Math.max(0, -signedLiabilities)
     else if (metric === 'projected-net-worth') value = projectedAssets + signedProjectedLiabilities
 
-    return { month: monthDates[i].slice(0, 7), label: formatMonthLabel(monthDates[i]), value }
+    return { month: d.slice(0, 7), label: formatMonthLabel(d), value }
   })
 
   return { ok: true, data }
