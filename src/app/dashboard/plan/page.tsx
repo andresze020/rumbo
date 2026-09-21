@@ -12,6 +12,7 @@ import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { EmptyState } from '@/components/empty-state'
 import { createClient } from '@/lib/supabase/server'
+import { getDisplayedLiabilityBalance } from '@/lib/net-worth/valuation'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import { formatCurrency, localeToBcp47 } from '@/lib/format'
@@ -143,7 +144,7 @@ export default async function PlanPage() {
   const activeDebts = debtRows.filter((d) => d.status === 'active')
   const totalDebt = activeDebts.reduce((sum, d) => {
     const bal = balancesByAccountId.get(d.account_id)
-    return sum + Math.max(0, -Number(bal?.posted_balance_base_currency ?? 0))
+    return sum + getDisplayedLiabilityBalance(bal?.posted_balance_base_currency ?? 0)
   }, 0)
 
   // Upcoming payments (recurring).

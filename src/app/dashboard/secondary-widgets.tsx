@@ -17,11 +17,8 @@ import type { TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { formatCurrency, formatMonthLabel, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import {
-  getDisplayedLiabilityBalance,
-  type AccountBalance,
-  type BudgetDetailRow,
-} from './page'
+import { getDisplayedLiabilityBalance } from '@/lib/net-worth/valuation'
+import type { AccountBalance, BudgetDetailRow } from './page'
 
 // Only the two accent colors this file's own JSX uses (upcoming-bills icon
 // background). The full ACCENT map stays in page.tsx, where the rest of it is

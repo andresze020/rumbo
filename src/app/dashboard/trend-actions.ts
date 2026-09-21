@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { groupByAsOfDate } from '@/lib/balances/multi-date'
+import { computeValuation, selectNetWorthAccounts } from '@/lib/net-worth/valuation'
 
 export type TrendMetric =
   | 'monthly-income'
@@ -127,28 +128,26 @@ export async function getDashboardTrend(
   })
   const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as AccountBalanceRow[])
 
+  // RUM-002: was its own 4th reimplementation of the assets/liabilities/net
+  // worth formula (undocumented until this ticket's audit), including a
+  // divergence from the other three: 'total-liabilities' used to clamp the
+  // *summed* signed liabilities (max(0, -sum)) instead of summing each
+  // account's own clamped magnitude — the same class of bug this ticket
+  // fixes elsewhere, just not yet visible as a cent-level discrepancy.
+  // computeValuation is the one shared formula every screen now uses; the
+  // `!a.is_archived` filter this file had is dropped as dead code —
+  // get_account_balances_as_of_many already excludes archived accounts by
+  // default (p_include_archived), so it never did anything here.
   const data: TrendPoint[] = monthDates.map((d, i) => {
-    const balances = (balancesByDate.get(monthEndDates[i]) ?? []).filter(
-      (a) => a.include_in_net_worth && !a.is_archived
+    const valuation = computeValuation(
+      selectNetWorthAccounts(balancesByDate.get(monthEndDates[i]) ?? [])
     )
-    const assets = balances
-      .filter((a) => a.account_class === 'asset')
-      .reduce((sum, a) => sum + Number(a.posted_balance_base_currency ?? 0), 0)
-    const signedLiabilities = balances
-      .filter((a) => a.account_class === 'liability')
-      .reduce((sum, a) => sum + Number(a.posted_balance_base_currency ?? 0), 0)
-    const projectedAssets = balances
-      .filter((a) => a.account_class === 'asset')
-      .reduce((sum, a) => sum + Number(a.projected_balance_base_currency ?? 0), 0)
-    const signedProjectedLiabilities = balances
-      .filter((a) => a.account_class === 'liability')
-      .reduce((sum, a) => sum + Number(a.projected_balance_base_currency ?? 0), 0)
 
     let value = 0
-    if (metric === 'net-worth') value = assets + signedLiabilities
-    else if (metric === 'total-assets') value = assets
-    else if (metric === 'total-liabilities') value = Math.max(0, -signedLiabilities)
-    else if (metric === 'projected-net-worth') value = projectedAssets + signedProjectedLiabilities
+    if (metric === 'net-worth') value = valuation.netWorth
+    else if (metric === 'total-assets') value = valuation.totalAssets
+    else if (metric === 'total-liabilities') value = valuation.totalLiabilities
+    else if (metric === 'projected-net-worth') value = valuation.projectedNetWorth
 
     return { month: d.slice(0, 7), label: formatMonthLabel(d), value }
   })

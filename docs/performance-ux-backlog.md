@@ -288,7 +288,7 @@ se movió respecto de la propuesta original.
 |---|---|---|---:|---|---|
 | RUM-010a | Elegir e instalar el stack de tests + fixture mínimo | **P0** | M | Ninguna | ✅ **Hecho 2026-09-21** — Vitest, `npm test`, en CI. Ver [`testing.md`](./testing.md) |
 | RUM-001 | Instrumentar baseline y trazabilidad de performance | P0 | M | Ninguna | ✅ **Hecho 2026-09-21** (capa de servidor pendiente, B-5). Ver [`performance-baseline.md`](./performance-baseline.md) |
-| RUM-002 | Reconciliar Net worth, Assets, Liabilities y Accounts total | P0 | L | RUM-010a (para tests) | Causa raíz ya localizada (§3.4 #1) |
+| RUM-002 | Reconciliar Net worth, Assets, Liabilities y Accounts total | **✅ Hecho 2026-09-21** | L | RUM-010a (para tests) | Servicio único `src/lib/net-worth/valuation.ts`; invariante decidido (`Net worth = Total assets + Signed liabilities`, sin cambios); bug de signo real encontrado y corregido en `accounts/page.tsx`. Ver [`performance-ux-execution-status.md`](./performance-ux-execution-status.md) |
 | RUM-005 | Descomponer y optimizar carga del Dashboard | **🟡 Orquestación + streaming hechos 2026-09-21** (cache/invalidación deferida) | M/L | RUM-001, RUM-002 | Los 7 awaits secuenciales + los 5 en paralelo + `netWorthTrend` al final se unieron en un solo `Promise.all` de 13; se encontró y corrigió el mismo patrón N+1 de RUM-006 escondido en `trend-actions.ts` (6 llamadas a `get_account_balances` por mes → 1 a `get_account_balances_as_of_many`). Todo lo debajo del fold ahora streamea detrás de un `<Suspense>` (primer uso en el repo) en `src/app/dashboard/secondary-widgets.tsx`. Cache/invalidación selectiva queda deferida a propósito: no hay capa de cache hoy, introducir una es su propia decisión arquitectónica. Ver [`performance-ux-execution-status.md`](./performance-ux-execution-status.md) |
 | RUM-003 | Formalizar periodos históricos, FX y precisión decimal | P0 | L | RUM-002 | Re-enfocado al fallback del CDN de FX (§3.4 #11) |
 | RUM-006 | Reducir llamadas repetidas de balances (Accounts y Net worth) | **✅ Hecho 2026-09-21** (performance; contrato de RUM-002 pendiente) | M/L | RUM-001, RUM-002 | 7+2+2 llamadas → 1+1+1, cada una al costo de una sola fecha. Ver [`performance-ux-execution-status.md`](./performance-ux-execution-status.md) §4 |
@@ -956,13 +956,12 @@ modificados, cualquier propuesta de migración y riesgos residuales.
 > `npm run db:test -- --file=rum_006` pasa 5/5 contra la función real, ya
 > aplicada. Registro completo en
 > [`performance-ux-execution-status.md`](./performance-ux-execution-status.md)
-> §4. **No cerrado del todo**: el criterio "reconcilia con el contrato de
-> RUM-002" sigue abierto porque RUM-002 no ha corrido — este ticket
-> deliberadamente no tocó el invariante de net worth ni ninguna fórmula de
-> presentación, solo cuántas veces y a qué costo se piden los datos. De paso,
-> desbloqueó `npm run db:test` para toda la suite (nuevo flag `--user`), lo
-> que reveló un hallazgo preexistente y no relacionado —
-> `docs/pending-work.md` §7.
+> §4. El criterio "reconcilia con el contrato de RUM-002" ya se satisface:
+> RUM-002 (2026-09-21) centralizó ese contrato en
+> `src/lib/net-worth/valuation.ts` y las pantallas que este ticket toca ya lo
+> usan. De paso, este ticket desbloqueó `npm run db:test` para toda la suite
+> (nuevo flag `--user`), lo que reveló un hallazgo preexistente y no
+> relacionado — `docs/pending-work.md` §7.
 
 **Prioridad:** P1 · **Tipo:** Backend/performance · **Tamaño:** M · **Dependencias:** RUM-001, RUM-002
 

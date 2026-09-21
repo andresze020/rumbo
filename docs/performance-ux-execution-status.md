@@ -8,26 +8,27 @@
 > Este archivo registra *qué pasó*. El backlog registra *qué hay que hacer*. No
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
-> **Creado 2026-09-21.** Último trabajo: **RUM-005** (orquestación +
-> streaming con `Suspense` del Dashboard — ver abajo), sobre la base de
-> **RUM-006** (balances multi-fecha, cerrado). **RUM-001** midió contra
-> producción que `get_account_balances` era el **71 % de toda la base de
-> datos** y escalaba con el historial del household; RUM-006 corta las 7+2
-> llamadas redundantes de Net worth y Dashboard a una sola llamada cada una.
-> Accounts se intentó llevar a 1 llamada también, pero review de Codex
-> encontró que eso excluía silenciosamente transacciones con fecha futura del
-> saldo de "hoy" — se revirtió a sus 2 llamadas originales; ver "Corrección
-> post-review" en la entrada de RUM-006. RUM-005 unió los 13 `await`
-> independientes de `dashboard/page.tsx` en un solo `Promise.all`, encontró
-> el mismo patrón N+1 de RUM-006 escondido en `trend-actions.ts` (6 llamadas
-> de balance por mes → 1), y ahora además hace streaming: todo lo que está
-> debajo del fold (Budget, categorías, próximos cobros, Insights, Deudas,
-> Metas, Actividad reciente) vive en un componente nuevo
-> (`secondary-widgets.tsx`) detrás de un único `<Suspense>` — el primero de
-> este repositorio — mientras el top-of-fold (net worth, cifras del mes) se
-> pinta sin esperarlo. **RUM-005 sigue sin cerrar del todo**: cache/
-> invalidación selectiva queda fuera, deferida a una decisión propia — ver la
-> entrada de RUM-005 en §4 para el porqué.
+> **Creado 2026-09-21.** Último trabajo: **RUM-002** (contrato único de
+> valoración de net worth — ver abajo), sobre la base de **RUM-005**
+> (orquestación + streaming del Dashboard) y **RUM-006** (balances
+> multi-fecha), ambos cerrados. **RUM-001** midió contra producción que
+> `get_account_balances` era el **71 % de toda la base de datos** y escalaba
+> con el historial del household; RUM-006 corta las 7+2 llamadas redundantes
+> de Net worth y Dashboard a una sola llamada cada una (Accounts se revirtió
+> a sus 2 llamadas originales tras un hallazgo de Codex — ver "Corrección
+> post-review" en la entrada de RUM-006). RUM-005 unió los 13 `await`
+> independientes de `dashboard/page.tsx` en un solo `Promise.all` y hace
+> streaming de todo lo debajo del fold detrás de un único `<Suspense>` — el
+> primero del repo; cache/invalidación selectiva queda deferida a propósito.
+> **RUM-002 cierra B-3 y B-4**: `src/lib/net-worth/valuation.ts` es ahora el
+> único lugar que calcula assets/liabilities/net worth — reemplaza cinco
+> copias independientes, una de ellas (`trend-actions.ts`) no documentada
+> hasta esta auditoría y con un bug real de suma. El invariante queda
+> decidido (`Net worth = Total assets + Signed liabilities`, sin cambios) y
+> se corrigió un bug de signo real en Accounts (`Math.abs` en vez de
+> `Math.max(0,-value)`, mostraba un crédito como si fuera deuda) y un callout
+> de política FX que llevaba un año diciendo lo contrario de lo que la app
+> realmente hace. Ver la entrada de RUM-002 en §4.
 
 ---
 
@@ -39,10 +40,10 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 |---|---|---|---|---|---|
 | RUM-010a — Stack de tests | P0 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | [#68](https://github.com/andresze020/rumbo/pull/68) | 2026-09-21 |
 | RUM-001 — Instrumentación y baseline | P0 | **Hecho** (capa B pendiente) | `claude/backlog-rum-10a-tmlee1` | [#69](https://github.com/andresze020/rumbo/pull/69) | 2026-09-21 |
-| RUM-002 — Reconciliar net worth | P0 | Pendiente | — | — | — |
+| RUM-002 — Reconciliar net worth | P0 | **Hecho** | `claude/rum-002-net-worth-valuation` | — | 2026-09-21 |
 | RUM-005 — Carga del Dashboard | P0 | **🟡 Orquestación + streaming hechos** (cache/invalidación deferida) | `claude/rum-005-suspense-streaming` | — | — |
 | RUM-003 — Periodos, FX y decimales | P0 | Pendiente | — | — | — |
-| RUM-006 — Balances repetidos | P1 | **Hecho** (contrato de RUM-002 pendiente) | `claude/backlog-rum-10a-tmlee1` | — | 2026-09-21 |
+| RUM-006 — Balances repetidos | P1 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | — | 2026-09-21 |
 | RUM-007 — Cache, prefetch y loading | P1 | Pendiente | — | — | — |
 | RUM-004 — Consultas de Transactions | P2 | Pendiente | — | — | — |
 | RUM-008 — IA del Dashboard | P2 | Pendiente | — | — | — |
@@ -56,15 +57,15 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | # | Bloqueo | Afecta a | Desbloquea |
 |---|---|---|---|
 | B-2 | No hay baseline de performance atribuido por etapa | RUM-004, RUM-005, RUM-006 y las decisiones grandes de RUM-007 | RUM-001 |
-| B-3 | No hay contrato autoritativo de valoración | RUM-003, RUM-005, RUM-006, RUM-008, RUM-009 | RUM-002 |
 | B-5 | Falta la capa B del baseline (timings de servidor): necesita la app corriendo con `NEXT_PUBLIC_SUPABASE_*`. Las capas A y C ya están medidas, así que esto ya no bloquea a RUM-005/006 — solo impide separar red+PostgREST del render | RUM-007 (decisiones de cache) | Que el usuario corra `RUMBO_PERF=1 npm run dev`, navegue y pegue las líneas `[rumbo-perf]` |
-| B-4 | El invariante de net worth no está decidido. El código hace `Total assets + Signed liabilities`; la cifra de Liabilities mostrada es `max(0, -balance)`. Es una decisión de producto, no un bug de cálculo | RUM-002, RUM-010b | Decisión del usuario dentro de RUM-002 |
 
 ### 2.1 Bloqueos cerrados
 
 | # | Bloqueo | Cerrado por | Fecha |
 |---|---|---|---|
 | B-1 | No había runner de tests de JS/TS en el repositorio | RUM-010a — Vitest, `npm test`, en CI ([`testing.md`](./testing.md)) | 2026-09-21 |
+| B-3 | No hay contrato autoritativo de valoración | RUM-002 — `src/lib/net-worth/valuation.ts`, adoptado por Net worth, Dashboard, `trend-actions.ts`, `secondary-widgets.tsx`, Accounts y `plan/page.tsx` | 2026-09-21 |
+| B-4 | El invariante de net worth no estaba decidido | RUM-002 — decisión: `Net worth = Total assets + Signed liabilities`, sin cambios respecto al código (Assets − Liabilities al centavo habría expulsado un crédito legítimo). Ver la entrada de RUM-002 en §4 para el razonamiento completo | 2026-09-21 |
 
 ---
 
@@ -114,6 +115,198 @@ quedaban cortos.
 
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
+
+### RUM-002 — Reconciliar Net worth, Assets, Liabilities y Accounts total · 2026-09-21 · rama `claude/rum-002-net-worth-valuation` · PR pendiente
+
+**Estado: hecho.** Cierra B-3 (no había contrato autoritativo de valoración) y
+B-4 (el invariante de net worth no estaba decidido).
+
+**Causa raíz, ya localizada antes de empezar este ticket (revisión de Codex en
+PR #67, §3.3 del backlog):** la cifra de "Liabilities" que se muestra en
+pantalla es `Math.max(0, -balance)` — una magnitud de cuánto se debe, nunca
+negativa — pero la fórmula real de net worth es
+`totalAssets + signedLiabilities`, sobre el saldo firmado (negativo si se
+debe, positivo si el hogar tiene saldo a favor en ese pasivo). Un pasivo con
+saldo a favor (una tarjeta sobrepagada) suma correctamente su crédito al net
+worth, pero muestra `$0` en la cifra de Liabilities — las dos cifras en
+pantalla parecen los operandos de una resta y no lo son. **El net worth no
+estaba mal calculado; la presentación confundía.**
+
+**La decisión del invariante (B-4), tomada aquí, no impuesta antes:** se
+mantiene `Net worth = Total assets + Signed liabilities`, exactamente como ya
+calculaba el código. **No** se fuerza `Net worth = Assets − Liabilities` al
+centavo — eso expulsaría un crédito legítimo del patrimonio del hogar. Lo que
+cambia es hacerlo legible (un tooltip en la cifra de Liabilities, reutilizando
+`GLOSSARY.liabilities` ya existente en `net-worth/page.tsx`, añadido también
+a la hero card de `/dashboard`) y aplicarlo de forma idéntica en todas
+partes mediante una sola función compartida, en vez de que cada pantalla
+tenga su propia copia que pudiera divergir.
+
+**Alcance real, más amplio de lo que el diagnóstico original nombraba.** El
+backlog original hablaba de tres reducciones independientes
+(`net-worth/page.tsx`, `dashboard/page.tsx`, `accounts/page.tsx`). La
+auditoría de este ticket encontró **cinco**:
+- Las tres ya conocidas.
+- **Una 4ª, no documentada hasta ahora:** `trend-actions.ts` (`getDashboardTrend`,
+  usado por el sparkline de net worth del Dashboard y por `/dashboard/trends`)
+  tenía su propia copia de la fórmula — y **divergía de las otras tres**:
+  calculaba `totalLiabilities` como `Math.max(0, -sum(signedLiabilities))`
+  (el clamp DESPUÉS de sumar) en vez de sumar el clamp de cada cuenta por
+  separado. Con dos pasivos, uno con deuda de 100 y otro con saldo a favor de
+  30, la primera fórmula da 70; la segunda (la correcta, usada en las otras
+  tres pantallas) da 100. Exactamente la misma clase de bug que este ticket
+  existe para prevenir, encontrada por auditar en vez de por un usuario
+  reportándola.
+- Dos reducciones más angostas, solo de deuda (`debts` table), en
+  `secondary-widgets.tsx` y `plan/page.tsx` — no calculan net worth completo,
+  pero sí reimplementaban el mismo flip de signo cada una por su cuenta.
+
+**Un bug real y separado, encontrado durante la auditoría — no solo
+centralización:** `accounts/page.tsx`'s `liabilityDisplay(value)` usaba
+`Math.abs(value)`, no `Math.max(0, -value)`. Para un pasivo con saldo
+negativo (debido, el caso normal) ambas fórmulas coinciden. Para un pasivo
+con saldo positivo (un crédito/sobrepago) divergen: `Math.abs` devuelve el
+**crédito como una cifra positiva**, y la fila se etiquetaba
+`balanceType: 'owed'` — así que un crédito de $50 se mostraba en Accounts
+como "$50.00 (owed)", exactamente lo inverso de la realidad. Corregido:
+ahora usa la misma `getDisplayedLiabilityBalance` que el resto de la app,
+mostrando `$0.00` (no maximamente informativo, pero nunca activamente
+incorrecto, y consistente con cómo el resto de la app ya trataba este caso).
+
+**Otro bug real, encontrado siguiendo la propia referencia del ticket a
+`net-worth-fx-policy.md`:** ese documento ya llevaba desde el 2026-08-17 un
+callout de "Superseded" admitiendo que estaba desactualizado — pero el texto
+que describía como obsoleto **seguía viviendo, sin cambios, en la UI real**:
+`/dashboard/net-worth` mostraba un callout permanente diciendo "It does not
+revalue foreign-currency balances with month-end market rates yet", que es
+falso desde que se aplicó
+`20260817120000_balance_fx_revaluation.sql` (los saldos SÍ se revalúan a la
+tasa vigente en la fecha, con fallback al histórico solo sin tasa
+disponible). Corregido el copy en el código, no solo el documento.
+
+**Diseño: un módulo, dos funciones puras.** `src/lib/net-worth/valuation.ts`
+(+ `valuation.test.ts`, 14 tests) exporta:
+- `getDisplayedLiabilityBalance(value)` — el único flip de signo canónico,
+  reemplazando 4-5 copias.
+- `computeValuation(rows)` — la fórmula completa (assets, liabilities firmado
+  y magnitud, net worth, variantes proyectadas). Deliberadamente agnóstica
+  de población: no sabe ni le importa `include_in_net_worth`/archivado/
+  membresía en `debts` — cada llamador decide su propia población, porque
+  llamadores distintos necesitan legítimamente poblaciones distintas (ver
+  "Total balance vs Net worth" abajo). Es un port directo y verificado byte
+  a byte de la fórmula ya duplicada en `summarizeBalances()`,
+  el bloque inline de `dashboard/page.tsx`, y (corregida) `trend-actions.ts`.
+- `selectNetWorthAccounts(rows)` — el filtro estándar
+  (`include_in_net_worth`) que Net worth, Dashboard y `trend-actions.ts`
+  comparten; el archivado ya se excluye río arriba, en SQL.
+
+**"Total balance" (Accounts) vs "Net worth" (Dashboard, Net worth) — son
+conceptos distintos a propósito, no un bug por reconciliar.** Net worth solo
+cuenta cuentas con `include_in_net_worth = true`. "Total balance" de Accounts
+suma toda cuenta que la pantalla esté mostrando (según el toggle de
+archivadas), tenga o no `include_in_net_worth` — responde "qué muestra esta
+pantalla", no "cuál es mi patrimonio". Ya estaban etiquetadas de forma
+distinta en la UI ("Total balance" vs "Net worth") antes de este ticket; no
+se cambió su población para que coincidan — sería un cambio de comportamiento
+no solicitado. Documentado explícitamente en
+`docs/features/net-worth-fx-policy.md` y en un comentario en
+`accounts/page.tsx` junto a `totalBalance`.
+
+**Cuentas de inversión: no necesitan regla especial, y esa ausencia de regla
+especial ES la regla.** `account_class` es un `check (in ('asset',
+'liability'))` — una cuenta de inversión es `account_class = 'asset'`, sumada
+exactamente igual que cualquier otra cuenta de activo. Verificado en
+`supabase/migrations/20260601000200_accounts_categories.sql`, documentado en
+`net-worth-fx-policy.md`.
+
+**Archivos modificados:**
+- `src/lib/net-worth/valuation.ts` + `.test.ts` — nuevo.
+- `src/app/dashboard/net-worth/page.tsx` — `summarizeBalances`/
+  `getDisplayedLiabilityBalance` locales eliminados, usa el módulo
+  compartido; callout de política FX corregido (ver arriba).
+- `src/app/dashboard/page.tsx` — bloque inline de assets/liabilities
+  eliminado, usa el módulo compartido; ya no exporta su propia
+  `getDisplayedLiabilityBalance`.
+- `src/app/dashboard/trend-actions.ts` — reemplaza su 4ª reimplementación
+  (con el bug de `total-liabilities` de arriba) por el módulo compartido;
+  elimina un filtro `!is_archived` redundante (SQL ya excluye archivadas).
+- `src/app/dashboard/secondary-widgets.tsx` — el import de
+  `getDisplayedLiabilityBalance` pasa de `./page` (un route file, un
+  atajo de la era RUM-005) a `@/lib/net-worth/valuation`.
+- `src/app/dashboard/accounts/page.tsx` — `liabilityDisplay` (el bug)
+  eliminado, usa `getDisplayedLiabilityBalance` compartida; comentario
+  explicando por qué `totalBalance` no usa `computeValuation`.
+- `src/app/dashboard/plan/page.tsx` — su propio `Math.max(0, -Number(...))`
+  reemplazado por la función compartida.
+- `src/components/financial-hero-card.tsx` — tooltip nuevo en "Liabilities"
+  (desktop), reutilizando `InfoTooltip term="liabilities"`, mismo patrón que
+  el tooltip de salud del mes ya existente.
+- `src/lib/glossary.ts` + `src/lib/i18n/legacy-ui-translations.ts` — texto de
+  `GLOSSARY.liabilities` ampliado para explicar el caso de saldo a favor
+  (en, con traducciones es/fr nuevas); más las traducciones es/fr del callout
+  de política FX corregido. Delegado a `i18n-scribe` — halló y dejó anotado
+  un hallazgo separado, fuera de alcance: el sistema `GLOSSARY`/`InfoTooltip
+  term=` nunca tuvo cobertura real de `npm run i18n:check` (el auditor no
+  recorre `glossary.ts`, y no reconoce variables pasadas a `ui(...)` cuando
+  el valor no es un literal) — los tooltips de glosario llevan mostrándose
+  en inglés a usuarios es/fr desde que existe `GLOSSARY`, sin que el gate lo
+  detectara. No corregido aquí (alcance de RUM-002 es net worth, no el
+  auditor de i18n) — anotado como hallazgo pendiente.
+- `docs/features/net-worth-fx-policy.md` — reescrito completo (no solo el
+  callout de "Superseded"): política de stock/flow vigente como autoritativa,
+  regla de cuentas archivadas y de inversión, la explicación de "Liabilities
+  mostrado" vs "término de la fórmula", y "Total balance" vs "Net worth".
+
+**Verificación:** `npm run lint` · `npx tsc --noEmit` · `npm test` (66 —
+52 previos + 14 nuevos de `valuation.test.ts`, ningún test existente cambió
+de resultado) · `npm run i18n:check` (pasa; claves nuevas en `glossary.ts` y
+el callout de FX, ambas con es/fr) · `npm run build`.
+
+**Reconciliación real, honestamente sin correr contra producción en esta
+sesión:** esta sandbox no tiene credenciales `NEXT_PUBLIC_SUPABASE_*` (el
+mismo hueco documentado desde RUM-001/RUM-005), así que la verificación
+"al centavo" entre Net worth, Dashboard y Accounts para un household real no
+se corrió aquí. Se verificó en su lugar por (a) equivalencia de fórmula:
+`computeValuation` es una relocación confirmada byte a byte de las tres
+fórmulas que reemplaza, no una reescritura, y (b) los 14 tests unitarios
+nuevos, incluido el caso exacto de la discrepancia de §3.3 (tarjeta con saldo
+a favor). La reconciliación en vivo queda en el checklist manual del PR.
+
+**Riesgos residuales / alcance no cubierto, a propósito:**
+- Ninguna migración — pura consolidación de JS/TS, ninguna RPC cambió.
+- No se diseñó un estado visual nuevo de "crédito" para un pasivo con saldo a
+  favor (mostraría, p. ej., "+$50 crédito" en vez de "$0.00 debido") — se
+  corrigió que la cifra nunca sea *incorrecta*, no se diseñó una UX más rica
+  para ese caso. Anotado como hallazgo pendiente, no arreglado aquí.
+- El hallazgo lateral de `i18n-scribe` sobre `GLOSSARY`/`InfoTooltip` sin
+  cobertura real de traducción (arriba) — fuera de alcance, anotado.
+- `docs/pending-work.md` no se tocó en esta sesión — revisar si necesita una
+  entrada.
+
+**Checklist manual de revisión (pendiente — correr localmente, no en esta
+sandbox):**
+1. Abrir Net worth, Dashboard y Accounts para el mismo household/mes →
+   net worth y assets coinciden entre Net worth y Dashboard.
+2. Confirmar que "Total balance" de Accounts puede diferir de Net worth
+   (si hay alguna cuenta excluida de net worth) y que ambas cifras están
+   etiquetadas de forma distinta.
+3. Buscar o crear un pasivo con saldo a favor → confirmar que ahora muestra
+   `$0.00` en Accounts (no el crédito como cifra positiva) y que sigue
+   sumando al net worth en Dashboard/Net worth.
+4. Pasar el cursor sobre el tooltip nuevo de Liabilities en Net worth y en
+   la hero card del Dashboard.
+5. Abrir `/dashboard/net-worth` y confirmar que el callout de política FX
+   describe revaluación (no "does not revalue").
+6. Cambiar de mes en Net worth y Dashboard varias veces → la evolución y los
+   deltas mes a mes se ven idénticos a antes del cambio.
+
+**¿Lista para PR?:** sí.
+
+**Correcciones al backlog:** B-3 y B-4 cerrados en §2.1. Fila de RUM-002 en
+el tablero pasa a "Hecho". Fila de RUM-006 ya no lleva la coletilla
+"(contrato de RUM-002 pendiente)".
+
+---
 
 ### RUM-005 — Streaming con Suspense para el Dashboard · 2026-09-21 · rama `claude/rum-005-suspense-streaming` · PR pendiente
 
@@ -877,6 +1070,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-21 | **RUM-002 cerrado: un servicio único de valoración, dos bugs reales encontrados por auditar, no solo centralización.** `src/lib/net-worth/valuation.ts` reemplaza cinco reimplementaciones independientes de assets/liabilities/net worth (tres ya conocidas + una 4ª no documentada en `trend-actions.ts`, que además divergía: clampeaba la suma en vez de sumar el clamp por cuenta). Invariante decidido (B-4 cerrado): `Net worth = Total assets + Signed liabilities`, sin cambios — Assets − Liabilities al centavo habría expulsado un crédito legítimo del patrimonio. Bug real encontrado en `accounts/page.tsx`: `Math.abs` en vez de `Math.max(0,-value)` mostraba un pasivo con saldo a favor como si fuera deuda (`"$50.00 (owed)"` para un crédito de $50) — corregido. Segundo bug real: el callout de política FX en `/dashboard/net-worth` seguía diciendo "no revalúa" en la UI real, un año después de que la migración de revaluación se aplicara — corregido el copy, no solo el doc. `docs/features/net-worth-fx-policy.md` reescrito completo. 14 tests nuevos, 66/66 pasan. B-3 y B-4 cerrados. Reconciliación en vivo no corrida en esta sandbox (sin credenciales de Supabase) — verificada por equivalencia de fórmula + tests, checklist manual queda para el usuario. |
 | 2026-09-21 | **RUM-005: streaming con `Suspense` (parcial, sobre la orquestación ya fusionada en #71).** Todo lo debajo del fold (Budget, categorías, próximos cobros, Insights, Deudas, Metas, Actividad reciente) se movió a `src/app/dashboard/secondary-widgets.tsx`, un Server Component nuevo detrás de un único `<Suspense>` — primer uso de `Suspense` en el repo. `budgetRows` y `homeChecklist` se quedan eager a propósito (el primero porque `healthScore` lo necesita y se pinta en la hero card top-of-fold; el segundo porque no está en el criterio de aceptación y diferirlo invertiría el orden visual actual). RUM-001 ya había medido que estas queries cuestan ~0 — este cambio no reduce tiempo de reloj medible, su valor es percepción de velocidad, aislamiento de fallos y cumplir el criterio literal del ticket, no un segundo hallazgo de latencia. Cache/invalidación selectiva queda fuera, deferida a propósito: no existe ninguna capa de cache hoy (solo `revalidatePath`, ~90 sitios), introducir una es una decisión arquitectónica separada. `npm run lint/tsc/test/i18n:check/build` todos pasan; el checklist manual de 7 pasos queda pendiente para el usuario — esta sandbox no tiene credenciales de Supabase para correrlo. |
 | 2026-09-21 | **RUM-005: orquestación del Dashboard (parcial).** Los 7 `await` secuenciales + los 5 en `Promise.all` + `netWorthTrend` (antes al final, sin motivo — solo depende de `selectedMonth`) de `dashboard/page.tsx` se unieron en un solo `Promise.all` de 13 lecturas independientes; solo `recentEntries`/`allocations` (necesitan IDs del batch) y `homeChecklist` (necesita resultados del batch) siguen secuenciales, con el motivo comentado. Segundo hallazgo: el mismo N+1 de balances que RUM-006 corrigió estaba escondido en `trend-actions.ts` — `getDashboardTrend()` hacía 6 llamadas a `get_account_balances` (una por mes) para las métricas de tipo balance; ahora es 1 llamada a `get_account_balances_as_of_many`. Beneficia también a `/dashboard/trends`, que reusa la misma función. Streaming con `Suspense` y cache/invalidación — el resto del alcance de RUM-005 — quedan sin hacer; no se marca "Hecho" en el tablero. |
 | 2026-09-21 | **RUM-006 cerrado y fusionado (PR #70), con una corrección post-review.** Codex marcó P1: el nuevo call único de Accounts pasaba `today` a `get_account_balances_as_of_many`, que siempre acota por `transaction_date <= as_of_date` — excluía silenciosamente transacciones con fecha futura del saldo de "hoy" (un caso real y soportado, ver `transaction-form.tsx`). Revertido solo el call de Accounts a sus 2 llamadas originales (`get_account_balances(household)` sin cota + `get_account_balances(household, prevMonthEnd)`); Net worth y Dashboard no se tocan, solo usaron siempre el overload ya acotado por fecha. Hilo de review respondido y resuelto, CI verde, `mergeable_state: clean`, PR #70 fusionado a `main`. |

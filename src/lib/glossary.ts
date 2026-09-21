@@ -10,7 +10,7 @@ export const GLOSSARY = {
   savingsRate:
     "The share of your income you kept instead of spending this month.",
   liabilities:
-    "Money you owe — credit cards, loans, and other debts.",
+    "Money you owe — credit cards, loans, and other debts. A credit balance (you're owed money) shows as $0 here, but it still adds to your net worth.",
   exchangeRate:
     "How many units of this currency equal 1 unit of your household's main currency.",
   openingBalance:
