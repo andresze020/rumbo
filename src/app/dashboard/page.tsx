@@ -277,53 +277,64 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const prevMonthEndDate = getMonthEndDate(prevMonthDate.slice(0, 7))
   const today = new Date().toISOString().slice(0, 10)
 
-  // RUM-006: this month + the previous month used to be 2 separate calls to
-  // get_account_balances, each re-aggregating the whole ledger from scratch
-  // (it has no lower date bound — RUM-001 measured its cost as flat regardless
-  // of as_of_date). One call to get_account_balances_as_of_many answers both
-  // dates from a single pass. See docs/performance-baseline.md.
-  const { data: multiDateBalances, error: accountBalancesError } = await supabase.rpc(
-    'get_account_balances_as_of_many',
-    { p_household_id: household.id, p_as_of_dates: [selectedMonthEndDate, prevMonthEndDate] }
-  )
-  const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as MultiDateAccountBalance[])
-  const accountBalances = balancesByDate.get(selectedMonthEndDate) ?? []
-  const { data: monthlySummaryRows, error: monthlySummaryError } = await supabase.rpc('get_monthly_dashboard_summary', {
-    p_household_id: household.id,
-    p_month: selectedMonthDate,
-  })
-  const { data: expenseCategoryRows, error: expenseCategoriesError } = await supabase.rpc('get_monthly_expenses_by_category', {
-    p_household_id: household.id,
-    p_month: selectedMonthDate,
-  })
-  const { data: categoryLookupRows, error: categoryLookupError } = await supabase
-    .from('categories')
-    .select('id, name, parent_category_id, is_archived')
-    .eq('household_id', household.id)
-    .is('deleted_at', null)
-  const { data: prevSummaryRows } = await supabase.rpc('get_monthly_dashboard_summary', {
-    p_household_id: household.id,
-    p_month: prevMonthDate,
-  })
-  const prevBalanceRows = balancesByDate.get(prevMonthEndDate) ?? []
-  const { data: budgetRows, error: budgetError } = await supabase.rpc('get_monthly_budget_details', {
-    p_household_id: household.id,
-    p_budget_month: selectedMonthDate,
-  })
-  const { count: nonOpeningTransactionCount } = await supabase
-    .from('transactions')
-    .select('id', { count: 'exact', head: true })
-    .eq('household_id', household.id)
-    .neq('transaction_type', 'opening_balance')
-    .is('deleted_at', null)
-
+  // RUM-005: every read below only depends on household.id and the date
+  // variables computed above — none of them reads another's result — so they
+  // were needlessly paying for their round trips one at a time (7 sequential
+  // awaits, then a separate 5-way Promise.all, then netWorthTrend after
+  // everything else). One Promise.all now covers all 13. Only homeChecklist
+  // and the recentTxIds-derived entries/allocations lookup below have a real
+  // dependency (on these results), so they stay sequential after this batch.
   const [
+    { data: multiDateBalances, error: accountBalancesError },
+    { data: monthlySummaryRows, error: monthlySummaryError },
+    { data: expenseCategoryRows, error: expenseCategoriesError },
+    { data: categoryLookupRows, error: categoryLookupError },
+    { data: prevSummaryRows },
+    { data: budgetRows, error: budgetError },
+    { count: nonOpeningTransactionCount },
     { data: recurringRows },
     { data: debtRows },
     { data: recentTxRows },
     { data: goalRows },
     { count: needsReviewCount },
+    netWorthTrend,
   ] = await Promise.all([
+    // RUM-006: this month + the previous month used to be 2 separate calls to
+    // get_account_balances, each re-aggregating the whole ledger from scratch
+    // (it has no lower date bound — RUM-001 measured its cost as flat
+    // regardless of as_of_date). One call to get_account_balances_as_of_many
+    // answers both dates from a single pass. See docs/performance-baseline.md.
+    supabase.rpc('get_account_balances_as_of_many', {
+      p_household_id: household.id,
+      p_as_of_dates: [selectedMonthEndDate, prevMonthEndDate],
+    }),
+    supabase.rpc('get_monthly_dashboard_summary', {
+      p_household_id: household.id,
+      p_month: selectedMonthDate,
+    }),
+    supabase.rpc('get_monthly_expenses_by_category', {
+      p_household_id: household.id,
+      p_month: selectedMonthDate,
+    }),
+    supabase
+      .from('categories')
+      .select('id, name, parent_category_id, is_archived')
+      .eq('household_id', household.id)
+      .is('deleted_at', null),
+    supabase.rpc('get_monthly_dashboard_summary', {
+      p_household_id: household.id,
+      p_month: prevMonthDate,
+    }),
+    supabase.rpc('get_monthly_budget_details', {
+      p_household_id: household.id,
+      p_budget_month: selectedMonthDate,
+    }),
+    supabase
+      .from('transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('household_id', household.id)
+      .neq('transaction_type', 'opening_balance')
+      .is('deleted_at', null),
     supabase
       .from('recurring_transactions')
       .select('id, name, transaction_type, amount, currency_code, next_run_date, auto_post')
@@ -362,7 +373,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .neq('transaction_type', 'opening_balance')
       .neq('status', 'voided')
       .is('deleted_at', null),
+    // Only depends on selectedMonth, known from the top of this function —
+    // previously awaited last, after everything else in this function had
+    // already resolved, for no reason.
+    getDashboardTrend('net-worth', selectedMonth, 6),
   ])
+  const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as MultiDateAccountBalance[])
+  const accountBalances = balancesByDate.get(selectedMonthEndDate) ?? []
+  const prevBalanceRows = balancesByDate.get(prevMonthEndDate) ?? []
 
   const recentTransactions = (recentTxRows ?? []) as RecentTransaction[]
   const recentTxIds = recentTransactions.map((tx) => tx.id)
@@ -720,7 +738,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     }
   })
 
-  const netWorthTrend = await getDashboardTrend('net-worth', selectedMonth, 6)
   const spark = netWorthTrend.ok ? netWorthTrend.data.map((d) => d.value) : []
 
   const firstName = profile.display_name?.trim().split(/\s+/)[0] || household.name
