@@ -1,6 +1,6 @@
 # The same gate the local `Stop` hook enforces, run where the hook cannot: a
 # pull request opened from a cloud session, or any merge that did not pass
-# through this machine. Keep the steps in sync with the `app-finanzas-verify`
+# through this machine. Keep the steps in sync with the `rumbo-verify`
 # skill — that skill is the source of truth for "is this ready?", this file is
 # only its unattended copy.
 name: CI
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   verify:
-    name: lint · typecheck · i18n · build
+    name: lint · typecheck · i18n · test · build
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -42,6 +42,12 @@ jobs:
 
       - name: i18n coverage
         run: npm run i18n:check
+
+      # Vitest unit suite (RUM-010a). Pure logic only: no database, no
+      # credentials, no browser. `npm run db:test` is deliberately not here —
+      # it runs against the live project. See docs/testing.md.
+      - name: Unit tests
+        run: npm test
 
       # Every route is server-rendered on demand, so the build never reaches
       # Supabase; these values exist only so the client factory has something

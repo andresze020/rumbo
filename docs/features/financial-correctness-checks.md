@@ -6,9 +6,11 @@
 No database schema changes required. BR-006 adds a lightweight SQL check file at
 `supabase/tests/br_003_006_money_invariants.sql`.
 
-The project still does not have an automated test runner in `package.json`; the
-current practical coverage is a repeatable SQL checklist for the trust-critical
-ledger and FX invariants touched by BR-003 through BR-006.
+These SQL checks cover the trust-critical ledger and FX invariants touched by
+BR-003 through BR-006. Since RUM-010a (2026-09-21) they are no longer the only
+automated coverage: the repo also has a Vitest unit runner (`npm test`) for pure
+TypeScript logic. The two suites are complementary — see
+[`docs/testing.md`](../testing.md).
 
 ---
 
@@ -63,6 +65,11 @@ supabase/tests/br_003_006_money_invariants.sql
 
 ## Follow-Up
 
-A future BR should add a real automated runner, either SQL-based or Vitest-based,
-once the project chooses a test stack. Until then, these SQL checks are the
-minimum repeatable gate for money-math regressions.
+~~A future BR should add a real automated runner, either SQL-based or
+Vitest-based, once the project chooses a test stack.~~ **Closed twice over:**
+`npm run db:test` (`scripts/db-test.mjs`) made these SQL files executable, and
+**RUM-010a** (2026-09-21) added Vitest as the JS/TS unit runner, wired into the
+validation gate and CI. See [`docs/testing.md`](../testing.md).
+
+Still open: porting these invariants to run against seeded fixtures rather than
+the live household, so they can run unattended in CI. That is **RUM-010b**.

@@ -219,12 +219,34 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 - Run checks before final answer (see the `rumbo-verify` skill):
   - `npm run lint`
   - `npx tsc --noEmit`  (there is no `typecheck` npm script)
+  - `npm test`  (Vitest unit suite — no database, runs in ~200 ms)
   - `npm run build` when feasible
 - The typecheck above is also enforced by a `Stop` hook, so a turn that leaves
   broken types cannot be closed. Subagents, slash commands and hooks are
   documented in `docs/ai-agents-workflow.md`.
 - The `zoho-*` skills visible in some sessions belong to a different project.
   Never use them here.
+
+## Tests
+
+Two suites, no overlap. Full conventions and the stack decision live in
+`docs/testing.md`.
+
+- **Vitest unit suite — `npm test`** (RUM-010a, 2026-09-21). Pure logic only:
+  no database, no credentials, no browser. Part of the gate above and of
+  `.github/workflows/ci.yml`. `npm run test:watch` while working.
+  - Tests are **co-located** with their subject as `<module>.test.ts`
+    (`src/lib/health/score.ts` → `src/lib/health/score.test.ts`).
+  - Shared fixtures go in `tests/fixtures/` as typed TypeScript modules, never
+    JSON, and only once a second test file needs them.
+  - Expected values are literals, not expressions re-deriving the formula under
+    test. Confirm a new test fails when you break the code it covers.
+  - Config: `vitest.config.mts` (`@/…` → `src/…`, node environment, no globals).
+  - Seeded with 11 tests over `src/lib/health/score.ts`.
+- **SQL invariants — `npm run db:test`**. The 5 files in `supabase/tests/`,
+  run against the **live** project via the Management API. Run when the change
+  touches the ledger, transfers, refunds, installments or goals. Not in CI:
+  there is no staging copy of that database.
 
 ## Git rules
 
