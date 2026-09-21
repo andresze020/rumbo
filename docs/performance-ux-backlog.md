@@ -51,7 +51,8 @@ Todo trabajo de este backlog debe preservar:
 ### Invariantes financieros mínimos
 
 ```text
-Net worth = Assets - Liabilities
+Net worth = Total assets + Signed liabilities
+Displayed liabilities = SUM(max(0, -balance))   # presentacion, no un termino de la ecuacion
 Savings = Income - Expenses
 Savings rate = Savings / Income, cuando Income != 0
 Transfers do not affect Income or Expenses
@@ -65,7 +66,7 @@ decisión explícita:
 
 | Regla vigente | Documento |
 |---|---|
-| Net worth usa el `exchange_rate_to_base` histórico almacenado por entry; no hay revaluación a tasa de cierre de mes | [features/net-worth-fx-policy.md](./features/net-worth-fx-policy.md) |
+| **Los saldos (stocks) se revalúan** a la tasa vigente en la fecha del snapshot; solo se cae a la suma histórica por entry si el household no tiene tasa para ese par. Los **flujos** (income, expense, budget) conservan la tasa de su propia fecha | `supabase/migrations/20260817120000_balance_fx_revaluation.sql`. **`features/net-worth-fx-policy.md` está desactualizado** en este punto: describe la política anterior a esa migración |
 | Las cuentas archivadas se excluyen de net worth actual e histórico (BR-004) | [features/net-worth-fx-policy.md](./features/net-worth-fx-policy.md) |
 | Los invariantes de dinero se verifican hoy con SQL de solo lectura, no con un runner de JS | [features/financial-correctness-checks.md](./features/financial-correctness-checks.md) |
 | `monthStartDay` personalizado existe pero hoy solo lo consume `/dashboard/reports` | [features/month-start-day.md](./features/month-start-day.md) |
@@ -106,7 +107,37 @@ Server-Timing, logs del servidor, `pg_stat_statements` ni `EXPLAIN ANALYZE`.
 | Agosto | $63,846.50 | $1,789.05 | $62,057.45 | $62,074.40 |
 | Julio | $60,323.19 | $6,152.85 | $54,170.34 | $54,251.18 |
 
-La diferencia cambia por mes y no se explica solo por redondeo.
+**Causa raíz encontrada** (2026-09-21, tras revisión de Codex en PR #67). No es
+redondeo ni FX: es que **la columna `Liabilities` que se muestra no es el término
+que entra en la ecuación**.
+
+En `src/app/dashboard/net-worth/page.tsx:90-119`:
+
+```ts
+getDisplayedLiabilityBalance = (v) => Math.max(0, -Number(v))   // lo que se muestra
+netWorth = totalAssets + signedLiabilities                       // lo que se calcula
+```
+
+Una cuenta de pasivo con **saldo a favor** (una tarjeta sobrepagada, saldo
+positivo) suma su crédito al net worth, pero aporta `0` al total de Liabilities
+mostrado. La diferencia de cada mes es exactamente ese crédito:
+
+| Mes | Assets | Liab. mostrado | Net worth | Crédito implícito |
+|---|---:|---:|---:|---:|
+| Septiembre | $62,416.70 | $11.78 | $62,539.37 | **$134.45** |
+| Agosto | $63,846.50 | $1,789.05 | $62,074.40 | **$16.95** |
+| Julio | $60,323.19 | $6,152.85 | $54,251.18 | **$80.84** |
+
+`assets + crédito − liab. mostrado = net worth` cuadra al centavo en los tres
+meses. El Dashboard usa la misma convención.
+
+**Consecuencia para RUM-002:** el net worth **no está mal calculado**. Sumar un
+saldo a favor al patrimonio es correcto. Lo que falla es la *presentación*: se
+muestran dos números que parecen los términos de una resta y no lo son. Exigir
+`Net worth = Assets − Liabilities` al centavo, como decía la primera versión de
+este backlog, **expulsaría un crédito legítimo del net worth**. RUM-002 pasa de
+"arreglar el cálculo" a "decidir y documentar cuál es el invariante, y hacer que
+las tres pantallas coincidan con él".
 
 ### 3.4 Validación de hipótesis contra el código (2026-09-21)
 
@@ -121,17 +152,19 @@ seguirlas produciría trabajo desperdiciado.
 | 3 | Los saldos se reconstruyen con una query por cuenta (N+1) | **Falso** | `get_account_balances(p_household_id, p_as_of_date)` es una RPC agregada: una llamada trae todas las cuentas |
 | 4 | No hay N+1 en ningún lado | **Falso — hay N+1 por mes** | `net-worth/page.tsx:288-302` llama `get_account_balances` **7 veces** (mes + 6 de evolución) dentro de un `Promise.all`; el Dashboard la llama 2 veces (`page.tsx:276`, `:297`) |
 | 5 | Transactions descarga el historial completo y filtra en el navegador | **Falso** | RPC única `search_household_transactions` con `p_limit`/`p_offset`, `PAGE_SIZE = 50` (`src/app/dashboard/transactions/page.tsx:715-742`); el rango de fechas va en SQL vía `src/lib/periods/transaction-period.ts` |
-| 6 | List, summary y count son llamadas separadas | **Falso** | `total_count` viene en la misma fila del RPC (`transactions/page.tsx:759`); los cuatro lookups (accounts/categories/payees/tags) van en un solo round trip (`:592`) |
+| 6 | List, summary y count son llamadas separadas | **Falso** | `total_count` viene en la misma fila del RPC (`transactions/page.tsx:759`); los cuatro lookups (accounts/categories/payees/tags) van en **una sola ola concurrente, pero son cuatro requests HTTP** (`Promise.all` de cuatro builders en `:596-631`; el comentario del código dice "one round trip" y es impreciso) |
 | 7 | El Dashboard bloquea el top-of-fold con módulos secundarios | **Confirmado, y peor de lo supuesto** | `src/app/dashboard/page.tsx` es un único Server Component sin `Suspense`. ~16 round-trips por carga; **8 son `await` estrictamente secuenciales** (`:276-310`); solo 5 están paralelizados (`:312-318`) |
 | 8 | `Month health` no tiene fórmula | **Falso** | `src/lib/health/score.ts` documenta la fórmula (líneas 1-18), exporta pesos `HEALTH_SAVINGS_WEIGHT = 0.65` / `HEALTH_BUDGET_WEIGHT = 0.35`, umbrales de savings y budget, y grados en `healthGrade()`. Hay tooltip (`page.tsx:811`). **El problema real es que no se muestra el desglose, no que la fórmula no exista.** |
 | 9 | El redondeo financiero debe centralizarse en `src/lib/calc.ts` | **Falso** | `calc.ts` es el evaluador de la calculadora del teclado numérico, sin relación con montos. La suma de dinero vive en las RPC de SQL |
 | 10 | La precisión decimal se pierde en JS | **Parcial** | No hay `decimal.js` / `big.js`. `src/lib/fx.ts` usa `number` nativo en todo. Falta confirmar si los agregados de SQL usan `numeric` |
 | 11 | La política de FX histórica es reproducible | **Riesgo confirmado** | `fetchFxRate` (`src/lib/fx.ts:9-49`) consulta un **CDN externo** (`@fawazahmed0/currency-api`) y **cae a `'latest'` si el archivo del día histórico falla** — una tasa histórica puede cambiar entre ejecuciones |
 | 12 | Los límites de periodo dependen de UTC accidentalmente | **Falso — es deliberado** | `src/lib/periods/month.ts:32` y `transaction-period.ts:51-53` documentan el uso de UTC a propósito. No hay timezone de household en el cálculo |
-| 13 | `monthStartDay` aplica en todas las pantallas | **Falso** | `month.ts:27-30`: solo lo usa `/dashboard/reports`; el resto de RPCs mensuales usan `date_trunc('month', ...)` |
+| 13 | `monthStartDay` aplica en todas las pantallas | **Falso** | `month.ts:27-30`: solo lo usa `/dashboard/reports`; las **RPC mensuales** (dashboard, budgets, month closures) usan `date_trunc('month', ...)`. **Transactions no entra aquí**: no tiene un solo `date_trunc`, resuelve sus límites con `transaction-period.ts` a partir de la URL, y `AGENTS.md` lo registra como *a separate concern, not a duplicate* de `periods/month.ts` |
 | 14 | Existe una capa de cache (React Query/SWR/`unstable_cache`) | **Falso** | Ninguna de las tres está en el repo. Solo `revalidatePath` en los `actions.ts` (patrón estándar de server actions) |
 | 15 | Todas las rutas tienen `loading.tsx` | **Falso** | Existen 17. **Faltan** en `assistant/`, `cash-flow/`, `debt-planner/`, `coming-soon/`, `help/`, `month-review/`, `more/`, `plan/`, `reports/`, `settings/`, `trends/` |
 | 16 | Se pueden "añadir tests" en cada ticket | **Falso — bloqueante** | **No hay runner de JS/TS**: ni Vitest, ni Jest, ni Playwright, ni archivos `*.test.*`, ni fixtures. La única cobertura automatizada son 5 archivos SQL de solo lectura en `supabase/tests/` vía `npm run db:test` |
+| 17 | `Net worth = Assets - Liabilities` es el invariante vigente | **Falso — y explica §3.3** | `net-worth/page.tsx:90-119`: `netWorth = totalAssets + signedLiabilities`, mientras que el total de Liabilities mostrado es `Math.max(0, -balance)`. Un pasivo con saldo a favor suma al net worth y muestra `0` en Liabilities |
+| 18 | Los saldos usan la tasa histórica congelada por entry | **Falso** | `supabase/migrations/20260817120000_balance_fx_revaluation.sql` (aplicada) revalúa los **stocks** a la tasa vigente en la fecha del snapshot, con fallback a la suma histórica solo si no hay tasa. `features/net-worth-fx-policy.md` quedó desactualizado |
 
 **Consecuencia de #16 en la priorización:** casi todos los tickets piden "add
 tests" y hoy no hay dónde escribirlos. Por eso RUM-010 se parte en dos y su
@@ -561,7 +594,15 @@ Ninguna vive en `src/lib/`. Confirmar antes de asumir.
 
 #### Criterios de aceptación
 
-- `Net worth = Assets - Liabilities` al centavo para todos los meses probados.
+- El invariante vigente queda **decidido y documentado**. El de partida es el
+  del código: `Net worth = Total assets + Signed liabilities`. **No** impongas
+  `Net worth = Assets − Liabilities` sin redefinir antes qué es "Liabilities":
+  hoy la cifra mostrada es `max(0, -balance)` y no es un término de la ecuación.
+- Un pasivo con saldo a favor (tarjeta sobrepagada) **sigue sumando** al net
+  worth, y la pantalla ya no presenta dos cifras que parecen una resta sin
+  serlo.
+- Las tres pantallas reconcilian al centavo entre sí para todos los meses
+  probados.
 - Dashboard, Accounts y Net worth comparten el mismo contrato de valoración.
 - Toda exclusión de una cuenta tiene una razón visible o documentada.
 - Los signos de las liability accounts están cubiertos por tests.
@@ -577,8 +618,23 @@ Trabaja en el ticket "RUM-002" de Rumbo directamente sobre este repositorio.
 Sigue el Contrato de ejecución de la §4 de docs/performance-ux-backlog.md.
 Lee también la §3.3 (discrepancia observada) y la §3.4 puntos 1, 2 y 12.
 
-Invariante requerido:
-Net worth = Assets - Liabilities
+Invariante de partida, tomado del código (NO lo cambies sin decidirlo
+explícitamente conmigo):
+Net worth = Total assets + Signed liabilities
+
+OJO, esto es lo primero que debes entender antes de tocar nada: la cifra de
+Liabilities que se muestra en pantalla es Math.max(0, -balance)
+(getDisplayedLiabilityBalance en net-worth/page.tsx:90), mientras que el cálculo
+real es totalAssets + signedLiabilities (línea 118). Un pasivo con saldo a favor
+—una tarjeta sobrepagada— suma su crédito al net worth pero aporta 0 al total de
+Liabilities mostrado. Esa es la causa raíz de la discrepancia de la §3.3 del
+backlog, y cuadra al centavo en los tres meses observados.
+
+Por lo tanto el net worth NO está mal calculado: sumar un saldo a favor al
+patrimonio es correcto. Lo que falla es la presentación. Si fuerzas
+Net worth = Assets - Liabilities al centavo, expulsas un crédito legítimo del
+patrimonio. Tu trabajo es decidir y documentar el invariante, y hacer que las
+tres pantallas coincidan con él, no "corregir" el número.
 
 Hipótesis de causa raíz ya localizada, confírmala antes de actuar: las tres
 pantallas llaman la misma RPC get_account_balances pero agregan con tres
@@ -607,10 +663,18 @@ Investiga, con evidencia:
 Crea un único servicio autoritativo de valoración en src/lib/ y haz que las tres
 pantallas lo usen. No parchees números en componentes de React.
 
-Respeta la política de FX vigente documentada en
-docs/features/net-worth-fx-policy.md: net worth usa el exchange_rate_to_base
-histórico almacenado por entry y no revalúa a tasa de cierre de mes. Cambiar esa
-política es RUM-003, no este ticket.
+Política de FX vigente, tomada de la migración aplicada
+supabase/migrations/20260817120000_balance_fx_revaluation.sql: los STOCKS (los
+saldos de cuenta a una fecha) se revalúan a la tasa vigente en esa fecha, y solo
+caen a la suma histórica por entry cuando el household no tiene tasa para el par.
+Los FLUJOS (income, expense, budget) conservan la tasa de su propia fecha.
+Preserva ese comportamiento: el servicio autoritativo que crees debe coincidir
+con las RPC, no revertirlas.
+
+ATENCIÓN: docs/features/net-worth-fx-policy.md describe la política ANTERIOR a
+esa migración ("no revalúa con tasas de cierre de mes") y está desactualizado.
+No lo tomes como fuente. Corregir ese documento es parte de la entrega de este
+ticket.
 
 Añade tests que cubran:
 - Solo assets.
@@ -763,9 +827,16 @@ suponía el diagnóstico original. Lo confirmado (§3.4):
    `src/lib/periods/month.ts:32` y `transaction-period.ts:51-53`. **No es un
    descuido**; cambiarlo a timezone de household es una decisión de producto, no
    un bugfix.
-4. **`monthStartDay` solo aplica a `/dashboard/reports`** (#13). Dashboard y
-   Transactions usan `date_trunc('month', ...)`. Esa inconsistencia es real y es
-   candidata de este ticket.
+4. **`monthStartDay` solo aplica a `/dashboard/reports`** (#13). Las RPC
+   mensuales (dashboard, budgets, month closures) usan `date_trunc('month',
+   ...)`. Esa inconsistencia es real y es candidata de este ticket — pero su
+   alcance es **BR-036 slice 2**, ya descrito en
+   [features/month-start-day.md](./features/month-start-day.md).
+   **Transactions queda fuera**: no usa `date_trunc` en ningún sitio, resuelve
+   sus límites desde la URL con `transaction-period.ts` (PR #66) y `AGENTS.md`
+   lo registra como *a separate concern, not a duplicate*. Meterlo aquí
+   pisaría el comportamiento de periodo recién unificado y su compatibilidad
+   con los enlaces antiguos.
 5. `src/lib/calc.ts` **no** tiene relación con el redondeo de dinero (#9): es el
    evaluador de la calculadora del teclado numérico.
 
@@ -817,8 +888,16 @@ Correcciones al diagnóstico original que debes respetar:
   (src/lib/periods/month.ts:32 y transaction-period.ts:51-53). No es un bug
   silencioso. Cambiarlo a timezone de household es una decisión de producto:
   detente y propónmela antes de implementarla.
-- monthStartDay existe pero hoy solo lo consume /dashboard/reports; el resto usa
-  date_trunc('month', ...). Esa inconsistencia sí es candidata de este ticket.
+- monthStartDay existe pero hoy solo lo consume /dashboard/reports; las RPC
+  mensuales (dashboard, budgets, month closures) usan date_trunc('month', ...).
+  Esa inconsistencia sí es candidata de este ticket, y su alcance es BR-036
+  slice 2 (ver docs/features/month-start-day.md).
+- NO metas Transactions en ese trabajo. No usa date_trunc en ningún sitio:
+  resuelve sus límites desde la URL con transaction-period.ts, que AGENTS.md
+  registra explícitamente como "a separate concern, not a duplicate" de
+  periods/month.ts. Cambiar sus presets pisaría el periodo unificado de PR #66 y
+  la compatibilidad con los enlaces antiguos, y requiere una decisión de
+  producto aparte.
 
 Define y centraliza:
 1. Qué ocurre cuando falta una tasa de FX. El fallo debe ser explícito y
@@ -1074,8 +1153,11 @@ pantalla ya hace todo esto bien:
 - Aplica el rango de fechas en SQL, resuelto por
   src/lib/periods/transaction-period.ts.
 - Devuelve total_count en la misma fila del RPC (línea 759), sin llamada aparte.
-- Resuelve los cuatro lookups (accounts/categories/payees/tags) en un solo
-  round trip (línea 592).
+- Resuelve los cuatro lookups (accounts/categories/payees/tags) en una sola ola
+  concurrente (líneas 596-631). Cuidado: el comentario del código dice "one
+  round trip" y es impreciso — son CUATRO requests HTTP en paralelo. Instrumenta
+  los cuatro por separado; contarlos como uno esconde tres operaciones de red y
+  de base de datos dentro de los 4.25 s.
 
 No reimplementes nada de lo anterior. Los 4.25 s vienen de otro sitio y tu
 primera tarea es atribuirlos con la evidencia de RUM-001. Si RUM-001 no está
@@ -1335,7 +1417,12 @@ Crea fixtures representativos con:
 Los fixtures no pueden contener datos financieros reales del usuario. Genéralos.
 
 Automatiza pruebas para:
-- Net worth = Assets - Liabilities.
+- El invariante de net worth tal y como RUM-002 lo haya dejado decidido y
+  documentado. El de partida es Net worth = Total assets + Signed liabilities.
+  NO escribas un test que afirme Net worth = Assets - Liabilities: la cifra de
+  Liabilities que se muestra es max(0, -balance), así que ese test fallaría —
+  correctamente — en cuanto un pasivo tenga saldo a favor. Incluye un caso
+  explícito de tarjeta sobrepagada.
 - Savings = Income - Expenses.
 - Comportamiento de savings rate con ingreso cero.
 - Neutralidad de las transferencias.

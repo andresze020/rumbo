@@ -39,6 +39,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | B-1 | No hay runner de tests de JS/TS en el repositorio | RUM-002…RUM-009 y RUM-010b: todos prometen cobertura y hoy no hay dónde escribirla | RUM-010a |
 | B-2 | No hay baseline de performance atribuido por etapa | RUM-004, RUM-005, RUM-006 y las decisiones grandes de RUM-007 | RUM-001 |
 | B-3 | No hay contrato autoritativo de valoración | RUM-003, RUM-005, RUM-006, RUM-008, RUM-009 | RUM-002 |
+| B-4 | El invariante de net worth no está decidido. El código hace `Total assets + Signed liabilities`; la cifra de Liabilities mostrada es `max(0, -balance)`. Es una decisión de producto, no un bug de cálculo | RUM-002, RUM-010b | Decisión del usuario dentro de RUM-002 |
 
 ---
 
@@ -107,3 +108,4 @@ Conteo estático del barrido de código del 2026-09-21, no medido en ejecución.
 | Fecha | Cambio |
 |---|---|
 | 2026-09-21 | Documento creado junto al backlog. Ningún ticket iniciado. |
+| 2026-09-21 | Revisión de Codex en PR #67. **Causa raíz de la discrepancia de net worth encontrada antes de empezar RUM-002**: un pasivo con saldo a favor suma al net worth y muestra `0` en Liabilities; cuadra al centavo en los tres meses. Corregidas cuatro afirmaciones del backlog (invariante, política de FX de saldos, cuatro round trips en Transactions, alcance del mes personalizado). Nuevo bloqueo B-4. |

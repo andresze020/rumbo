@@ -7,6 +7,18 @@ Migration `20260614000100_br_004_exclude_archived_as_of_balances.sql` updates
 historical/as-of account balances to exclude archived accounts. No net-new table
 is introduced.
 
+> **Superseded 2026-08-17 — this doc describes the policy before
+> `20260817120000_balance_fx_revaluation.sql`.** That migration (applied) draws
+> a stock/flow distinction: an **account balance at a date** is now revalued at
+> the rate in effect on that date, falling back to the historical per-entry sum
+> only when the household has no usable rate for the pair. **Flows** (income,
+> expense, budget lines) still keep the rate of their own transaction date, so
+> reports and budgets read exactly as before. The migration header is the
+> authoritative description. The sections below are kept as the record of the
+> earlier policy and of the BR-004 archived-account rule, which still holds.
+> Rewriting this doc against the deployed behavior is a deliverable of RUM-002
+> ([performance-ux-backlog.md](../performance-ux-backlog.md)).
+
 Net worth uses each ledger entry's stored historical `exchange_rate_to_base`.
 Foreign-currency balances are not revalued with month-end market rates yet.
 
