@@ -9,6 +9,7 @@ import {
   TrendingDown,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { Callout } from '@/components/callout'
 import { InsightCard, type InsightTone } from '@/components/insight-card'
 import { CategoryDonut, type DonutSlice } from '@/components/category-donut'
 import { RecentActivity, type RecentActivityRow } from '@/components/recent-activity'
@@ -169,7 +170,7 @@ export async function DashboardSecondaryWidgets({
 
   const [
     { data: expenseCategoryRows, error: expenseCategoriesError },
-    { data: categoryLookupRows },
+    { data: categoryLookupRows, error: categoryLookupError },
     { data: recurringRows },
     { data: debtRows },
     { data: recentTxRows },
@@ -467,8 +468,16 @@ export async function DashboardSecondaryWidgets({
 
   const cardClass = 'rounded-2xl border bg-card shadow-sm shadow-black/[0.03]'
 
+  // Before the split, these two fed the page-wide hasLoadError Callout. Now
+  // that this section streams in on its own, the same visible error needs
+  // its own copy here — a failed categories fetch silently degrades every
+  // widget that reads categoriesById (donut, insights, recent activity) to
+  // fallback labels otherwise, with nothing telling the user data is missing.
+  const hasLoadError = Boolean(expenseCategoriesError || categoryLookupError)
+
   return (
     <>
+      {hasLoadError ? <Callout variant="error">{t('dashboard.loadError')}</Callout> : null}
       {/* Main + right rail */}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_304px] [&>*]:min-w-0">
         {/* Main column */}
