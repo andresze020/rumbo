@@ -57,6 +57,11 @@ report exactly as they always have.
   sums is already in base currency by the time it reaches this module, via
   the RPCs above. Population (which accounts, `include_in_net_worth` or not)
   stays the caller's decision — see that module's own header for why.
+- This page covers *balance revaluation*, a server-side, as-of-date concern.
+  A transaction *entry's* own historical rate lookup is a separate, client-side
+  layer — see [`fx-rate-resolution.md`](./fx-rate-resolution.md) (RUM-003) for
+  that contract, and [`period-semantics.md`](./period-semantics.md) for what
+  "as of date" means for the current vs. a historical month.
 
 ### Archived accounts
 

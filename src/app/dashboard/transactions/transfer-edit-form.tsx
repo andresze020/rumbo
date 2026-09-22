@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
-import { fetchFxRate } from '@/lib/fx'
+import { describeFxNote, fetchFxRate } from '@/lib/fx'
 import { formatCurrency } from '@/lib/format'
 import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
@@ -220,11 +220,7 @@ export function TransferEditForm({
     setFetchingRate(false)
     if (result.rate !== null) {
       setUserRate(String(parseFloat(result.rate.toFixed(6))))
-      setFxNote(
-        result.isLatest
-          ? `No rate for future dates — using latest market rate (${result.date}).`
-          : `Rate for ${result.date}.`
-      )
+      setFxNote(describeFxNote(result))
     } else {
       setFxError(result.error)
     }

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
-import { fetchFxRate } from '@/lib/fx'
+import { describeFxNote, fetchFxRate } from '@/lib/fx'
 import { formatCurrency } from '@/lib/format'
 import {
   Dialog,
@@ -74,13 +74,7 @@ export function OpeningBalanceForm({
     setFetchingRate(false)
     if (result.rate !== null) {
       setUserRate(String(parseFloat(result.rate.toFixed(6))))
-      if (result.isLatest) {
-        setFxNote(
-          `No rate available for future dates — using latest market rate (${result.date}).`
-        )
-      } else {
-        setFxNote(`Rate for ${result.date}.`)
-      }
+      setFxNote(describeFxNote(result))
     } else {
       setFxError(result.error)
     }

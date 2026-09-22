@@ -1,9 +1,25 @@
 const FX_API_BASE =
   'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api'
 
+/**
+ * RUM-003: `source` replaces the old `isLatest: boolean`, which collapsed two
+ * unrelated situations into one flag: a genuinely future transaction date
+ * (expected to use 'latest' — not a failure) and a past/present date whose
+ * historical rate file the provider didn't have (a real, silent data gap
+ * before this ticket). Callers need to tell these apart to render an honest
+ * note instead of the "No rate available for future dates" message this
+ * codebase used to show even when the date was not future at all.
+ *
+ * - 'requested' — the rate is for the exact date asked for.
+ * - 'future'    — the date is after today; 'latest' is the expected answer.
+ * - 'fallback'  — the date was valid (today or earlier) but had no rate on
+ *   file, so 'latest' was substituted. This is the case that used to be
+ *   silent; it is now distinct and logged.
+ */
 export type FxResult =
-  | { rate: number; date: string; isLatest: false }
-  | { rate: number; date: string; isLatest: true }
+  | { rate: number; date: string; requestedDate: string; source: 'requested' }
+  | { rate: number; date: string; requestedDate: string; source: 'future' }
+  | { rate: number; date: string; requestedDate: string; source: 'fallback' }
   | { rate: null; error: string }
 
 export async function fetchFxRate(
@@ -32,19 +48,53 @@ export async function fetchFxRate(
   try {
     const result = await tryDate(fetchDate)
     if (result) {
-      return { rate: result.rate, date: result.date, isLatest: isFuture }
+      return {
+        rate: result.rate,
+        date: result.date,
+        requestedDate: transactionDate,
+        source: isFuture ? 'future' : 'requested',
+      }
     }
 
     if (!isFuture) {
       const latest = await tryDate('latest')
       if (latest) {
-        return { rate: latest.rate, date: latest.date, isLatest: true }
+        console.error(
+          `[fx] No rate on file for ${accountCurrency}/${baseCurrency} on ${transactionDate}; falling back to latest (${latest.date}).`
+        )
+        return {
+          rate: latest.rate,
+          date: latest.date,
+          requestedDate: transactionDate,
+          source: 'fallback',
+        }
       }
     }
 
+    console.error(
+      `[fx] No rate found for ${accountCurrency}/${baseCurrency} (requested ${transactionDate}), including at latest.`
+    )
     return { rate: null, error: `No rate found for ${accountCurrency}/${baseCurrency}. Enter it manually.` }
-  } catch {
+  } catch (err) {
+    console.error(`[fx] Fetch failed for ${accountCurrency}/${baseCurrency} on ${transactionDate}.`, err)
     return { rate: null, error: 'Could not fetch rate. Enter it manually.' }
+  }
+}
+
+/**
+ * Human-readable note for a successful `fetchFxRate` result, shared by every
+ * form that auto-fills an FX rate. Previously each of the five forms
+ * duplicated this text independently, and all five got the fallback case
+ * wrong (labelling it "future dates" regardless of `source`).
+ */
+export function describeFxNote(result: Extract<FxResult, { rate: number }>): string {
+  switch (result.source) {
+    case 'future':
+      return `This date is in the future — using the latest available market rate (${result.date}).`
+    case 'fallback':
+      return `No rate on file for ${result.requestedDate} — using the latest available rate (${result.date}) instead. Verify before saving.`
+    case 'requested':
+      return `Rate for ${result.date}.`
   }
 }
 
