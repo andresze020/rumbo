@@ -116,3 +116,30 @@ export function parseMonthStartDay(value: unknown): number {
   }
   return parsed
 }
+
+/**
+ * RUM-003 — the calendar month-end for `label` (`YYYY-MM`), UTC. This is
+ * **not** `monthStartDay`-aware: it was, until this ticket, independently
+ * duplicated byte-for-byte in `dashboard/page.tsx`, `dashboard/net-worth/page.tsx`,
+ * and `dashboard/trend-actions.ts`, all three keyed on the plain calendar month
+ * (matching BR-036 slice 1's scope: those screens don't consume
+ * `monthStartDay` yet — see this module's header).
+ */
+export function monthEndDate(label: string): string {
+  const { year, month } = parseMonth(label)
+  return toIso(new Date(Date.UTC(year, month, 0)))
+}
+
+/**
+ * RUM-003 — the balance snapshot date for `label`. A still-open, current
+ * month snapshots at **today**: a household's net worth "this month" should
+ * reflect flows from the month's start up to now, not up to a date that
+ * hasn't happened yet (the bug this fixes — Dashboard and Net worth
+ * previously asked for the month's *end* date even for the current month,
+ * which could pull in future-dated entries the ledger allows). A closed,
+ * historical month always snapshots at its own calendar close.
+ */
+export function snapshotDateForMonth(label: string, todayIso: string): string {
+  const currentLabel = todayIso.slice(0, 7)
+  return label === currentLabel ? todayIso : monthEndDate(label)
+}

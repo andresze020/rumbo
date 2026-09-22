@@ -8,10 +8,11 @@
 > Este archivo registra *qué pasó*. El backlog registra *qué hay que hacer*. No
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
-> **Creado 2026-09-21.** Último trabajo: **RUM-002** (contrato único de
-> valoración de net worth — ver abajo), sobre la base de **RUM-005**
-> (orquestación + streaming del Dashboard) y **RUM-006** (balances
-> multi-fecha), ambos cerrados. **RUM-001** midió contra producción que
+> **Creado 2026-09-21.** Último trabajo: **RUM-003** (fallback silencioso de
+> FX eliminado, snapshot del mes actual corregido, redondeo centralizado —
+> ver abajo), sobre la base de **RUM-002** (contrato único de valoración de
+> net worth), **RUM-005** (orquestación + streaming del Dashboard) y
+> **RUM-006** (balances multi-fecha), todos cerrados. **RUM-001** midió contra producción que
 > `get_account_balances` era el **71 % de toda la base de datos** y escalaba
 > con el historial del household; RUM-006 corta las 7+2 llamadas redundantes
 > de Net worth y Dashboard a una sola llamada cada una (Accounts se revirtió
@@ -28,7 +29,16 @@
 > se corrigió un bug de signo real en Accounts (`Math.abs` en vez de
 > `Math.max(0,-value)`, mostraba un crédito como si fuera deuda) y un callout
 > de política FX que llevaba un año diciendo lo contrario de lo que la app
-> realmente hace. Ver la entrada de RUM-002 en §4.
+> realmente hace. Ver la entrada de RUM-002 en §4. **RUM-003** cierra el
+> fallback silencioso de `fetchFxRate` a `'latest'` (ahora
+> `source: requested/future/fallback`, con log y texto de UI correcto) y un
+> bug real de snapshot: Dashboard y Net worth pedían el balance del mes
+> actual "as of" su fin de mes — una fecha futura — en vez de "as of ahora";
+> nueva `snapshotDateForMonth` lo corrige y deduplica un `getMonthEndDate`
+> triplicado. `roundToCents` también centralizado; decisión documentada de
+> no adoptar un tipo decimal en JS. UTC de periodos y `monthStartDay` más
+> allá de Reports quedan como decisiones explícitas, no implementadas. Ver
+> la entrada de RUM-003 en §4.
 
 ---
 
@@ -40,9 +50,9 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 |---|---|---|---|---|---|
 | RUM-010a — Stack de tests | P0 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | [#68](https://github.com/andresze020/rumbo/pull/68) | 2026-09-21 |
 | RUM-001 — Instrumentación y baseline | P0 | **Hecho** (capa B pendiente) | `claude/backlog-rum-10a-tmlee1` | [#69](https://github.com/andresze020/rumbo/pull/69) | 2026-09-21 |
-| RUM-002 — Reconciliar net worth | P0 | **Hecho** | `claude/rum-002-net-worth-valuation` | — | 2026-09-21 |
+| RUM-002 — Reconciliar net worth | P0 | **Hecho** | `claude/rum-002-net-worth-valuation` | [#73](https://github.com/andresze020/rumbo/pull/73) | 2026-09-21 |
 | RUM-005 — Carga del Dashboard | P0 | **🟡 Orquestación + streaming hechos** (cache/invalidación deferida) | `claude/rum-005-suspense-streaming` | — | — |
-| RUM-003 — Periodos, FX y decimales | P0 | Pendiente | — | — | — |
+| RUM-003 — Periodos, FX y decimales | P0 | **Hecho** | `claude/rum-003-fx-period-precision` | — | 2026-09-22 |
 | RUM-006 — Balances repetidos | P1 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | — | 2026-09-21 |
 | RUM-007 — Cache, prefetch y loading | P1 | Pendiente | — | — | — |
 | RUM-004 — Consultas de Transactions | P2 | Pendiente | — | — | — |
@@ -116,7 +126,112 @@ quedaban cortos.
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
 
-### RUM-002 — Reconciliar Net worth, Assets, Liabilities y Accounts total · 2026-09-21 · rama `claude/rum-002-net-worth-valuation` · PR pendiente
+### RUM-003 — Formalizar periodos históricos, FX y precisión decimal · 2026-09-22 · rama `claude/rum-003-fx-period-precision` · PR pendiente
+
+**Alcance real** (más acotado que el título original, per re-enfoque §3.4): un
+fallback silencioso de FX, un bug de snapshot de balances, y una duplicación
+de redondeo. Nada de esquema. Dos decisiones que el prompt del ticket pedía
+proponer en vez de implementar — timezone UTC y extensión de `monthStartDay`
+— quedan documentadas como decisiones explícitas, no tocadas.
+
+**1. FX: el fallback silencioso a `'latest'`.** `fetchFxRate`
+(`src/lib/fx.ts`) reintentaba `'latest'` cuando el proveedor no tenía el
+archivo del día histórico, sin loggear nada y exponiendo la sustitución solo
+como `isLatest: boolean`. Los 5 formularios que lo consumen (transacción,
+transferencia, deuda, ajuste de saldo, saldo inicial) mostraban el mismo texto
+copiado-pegado: *"No rate available for future dates — using latest market
+rate."* — **incluso cuando la fecha no era futura**, es decir, incluso en un
+vacío de datos histórico real. El mensaje era activamente incorrecto en el
+caso que más importaba.
+
+`FxResult` ahora distingue `source: 'requested' | 'future' | 'fallback'` (en
+vez de `isLatest`), añade `requestedDate`, y loggea con `console.error` en
+`'fallback'` y en fallo total (par de moneda + fecha, sin PII — el techo
+práctico de "trazable" sin infraestructura de telemetría nueva, que RUM-001
+ya dejó como ítem futuro separado, B-5). `describeFxNote(result)`, nuevo,
+centraliza el texto que antes estaba duplicado (y mal) en los 5 formularios.
+Ver [`fx-rate-resolution.md`](./features/fx-rate-resolution.md).
+
+**2. El bug real: snapshot del mes actual usaba fin de mes, no "hoy".**
+`dashboard/page.tsx`, `dashboard/net-worth/page.tsx` (incluida su serie de
+evolución de 6 meses) y `dashboard/trend-actions.ts` pedían el balance "as of"
+el fin de mes calendario incluso para el mes actual, en curso — hoy (21 sep)
+pedían `p_as_of_date = 30 sep`, una fecha futura. Como el ledger permite
+asientos con fecha futura (Accounts ya lo asume en su propia query sin
+límite), una transacción futura podía contar silenciosamente hacia "este
+mes" antes de que su fecha llegara. Esto contradice el criterio de aceptación
+del ticket: mes actual = flujos desde el inicio del mes hasta ahora,
+snapshot a ahora; mes histórico = mes calendario completo, snapshot al
+cierre. `getMonthEndDate` además estaba triplicado byte-a-byte en esos tres
+archivos.
+
+Arreglo: `src/lib/periods/month.ts` ganó `monthEndDate(label)` (la
+reubicación pura de la lógica triplicada) y `snapshotDateForMonth(label,
+todayIso)` (hoy si `label` es el mes UTC actual, si no `monthEndDate`). Los
+tres archivos ahora resuelven su fecha de snapshot con esta función
+compartida. Un mes histórico no cambia de resultado — esto solo mueve el
+snapshot del mes actual de una fecha futura a hoy. Accounts no necesitó
+cambios: ya usaba una query sin `as_of` (genuinamente "ahora mismo").
+
+Ver [`period-semantics.md`](./features/period-semantics.md) para esto, más
+la decisión de mantener UTC sin cambios y de no extender `monthStartDay` más
+allá de Reports (BR-036 slice 2 sigue siendo su propia decisión de modelo de
+datos + migración, sin implementar aquí).
+
+**3. Redondeo: sin tipo decimal, un solo `roundToCents`.** El schema ya es
+`numeric(18,4)`/`numeric(18,8)` en cada columna de dinero o tasa — nunca
+`float`/`double precision` — y cada suma en JS de este repo es sobre una
+cantidad acotada de montos a escala de un hogar, dentro de lo que un double
+IEEE-754 representa exacto. El único hallazgo real fue duplicación, no
+imprecisión: `roundToCents` vivía en `calc.ts` (el evaluador del teclado
+numérico, sin relación con dinero por propósito) y, por separado y sin el
+guard de `Number.EPSILON`, en `installments/shared.ts`. Ambas rutas ahora
+importan la única copia en `src/lib/money.ts`. No se adoptó `decimal.js` ni
+`big.js` — decisión con evidencia, no omisión.
+
+**Archivos modificados:**
+- `src/lib/fx.ts`, `src/lib/fx.test.ts` (nuevo) — `FxResult.source`,
+  `describeFxNote`, logging.
+- `transaction-form.tsx`, `transfer-edit-form.tsx`, `debt-create-form.tsx`,
+  `balance-adjustment-form.tsx`, `opening-balance-form.tsx` — consumen
+  `describeFxNote`.
+- `src/lib/periods/month.ts`, `src/lib/periods/month.test.ts` (nuevo) —
+  `monthEndDate`, `snapshotDateForMonth`.
+- `dashboard/page.tsx`, `dashboard/net-worth/page.tsx`,
+  `dashboard/trend-actions.ts` — snapshot compartido; `EvolutionPoint.monthEndDate`
+  renombrado a `snapshotDate` (ya no siempre es fin de mes).
+- `src/lib/money.ts` (nuevo), `src/lib/calc.ts` (pierde `roundToCents`),
+  `src/lib/installments/shared.ts`, `amount-input.tsx` — redondeo único.
+- `docs/features/fx-rate-resolution.md` (nuevo), `docs/features/period-semantics.md`
+  (nuevo), `docs/features/net-worth-fx-policy.md` (cross-ref).
+
+**Explícitamente no tocado:** esquema/migraciones (ninguna); timezone UTC de
+periodos; `monthStartDay` más allá de Reports;
+`src/lib/periods/transaction-period.ts` (concern separado, PR #66);
+`src/lib/calc.ts`'s evaluador.
+
+**Verificación:** `npm run lint`, `npx tsc --noEmit`, `npm test` (87
+pasaron — 66 existentes + 11 de `fx.test.ts` + 10 de `month.test.ts`, ningún
+test existente cambió de resultado), `npm run i18n:check` (sin cambios —
+las notas de FX son texto dinámico en JS, nunca estuvieron traducidas; gap
+preexistente, no ampliado por este ticket), `npm run build`.
+
+**Sin verificación en vivo** en este sandbox (sin `NEXT_PUBLIC_SUPABASE_*`,
+misma limitación que cada ticket anterior). Checklist manual dejado en el PR:
+fecha futura en un formulario FX → nota distingue "futuro" de "sin dato";
+Dashboard mes actual + transacción con fecha futura → no debe afectar el
+neto del mes actual; mes histórico → snapshot sin cambios; punto más
+reciente del gráfico de evolución de Net worth == cifra actual del
+Dashboard.
+
+**Riesgos residuales:** la nota de fallback FX no pasa por el sistema de
+traducción estática (gap preexistente del script de auditoría, no de este
+cambio); `monthStartDay` slice 2 queda como ticket futuro pendiente de
+decisión de producto.
+
+---
+
+### RUM-002 — Reconciliar Net worth, Assets, Liabilities y Accounts total · 2026-09-21 · rama `claude/rum-002-net-worth-valuation` · PR #73
 
 **Estado: hecho.** Cierra B-3 (no había contrato autoritativo de valoración) y
 B-4 (el invariante de net worth no estaba decidido).
@@ -1070,6 +1185,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-22 | **RUM-003 cerrado: fallback silencioso de FX eliminado, bug de snapshot del mes actual corregido, redondeo centralizado — sin tipo decimal ni migraciones.** `fetchFxRate` ya no colapsa "fecha futura" y "sin dato histórico" en el mismo `isLatest: boolean`; los 5 formularios de FX mostraban el mismo texto erróneo ("no rate for future dates") incluso cuando la fecha no era futura — ahora `source: requested/future/fallback` distingue los casos y `describeFxNote` centraliza el texto correcto, con `console.error` trazando el fallback real. Bug real encontrado: Dashboard, Net worth (incluida su evolución de 6 meses) y `trend-actions.ts` pedían el balance del mes actual "as of" su fin de mes calendario — una fecha futura hoy — en vez de "as of ahora"; nueva `snapshotDateForMonth` en `src/lib/periods/month.ts` lo corrige y de paso deduplica un `getMonthEndDate` triplicado byte-a-byte. `roundToCents` (duplicado en `calc.ts` e `installments/shared.ts`) centralizado en `src/lib/money.ts`; decisión con evidencia de no adoptar `decimal.js`/`big.js` (schema ya es `numeric` en cada columna de dinero). UTC de periodos y extensión de `monthStartDay` quedan documentadas como decisiones explícitas, no implementadas. 21 tests nuevos (87/87 pasan). Sin verificación en vivo en esta sandbox (sin credenciales de Supabase) — checklist manual queda para el usuario. |
 | 2026-09-21 | **RUM-002 cerrado: un servicio único de valoración, dos bugs reales encontrados por auditar, no solo centralización.** `src/lib/net-worth/valuation.ts` reemplaza cinco reimplementaciones independientes de assets/liabilities/net worth (tres ya conocidas + una 4ª no documentada en `trend-actions.ts`, que además divergía: clampeaba la suma en vez de sumar el clamp por cuenta). Invariante decidido (B-4 cerrado): `Net worth = Total assets + Signed liabilities`, sin cambios — Assets − Liabilities al centavo habría expulsado un crédito legítimo del patrimonio. Bug real encontrado en `accounts/page.tsx`: `Math.abs` en vez de `Math.max(0,-value)` mostraba un pasivo con saldo a favor como si fuera deuda (`"$50.00 (owed)"` para un crédito de $50) — corregido. Segundo bug real: el callout de política FX en `/dashboard/net-worth` seguía diciendo "no revalúa" en la UI real, un año después de que la migración de revaluación se aplicara — corregido el copy, no solo el doc. `docs/features/net-worth-fx-policy.md` reescrito completo. 14 tests nuevos, 66/66 pasan. B-3 y B-4 cerrados. Reconciliación en vivo no corrida en esta sandbox (sin credenciales de Supabase) — verificada por equivalencia de fórmula + tests, checklist manual queda para el usuario. |
 | 2026-09-21 | **RUM-005: streaming con `Suspense` (parcial, sobre la orquestación ya fusionada en #71).** Todo lo debajo del fold (Budget, categorías, próximos cobros, Insights, Deudas, Metas, Actividad reciente) se movió a `src/app/dashboard/secondary-widgets.tsx`, un Server Component nuevo detrás de un único `<Suspense>` — primer uso de `Suspense` en el repo. `budgetRows` y `homeChecklist` se quedan eager a propósito (el primero porque `healthScore` lo necesita y se pinta en la hero card top-of-fold; el segundo porque no está en el criterio de aceptación y diferirlo invertiría el orden visual actual). RUM-001 ya había medido que estas queries cuestan ~0 — este cambio no reduce tiempo de reloj medible, su valor es percepción de velocidad, aislamiento de fallos y cumplir el criterio literal del ticket, no un segundo hallazgo de latencia. Cache/invalidación selectiva queda fuera, deferida a propósito: no existe ninguna capa de cache hoy (solo `revalidatePath`, ~90 sitios), introducir una es una decisión arquitectónica separada. `npm run lint/tsc/test/i18n:check/build` todos pasan; el checklist manual de 7 pasos queda pendiente para el usuario — esta sandbox no tiene credenciales de Supabase para correrlo. |
 | 2026-09-21 | **RUM-005: orquestación del Dashboard (parcial).** Los 7 `await` secuenciales + los 5 en `Promise.all` + `netWorthTrend` (antes al final, sin motivo — solo depende de `selectedMonth`) de `dashboard/page.tsx` se unieron en un solo `Promise.all` de 13 lecturas independientes; solo `recentEntries`/`allocations` (necesitan IDs del batch) y `homeChecklist` (necesita resultados del batch) siguen secuenciales, con el motivo comentado. Segundo hallazgo: el mismo N+1 de balances que RUM-006 corrigió estaba escondido en `trend-actions.ts` — `getDashboardTrend()` hacía 6 llamadas a `get_account_balances` (una por mes) para las métricas de tipo balance; ahora es 1 llamada a `get_account_balances_as_of_many`. Beneficia también a `/dashboard/trends`, que reusa la misma función. Streaming con `Suspense` y cache/invalidación — el resto del alcance de RUM-005 — quedan sin hacer; no se marca "Hecho" en el tablero. |

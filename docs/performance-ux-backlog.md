@@ -290,8 +290,8 @@ se movió respecto de la propuesta original.
 | RUM-001 | Instrumentar baseline y trazabilidad de performance | P0 | M | Ninguna | ✅ **Hecho 2026-09-21** (capa de servidor pendiente, B-5). Ver [`performance-baseline.md`](./performance-baseline.md) |
 | RUM-002 | Reconciliar Net worth, Assets, Liabilities y Accounts total | **✅ Hecho 2026-09-21** | L | RUM-010a (para tests) | Servicio único `src/lib/net-worth/valuation.ts`; invariante decidido (`Net worth = Total assets + Signed liabilities`, sin cambios); bug de signo real encontrado y corregido en `accounts/page.tsx`. Ver [`performance-ux-execution-status.md`](./performance-ux-execution-status.md) |
 | RUM-005 | Descomponer y optimizar carga del Dashboard | **🟡 Orquestación + streaming hechos 2026-09-21** (cache/invalidación deferida) | M/L | RUM-001, RUM-002 | Los 7 awaits secuenciales + los 5 en paralelo + `netWorthTrend` al final se unieron en un solo `Promise.all` de 13; se encontró y corrigió el mismo patrón N+1 de RUM-006 escondido en `trend-actions.ts` (6 llamadas a `get_account_balances` por mes → 1 a `get_account_balances_as_of_many`). Todo lo debajo del fold ahora streamea detrás de un `<Suspense>` (primer uso en el repo) en `src/app/dashboard/secondary-widgets.tsx`. Cache/invalidación selectiva queda deferida a propósito: no hay capa de cache hoy, introducir una es su propia decisión arquitectónica. Ver [`performance-ux-execution-status.md`](./performance-ux-execution-status.md) |
-| RUM-003 | Formalizar periodos históricos, FX y precisión decimal | P0 | L | RUM-002 | Re-enfocado al fallback del CDN de FX (§3.4 #11) |
-| RUM-006 | Reducir llamadas repetidas de balances (Accounts y Net worth) | **✅ Hecho 2026-09-21** (performance; contrato de RUM-002 pendiente) | M/L | RUM-001, RUM-002 | 7+2+2 llamadas → 1+1+1, cada una al costo de una sola fecha. Ver [`performance-ux-execution-status.md`](./performance-ux-execution-status.md) §4 |
+| RUM-003 | Formalizar periodos históricos, FX y precisión decimal | **✅ Hecho 2026-09-22** | L | RUM-002 | Fallback silencioso de FX a `'latest'` eliminado (`source: requested/future/fallback` + log); bug de snapshot corregido (mes actual ahora usa "hoy", no fin de mes) en Dashboard/Net worth/trend; `roundToCents` centralizado, sin tipo decimal (evidencia: schema ya es `numeric`). UTC y `monthStartDay` fuera de Reports quedan documentados como decisiones explícitas, no implementados. Ver [`performance-ux-execution-status.md`](./performance-ux-execution-status.md) |
+| RUM-006 | Reducir llamadas repetidas de balances (Accounts y Net worth) | **✅ Hecho 2026-09-21** | M/L | RUM-001, RUM-002 | 7+2+2 llamadas → 1+1+1, cada una al costo de una sola fecha. Ver [`performance-ux-execution-status.md`](./performance-ux-execution-status.md) §4 |
 | RUM-007 | Cache, prefetch y continuidad de loading states | P1 | M | RUM-001; coordinar 004–006 | Sin cambio |
 | RUM-004 | Optimizar consultas de Transactions | **P1** | M | RUM-001 | **Re-scope, no descarte.** `search_household_transactions` cuesta 22 ms sobre un mes pero **190 ms y 34.791 buffers sobre all-time**, y el offset no influye ([baseline §5.4.1](./performance-baseline.md)) |
 | RUM-008 | Simplificar arquitectura de información del Dashboard | P2 | M | RUM-002 | Sin cambio |
@@ -830,6 +830,16 @@ archivos modificados, timings y riesgos residuales.
 ---
 
 ### RUM-003 — Formalizar periodos históricos, FX y precisión decimal
+
+> ✅ **Hecho el 2026-09-22.** Alcance real, más acotado que el título: el
+> fallback silencioso de `fetchFxRate` a `'latest'`, el snapshot de balances
+> del mes actual (usaba fin de mes en vez de hoy), y la duplicación de
+> `roundToCents`. UTC y la extensión de `monthStartDay` quedan como
+> decisiones documentadas, no implementadas — ninguna migración en este
+> ticket. Ver la entrada RUM-003 en
+> [`performance-ux-execution-status.md`](./performance-ux-execution-status.md),
+> [`fx-rate-resolution.md`](./features/fx-rate-resolution.md) y
+> [`period-semantics.md`](./features/period-semantics.md).
 
 **Prioridad:** P0 · **Tipo:** Integridad financiera/multi-currency · **Tamaño:** L · **Dependencia:** RUM-002
 

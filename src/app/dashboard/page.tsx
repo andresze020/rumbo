@@ -10,6 +10,7 @@ import {
 import { createClient } from '@/lib/supabase/server'
 import { groupByAsOfDate } from '@/lib/balances/multi-date'
 import { computeValuation, selectNetWorthAccounts } from '@/lib/net-worth/valuation'
+import { monthEndDate, snapshotDateForMonth } from '@/lib/periods/month'
 import { buttonVariants } from '@/components/ui/button'
 import {
   Card,
@@ -146,16 +147,14 @@ function parseDashboardMonth(month: string | undefined) {
   return month
 }
 
-function getMonthEndDate(month: string) {
-  const [year, monthNumber] = month.split('-').map(Number)
-  return new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10)
-}
-
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams
   const selectedMonth = parseDashboardMonth(params.month)
   const selectedMonthDate = `${selectedMonth}-01`
-  const selectedMonthEndDate = getMonthEndDate(selectedMonth)
+  const todayIso = new Date().toISOString().slice(0, 10)
+  // RUM-003: the current, still-open month snapshots at today, not at its
+  // (unrealized) month end — see snapshotDateForMonth's own doc comment.
+  const selectedSnapshotDate = snapshotDateForMonth(selectedMonth, todayIso)
   const supabase = await createClient()
   const locale = await getLocale()
   const t = (key: TranslationKey, vars?: Record<string, string | number>) => translate(locale, key, vars)
@@ -182,7 +181,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const baseCurrency = household.base_currency as string
   const prevMonthDate = getPreviousMonthDate(selectedMonth)
-  const prevMonthEndDate = getMonthEndDate(prevMonthDate.slice(0, 7))
+  const prevMonthEndDate = monthEndDate(prevMonthDate.slice(0, 7))
 
   // RUM-005: these 6 reads only depend on household.id and the date variables
   // computed above — none of them reads another's result. Everything that's
@@ -207,7 +206,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     // answers both dates from a single pass. See docs/performance-baseline.md.
     supabase.rpc('get_account_balances_as_of_many', {
       p_household_id: household.id,
-      p_as_of_dates: [selectedMonthEndDate, prevMonthEndDate],
+      p_as_of_dates: [selectedSnapshotDate, prevMonthEndDate],
     }),
     supabase.rpc('get_monthly_dashboard_summary', {
       p_household_id: household.id,
@@ -233,7 +232,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     getDashboardTrend('net-worth', selectedMonth, 6),
   ])
   const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as MultiDateAccountBalance[])
-  const accountBalances = balancesByDate.get(selectedMonthEndDate) ?? []
+  const accountBalances = balancesByDate.get(selectedSnapshotDate) ?? []
   const prevBalanceRows = balancesByDate.get(prevMonthEndDate) ?? []
 
   const balances = accountBalances

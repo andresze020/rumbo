@@ -22,6 +22,7 @@ import {
   selectNetWorthAccounts,
   type ValuationSummary,
 } from '@/lib/net-worth/valuation'
+import { snapshotDateForMonth } from '@/lib/periods/month'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import { formatCurrency, formatLabel as formatValue, formatMonthLabel } from '@/lib/format'
@@ -53,7 +54,7 @@ type MultiDateAccountBalance = AccountBalance & { as_of_date: string }
 
 type EvolutionPoint = ValuationSummary & {
   month: string
-  monthEndDate: string
+  snapshotDate: string
   hasError: boolean
 }
 
@@ -69,11 +70,6 @@ function parseMonth(month: string | undefined) {
   const parsedDate = new Date(`${month}-01T00:00:00.000Z`)
   if (Number.isNaN(parsedDate.getTime())) return currentMonthParam()
   return month
-}
-
-function getMonthEndDate(month: string) {
-  const [year, monthNumber] = month.split('-').map(Number)
-  return new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10)
 }
 
 function getPreviousMonths(selectedMonth: string, count: number) {
@@ -227,7 +223,10 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
   const locale = await getLocale()
   const accountsView = await getAccountsView()
   const selectedMonth = parseMonth(params.month)
-  const selectedMonthEndDate = getMonthEndDate(selectedMonth)
+  const todayIso = new Date().toISOString().slice(0, 10)
+  // RUM-003: the current, still-open month snapshots at today, not at its
+  // (unrealized) month end — see snapshotDateForMonth's own doc comment.
+  const selectedSnapshotDate = snapshotDateForMonth(selectedMonth, todayIso)
   const evolutionMonths = getPreviousMonths(selectedMonth, 6)
   const supabase = await createClient()
 
@@ -258,15 +257,15 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
   // answers every requested date from that single pass: the same 7 dates
   // measured at 207-247 ms/~34 800 buffers TOTAL — the cost of roughly one
   // single-date call, not seven. See docs/performance-baseline.md.
-  const evolutionMonthEndDates = evolutionMonths.map(getMonthEndDate)
-  const requestedDates = [selectedMonthEndDate, ...evolutionMonthEndDates]
+  const evolutionSnapshotDates = evolutionMonths.map((month) => snapshotDateForMonth(month, todayIso))
+  const requestedDates = [selectedSnapshotDate, ...evolutionSnapshotDates]
 
   const { data: allBalances, error: balancesError } = await supabase.rpc(
     'get_account_balances_as_of_many',
     { p_household_id: household.id, p_as_of_dates: requestedDates }
   )
   const balancesByDate = groupByAsOfDate((allBalances ?? []) as MultiDateAccountBalance[])
-  const selectedBalances = balancesByDate.get(selectedMonthEndDate) ?? []
+  const selectedBalances = balancesByDate.get(selectedSnapshotDate) ?? []
   const selectedBalancesError = balancesError
 
   // A single call means a single pass/fail for the whole page, which is more
@@ -274,11 +273,11 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
   // failure could silently drop one evolution point while the rest rendered
   // fine. Now either every date has data or the page says so once.
   const evolutionResults = evolutionMonths.map((month) => {
-    const monthEndDate = getMonthEndDate(month)
+    const snapshotDate = snapshotDateForMonth(month, todayIso)
     const summary = computeValuation(
-      selectNetWorthAccounts(balancesByDate.get(monthEndDate) ?? [])
+      selectNetWorthAccounts(balancesByDate.get(snapshotDate) ?? [])
     )
-    return { month, monthEndDate, hasError: Boolean(balancesError), ...summary }
+    return { month, snapshotDate, hasError: Boolean(balancesError), ...summary }
   })
 
   const balances = selectedBalances
@@ -444,7 +443,7 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
               >
                 <div>
                   <p className="text-sm font-medium">{formatMonthLabel(point.month, locale)}</p>
-                  <p className="text-xs text-muted-foreground">{point.monthEndDate}</p>
+                  <p className="text-xs text-muted-foreground">{point.snapshotDate}</p>
                 </div>
                 <div className="flex min-w-0 items-center">
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">

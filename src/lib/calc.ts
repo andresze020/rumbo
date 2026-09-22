@@ -83,8 +83,3 @@ export function evaluateAmountExpression(expression: string): number | null {
 
   return Number.isFinite(value) ? value : null
 }
-
-/** Rounds to 2 decimals for money amounts, avoiding float artifacts like 0.1+0.2. */
-export function roundToCents(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100
-}

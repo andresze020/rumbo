@@ -6,9 +6,9 @@ import { Input } from '@/components/ui/input'
 import {
   evaluateAmountExpression,
   hasPendingOperation,
-  roundToCents,
   trimIncompleteExpression,
 } from '@/lib/calc'
+import { roundToCents } from '@/lib/money'
 import {
   formatAmountForDisplay,
   getCurrencySymbol,

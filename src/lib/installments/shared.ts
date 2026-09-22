@@ -7,6 +7,8 @@
 // be worse than no preview at all. Both are deliberately short enough to compare
 // side by side.
 
+import { roundToCents } from '@/lib/money'
+
 export type InstallmentSplit = {
   /** Amount of every installment except the last. */
   perInstallment: number
@@ -14,10 +16,6 @@ export type InstallmentSplit = {
   lastInstallment: number
   /** Always exactly the original total. */
   total: number
-}
-
-function roundToCents(value: number): number {
-  return Math.round(value * 100) / 100
 }
 
 /**

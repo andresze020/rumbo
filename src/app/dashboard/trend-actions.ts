@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { groupByAsOfDate } from '@/lib/balances/multi-date'
 import { computeValuation, selectNetWorthAccounts } from '@/lib/net-worth/valuation'
+import { snapshotDateForMonth } from '@/lib/periods/month'
 
 export type TrendMetric =
   | 'monthly-income'
@@ -32,11 +33,6 @@ function getLastNMonthDates(currentMonth: string, n: number): string[] {
     months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`)
   }
   return months
-}
-
-function getMonthEndDate(monthDate: string): string {
-  const [year, mon] = monthDate.slice(0, 7).split('-').map(Number)
-  return new Date(Date.UTC(year, mon, 0)).toISOString().slice(0, 10)
 }
 
 function formatMonthLabel(monthDate: string): string {
@@ -114,17 +110,22 @@ export async function getDashboardTrend(
     return { ok: true, data }
   }
 
-  // Balance-type metrics: one aggregation for every requested month-end date,
+  // Balance-type metrics: one aggregation for every requested snapshot date,
   // not one get_account_balances call per month. get_account_balances(household,
   // as_of_date) has no lower date bound (RUM-001), so each of those N calls
   // re-aggregated the whole ledger from scratch; get_account_balances_as_of_many
   // (RUM-006) answers every requested date from a single pass instead. This
   // exact N+1 pattern was found and deliberately deferred out of RUM-006's
   // scope (three other call sites only) — see docs/performance-ux-execution-status.md.
-  const monthEndDates = monthDates.map((d) => getMonthEndDate(d))
+  //
+  // RUM-003: monthDates' last entry is always currentMonth (getLastNMonthDates'
+  // i=0 case) — snapshotDateForMonth resolves that one point to today instead
+  // of an unrealized month-end, same fix as Dashboard/Net worth.
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const snapshotDates = monthDates.map((d) => snapshotDateForMonth(d.slice(0, 7), todayIso))
   const { data: multiDateBalances } = await supabase.rpc('get_account_balances_as_of_many', {
     p_household_id: householdId,
-    p_as_of_dates: monthEndDates,
+    p_as_of_dates: snapshotDates,
   })
   const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as AccountBalanceRow[])
 
@@ -140,7 +141,7 @@ export async function getDashboardTrend(
   // default (p_include_archived), so it never did anything here.
   const data: TrendPoint[] = monthDates.map((d, i) => {
     const valuation = computeValuation(
-      selectNetWorthAccounts(balancesByDate.get(monthEndDates[i]) ?? [])
+      selectNetWorthAccounts(balancesByDate.get(snapshotDates[i]) ?? [])
     )
 
     let value = 0
