@@ -399,7 +399,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           {/* Monthly metrics */}
           <section>
             <div className="mb-2 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold">{t('dashboard.thisMonthTitle')}</h2>
+              <h2 className="text-sm font-bold">{formatMonthLabel(selectedMonth, locale)}</h2>
               <Link
                 href={`/dashboard/trends?month=${selectedMonth}`}
                 className="shrink-0 text-xs font-semibold text-primary hover:underline"
