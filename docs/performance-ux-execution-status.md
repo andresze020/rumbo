@@ -246,8 +246,9 @@ en la moneda base, aunque el importe está en la moneda de la regla).
 *Review queue* — el badge de Home contaba todo el histórico de no revisadas y
 enlazaba a 2000–2099. Ahora cuenta solo el mes en pantalla (no anuladas), dice
 "4 to review in September 2026", enlaza a
-`/dashboard/transactions?review=unreviewed&month=YYYY-MM` y solo aparece con
-conteo > 0. Month review ("Categorize N transactions to review") aplica las
+`/dashboard/transactions?review=unreviewed&status=posted&status=pending&month=YYYY-MM`
+(el filtro de estado hace que la lista excluya las anuladas igual que el
+conteo — hallazgo menor de `ledger-guard`) y solo aparece con conteo > 0. Month review ("Categorize N transactions to review") aplica las
 mismas reglas y el mismo enlace — antes decía 5 donde Home decía 4. Los datos
 de revisión no se tocan.
 

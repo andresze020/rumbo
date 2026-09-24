@@ -264,7 +264,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       accent: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
       title: `Categorize ${pendingReview} transaction${pendingReview === 1 ? '' : 's'} to review`,
       description: 'Clear your review queue before closing the books.',
-      href: `/dashboard/transactions?review=unreviewed&month=${month}`,
+      href: `/dashboard/transactions?review=unreviewed&status=posted&status=pending&month=${month}`,
     })
   }
   if (hasActivity && curr.savings > 0.01) {

@@ -751,7 +751,7 @@ export async function DashboardSecondaryWidgets({
             <h2 className="text-sm font-bold">{t('dashboard.recentActivityTitle')}</h2>
             {needsReviewCount ? (
               <Link
-                href={`/dashboard/transactions?review=unreviewed&month=${selectedMonth}`}
+                href={`/dashboard/transactions?review=unreviewed&status=posted&status=pending&month=${selectedMonth}`}
                 className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-400"
               >
                 {t('dashboard.needsReviewMonth', {
