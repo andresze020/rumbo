@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CalendarClock,
   Layers,
+  ListChecks,
   PiggyBank,
   Scale,
   Sparkles,
@@ -347,7 +348,7 @@ export async function DashboardSecondaryWidgets({
       text: t('dashboard.insightUpcoming', { count: upcomingRows.length }),
     })
   }
-  if (largestExpenseCategory && insights.length < 4) {
+  if (largestExpenseCategory && insights.length < 2) {
     insights.push({
       key: 'top-category',
       tone: 'info',
@@ -358,7 +359,10 @@ export async function DashboardSecondaryWidgets({
       }),
     })
   }
-  const visibleInsights = insights.slice(0, 4)
+  // RUM-008: top-of-fold already answers "how much / how was the month"; the
+  // right rail only has room for a couple of genuinely actionable signals
+  // before it starts competing with Recent activity for attention.
+  const visibleInsights = insights.slice(0, 2)
 
   // ── Upcoming bills (recurring). ──────────────────────────────────────────
   function daysUntil(dateStr: string) {
@@ -472,6 +476,15 @@ export async function DashboardSecondaryWidgets({
   // fallback labels otherwise, with nothing telling the user data is missing.
   const hasLoadError = Boolean(expenseCategoriesError || categoryLookupError)
 
+  // RUM-008: Budget and Goals both use "not set up yet" copy when empty —
+  // real setup gaps, not a state worth celebrating — so their empty cases
+  // move into one compact setup card instead of two more full-size cards.
+  // Debts is deliberately excluded: its empty copy ("No active debts. Nicely
+  // done.") treats zero debts as a positive outcome, not an incomplete setup,
+  // so it keeps its own card exactly as before.
+  const budgetNeedsSetup = !budgetError && !hasBudget
+  const goalsNeedSetup = goalsMini.length === 0
+
   return (
     <>
       {hasLoadError ? <Callout variant="error">{t('dashboard.loadError')}</Callout> : null}
@@ -524,16 +537,6 @@ export async function DashboardSecondaryWidgets({
                   </Link>
                 ))}
               </div>
-            </div>
-          ) : !budgetError ? (
-            <div className={cn(cardClass, 'p-4 sm:p-5')}>
-              <h2 className="mb-3 text-sm font-bold">{t('dashboard.budgetTitle')}</h2>
-              <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                {t('dashboard.noBudget', { month: formatMonthLabel(selectedMonth, locale) })}{' '}
-                <Link href={`/dashboard/budgets?month=${selectedMonth}`} className="underline underline-offset-2 hover:text-foreground">
-                  {t('dashboard.createBudget')}
-                </Link>
-              </p>
             </div>
           ) : null}
 
@@ -660,14 +663,12 @@ export async function DashboardSecondaryWidgets({
           </div>
 
           {/* Goals mini */}
-          <div className={cn(cardClass, 'p-4')}>
-            <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold">
-              <PiggyBank className="size-[14px] text-primary" aria-hidden="true" />
-              {t('dashboard.goalsMiniTitle')}
-            </h2>
-            {goalsMini.length === 0 ? (
-              <p className="text-xs text-muted-foreground">{t('dashboard.goalsMiniEmpty')}</p>
-            ) : (
+          {!goalsNeedSetup ? (
+            <div className={cn(cardClass, 'p-4')}>
+              <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold">
+                <PiggyBank className="size-[14px] text-primary" aria-hidden="true" />
+                {t('dashboard.goalsMiniTitle')}
+              </h2>
               <div className="space-y-2.5">
                 {goalsMini.map((g) => (
                   <div key={g.id}>
@@ -681,11 +682,11 @@ export async function DashboardSecondaryWidgets({
                   </div>
                 ))}
               </div>
-            )}
-            <Link href="/dashboard/goals" className="mt-3 inline-block text-[11.5px] font-semibold text-primary hover:underline">
-              {t('dashboard.viewGoals')} →
-            </Link>
-          </div>
+              <Link href="/dashboard/goals" className="mt-3 inline-block text-[11.5px] font-semibold text-primary hover:underline">
+                {t('dashboard.viewGoals')} →
+              </Link>
+            </div>
+          ) : null}
         </aside>
       </div>
 
@@ -707,6 +708,41 @@ export async function DashboardSecondaryWidgets({
         </div>
         <RecentActivity rows={recentActivityRows} emptyLabel={t('dashboard.recentActivityEmpty')} />
       </div>
+
+      {/* RUM-008: unconfigured Budget/Goals, consolidated into one compact
+          card instead of two more full-size empty ones. Last on the page —
+          least urgent of what Home shows. */}
+      {budgetNeedsSetup || goalsNeedSetup ? (
+        <div className={cn(cardClass, 'p-4')}>
+          <h2 className="mb-1 flex items-center gap-1.5 text-sm font-bold">
+            <ListChecks className="size-[14px] text-muted-foreground" aria-hidden="true" />
+            {t('dashboard.setupTitle')}
+          </h2>
+          <div className="divide-y">
+            {budgetNeedsSetup ? (
+              <div className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                <p className="text-xs text-muted-foreground">
+                  {t('dashboard.noBudget', { month: formatMonthLabel(selectedMonth, locale) })}
+                </p>
+                <Link
+                  href={`/dashboard/budgets?month=${selectedMonth}`}
+                  className="shrink-0 text-xs font-semibold text-primary hover:underline"
+                >
+                  {t('dashboard.createBudget')} →
+                </Link>
+              </div>
+            ) : null}
+            {goalsNeedSetup ? (
+              <div className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                <p className="text-xs text-muted-foreground">{t('dashboard.goalsMiniEmpty')}</p>
+                <Link href="/dashboard/goals" className="shrink-0 text-xs font-semibold text-primary hover:underline">
+                  {t('dashboard.viewGoals')} →
+                </Link>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </>
   )
 }

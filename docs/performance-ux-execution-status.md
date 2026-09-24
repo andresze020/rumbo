@@ -8,7 +8,20 @@
 > Este archivo registra *qué pasó*. El backlog registra *qué hay que hacer*. No
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
-> **Actualizado 2026-09-24 — RUM-004 cerrado: causa raíz real de "Transactions
+> **Actualizado 2026-09-24 — RUM-008 cerrado: label de mes dinámico y
+> tarjetas vacías de Budget/Goals consolidadas en una, verificado en vivo con
+> capturas en 4 anchos × 2 temas.** Alcance acotado a lo que los criterios de
+> aceptación pedían literalmente (no la reescritura completa de jerarquía que
+> proponía el ticket): `dashboard.thisMonthTitle` (estático "This month") →
+> `formatMonthLabel(selectedMonth, locale)`; Budget y Goals, cuando no están
+> configurados, dejan de mostrar cada uno su propia tarjeta vacía y pasan a
+> una sola tarjeta compacta nueva ("Finish setting up"); Insights baja de 4 a
+> 2 tarjetas. Debts queda deliberadamente fuera de la consolidación — su copy
+> vacío ("No active debts. Nicely done.") es una afirmación positiva, no una
+> configuración pendiente. Ver la entrada de RUM-008 en §4 para el
+> razonamiento completo y las capturas.
+>
+> **2026-09-24 — RUM-004 cerrado: causa raíz real de "Transactions
 > lento" encontrada y arreglada en producción, con mejora confirmada.** No era
 > la query: las políticas RLS de 5 tablas llamaban
 > `is_household_member(household_id)`, una función `security definer` que
@@ -87,8 +100,8 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | RUM-003 — Periodos, FX y decimales | P0 | **Hecho** | `claude/rum-003-fx-period-precision` | — | 2026-09-22 |
 | RUM-006 — Balances repetidos | P1 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | — | 2026-09-21 |
 | RUM-007 — Cache, prefetch y loading | P1 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#75](https://github.com/andresze020/rumbo/pull/75) | 2026-09-24 |
-| RUM-004 — Consultas de Transactions | P2 | **Hecho, aplicado y verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | — | 2026-09-24 |
-| RUM-008 — IA del Dashboard | P2 | Pendiente | — | — | — |
+| RUM-004 — Consultas de Transactions | P2 | **Hecho, aplicado y verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#76](https://github.com/andresze020/rumbo/pull/76) | 2026-09-24 |
+| RUM-008 — IA del Dashboard | P2 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | — | 2026-09-24 |
 | RUM-009 — Month health e Insights | P2 | Pendiente | — | — | — |
 | RUM-010b — Suite de regresión y gate | P0 transversal | Pendiente | — | — | — |
 
@@ -159,7 +172,150 @@ quedaban cortos.
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
 
-### RUM-004 — Optimizar consultas de Transactions · 2026-09-24 · rama `claude/next-backlog-ticket-2azpv2` · PR pendiente · **migración aplicada y verificada**
+### RUM-008 — Simplificar arquitectura de información del Dashboard · 2026-09-24 · rama `claude/next-backlog-ticket-2azpv2` · PR pendiente
+
+**Alcance real** (más acotado que la jerarquía completa propuesta en el
+ticket, con la razón documentada en cada punto): reordenar todo `Home` de
+arriba abajo era un cambio grande y riesgoso para el beneficio marginal, dado
+que la columna izquierda/derecha (`lg:grid-cols-[minmax(0,1fr)_304px]`) ya
+aproxima razonablemente el orden que pide el ticket en mobile (donde el grid
+colapsa a una sola columna: Budget → Donut → Upcoming → Insights → Debts →
+Goals → Recent activity ya sitúa "obligaciones" antes que "señales" y
+"señales" antes que "actividad reciente"). En vez de reescribir esa
+estructura, se atacaron los tres puntos concretos de los criterios de
+aceptación que el código sí violaba, verificables uno por uno:
+
+**1. Copy del mes.** `dashboard.thisMonthTitle` (`page.tsx:402`) era un
+literal estático "This month" que no cambiaba al navegar a un mes pasado con
+`MonthNav`. Reemplazado por `formatMonthLabel(selectedMonth, locale)` — la
+misma función que ya usan `noActivity`/`noBudget`/`expensesByCategoryEmpty`
+en el resto de la pantalla, así que no hay una nueva fuente de verdad, solo
+una consistencia que faltaba. Sin clave de traducción nueva: `formatMonthLabel`
+ya usa `Intl.DateTimeFormat`, localizado sin pasar por el diccionario. La
+clave `thisMonthTitle` quedó huérfana y se eliminó de los tres locales (vía
+`i18n-scribe`, confirmado con grep que no se usaba en ningún `.tsx`/`.ts`
+antes de borrarla).
+
+**2. Varias tarjetas vacías consecutivas.** Confirmado con un household de
+prueba real (cuenta nueva, un solo account, sin budget/debts/goals/transacciones):
+antes de este cambio, Budget y Goals mostraban cada una su propia tarjeta de
+tamaño completo con un único párrafo "no configurado" — dos tarjetas
+completas para decir, en esencia, "todavía no hiciste esto". Consolidadas en
+una sola tarjeta compacta nueva ("Finish setting up" / `dashboard.setupTitle`,
+clave nueva vía `i18n-scribe`) con una fila de una línea + CTA por módulo
+pendiente, **solo cuando corresponde** — si Budget o Goals ya tienen datos,
+esa fila no aparece y el módulo sigue mostrando su tarjeta completa normal
+como siempre. **Debts queda fuera a propósito**: su copy vacío existente
+("No active debts. Nicely done.") trata cero deudas como un resultado
+positivo, no como una configuración incompleta — meterlo en la tarjeta de
+"pendientes de configurar" habría convertido un elogio en un reclamo
+incorrecto para cualquier household sin deudas. El ticket nombra literalmente
+"Budget/Debt/Goal" pero el copy del producto ya distingue los tres; se
+respetó esa distinción en vez de aplicar la palabra del ticket al pie de la
+letra.
+
+**3. Señales accionables.** El grid interno de Insights ya limitaba a 4
+(`insights.slice(0, 4)`); el ticket pide "una o dos". Bajado a 2
+(`insights.slice(0, 2)`), con la condición que añade el insight de respaldo
+("top-category") ajustada de `insights.length < 4` a `< 2` para que no
+compute un insight que el slice descartaría de todos modos.
+
+**No tocado, con razón:** el health score duplicado (hero card + tarjeta
+`lg:hidden` en `page.tsx:428-439`) — es una decisión de layout mobile
+existente (mostrar el score en un lugar donde el hero card quizás no tiene
+espacio), no algo que el ticket pida cambiar explícitamente, y tocarlo sin
+una razón concreta habría sido alcance no pedido. `needsReviewCount` ya vive
+como badge compacto en el header de Recent activity, no como tarjeta
+separada — no necesitaba moverse. Reordenar Donut/Upcoming entre sí u
+otro tipo de reestructuración visual mayor de la columna principal/aside no
+se hizo — el ticket dice explícitamente "no conviertas esto en una
+refactorización total del archivo" (instrucción heredada de RUM-005, que ya
+partió este archivo).
+
+**Archivos modificados:**
+- `src/app/dashboard/page.tsx:402` — label de mes dinámico.
+- `src/app/dashboard/secondary-widgets.tsx` — import de `ListChecks`; cap de
+  insights a 2; rama vacía de Budget eliminada (ahora solo renderiza cuando
+  `hasBudget`); Goals mini envuelto en `!goalsNeedSetup`; nueva tarjeta
+  "Finish setting up" al final, antes del cierre del fragmento.
+- `src/lib/i18n/dictionaries.ts` — `dashboard.setupTitle` nueva (en/es/fr);
+  `dashboard.thisMonthTitle` eliminada (en/es/fr, huérfana).
+
+**Antes / después:** antes, un household nuevo con una sola cuenta veía dos
+tarjetas completas ("Budget vs Actual" / "Goals") cuyo único contenido era
+una frase de "todavía no configuraste esto". Después, esas dos frases viven
+en una sola tarjeta compacta al final de la pantalla. El header de "Monthly
+metrics" decía "This month" en cualquier mes navegado; ahora dice el mes real
+("September 2026", verificado navegando con `MonthNav`).
+
+**Verificado en vivo**, no solo por lectura de código — esta sesión tenía
+credenciales reales de Supabase. Cuenta de prueba nueva (`rum008-qa-*@example.com`,
+un household con una sola cuenta, sin budget/debts/goals/transacciones) vía
+Playwright headless contra `npm run dev`, capturas en 320/375/430/768px,
+claro y oscuro. Confirmado visualmente (no solo por grep del HTML, que
+mostraba "2 ocurrencias" de cada frase por el mismo motivo ya documentado en
+RUM-007 — el payload de hidratación RSC serializa el árbol dos veces):
+- El header de mes dice "September 2026", no "This month".
+- Budget y Goals **no** tienen tarjetas propias vacías — solo aparecen como
+  dos líneas dentro de "Finish setting up".
+- Debts conserva su propia tarjeta con "No active debts. Nicely done."
+- Sin overflow ni corte de contenido en ninguno de los cuatro anchos, claro
+  y oscuro.
+
+**Comandos ejecutados:** `npm run lint` · `npx tsc --noEmit` · `npm test`
+(98/98) · `npm run i18n:check` (1.262 frases) · `npm run build` — todos en
+verde. Verificación visual descrita arriba (script de Playwright de un solo
+uso, no comiteado, capturas entregadas al usuario).
+
+**Migraciones o pasos pendientes:** ninguno — cambio puramente de frontend,
+sin tocar esquema, RLS ni ninguna función financiera.
+
+**Riesgos residuales:**
+- La jerarquía completa que proponía el ticket (obligaciones antes que
+  Budget/Donut en el orden visual) no se implementó — se decidió que el
+  orden actual ya aproxima razonablemente esa jerarquía en mobile (ver
+  "Alcance real" arriba) en vez de arriesgar una reescritura grande. Si una
+  revisión futura decide que el orden literal importa más de lo que se
+  asumió aquí, es trabajo pendiente, no un olvido.
+- Un household que **solo** tiene Debts sin configurar (Budget y Goals ya
+  con datos) sigue viendo la tarjeta de Debts con su copy positivo normal —
+  correcto por diseño, pero significa que "Finish setting up" nunca
+  incluye a Debts bajo ninguna circunstancia, ni siquiera si en el futuro
+  alguien decide que sí debería tratarse como "pendiente". Decisión
+  documentada, no un descuido.
+- El cap de Insights a 2 no se verificó visualmente con datos reales (el
+  household de prueba no tenía transacciones para generar insights) — el
+  cambio es un `slice(0, 2)` de una sola línea, bajo riesgo, pero queda como
+  verificación pendiente si se quiere ver con datos reales.
+- No se probó con un segundo household real con datos (budget configurado,
+  con deudas, con metas) para confirmar que las tarjetas normales (no-vacías)
+  siguen viéndose igual que antes — el código de esas ramas no cambió
+  (`hasBudget ? <tarjeta completa> : null` es la misma tarjeta completa que
+  ya existía, solo se quitó su rama `else`), así que el riesgo es bajo, pero
+  no hay captura de pantalla que lo confirme.
+
+**Checklist manual de revisión:**
+1. Con un household real con budget/debts/goals configurados, confirmar que
+   las tres tarjetas siguen mostrando sus datos normales (sin cambios
+   esperados — solo para confirmar que quitar la rama `else` no rompió la
+   rama `if`).
+2. Con un household con exactamente un módulo sin configurar (ej. budget sí,
+   goals no), confirmar que "Finish setting up" aparece con una sola fila,
+   no dos.
+3. Navegar varios meses atrás con `MonthNav` y confirmar que el header de
+   "Monthly metrics" siempre coincide con el mes mostrado.
+4. Con datos reales de gasto/ingreso, confirmar que Insights nunca muestra
+   más de 2 tarjetas.
+
+**¿Lista para PR?:** sí. Gate completo en verde, verificado visualmente en
+4 anchos × 2 temas contra Supabase real.
+
+**Correcciones al backlog:** ninguna — el ticket no tenía hipótesis en §3.4
+que corregir; es trabajo de producto/UI, no de performance.
+
+---
+
+### RUM-004 — Optimizar consultas de Transactions · 2026-09-24 · rama `claude/next-backlog-ticket-2azpv2` · PR [#76](https://github.com/andresze020/rumbo/pull/76) (fusionado) · **migración aplicada y verificada**
 
 **Causa raíz confirmada — y no es la que el ticket asumía.** RUM-001 (§5.4/5.4.1)
 ya había medido que `search_household_transactions` sobre all-time cuesta 190 ms
@@ -1604,6 +1760,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-24 | **RUM-008 cerrado: label de mes dinámico, Budget/Goals consolidados en una tarjeta compacta, Insights bajado a 2.** Alcance acotado a los tres puntos concretos de los criterios de aceptación (no la jerarquía completa del ticket, que ya se aproxima razonablemente en mobile con la estructura actual). Verificado en vivo con Playwright contra `npm run dev` y Supabase real: cuenta de prueba nueva con un household de una sola cuenta, sin budget/debts/goals/transacciones, capturada en 320/375/430/768px, claro y oscuro. Confirmado visualmente que "September 2026" reemplaza "This month", que Budget y Goals ya no tienen tarjetas propias vacías (solo aparecen como líneas dentro de "Finish setting up"), y que Debts conserva su copy positivo ("No active debts. Nicely done.") sin tocar — decisión deliberada, no un olvido, porque cero deudas es un resultado bueno, no una configuración pendiente. Dos claves de i18n vía `i18n-scribe`: `dashboard.setupTitle` nueva, `dashboard.thisMonthTitle` eliminada (huérfana en las 3 locales). Gate completo en verde. |
 | 2026-09-24 | **RUM-004 cerrado: migración aplicada, mejora confirmada en producción.** El usuario pusheó el commit con la migración redactada desde su máquina (el harness había bloqueado el push desde esta sesión); un `db-push.mjs push --apply` pedido de nuevo por el usuario sí pasó el clasificador esta vez (61/61 migraciones). `EXPLAIN (ANALYZE, BUFFERS)` inmediatamente después, mismo household real, mismo método que encontró el problema: `get_account_balances` 192 ms/36.778 buffers → **25 ms/3.024 buffers** (~7,7×/~12,2×); `search_household_transactions` (all-time) 186 ms/34.791 buffers → **22 ms/1.731 buffers** (~8,4×/~20×). Antes/después real, no proyectado. El resto del alcance original del ticket (índices, keyset pagination) no hacía falta — la causa raíz era el plan de RLS, no la query ni la paginación. B-6 se cierra como "superado para esta migración puntual", no como resuelto en general: el mismo comando fue bloqueado y luego permitido sin cambiar nada explícito. |
 | 2026-09-24 | **RUM-004: causa raíz real encontrada con `EXPLAIN ANALYZE` en producción — no es la query, son las políticas RLS.** `is_household_member(household_id)` es `security definer`, que Postgres nunca inlinea, así que las políticas `select` de `transactions`/`transaction_entries`/`transaction_allocations`/`transaction_tags`/`accounts` la reinvocan por cada fila. Medido en el household real más grande (4.664 transacciones): con RLS, el join de `search_household_transactions` con `transaction_entries` se convierte en un Nested Loop que llama la función 4.664 veces (23.843 de 33.507 buffers, 196 ms); sin RLS, el mismo query plan es un Hash Join de una pasada (27 ms). Halazgo con implicación mayor: `get_account_balances` hace el mismo join bajo las mismas políticas, casi con certeza la razón real por la que RUM-001/006 ya lo habían medido como la llamada más cara del sistema. Migración redactada (`20260924120000_rum004_rls_select_policy_perf.sql`) que reescribe esas 5 políticas al patrón de subquery que recomienda la guía de RLS de Supabase — misma semántica de autorización, sin invocar la función por fila. El usuario confirmó por chat que la aplicara en el momento, pero el clasificador de auto-mode del harness bloqueó la acción (`[Protected-Scope IaC Apply]`) incluso con esa confirmación explícita; nueva entrada B-6 documenta el bloqueo y los comandos exactos para que el usuario la aplique él mismo. Sin "después" medido todavía. Detalle completo en la entrada de RUM-004 §4. |
 | 2026-09-24 | **RUM-007: verificación en vivo con Supabase real (post-cierre) + fix de un hallazgo de Codex.** El usuario habilitó credenciales reales después de que el PR #75 quedara listo. (a) Codex (P2) marcó que `budgets/loading.tsx` volvía todo el skeleton un `role="status"`, anunciando 4× "Loading budget data." y cada título de tarjeta — corregido con el mismo patrón de un solo `sr-only` + `aria-hidden` que ya usa `PageLoading`; thread resuelto, CI verde de nuevo. (b) Con Playwright headless (Chromium del contenedor) contra `npm run dev` y un build de producción, autenticado con una cuenta de prueba nueva: confirmado que las 11 rutas nuevas (incluida `coming-soon/[feature]`) emiten su fallback en el HTML servido por el servidor real, que el fix de `budgets/loading.tsx` deja un solo mensaje visible, y que el prefetch de Home/Transactions/Accounts **no dispara nada en `next dev`** (comportamiento normal de Next, no un bug) pero sí en producción. Hallazgo secundario que corrige una frase del documento: `More` también genera tráfico de fondo por tener `loading.tsx` ahora (prefetch superficial por defecto), no solo las tres pestañas explícitas. Cambio de household con 2+ membresías y lector de pantalla real siguen sin probar — no hay flujo de self-service para crear una segunda household de prueba. Detalle completo en la entrada de RUM-007 §4. |
