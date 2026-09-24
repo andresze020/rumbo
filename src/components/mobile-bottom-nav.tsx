@@ -31,18 +31,29 @@ type Tab = {
   href: string
   labelKey: TranslationKey
   icon: LucideIcon
+  // Next.js default (`prefetch={null}`) only prefetches up to a route's
+  // `loading.tsx` boundary for a dynamic page, not its data. The three tabs
+  // people actually bounce between (RUM-007, baseline §3.1) opt into full
+  // prefetch so the Router Cache already holds their RSC payload by the time
+  // the tap lands — More stays on the default, it is a low-traffic hub.
+  prefetch?: boolean
 }
 
 // Two tabs on each side of the central FAB.
 const leftTabs: Tab[] = [
-  { href: '/dashboard', labelKey: 'nav.home', icon: Home },
-  { href: '/dashboard/transactions', labelKey: 'nav.transactions', icon: ArrowLeftRight },
+  { href: '/dashboard', labelKey: 'nav.home', icon: Home, prefetch: true },
+  {
+    href: '/dashboard/transactions',
+    labelKey: 'nav.transactions',
+    icon: ArrowLeftRight,
+    prefetch: true,
+  },
 ]
 
 const rightTabs: Tab[] = [
   // Accounts is opened far more often than Plan, so it earns the primary slot.
   // Plan stays reachable from the budgets page and via its own route.
-  { href: '/dashboard/accounts', labelKey: 'nav.accounts', icon: Wallet },
+  { href: '/dashboard/accounts', labelKey: 'nav.accounts', icon: Wallet, prefetch: true },
   { href: '/dashboard/more', labelKey: 'nav.more', icon: MoreHorizontal },
 ]
 
@@ -188,6 +199,7 @@ function BottomTab({ tab, active, label }: { tab: Tab; active: boolean; label: s
   return (
     <Link
       href={tab.href}
+      prefetch={tab.prefetch}
       aria-current={active ? 'page' : undefined}
       className={cn(
         // `active:` gives the tab the press-down a native tab bar has; without
