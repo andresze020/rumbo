@@ -8,13 +8,18 @@ import {
 
 export default function BudgetsLoading() {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <div>
+    <main
+      role="status"
+      aria-live="polite"
+      className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6"
+    >
+      <span className="sr-only">Loading budgets…</span>
+      <div aria-hidden="true">
         <p className="text-sm text-muted-foreground">Loading</p>
         <h1 className="text-2xl font-semibold tracking-normal">Budgets</h1>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-hidden="true">
         {['Total budgeted', 'Total spent', 'Remaining', 'Percent used'].map(
           (label) => (
             <Card key={label}>
@@ -30,7 +35,7 @@ export default function BudgetsLoading() {
         )}
       </div>
 
-      <Card>
+      <Card aria-hidden="true">
         <CardHeader>
           <CardTitle>Budget lines</CardTitle>
           <CardDescription>Loading planned and actual amounts.</CardDescription>

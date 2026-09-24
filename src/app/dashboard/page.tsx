@@ -447,7 +447,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           {/* Budget, category breakdown, upcoming bills, insights, debts,
               goals, recent activity — RUM-005: streams in behind its own
               Suspense boundary instead of blocking everything above. */}
-          <Suspense fallback={<SecondaryWidgetsSkeleton />}>
+          <Suspense
+            fallback={
+              <div role="status" aria-live="polite">
+                <span className="sr-only">Loading more of your dashboard…</span>
+                <SecondaryWidgetsSkeleton />
+              </div>
+            }
+          >
             <DashboardSecondaryWidgets
               householdId={household.id}
               baseCurrency={baseCurrency}

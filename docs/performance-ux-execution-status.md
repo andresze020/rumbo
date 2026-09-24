@@ -8,6 +8,21 @@
 > Este archivo registra *qué pasó*. El backlog registra *qué hay que hacer*. No
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
+> **Actualizado 2026-09-24 — RUM-007 cerrado y verificado en vivo.** Las 11
+> rutas de `dashboard/` sin `loading.tsx` (§3.4 #15) ya tienen el mismo
+> skeleton que el resto; `Home`/`Transactions`/`Accounts` del bottom nav usan
+> `prefetch={true}` de Next para poblar el Router Cache del cliente en vez de
+> una cache propia — B-5 sigue bloqueando afinar `staleTimes`, así que esa
+> pieza queda como decisión explícita pendiente, no implementada a medias.
+> Un hallazgo de Codex en PR #75 (`budgets/loading.tsx` anunciaba su
+> skeleton completo, no un solo mensaje) quedó corregido y confirmado. El
+> usuario habilitó credenciales reales de Supabase después del cierre
+> inicial; una pasada con Playwright headless contra `npm run dev` y un
+> build de producción confirmó las 11 rutas emitiendo su fallback en el
+> stream SSR real y el prefetch de las tres pestañas funcionando en
+> producción (**no en `next dev`, que no prefetchea nada — hallazgo nuevo,
+> no es un bug**). Ver la entrada de RUM-007 en §4, incluida su nota
+> "Verificación en vivo, 2026-09-24".
 > **Creado 2026-09-21.** Último trabajo: **RUM-003** (fallback silencioso de
 > FX eliminado, snapshot del mes actual corregido, redondeo centralizado —
 > ver abajo), sobre la base de **RUM-002** (contrato único de valoración de
@@ -54,7 +69,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | RUM-005 — Carga del Dashboard | P0 | **🟡 Orquestación + streaming hechos** (cache/invalidación deferida) | `claude/rum-005-suspense-streaming` | — | — |
 | RUM-003 — Periodos, FX y decimales | P0 | **Hecho** | `claude/rum-003-fx-period-precision` | — | 2026-09-22 |
 | RUM-006 — Balances repetidos | P1 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | — | 2026-09-21 |
-| RUM-007 — Cache, prefetch y loading | P1 | Pendiente | — | — | — |
+| RUM-007 — Cache, prefetch y loading | P1 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#75](https://github.com/andresze020/rumbo/pull/75) | 2026-09-24 |
 | RUM-004 — Consultas de Transactions | P2 | Pendiente | — | — | — |
 | RUM-008 — IA del Dashboard | P2 | Pendiente | — | — | — |
 | RUM-009 — Month health e Insights | P2 | Pendiente | — | — | — |
@@ -67,7 +82,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | # | Bloqueo | Afecta a | Desbloquea |
 |---|---|---|---|
 | B-2 | No hay baseline de performance atribuido por etapa | RUM-004, RUM-005, RUM-006 y las decisiones grandes de RUM-007 | RUM-001 |
-| B-5 | Falta la capa B del baseline (timings de servidor): necesita la app corriendo con `NEXT_PUBLIC_SUPABASE_*`. Las capas A y C ya están medidas, así que esto ya no bloquea a RUM-005/006 — solo impide separar red+PostgREST del render | RUM-007 (decisiones de cache) | Que el usuario corra `RUMBO_PERF=1 npm run dev`, navegue y pegue las líneas `[rumbo-perf]` |
+| B-5 | Falta la capa B del baseline (timings de servidor): necesita la app corriendo con `NEXT_PUBLIC_SUPABASE_*`. Las capas A y C ya están medidas, así que esto ya no bloquea a RUM-005/006 — solo impide separar red+PostgREST del render | Afinar `experimental.staleTimes` del Router Cache (RUM-007 lo dejó como decisión explícita pendiente, no bloqueada — el resto del ticket no lo necesitaba) | Que el usuario corra `RUMBO_PERF=1 npm run dev`, navegue y pegue las líneas `[rumbo-perf]` |
 
 ### 2.1 Bloqueos cerrados
 
@@ -125,6 +140,209 @@ quedaban cortos.
 
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
+
+### RUM-007 — Cache, prefetch y continuidad de loading states · 2026-09-24 · rama `claude/next-backlog-ticket-2azpv2` · PR [#75](https://github.com/andresze020/rumbo/pull/75)
+
+**Causa raíz confirmada:** §3.4 #14/#15 ya lo decían — cero cache client-side
+(sin React Query/SWR/`unstable_cache`) y 11 de 28 rutas de `dashboard/` sin
+`loading.tsx`. Confirmado contra el código: `assistant/`, `cash-flow/`,
+`debt-planner/`, `coming-soon/[feature]/`, `help/`, `month-review/`, `more/`,
+`plan/`, `reports/`, `settings/`, `trends/` no tenían boundary de carga
+propio. Sin uno, App Router no tiene ningún `<Suspense>` que mostrar mientras
+esa ruta streamea — la navegación se queda sobre la pantalla anterior sin
+ninguna señal hasta que el RSC completo está listo, que es la secuencia
+"skeleton (de otra ruta) → nada" que reportó el diagnóstico visual.
+
+**Decisión de arquitectura (cache):** no se introdujo ninguna librería de
+datos ni una capa de cache propia. El "Contrato confirmado" del prompt ya
+pedía justificar el trade-off antes de añadir una, y el bloqueo **B-5** marca
+explícitamente que las "decisiones grandes de cache" de este ticket están
+bloqueadas hasta tener la capa de timings de servidor (no disponible en esta
+sandbox — sin credenciales de Supabase). Lo que sí se hizo, con el mecanismo
+nativo de Next 16 que ya está en el repo:
+
+- **Prefetch de pestañas principales** (`src/components/mobile-bottom-nav.tsx`)
+  usando `<Link prefetch>` — comportamiento soportado directamente por
+  Next.js, cero código nuevo de cache. `prefetch={null}` (default) sobre una
+  ruta dinámica solo prefetchea hasta su `loading.tsx`, no los datos; `Home`,
+  `Transactions` y `Accounts` (las tres que la baseline §3.1 mide como el
+  tráfico real entre pestañas) pasan a `prefetch={true}`, que sí completa el
+  render dinámico y lo deja en el Router Cache del cliente. `More` se deja en
+  el default — hub de baja frecuencia, no vale el tráfico de fondo.
+- **Invalidación selectiva: ya existía, se auditó, no se tocó.** Cada
+  `actions.ts` de área llama `revalidatePath` con las rutas exactas que esa
+  mutación afecta (ver el mapa completo hecho por el scout de esta sesión —
+  no repetido aquí para no duplicar). `household-actions.ts:46` hace
+  `revalidatePath('/dashboard', 'layout')` al cambiar de household, que
+  invalida el Router Cache completo de todo el árbol `/dashboard` — incluidas
+  las tres entradas recién prefetcheadas — así que no hay fuga de datos de un
+  household a otro por prefetch.
+- **Sin race conditions que arreglar.** Se buscó cualquier `fetch` manual /
+  `useSWR` / `useQuery` que compitiera al cambiar mes o household rápido; no
+  existe ninguno (`AskUserQuestion` de la sesión de scout confirmado con
+  grep). Cambiar de mes es un `<Link>`/`router.push` a una URL nueva
+  (`?month=...`); cambiar de household es un `<form action={switchHouseholdAction}>`.
+  Ambos son navegaciones/acciones del router de Next, que ya cancela la
+  navegación anterior cuando empieza una nueva — no hace falta
+  `AbortController` a mano.
+- **No se tocó `experimental.staleTimes`.** Cambiar la ventana de frescura del
+  Router Cache es exactamente la "decisión grande de cache" que B-5 bloquea:
+  sin poder medir su efecto contra datos reales (esta sandbox no tiene
+  credenciales de Supabase), afinar ese número a ciegas arriesga mostrar
+  saldos desactualizados tras una mutación sin forma de comprobarlo. Queda
+  como decisión explícita pendiente, no como código a medias.
+
+**Archivos modificados:**
+- `src/components/page-loading.tsx` — `<main role="status" aria-live="polite">`
+  y `aria-hidden` en las barras decorativas; usado por 27 de las 28 rutas.
+- `src/app/dashboard/loading.tsx:21-26` — mismo tratamiento en el skeleton
+  custom de la ruta raíz.
+- `src/app/dashboard/budgets/loading.tsx:9-16` — mismo tratamiento en el otro
+  skeleton custom (la única otra ruta que no usa `PageLoading`).
+- `src/app/dashboard/page.tsx` — el `<Suspense fallback={<SecondaryWidgetsSkeleton />}>`
+  de RUM-005 gana un `role="status"`/`aria-live="polite"` con un `sr-only`
+  propio; `SecondaryWidgetsSkeleton` se queda `aria-hidden` (es decorativo,
+  ya lo era).
+- `src/components/mobile-bottom-nav.tsx` — `Tab.prefetch`, `prefetch={true}`
+  en Home/Transactions/Accounts, prop pasada a `<Link>` en `BottomTab`.
+- **11 `loading.tsx` nuevos**, todos sobre `PageLoading` con el mismo patrón
+  que ya usan `accounts/`, `tags/`, etc.: `assistant/`, `cash-flow/`,
+  `debt-planner/`, `coming-soon/[feature]/`, `help/`, `month-review/`,
+  `more/`, `plan/`, `reports/`, `settings/`, `trends/`.
+- `src/app/dashboard/route-loading-coverage.test.ts` — test nuevo.
+
+**Antes / después:** antes, navegar a cualquiera de las 11 rutas no mostraba
+ningún boundary de carga propio — la app se quedaba sobre el contenido de la
+pantalla anterior sin señal hasta que el RSC terminaba. Después, las 11
+tienen el mismo skeleton inmediato que ya tenían `accounts/`/`transactions/`/etc.
+Las tres pestañas principales del bottom nav ahora prefetchean su render
+completo (no solo el boundary) cuando entran en viewport, así que un tap
+sobre ellas reutiliza esa entrada del Router Cache en vez de esperar un RSC
+fetch completo. Ningún loading state visible perdía anuncio para lectores de
+pantalla antes; ahora los 28 (`PageLoading`, el skeleton raíz, el de budgets y
+el de widgets secundarios) usan `role="status"`/`aria-live="polite"` con un
+único texto legible (el título/descripción ya traducidos, o un `sr-only`
+puntual) — nada de anunciar cada barra `animate-pulse` por separado.
+
+**Métricas:** sin baseline instrumentado nuevo — B-5 (timings de servidor)
+sigue bloqueado por falta de credenciales de Supabase en esta sandbox, igual
+que en RUM-003/RUM-005. El conteo estático de rutas sin `loading.tsx` (11/28
+antes → 0/28 después) es verificable por inspección y ahora está fijado por
+`route-loading-coverage.test.ts`.
+
+**Comandos ejecutados:** `npm install` (vitest no estaba instalado en el
+contenedor) · `npm test` (98/98, antes 97/97 sin el test nuevo) · `npm run
+lint` · `npx tsc --noEmit` · `npm run build` (Next 16.2.6/Turbopack,
+compilación y generación de las 39 rutas correctas, incluidas las 11 nuevas
+con su propio `loading.tsx`).
+
+**Migraciones o pasos pendientes:** ninguna.
+
+**Riesgos residuales:**
+- `prefetch={true}` en tres tabs que están siempre visibles en la barra
+  inferior significa que casi cualquier pantalla de `dashboard/` dispara en
+  segundo plano el render completo de las otras dos — incluida su consulta a
+  `get_account_balances`/`search_household_transactions`, que RUM-001 midió
+  como la carga real de la base. En una app household-first de pocos
+  usuarios el volumen absoluto es bajo, pero es tráfico de fondo nuevo que no
+  existía; si el usuario lo nota en producción, la palanca es quitar
+  `prefetch={true}` de una de las tres tabs, no tocar cache.
+- El "skeleton → pantalla casi en blanco" de la baseline §3.1 (Dashboard↔
+  Transactions, Accounts↔Transactions) ocurre en rutas que **ya tenían**
+  `loading.tsx` antes de este ticket — ese síntoma específico no está resuelto
+  por este cambio, ya lo atacaron RUM-005/RUM-006 (menos round-trips
+  bloqueantes) y lo que quede es candidato a RUM-004 (`search_household_transactions`
+  sobre rangos largos) o a medición real con B-5, no a este ticket.
+- `experimental.staleTimes` queda sin tocar por diseño (ver arriba); si una
+  medición real futura muestra que el Router Cache por defecto no alcanza,
+  es la siguiente decisión a tomar con datos, no una que faltó aquí.
+- No hay verificación en un navegador real ni contra Supabase real en esta
+  sandbox — igual que RUM-002/003/005/006, queda para el checklist manual del
+  usuario.
+
+**Checklist manual de revisión:**
+1. Abrir cada una de las 11 rutas nuevas en conexión lenta (throttle) y
+   confirmar que aparece el skeleton de `PageLoading` antes del contenido,
+   nunca una pantalla en blanco.
+2. Con el inspector de accesibilidad (o un lector de pantalla), navegar a una
+   ruta con carga lenta y confirmar que se anuncia una sola vez el nombre de
+   la página que carga, no cada barra individual.
+3. Tocar rápido entre Home/Transactions/Accounts varias veces seguidas y
+   confirmar que no aparece contenido de una pestaña mezclado con otra ni un
+   parpadeo hacia datos viejos de otro household tras un cambio de household.
+4. Cambiar de household desde el selector y confirmar que las tres pestañas
+   prefetcheadas muestran los datos del household nuevo, no datos cacheados
+   del anterior.
+5. Con el panel de Network abierto, confirmar que Home/Transactions/Accounts
+   disparan una petición de prefetch al quedar visibles en la barra inferior,
+   y que More no lo hace.
+
+**¿Lista para PR?:** sí. Gate completo en verde (`lint`/`tsc`/`test`/`build`);
+lo que falta es exclusivamente verificación manual/dispositivo real, igual
+que en los tickets anteriores de este backlog sin credenciales de Supabase.
+
+**Correcciones al backlog:** ninguna — §3.4 #14 y #15 ya describían
+correctamente el estado del código; este ticket los cierra, no los corrige.
+
+**Verificación en vivo, 2026-09-24 (con credenciales reales de Supabase).**
+Lo de arriba se escribió sin poder correr la app; el usuario habilitó
+`NEXT_PUBLIC_SUPABASE_*` en esta sandbox después de que el PR #75 ya estaba
+en revisión, así que se corrió una pasada real: cuenta de prueba nueva
+(`rum007-qa-*@example.com`, sin datos financieros) creada por signup, un
+household de prueba vía onboarding (cuentas/categorías omitidas —
+irrelevantes para este ticket), y un script de Playwright headless
+(Chromium pre-instalado del contenedor) contra `npm run dev` y, para el
+prefetch, también contra `next build && next start -p 3001`. El script no se
+commitea (vivía en el scratchpad de la sesión). Hallazgos:
+
+1. **Las 11 rutas nuevas SÍ emiten su `loading.tsx` en el stream SSR real.**
+   GET autenticado directo a cada una de las 11 (incluida
+   `coming-soon/[feature]`) confirma `role="status"` presente y el texto de
+   `description` de `PageLoading` presente en el HTML devuelto por el
+   servidor — no es solo que el componente compile, el fallback se renderiza
+   de verdad antes del contenido real, contra una sesión y un household
+   reales.
+2. **El fix de `budgets/loading.tsx` (hallazgo de Codex) se comporta como se
+   diseñó.** El único `sr-only` "Loading budgets…" aparece en el HTML
+   (duplicado a 2 solo por el payload RSC de hidratación que serializa el
+   mismo árbol — no es un segundo nodo visible); las 4 tarjetas y la sección
+   de líneas de presupuesto quedan dentro de bloques `aria-hidden="true"`.
+3. **Hallazgo nuevo, no documentado arriba: Next.js no prefetchea en
+   absoluto en `next dev`.** La comprobación de red contra el dev server dio
+   cero peticiones de prefetch para Home/Transactions/Accounts — ninguna,
+   ni siquiera con la barra inferior visible 2.5 s. Repetida la misma prueba
+   contra un build de producción (`next start`), las tres SÍ dispararon su
+   petición de prefetch al quedar en viewport. Esto **no es un bug de este
+   PR**: es comportamiento conocido de Next (el dev server no precompila el
+   RSC payload de rutas que no se han visitado, así que prefetchear no
+   ahorraría nada). Pero corrige una frase de este mismo documento más
+   arriba: "`More` se deja en el default" no significa "More no genera
+   tráfico de fondo" — con su `loading.tsx` nuevo, el prefetch por defecto
+   (`prefetch={null}`) también le dispara una petición al quedar en
+   viewport, solo que más superficial (hasta el boundary, no el render
+   completo) que la de las tres pestañas con `prefetch={true}`. El riesgo
+   residual de tráfico de fondo de la sección de arriba aplica un poco
+   también a More, no solo a las tres explícitas.
+4. **Navegación rápida entre pestañas no dejó contenido mezclado ni URL
+   incorrecta** tras cuatro saltos consecutivos (`accounts` →
+   `transactions` → `dashboard` → `accounts`); terminó exactamente en
+   `/dashboard/accounts`.
+5. **No verificado en esta pasada:** cambio de household con más de una
+   membresía activa (crear una segunda household de prueba no tiene un
+   flujo de self-service en la UI — solo onboarding u invitación — y no
+   valía la pena montarlo para este ticket dado que la invalidación ya está
+   verificada por lectura de código: `household-actions.ts:46`), lector de
+   pantalla real (el chequeo de accesibilidad fue por inspección del HTML
+   servido, no un lector de pantalla real), y dispositivo táctil real. Estos
+   tres puntos del checklist manual siguen abiertos para el usuario.
+
+Con esto, la fila "No hay verificación en un navegador real ni contra
+Supabase real en esta sandbox" de **Riesgos residuales** queda desactualizada
+para los puntos 1–4 del checklist manual (ya verificados); sigue vigente tal
+cual para el punto 4 original del checklist (cambio de household) y para
+lector de pantalla / dispositivo táctil real.
+
+---
 
 ### RUM-003 — Formalizar periodos históricos, FX y precisión decimal · 2026-09-22 · rama `claude/rum-003-fx-period-precision` · PR pendiente
 
@@ -1185,6 +1403,8 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-24 | **RUM-007: verificación en vivo con Supabase real (post-cierre) + fix de un hallazgo de Codex.** El usuario habilitó credenciales reales después de que el PR #75 quedara listo. (a) Codex (P2) marcó que `budgets/loading.tsx` volvía todo el skeleton un `role="status"`, anunciando 4× "Loading budget data." y cada título de tarjeta — corregido con el mismo patrón de un solo `sr-only` + `aria-hidden` que ya usa `PageLoading`; thread resuelto, CI verde de nuevo. (b) Con Playwright headless (Chromium del contenedor) contra `npm run dev` y un build de producción, autenticado con una cuenta de prueba nueva: confirmado que las 11 rutas nuevas (incluida `coming-soon/[feature]`) emiten su fallback en el HTML servido por el servidor real, que el fix de `budgets/loading.tsx` deja un solo mensaje visible, y que el prefetch de Home/Transactions/Accounts **no dispara nada en `next dev`** (comportamiento normal de Next, no un bug) pero sí en producción. Hallazgo secundario que corrige una frase del documento: `More` también genera tráfico de fondo por tener `loading.tsx` ahora (prefetch superficial por defecto), no solo las tres pestañas explícitas. Cambio de household con 2+ membresías y lector de pantalla real siguen sin probar — no hay flujo de self-service para crear una segunda household de prueba. Detalle completo en la entrada de RUM-007 §4. |
+| 2026-09-24 | **RUM-007 cerrado: 11 rutas de `dashboard/` sin `loading.tsx` cubiertas, prefetch nativo de Next en las tres pestañas principales, anuncios `role="status"` en los 28 loading states, sin cache nueva.** Confirmado el hallazgo de §3.4 #15 (11 rutas sin boundary de carga propio); las 11 usan el mismo `PageLoading` que ya usaban `accounts/`/`tags/`/etc. Decisión de arquitectura: no se introdujo React Query/SWR/`unstable_cache` ni cache propia — B-5 bloquea explícitamente afinar esa pieza sin timings reales, así que se dejó como decisión pendiente documentada, no como código a medias. Lo que sí usa el repo tal cual: `<Link prefetch={true}>` (nativo de Next 16) en Home/Transactions/Accounts del bottom nav, y la invalidación existente vía `revalidatePath` (auditada, no tocada — `household-actions.ts:46` ya limpia todo el Router Cache de `/dashboard` al cambiar de household, así que no hay fuga entre households por el nuevo prefetch). Un test nuevo (`route-loading-coverage.test.ts`) fija las 11 rutas por nombre para que la regresión no vuelva a descubrirse en un video. 98/98 tests, `lint`/`tsc`/`build` en verde. Verificación en navegador real y con Supabase real queda pendiente — sin credenciales en esta sandbox, igual que RUM-002/003/005/006. |
 | 2026-09-22 | **RUM-003 cerrado: fallback silencioso de FX eliminado, bug de snapshot del mes actual corregido, redondeo centralizado — sin tipo decimal ni migraciones.** `fetchFxRate` ya no colapsa "fecha futura" y "sin dato histórico" en el mismo `isLatest: boolean`; los 5 formularios de FX mostraban el mismo texto erróneo ("no rate for future dates") incluso cuando la fecha no era futura — ahora `source: requested/future/fallback` distingue los casos y `describeFxNote` centraliza el texto correcto, con `console.error` trazando el fallback real. Bug real encontrado: Dashboard, Net worth (incluida su evolución de 6 meses) y `trend-actions.ts` pedían el balance del mes actual "as of" su fin de mes calendario — una fecha futura hoy — en vez de "as of ahora"; nueva `snapshotDateForMonth` en `src/lib/periods/month.ts` lo corrige y de paso deduplica un `getMonthEndDate` triplicado byte-a-byte. `roundToCents` (duplicado en `calc.ts` e `installments/shared.ts`) centralizado en `src/lib/money.ts`; decisión con evidencia de no adoptar `decimal.js`/`big.js` (schema ya es `numeric` en cada columna de dinero). UTC de periodos y extensión de `monthStartDay` quedan documentadas como decisiones explícitas, no implementadas. 21 tests nuevos (87/87 pasan). Sin verificación en vivo en esta sandbox (sin credenciales de Supabase) — checklist manual queda para el usuario. |
 | 2026-09-21 | **RUM-002 cerrado: un servicio único de valoración, dos bugs reales encontrados por auditar, no solo centralización.** `src/lib/net-worth/valuation.ts` reemplaza cinco reimplementaciones independientes de assets/liabilities/net worth (tres ya conocidas + una 4ª no documentada en `trend-actions.ts`, que además divergía: clampeaba la suma en vez de sumar el clamp por cuenta). Invariante decidido (B-4 cerrado): `Net worth = Total assets + Signed liabilities`, sin cambios — Assets − Liabilities al centavo habría expulsado un crédito legítimo del patrimonio. Bug real encontrado en `accounts/page.tsx`: `Math.abs` en vez de `Math.max(0,-value)` mostraba un pasivo con saldo a favor como si fuera deuda (`"$50.00 (owed)"` para un crédito de $50) — corregido. Segundo bug real: el callout de política FX en `/dashboard/net-worth` seguía diciendo "no revalúa" en la UI real, un año después de que la migración de revaluación se aplicara — corregido el copy, no solo el doc. `docs/features/net-worth-fx-policy.md` reescrito completo. 14 tests nuevos, 66/66 pasan. B-3 y B-4 cerrados. Reconciliación en vivo no corrida en esta sandbox (sin credenciales de Supabase) — verificada por equivalencia de fórmula + tests, checklist manual queda para el usuario. |
 | 2026-09-21 | **RUM-005: streaming con `Suspense` (parcial, sobre la orquestación ya fusionada en #71).** Todo lo debajo del fold (Budget, categorías, próximos cobros, Insights, Deudas, Metas, Actividad reciente) se movió a `src/app/dashboard/secondary-widgets.tsx`, un Server Component nuevo detrás de un único `<Suspense>` — primer uso de `Suspense` en el repo. `budgetRows` y `homeChecklist` se quedan eager a propósito (el primero porque `healthScore` lo necesita y se pinta en la hero card top-of-fold; el segundo porque no está en el criterio de aceptación y diferirlo invertiría el orden visual actual). RUM-001 ya había medido que estas queries cuestan ~0 — este cambio no reduce tiempo de reloj medible, su valor es percepción de velocidad, aislamiento de fallos y cumplir el criterio literal del ticket, no un segundo hallazgo de latencia. Cache/invalidación selectiva queda fuera, deferida a propósito: no existe ninguna capa de cache hoy (solo `revalidatePath`, ~90 sitios), introducir una es una decisión arquitectónica separada. `npm run lint/tsc/test/i18n:check/build` todos pasan; el checklist manual de 7 pasos queda pendiente para el usuario — esta sandbox no tiene credenciales de Supabase para correrlo. |
