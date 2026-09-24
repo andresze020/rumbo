@@ -33,7 +33,8 @@ import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { formatCurrency, formatMonthLabel, formatPercent, formatTransactionCount, localeToBcp47 } from '@/lib/format'
-import { computeHealthScore, healthGrade as computeHealthGrade } from '@/lib/health/score'
+import { healthBreakdown } from '@/lib/health/score'
+import { MonthHealthBreakdown } from '@/components/month-health-breakdown'
 import { getHomeChecklist } from '@/lib/home-checklist/server'
 import { cn } from '@/lib/utils'
 
@@ -329,7 +330,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   ]
 
   // ── Health score (BR-021): shared real formula (see lib/health/score). ─────
-  const healthScore = computeHealthScore({
+  const health = healthBreakdown({
     savingsRate: monthlySummary?.savings_rate != null ? Number(monthlySummary.savings_rate) : null,
     hasBudget,
     budgetPercent: totalBudgetPercent,
@@ -344,8 +345,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   // with the fetches they gate — this only covers the two Tier-1 reads.
   const hasLoadError = accountBalancesError || monthlySummaryError
   const cardClass = 'rounded-2xl border bg-card shadow-sm shadow-black/[0.03]'
-  const score = healthScore
-  const healthGrade = computeHealthGrade(score)
 
   return (
     <main className="mx-auto flex w-full max-w-[1340px] flex-col gap-4 p-4 sm:p-6">
@@ -384,15 +383,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             deltaPct={netWorthDeltaPct}
             currency={baseCurrency}
             spark={spark}
-            healthScore={healthScore}
             labels={{
               netWorth: t('dashboard.heroEyebrow'),
               assets: t('dashboard.heroAssets'),
               liabilities: t('dashboard.heroLiabilities'),
               projected: t('dashboard.heroProjected'),
-              monthHealth: t('dashboard.monthHealth'),
               vsPrev: t('common.vsLastMonth'),
-              healthTooltip: t('dashboard.healthScoreTooltip'),
             }}
           />
 
@@ -424,19 +420,26 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </section>
 
-          {/* Mobile-only month health card */}
-          <div className={cn(cardClass, 'flex items-center gap-4 p-4 lg:hidden')}>
-            <div className="flex size-14 shrink-0 items-center justify-center rounded-full border-[3px] border-primary bg-primary/10">
-              <span className="text-base font-bold text-primary">{healthGrade}</span>
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1 text-sm font-semibold">
-                {t('dashboard.monthHealth')}
-                <InfoTooltip text={t('dashboard.healthScoreTooltip')} label={t('dashboard.monthHealth')} />
+          {/* Month health (BR-021 / RUM-009): one card on every breakpoint,
+              with the numbers behind the grade — see lib/health/score. */}
+          <section
+            aria-labelledby="month-health-title"
+            className={cn(cardClass, 'flex flex-col gap-4 p-4 sm:flex-row sm:items-start')}
+          >
+            <div className="flex shrink-0 items-center gap-4 sm:w-52">
+              <div className="flex size-14 shrink-0 items-center justify-center rounded-full border-[3px] border-primary bg-primary/10">
+                <span className="text-base font-bold text-primary">{health.grade}</span>
               </div>
-              <p className="text-xs text-muted-foreground">{score}/100</p>
+              <div className="min-w-0">
+                <h2 id="month-health-title" className="flex items-center gap-1 text-sm font-semibold">
+                  {t('dashboard.monthHealth')}
+                  <InfoTooltip text={t('dashboard.healthScoreTooltip')} label={t('dashboard.monthHealth')} />
+                </h2>
+                <p className="text-xs text-muted-foreground">{health.score}/100</p>
+              </div>
             </div>
-          </div>
+            <MonthHealthBreakdown breakdown={health} month={selectedMonth} locale={locale} className="flex-1" />
+          </section>
 
           {!hasMonthlyActivity ? (
             <Callout variant="info" className="border-dashed text-muted-foreground">

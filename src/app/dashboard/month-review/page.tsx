@@ -22,7 +22,9 @@ import { InfoTooltip } from '@/components/info-tooltip'
 import { SubmitButton } from '@/components/submit-button'
 import { formatCurrency, formatIsoDate, formatPercent } from '@/lib/format'
 import { getLocale } from '@/lib/i18n/server'
-import { computeHealthScore, healthGrade } from '@/lib/health/score'
+import { healthBreakdown } from '@/lib/health/score'
+import { monthEndDate } from '@/lib/periods/month'
+import { MonthHealthBreakdown } from '@/components/month-health-breakdown'
 import { cn } from '@/lib/utils'
 import {
   getHousehold,
@@ -187,6 +189,8 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
   const topExpense = thisCats[0] ?? null
 
   // ── Pending-review count — graceful if the column doesn't exist yet. ───────
+  //    RUM-009: scoped to this month and non-voided, the same rules as the
+  //    Home badge, so both surfaces report the same number for the month.
   let pendingReview: number | null = null
   {
     const { count, error } = await ctx.supabase
@@ -195,18 +199,24 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       .eq('household_id', ctx.household.id)
       .eq('review_status', 'unreviewed')
       .neq('transaction_type', 'opening_balance')
+      .neq('status', 'voided')
       .is('deleted_at', null)
+      .gte('transaction_date', `${month}-01`)
+      .lte('transaction_date', monthEndDate(month))
     if (!error) pendingReview = count ?? 0
   }
 
   // ── Health score (BR-021): a real, documented formula (see lib/health/score).
   //    Weighted savings rate (65%) + budget adherence (35%). ─────────────────
-  const score = computeHealthScore({
+  //    RUM-009: the same healthBreakdown() the dashboard renders, so the grade,
+  //    its inputs and the suggested action match on both surfaces.
+  const health = healthBreakdown({
     savingsRate: curr.savingsRate,
     hasBudget,
     budgetPercent: totalBudgetPercent,
   })
-  const scoreGrade = healthGrade(score)
+  const score = health.score
+  const scoreGrade = health.grade
 
   // ── BR-021: light "close month" state (marker + snapshot, no ledger lock). ──
   const monthClosed = params.closed === '1'
@@ -254,7 +264,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       accent: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
       title: `Categorize ${pendingReview} transaction${pendingReview === 1 ? '' : 's'} to review`,
       description: 'Clear your review queue before closing the books.',
-      href: '/dashboard/transactions',
+      href: `/dashboard/transactions?review=unreviewed&status=posted&status=pending&month=${month}`,
     })
   }
   if (hasActivity && curr.savings > 0.01) {
@@ -350,63 +360,60 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
 
       {/* Month status + health. The id is the landing spot for the Control
           center checklist's "close this month" row. */}
-      <div
-        id="close-month"
-        className={cn(
-          CARD,
-          'scroll-mt-20 flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5'
-        )}
-      >
-        <div className="flex items-center gap-4">
-          <div className="flex size-16 shrink-0 items-center justify-center rounded-full border-[3px] border-primary bg-primary/10">
-            <span className="text-xl font-bold text-primary">{scoreGrade}</span>
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 text-sm font-bold">
-              Month health
-              <InfoTooltip
-                text="Score out of 100 from your savings rate (65%) and, when you have a budget, budget adherence (35%). 100 ≈ saving 20%+ of income while staying within budget. Guidance, not financial advice."
-                label="Month health"
-              />
+      <div id="close-month" className={cn(CARD, 'scroll-mt-20 space-y-4 p-4 sm:p-5')}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex size-16 shrink-0 items-center justify-center rounded-full border-[3px] border-primary bg-primary/10">
+              <span className="text-xl font-bold text-primary">{scoreGrade}</span>
             </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">{score}/100</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {longMonthLabel(month, locale)} · {hasActivity ? 'Activity recorded' : 'No activity yet'}
-            </p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-sm font-bold">
+                Month health
+                <InfoTooltip
+                  text="Score out of 100 from your savings rate (65%) and, when you have a budget, budget adherence (35%). 100 ≈ saving 20%+ of income while staying within budget. Guidance, not financial advice."
+                  label="Month health"
+                />
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground">{score}/100</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {longMonthLabel(month, locale)} · {hasActivity ? 'Activity recorded' : 'No activity yet'}
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          {isClosed ? (
-            <>
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                <CheckCircle2 className="size-3.5" aria-hidden="true" />
-                Closed{closedAtLabel ? ` · ${closedAtLabel}` : ''}
-              </span>
-              <form action={reopenMonthAction}>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {isClosed ? (
+              <>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  <CheckCircle2 className="size-3.5" aria-hidden="true" />
+                  Closed{closedAtLabel ? ` · ${closedAtLabel}` : ''}
+                </span>
+                <form action={reopenMonthAction}>
+                  <input type="hidden" name="month" value={month} />
+                  <SubmitButton type="submit" variant="outline" size="sm" pendingText="Reopening…">
+                    <RotateCcw aria-hidden="true" />
+                    Reopen
+                  </SubmitButton>
+                </form>
+              </>
+            ) : (
+              <form action={closeMonthAction}>
                 <input type="hidden" name="month" value={month} />
-                <SubmitButton type="submit" variant="outline" size="sm" pendingText="Reopening…">
-                  <RotateCcw aria-hidden="true" />
-                  Reopen
+                <input type="hidden" name="income" value={curr.income} />
+                <input type="hidden" name="expenses" value={curr.expenses} />
+                <input type="hidden" name="savings" value={curr.savings} />
+                <input type="hidden" name="savings_rate" value={curr.savingsRate ?? ''} />
+                <input type="hidden" name="score" value={score} />
+                <input type="hidden" name="grade" value={scoreGrade} />
+                <input type="hidden" name="currency" value={currency} />
+                <SubmitButton type="submit" size="sm" className="gap-2" pendingText="Closing…">
+                  <Lock aria-hidden="true" />
+                  Close month
                 </SubmitButton>
               </form>
-            </>
-          ) : (
-            <form action={closeMonthAction}>
-              <input type="hidden" name="month" value={month} />
-              <input type="hidden" name="income" value={curr.income} />
-              <input type="hidden" name="expenses" value={curr.expenses} />
-              <input type="hidden" name="savings" value={curr.savings} />
-              <input type="hidden" name="savings_rate" value={curr.savingsRate ?? ''} />
-              <input type="hidden" name="score" value={score} />
-              <input type="hidden" name="grade" value={scoreGrade} />
-              <input type="hidden" name="currency" value={currency} />
-              <SubmitButton type="submit" size="sm" className="gap-2" pendingText="Closing…">
-                <Lock aria-hidden="true" />
-                Close month
-              </SubmitButton>
-            </form>
-          )}
+            )}
+          </div>
         </div>
+        <MonthHealthBreakdown breakdown={health} month={month} locale={locale} />
       </div>
 
       {/* KPIs */}

@@ -45,19 +45,93 @@ export type HealthScoreInput = {
 }
 
 /**
- * Combined month-health score (0–100, integer). Weighted savings + budget
- * adherence, renormalised to savings-only when there is no budget.
+ * RUM-009 — what the user should do next, derived from the weakest component.
+ *
+ * - `rein_in_budget`: budget adherence is strictly the weakest component.
+ * - `record_income`: no savings rate yet (no income this month), so the
+ *   savings component sits at the neutral 50.
+ * - `raise_savings`: savings is the weakest component and below 100.
+ * - `set_budget`: savings is maxed but there is no budget to measure against.
+ * - `keep_going`: every component is at 100.
  */
-export function computeHealthScore({
+export type HealthAction =
+  | 'record_income'
+  | 'raise_savings'
+  | 'rein_in_budget'
+  | 'set_budget'
+  | 'keep_going'
+
+export type HealthBreakdown = {
+  score: number
+  grade: string
+  savings: {
+    /** Month savings rate (0.1 = 10%), or null with no income. */
+    rate: number | null
+    /** Sub-score 0–100. */
+    points: number
+    /** Effective weight in the final score (1 when there is no budget). */
+    weight: number
+  }
+  /** null when the month has no budget: the score is savings-only. */
+  budget: {
+    /** actual / planned (1 = 100% of the plan used). */
+    percentUsed: number
+    points: number
+    weight: number
+  } | null
+  weakest: 'savings' | 'budget'
+  action: HealthAction
+}
+
+/**
+ * Full, explainable month-health result. The dashboard and Month review both
+ * render from this so the number, its inputs and the suggested action can
+ * never disagree between surfaces.
+ */
+export function healthBreakdown({
   savingsRate,
   hasBudget,
   budgetPercent,
-}: HealthScoreInput): number {
-  const savings = savingsComponent(savingsRate)
-  const raw = hasBudget
-    ? HEALTH_SAVINGS_WEIGHT * savings + HEALTH_BUDGET_WEIGHT * budgetComponent(budgetPercent)
-    : savings
-  return Math.round(Math.max(0, Math.min(100, raw)))
+}: HealthScoreInput): HealthBreakdown {
+  const rate = savingsRate == null || !Number.isFinite(savingsRate) ? null : savingsRate
+  const savingsPoints = savingsComponent(rate)
+  const budget = hasBudget
+    ? {
+        percentUsed: budgetPercent,
+        points: budgetComponent(budgetPercent),
+        weight: HEALTH_BUDGET_WEIGHT,
+      }
+    : null
+  const savings = {
+    rate,
+    points: savingsPoints,
+    weight: budget ? HEALTH_SAVINGS_WEIGHT : 1,
+  }
+
+  const raw = budget
+    ? savings.weight * savings.points + budget.weight * budget.points
+    : savings.points
+  const score = Math.round(Math.max(0, Math.min(100, raw)))
+
+  const weakest: HealthBreakdown['weakest'] =
+    budget && budget.points < savings.points ? 'budget' : 'savings'
+
+  let action: HealthAction
+  if (weakest === 'budget') action = 'rein_in_budget'
+  else if (rate == null) action = 'record_income'
+  else if (savings.points < 100) action = 'raise_savings'
+  else if (!budget) action = 'set_budget'
+  else action = 'keep_going'
+
+  return { score, grade: healthGrade(score), savings, budget, weakest, action }
+}
+
+/**
+ * Combined month-health score (0–100, integer). Weighted savings + budget
+ * adherence, renormalised to savings-only when there is no budget.
+ */
+export function computeHealthScore(input: HealthScoreInput): number {
+  return healthBreakdown(input).score
 }
 
 /** Shared letter grade for a 0–100 score. */

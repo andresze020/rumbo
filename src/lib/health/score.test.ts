@@ -5,6 +5,7 @@ import {
   HEALTH_SAVINGS_WEIGHT,
   budgetComponent,
   computeHealthScore,
+  healthBreakdown,
   healthGrade,
   savingsComponent,
 } from './score'
@@ -113,5 +114,79 @@ describe('healthGrade', () => {
     expect(healthGrade(40)).toBe('C')
     expect(healthGrade(39)).toBe('D')
     expect(healthGrade(0)).toBe('D')
+  })
+})
+
+describe('healthBreakdown (RUM-009)', () => {
+  it('exposes the inputs, sub-scores and effective weights behind the score', () => {
+    const b = healthBreakdown({ savingsRate: 0.1, hasBudget: true, budgetPercent: 1.25 })
+    expect(b.score).toBe(66)
+    expect(b.grade).toBe('B')
+    expect(b.savings.rate).toBe(0.1)
+    expect(b.savings.points).toBeCloseTo(75, 10)
+    expect(b.savings.weight).toBe(0.65)
+    expect(b.budget).toEqual({ percentUsed: 1.25, points: 50, weight: 0.35 })
+  })
+
+  it('gives savings the whole weight and no budget row when there is no budget', () => {
+    const b = healthBreakdown({ savingsRate: 0.1, hasBudget: false, budgetPercent: 3 })
+    expect(b.budget).toBeNull()
+    expect(b.savings.weight).toBe(1)
+    expect(b.score).toBe(75)
+  })
+
+  it('agrees with computeHealthScore and healthGrade for the same input', () => {
+    const inputs = [
+      { savingsRate: -0.3, hasBudget: true, budgetPercent: 1.4 },
+      { savingsRate: 0.07, hasBudget: true, budgetPercent: 1.13 },
+      { savingsRate: null, hasBudget: false, budgetPercent: 0 },
+      { savingsRate: 0.5, hasBudget: true, budgetPercent: 0.2 },
+    ]
+    for (const input of inputs) {
+      const b = healthBreakdown(input)
+      expect(b.score).toBe(computeHealthScore(input))
+      expect(b.grade).toBe(healthGrade(b.score))
+    }
+  })
+
+  it('normalises a non-finite savings rate to null (neutral 50)', () => {
+    const b = healthBreakdown({ savingsRate: Number.NaN, hasBudget: false, budgetPercent: 0 })
+    expect(b.savings.rate).toBeNull()
+    expect(b.savings.points).toBe(50)
+  })
+
+  it('points the action at budget when budget adherence is the weakest component', () => {
+    const b = healthBreakdown({ savingsRate: 0.1, hasBudget: true, budgetPercent: 1.4 })
+    expect(b.weakest).toBe('budget')
+    expect(b.action).toBe('rein_in_budget')
+  })
+
+  it('points the action at budget even without income when the budget is worse than neutral', () => {
+    const b = healthBreakdown({ savingsRate: null, hasBudget: true, budgetPercent: 1.4 })
+    expect(b.action).toBe('rein_in_budget')
+  })
+
+  it('asks for income when there is no savings rate and budget is not worse', () => {
+    expect(healthBreakdown({ savingsRate: null, hasBudget: true, budgetPercent: 1 }).action).toBe('record_income')
+    expect(healthBreakdown({ savingsRate: null, hasBudget: false, budgetPercent: 0 }).action).toBe('record_income')
+  })
+
+  it('asks to raise savings when savings is the weakest component', () => {
+    const b = healthBreakdown({ savingsRate: 0.05, hasBudget: true, budgetPercent: 0.9 })
+    expect(b.weakest).toBe('savings')
+    expect(b.action).toBe('raise_savings')
+    expect(healthBreakdown({ savingsRate: -0.1, hasBudget: false, budgetPercent: 0 }).action).toBe('raise_savings')
+  })
+
+  it('breaks a tie in favour of savings (the heavier weight)', () => {
+    // savings 50 · budget 50
+    const b = healthBreakdown({ savingsRate: 0, hasBudget: true, budgetPercent: 1.25 })
+    expect(b.weakest).toBe('savings')
+    expect(b.action).toBe('raise_savings')
+  })
+
+  it('suggests a budget once savings is maxed without one, else keep going', () => {
+    expect(healthBreakdown({ savingsRate: 0.3, hasBudget: false, budgetPercent: 0 }).action).toBe('set_budget')
+    expect(healthBreakdown({ savingsRate: 0.3, hasBudget: true, budgetPercent: 0.8 }).action).toBe('keep_going')
   })
 })

@@ -9,25 +9,40 @@ import {
   Sparkles,
   TrendingDown,
 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { Callout } from '@/components/callout'
-import { InsightCard, type InsightTone } from '@/components/insight-card'
+import { InsightCard } from '@/components/insight-card'
 import { CategoryDonut, type DonutSlice } from '@/components/category-donut'
 import { RecentActivity, type RecentActivityRow } from '@/components/recent-activity'
 import type { TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { formatCurrency, formatMonthLabel, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { getDisplayedLiabilityBalance } from '@/lib/net-worth/valuation'
+import { computeValuation, getDisplayedLiabilityBalance } from '@/lib/net-worth/valuation'
+import { monthEndDate } from '@/lib/periods/month'
+import {
+  buildDashboardInsights,
+  scheduledDirection,
+  summarizeDebts,
+  type DashboardInsight,
+} from '@/lib/insights/dashboard'
 import type { AccountBalance, BudgetDetailRow } from './page'
 
-// Only the two accent colors this file's own JSX uses (upcoming-bills icon
-// background). The full ACCENT map stays in page.tsx, where the rest of it is
+// Only the accent colors this file's own JSX uses (scheduled-activity icon
+// background, keyed by scheduledDirection). The full ACCENT map stays in page.tsx, where the rest of it is
 // actually used — not worth a shared-constants module for two colors.
 const ACCENT = {
-  emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
-  rose: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
+  in: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+  out: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
+  neutral: 'bg-muted text-muted-foreground',
 } as const
+const SCHEDULED_AMOUNT_CLASS = {
+  in: 'text-emerald-600 dark:text-emerald-400',
+  out: 'text-rose-600 dark:text-rose-400',
+  neutral: 'text-foreground',
+} as const
+const SCHEDULED_SIGN = { in: '+', out: '−', neutral: '' } as const
 
 // Category identity colors for budget dots/bars + donut alignment + goals mini.
 const SERIES = [
@@ -220,7 +235,11 @@ export async function DashboardSecondaryWidgets({
       .eq('review_status', 'unreviewed')
       .neq('transaction_type', 'opening_balance')
       .neq('status', 'voided')
-      .is('deleted_at', null),
+      .is('deleted_at', null)
+      // RUM-009: Home shows the month on screen's review backlog, not the
+      // all-time one — the data is untouched, only what Home surfaces.
+      .gte('transaction_date', selectedMonthDate)
+      .lte('transaction_date', monthEndDate(selectedMonth)),
   ])
 
   const recentTransactions = (recentTxRows ?? []) as RecentTransaction[]
@@ -295,73 +314,59 @@ export async function DashboardSecondaryWidgets({
   const overallPctTone =
     totalBudgetPercent >= 1 ? 'rose' : totalBudgetPercent >= 0.8 ? 'amber' : 'primary'
 
-  // ── Insights (real data only). ───────────────────────────────────────────
-  type Insight = { key: string; tone: InsightTone; icon: React.ReactNode; text: string }
-  const insights: Insight[] = []
-  const overBudgetLine = budgetLines
-    .filter((l) => Number(l.actual_amount ?? 0) > Number(l.planned_amount ?? 0) && Number(l.planned_amount ?? 0) > 0)
-    .sort(
-      (a, b) =>
-        Number(b.actual_amount ?? 0) / Number(b.planned_amount ?? 1) -
-        Number(a.actual_amount ?? 0) / Number(a.planned_amount ?? 1)
-    )[0]
-  if (overBudgetLine) {
-    const pct = Number(overBudgetLine.actual_amount ?? 0) / Number(overBudgetLine.planned_amount ?? 1)
-    insights.push({
-      key: 'over-budget',
-      tone: 'warning',
-      icon: <AlertTriangle />,
-      text: t('dashboard.insightOverBudget', { category: overBudgetLine.category_name ?? '—', percent: formatPercent(pct, locale) }),
-    })
-  }
-  if (hasMonthlyActivity && monthlySavings > 0.01) {
-    insights.push({
-      key: 'cash-flow-positive',
-      tone: 'positive',
-      icon: <PiggyBank />,
-      text: t('dashboard.insightPositiveCashFlow', { amount: formatCurrency(monthlySavings, dashboardCurrency) }),
-    })
-  } else if (hasMonthlyActivity && monthlySavings < -0.01) {
-    insights.push({
-      key: 'cash-flow-negative',
-      tone: 'warning',
-      icon: <TrendingDown />,
-      text: t('dashboard.insightNegativeCashFlow', { amount: formatCurrency(Math.abs(monthlySavings), dashboardCurrency) }),
-    })
-  }
-  const debtDrop = prevLiabilities - totalLiabilities
-  if (debtDrop > 0.01 && prevLiabilities > 0) {
-    insights.push({
-      key: 'debt-down',
-      tone: 'positive',
-      icon: <TrendingDown />,
-      text: t('dashboard.insightDebtDown', { amount: formatCurrency(debtDrop, baseCurrency) }),
-    })
-  }
+  // ── Insights (RUM-009): deterministic, traceable, actionable — see
+  // lib/insights/dashboard for the rules. This file only maps kinds to
+  // icons and copy.
   const upcomingRows = (recurringRows ?? []) as Recurring[]
-  if (upcomingRows.length > 0) {
-    insights.push({
-      key: 'upcoming',
-      tone: 'info',
-      icon: <CalendarClock />,
-      text: t('dashboard.insightUpcoming', { count: upcomingRows.length }),
-    })
+  const visibleInsights = buildDashboardInsights({
+    month: selectedMonth,
+    budgetLines,
+    hasMonthlyActivity,
+    monthlySavings,
+    totalLiabilities,
+    prevLiabilities,
+    topCategory: largestExpenseCategory
+      ? {
+          category_id: largestExpenseCategory.category_id,
+          name: getCategoryPath(largestExpenseCategory, categoriesById).name,
+          amount: largestExpenseAmount,
+        }
+      : null,
+  })
+  function renderInsight(ins: DashboardInsight): { icon: ReactNode; text: string; actionLabel: string } {
+    switch (ins.kind) {
+      case 'over-budget':
+        return {
+          icon: <AlertTriangle />,
+          text: t('dashboard.insightOverBudget', { category: ins.category, percent: formatPercent(ins.percent, locale) }),
+          actionLabel: t('dashboard.insightActionViewTransactions'),
+        }
+      case 'cash-flow-positive':
+        return {
+          icon: <PiggyBank />,
+          text: t('dashboard.insightPositiveCashFlow', { amount: formatCurrency(ins.amount, dashboardCurrency) }),
+          actionLabel: t('dashboard.insightActionReviewMonth'),
+        }
+      case 'cash-flow-negative':
+        return {
+          icon: <TrendingDown />,
+          text: t('dashboard.insightNegativeCashFlow', { amount: formatCurrency(ins.amount, dashboardCurrency) }),
+          actionLabel: t('dashboard.insightActionViewTransactions'),
+        }
+      case 'liabilities-down':
+        return {
+          icon: <TrendingDown />,
+          text: t('dashboard.insightLiabilitiesDown', { amount: formatCurrency(ins.amount, baseCurrency) }),
+          actionLabel: t('dashboard.insightActionViewAccounts'),
+        }
+      case 'top-category':
+        return {
+          icon: <Layers />,
+          text: t('dashboard.insightTopCategory', { category: ins.category, amount: formatCurrency(ins.amount, dashboardCurrency) }),
+          actionLabel: t('dashboard.insightActionViewTransactions'),
+        }
+    }
   }
-  if (largestExpenseCategory && insights.length < 2) {
-    insights.push({
-      key: 'top-category',
-      tone: 'info',
-      icon: <Layers />,
-      text: t('dashboard.insightTopCategory', {
-        category: getCategoryPath(largestExpenseCategory, categoriesById).name,
-        amount: formatCurrency(largestExpenseAmount, dashboardCurrency),
-      }),
-    })
-  }
-  // RUM-008: top-of-fold already answers "how much / how was the month"; the
-  // right rail only has room for a couple of genuinely actionable signals
-  // before it starts competing with Recent activity for attention.
-  const visibleInsights = insights.slice(0, 2)
 
   // ── Upcoming bills (recurring). ──────────────────────────────────────────
   function daysUntil(dateStr: string) {
@@ -370,13 +375,15 @@ export async function DashboardSecondaryWidgets({
     return Math.round((a.getTime() - b.getTime()) / 86_400_000)
   }
   const upcoming = upcomingRows.map((row) => {
-    const isExpenseLike = row.transaction_type !== 'income'
+    const direction = scheduledDirection(row.transaction_type)
     const days = row.next_run_date ? daysUntil(row.next_run_date) : null
     const dueSoon = days !== null && days <= 0
     const dueText =
       days === null
         ? ''
-        : days <= 0
+        : days < 0
+        ? t('dashboard.overdueDays', { days: Math.abs(days) })
+        : days === 0
         ? t('dashboard.dueToday')
         : t('dashboard.inDays', { days })
     const tag = row.auto_post
@@ -390,7 +397,10 @@ export async function DashboardSecondaryWidgets({
       name: row.name,
       dueText,
       amount: Number(row.amount),
-      isExpenseLike,
+      currency: row.currency_code,
+      direction,
+      sign: SCHEDULED_SIGN[direction],
+      amountClass: SCHEDULED_AMOUNT_CLASS[direction],
       tag,
       tagTone,
     }
@@ -406,6 +416,18 @@ export async function DashboardSecondaryWidgets({
   const totalOriginal = activeDebtRows.reduce((s, d) => s + Number(d.original_principal ?? 0), 0)
   const debtPaidPct = totalOriginal > 0 ? Math.max(0, Math.min(100, Math.round(((totalOriginal - totalDebt) / totalOriginal) * 100))) : null
   const nextPayment = activeDebtRows.reduce((s, d) => s + Number(d.minimum_payment ?? 0), 0)
+  // RUM-009: the card reads Debt Planner records; account liabilities can
+  // exist without one (a credit card), so never say "no debt" over them.
+  // Reconciled against ALL liability accounts, not the net-worth total:
+  // `totalDebt` above reads unfiltered balances, so comparing it with a
+  // figure that drops include_in_net_worth=false accounts would mix scopes.
+  const allAccountLiabilities = computeValuation(balances).totalLiabilities
+  const debtsSummary = summarizeDebts({
+    activeDebtCount: activeDebtRows.length,
+    plannerTotal: totalDebt,
+    totalLiabilities: allAccountLiabilities,
+  })
+  const debtsOwed = debtsSummary.state !== 'none'
 
   // ── Goals mini. ───────────────────────────────────────────────────────────
   // `anyGoalsConfigured` reads the unfiltered rows so a household with only
@@ -564,13 +586,17 @@ export async function DashboardSecondaryWidgets({
             {/* Upcoming bills */}
             <div className={cn(cardClass, 'overflow-hidden')}>
               <div className="flex items-center justify-between border-b px-4 py-3">
-                <h2 className="text-sm font-bold">{t('dashboard.upcomingTitle')}</h2>
-                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-bold text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
-                  {upcoming.length} {t('dashboard.upcomingThisMonth')}
-                </span>
+                {/* RUM-009: income and expenses both appear here, so it is
+                    "Scheduled activity", not "Upcoming payments". The list is
+                    the next few runs by date, not a month total, so there is
+                    no "N this month" count. */}
+                <h2 className="text-sm font-bold">{t('dashboard.scheduledTitle')}</h2>
+                <Link href="/dashboard/recurring" className="text-xs font-semibold text-primary hover:underline">
+                  {t('common.viewAll')} →
+                </Link>
               </div>
               {upcoming.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">{t('mobile.upcomingEmpty')}</p>
+                <p className="p-4 text-sm text-muted-foreground">{t('dashboard.scheduledEmpty')}</p>
               ) : (
                 <div className="divide-y">
                   {upcoming.map((bl) => (
@@ -578,7 +604,7 @@ export async function DashboardSecondaryWidgets({
                       <span
                         className={cn(
                           'flex size-7 shrink-0 items-center justify-center rounded-lg [&_svg]:size-[13px]',
-                          bl.isExpenseLike ? ACCENT.rose : ACCENT.emerald
+                          ACCENT[bl.direction]
                         )}
                         aria-hidden="true"
                       >
@@ -589,9 +615,9 @@ export async function DashboardSecondaryWidgets({
                         <p className="text-[10.5px] text-muted-foreground">{bl.dueText}</p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className={cn('text-xs font-semibold tabular-nums', bl.isExpenseLike ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')}>
-                          {bl.isExpenseLike ? '−' : '+'}
-                          {formatCurrency(bl.amount, baseCurrency)}
+                        <p className={cn('text-xs font-semibold tabular-nums', bl.amountClass)}>
+                          {bl.sign}
+                          {formatCurrency(bl.amount, bl.currency)}
                         </p>
                         <p
                           className={cn(
@@ -621,15 +647,25 @@ export async function DashboardSecondaryWidgets({
                 <Sparkles className="size-[15px] text-primary" aria-hidden="true" />
                 {t('dashboard.insightsTitle')}
               </h2>
-              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-primary">
-                {t('dashboard.insightsLive')}
-              </span>
             </div>
             {visibleInsights.length ? (
               <div className="flex flex-col gap-2.5 p-3">
-                {visibleInsights.map((ins) => (
-                  <InsightCard key={ins.key} tone={ins.tone} icon={ins.icon}>{ins.text}</InsightCard>
-                ))}
+                {visibleInsights.map((ins) => {
+                  const view = renderInsight(ins)
+                  return (
+                    <InsightCard
+                      key={ins.kind}
+                      tone={ins.tone}
+                      icon={view.icon}
+                      action={{ href: ins.href, label: view.actionLabel }}
+                    >
+                      {view.text}
+                    </InsightCard>
+                  )
+                })}
+                <p className="px-0.5 text-[10.5px] text-muted-foreground">
+                  {t('dashboard.insightsBasis', { month: formatMonthLabel(selectedMonth, locale) })}
+                </p>
               </div>
             ) : (
               <p className="p-4 text-xs text-muted-foreground">{t('dashboard.insightsEmpty')}</p>
@@ -645,10 +681,15 @@ export async function DashboardSecondaryWidgets({
               </h2>
               <Link href="/dashboard/debts" className="text-xs font-semibold text-primary hover:underline">{t('dashboard.planDebt')} →</Link>
             </div>
-            {activeDebtRows.length === 0 ? (
+            {!debtsOwed ? (
               <p className="text-xs text-muted-foreground">{t('dashboard.debtsMiniEmpty')}</p>
+            ) : debtsSummary.state === 'untracked-liabilities' ? (
+              <p className="text-xs text-muted-foreground">
+                {t('dashboard.debtsMiniUntracked', { amount: formatCurrency(debtsSummary.accountLiabilities, baseCurrency) })}
+              </p>
             ) : (
               <>
+                <p className="text-[11px] text-muted-foreground">{t('dashboard.debtsMiniPlannerTotal')}</p>
                 <p className="mb-2 text-lg font-bold tabular-nums text-rose-600 dark:text-rose-400">{formatCurrency(totalDebt, baseCurrency)}</p>
                 {debtPaidPct !== null ? (
                   <>
@@ -662,6 +703,11 @@ export async function DashboardSecondaryWidgets({
                   </>
                 ) : nextPayment > 0 ? (
                   <p className="text-[11.5px] text-muted-foreground">{t('dashboard.nextPaymentLabel')}: {formatCurrency(nextPayment, baseCurrency)}</p>
+                ) : null}
+                {debtsSummary.untrackedLiabilities > 0 ? (
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    {t('dashboard.debtsMiniOtherLiabilities', { amount: formatCurrency(debtsSummary.untrackedLiabilities, baseCurrency) })}
+                  </p>
                 ) : null}
               </>
             )}
@@ -709,10 +755,13 @@ export async function DashboardSecondaryWidgets({
             <h2 className="text-sm font-bold">{t('dashboard.recentActivityTitle')}</h2>
             {needsReviewCount ? (
               <Link
-                href="/dashboard/transactions?review=unreviewed&date_from=2000-01-01&date_to=2099-12-31"
+                href={`/dashboard/transactions?review=unreviewed&status=posted&status=pending&month=${selectedMonth}`}
                 className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-400"
               >
-                {t('dashboard.needsReviewCount', { count: needsReviewCount })}
+                {t('dashboard.needsReviewMonth', {
+                  count: needsReviewCount,
+                  month: formatMonthLabel(selectedMonth, locale),
+                })}
               </Link>
             ) : null}
           </div>
