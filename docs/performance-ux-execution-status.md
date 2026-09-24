@@ -8,7 +8,17 @@
 > Este archivo registra *qué pasó*. El backlog registra *qué hay que hacer*. No
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
-> **Actualizado 2026-09-24 — RUM-008 cerrado: label de mes dinámico y
+> **Actualizado 2026-09-24 — RUM-009 cerrado: Month health muestra su
+> desglose numérico, Insights deterministas y con acción, Debts distingue
+> Debt Planner de liabilities de cuenta, "Scheduled activity" y review queue
+> acotada al mes.** Sin fórmula nueva: `healthBreakdown()` en
+> `lib/health/score.ts` expone entradas, sub-puntos, pesos y la acción del
+> componente más débil, y es la única fuente para dashboard y Month review
+> (verificado en vivo: 80/100 en ambas). Insights salen de un módulo puro
+> (`lib/insights/dashboard.ts`) con 15 tests; badge `LIVE` retirado. Ver la
+> entrada de RUM-009 en §4.
+>
+> **2026-09-24 — RUM-008 cerrado: label de mes dinámico y
 > tarjetas vacías de Budget/Goals consolidadas en una, verificado en vivo con
 > capturas en 4 anchos × 2 temas.** Alcance acotado a lo que los criterios de
 > aceptación pedían literalmente (no la reescritura completa de jerarquía que
@@ -101,8 +111,8 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | RUM-006 — Balances repetidos | P1 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | — | 2026-09-21 |
 | RUM-007 — Cache, prefetch y loading | P1 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#75](https://github.com/andresze020/rumbo/pull/75) | 2026-09-24 |
 | RUM-004 — Consultas de Transactions | P2 | **Hecho, aplicado y verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#76](https://github.com/andresze020/rumbo/pull/76) | 2026-09-24 |
-| RUM-008 — IA del Dashboard | P2 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | — | 2026-09-24 |
-| RUM-009 — Month health e Insights | P2 | Pendiente | — | — | — |
+| RUM-008 — IA del Dashboard | P2 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#77](https://github.com/andresze020/rumbo/pull/77) | 2026-09-24 |
+| RUM-009 — Month health e Insights | P2 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | PR pendiente | 2026-09-24 |
 | RUM-010b — Suite de regresión y gate | P0 transversal | Pendiente | — | — | — |
 
 ---
@@ -171,6 +181,107 @@ quedaban cortos.
 
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
+
+### RUM-009 — Corregir semántica de Month health, Insights y módulos secundarios · 2026-09-24 · rama `claude/next-backlog-ticket-2azpv2` · PR pendiente
+
+**Definiciones finales.**
+
+*Month health* — la fórmula no cambió (§3.4 #8). `healthBreakdown(input)`
+(`src/lib/health/score.ts`) devuelve `{ score, grade, savings: { rate,
+points, weight }, budget: { percentUsed, points, weight } | null, weakest,
+action }`; `computeHealthScore` ahora deriva de él, así que no hay dos
+cálculos. Peso efectivo de savings = 1 cuando no hay budget (antes implícito,
+ahora visible). `weakest` = budget solo si sus puntos son estrictamente menores
+que los de savings (empate → savings, el de más peso). `action`, en orden:
+`rein_in_budget` (budget es el más débil) → `record_income` (sin tasa de
+ahorro: savings está en el neutro 50) → `raise_savings` (savings < 100) →
+`set_budget` (savings al máximo sin budget) → `keep_going`. Cada acción tiene
+un enlace acotado al mes (transactions de gasto/ingreso o budgets).
+
+*UI* — un único componente `MonthHealthBreakdown`
+(`src/components/month-health-breakdown.tsx`) usado por el dashboard y por
+Month review: filas "Savings rate" / "Budget used" con valor, `N pts × peso`
+y chip "Weakest"; frase de acción + CTA; `<details>` "How it's calculated"
+con los umbrales (savings −20 %→0 / 0 %→50 / +20 %→100, budget ≤100 %→100
+hasta 0 en 150 %, pesos interpolados desde las constantes exportadas, bandas de
+grado). La columna de health del hero de escritorio y su `healthGrade`
+duplicado en `financial-hero-card.tsx` se eliminaron; la tarjeta que antes era
+`lg:hidden` ahora se muestra en todos los breakpoints con el desglose.
+
+*Insights* — `buildDashboardInsights()` (`src/lib/insights/dashboard.ts`),
+función pura, en orden de prioridad, tope 2:
+1. `over-budget`: línea con mayor ratio actual/plan > 100 % (empates por
+   nombre de categoría y luego id → no depende del orden de filas) → enlace a
+   las transacciones de gasto de esa categoría en el mes.
+2. `cash-flow-positive/negative`: ingresos − gastos del mes (solo con
+   actividad, umbral 0,01) → Month review / gastos del mes.
+3. `liabilities-down`: liabilities de **cuentas** (valuación de net worth)
+   bajaron vs el mes anterior. El copy dice ahora "Balances owed on your
+   accounts…", no "Your debt", para no contradecir la tarjeta Debts, que lee
+   el Debt Planner → Accounts.
+4. `top-category`: solo rellena un hueco libre.
+Se eliminó el insight "N upcoming payment(s)": repetía la tarjeta de al lado y
+su conteo estaba truncado por el `.limit(4)` de la query. Badge `LIVE`
+retirado (no hay actualización en vivo; es un render de servidor). Cada
+tarjeta lleva un CTA y la lista cierra con "Based on {mes}: your
+transactions, budget and account balances." como trazabilidad.
+
+*Debts* — `summarizeDebts()` distingue tres estados: `tracked` (hay registros
+activos del Debt Planner; la tarjeta rotula el total "Tracked in the Debt
+Planner" y, si las liabilities de cuentas superan ese total, añade
+"+X owed on accounts not in the Debt Planner"), `untracked-liabilities` (sin
+registros pero las cuentas deben dinero: "No debts in the Debt Planner yet.
+Your accounts owe X (e.g. credit cards)…") y `none` (solo entonces "No active
+debts. Nicely done."). Ya no se dice "sin deuda" con una tarjeta de crédito
+con saldo.
+
+*Scheduled activity* — renombrada (contiene ingresos y gastos). El badge
+"N this month" era falso (la lista son las próximas 4 ejecuciones por fecha,
+no el mes) → reemplazado por "View all →" a `/dashboard/recurring`. Signos:
+`scheduledDirection()` — income `+`, transfer sin signo (no es ingreso ni
+gasto), resto `−`. Fechas: vencidos ahora dicen "3d overdue" en vez de "Due
+today". Importe formateado en el `currency_code` de la fila recurrente (antes
+en la moneda base, aunque el importe está en la moneda de la regla).
+
+*Review queue* — el badge de Home contaba todo el histórico de no revisadas y
+enlazaba a 2000–2099. Ahora cuenta solo el mes en pantalla (no anuladas), dice
+"4 to review in September 2026", enlaza a
+`/dashboard/transactions?review=unreviewed&month=YYYY-MM` y solo aparece con
+conteo > 0. Month review ("Categorize N transactions to review") aplica las
+mismas reglas y el mismo enlace — antes decía 5 donde Home decía 4. Los datos
+de revisión no se tocan.
+
+**Tests.** `score.test.ts` +10 (desglose, paridad con `computeHealthScore`,
+cada acción, empate); `src/lib/insights/dashboard.test.ts` nuevo, 15 tests
+(cada insight, determinismo ante orden de filas, prioridad/tope, los tres
+estados de Debts, signos de Scheduled activity).
+
+**Verificación en vivo.** Playwright contra `npm run dev` + Supabase real.
+Usuario de prueba nuevo (`rum009-qa-*@example.com`) sembrado **como ese
+usuario** (clave anon + su sesión → RLS aplica) con las mismas RPC que usan las
+server actions (`create_manual_transaction`, `create_monthly_budget`,
+`upsert_budget_line`) más una tarjeta de crédito, 3 reglas recurrentes
+(gasto vencido, ingreso, transferencia) y un budget con una línea al 150 %.
+9/9 comprobaciones: sin `Live`, "Scheduled activity", "3d overdue",
+transferencia sin signo, copy de Debt Planner sin "Nicely done", filas del
+desglose, badge "4 to review in September 2026" → lista filtrada con
+exactamente las 4 del mes, línea de trazabilidad, y **score 80 en dashboard =
+80 en Month review**. Capturas 375 px y 1280 px del dashboard y 1280 px de
+Month review.
+
+**Traducciones** vía `i18n-scribe`: 31 claves nuevas `dashboard.*` (en/es/fr),
+6 eliminadas por huérfanas (`insightsLive`, `insightUpcoming`,
+`insightDebtDown`, `upcomingTitle`, `upcomingThisMonth`, `needsReviewCount`).
+`mobile.upcomingEmpty` se mantiene (lo usa Plan). El copy de Month review sigue
+siendo el literal legacy existente.
+
+**Gate.** `npm run lint` ✅ · `npx tsc --noEmit` ✅ · `npm test` 123/123 ✅ ·
+`npm run i18n:check` ✅ · `npm run build` ✅. Sin migraciones ni cambios de RLS.
+
+**Pendiente / fuera de alcance.** El usuario de prueba queda en Supabase de
+producción, como los de RUM-007/008. El delta "↑ 27.8 % vs last month" de un
+net worth negativo que mejora (−900 → −650) es comportamiento previo del hero,
+no tocado aquí.
 
 ### RUM-008 — Simplificar arquitectura de información del Dashboard · 2026-09-24 · rama `claude/next-backlog-ticket-2azpv2` · PR pendiente
 
@@ -1760,6 +1871,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-24 | **RUM-009 cerrado: Month health con desglose numérico (misma fórmula), Insights deterministas/trazables/accionables, Debts distingue Debt Planner de liabilities de cuenta, "Scheduled activity", review queue acotada al mes.** `healthBreakdown()` como única fuente para dashboard y Month review (80 = 80 verificado en vivo); módulo puro `lib/insights/dashboard.ts` con 15 tests; badge `LIVE` y el insight de "upcoming" retirados; transferencias programadas sin signo e importes en la moneda de la regla; conteo de revisión alineado entre Home y Month review. 31 claves nuevas vía `i18n-scribe`. Gate completo en verde. |
 | 2026-09-24 | **RUM-008 cerrado: label de mes dinámico, Budget/Goals consolidados en una tarjeta compacta, Insights bajado a 2.** Alcance acotado a los tres puntos concretos de los criterios de aceptación (no la jerarquía completa del ticket, que ya se aproxima razonablemente en mobile con la estructura actual). Verificado en vivo con Playwright contra `npm run dev` y Supabase real: cuenta de prueba nueva con un household de una sola cuenta, sin budget/debts/goals/transacciones, capturada en 320/375/430/768px, claro y oscuro. Confirmado visualmente que "September 2026" reemplaza "This month", que Budget y Goals ya no tienen tarjetas propias vacías (solo aparecen como líneas dentro de "Finish setting up"), y que Debts conserva su copy positivo ("No active debts. Nicely done.") sin tocar — decisión deliberada, no un olvido, porque cero deudas es un resultado bueno, no una configuración pendiente. Dos claves de i18n vía `i18n-scribe`: `dashboard.setupTitle` nueva, `dashboard.thisMonthTitle` eliminada (huérfana en las 3 locales). Gate completo en verde. |
 | 2026-09-24 | **RUM-004 cerrado: migración aplicada, mejora confirmada en producción.** El usuario pusheó el commit con la migración redactada desde su máquina (el harness había bloqueado el push desde esta sesión); un `db-push.mjs push --apply` pedido de nuevo por el usuario sí pasó el clasificador esta vez (61/61 migraciones). `EXPLAIN (ANALYZE, BUFFERS)` inmediatamente después, mismo household real, mismo método que encontró el problema: `get_account_balances` 192 ms/36.778 buffers → **25 ms/3.024 buffers** (~7,7×/~12,2×); `search_household_transactions` (all-time) 186 ms/34.791 buffers → **22 ms/1.731 buffers** (~8,4×/~20×). Antes/después real, no proyectado. El resto del alcance original del ticket (índices, keyset pagination) no hacía falta — la causa raíz era el plan de RLS, no la query ni la paginación. B-6 se cierra como "superado para esta migración puntual", no como resuelto en general: el mismo comando fue bloqueado y luego permitido sin cambiar nada explícito. |
 | 2026-09-24 | **RUM-004: causa raíz real encontrada con `EXPLAIN ANALYZE` en producción — no es la query, son las políticas RLS.** `is_household_member(household_id)` es `security definer`, que Postgres nunca inlinea, así que las políticas `select` de `transactions`/`transaction_entries`/`transaction_allocations`/`transaction_tags`/`accounts` la reinvocan por cada fila. Medido en el household real más grande (4.664 transacciones): con RLS, el join de `search_household_transactions` con `transaction_entries` se convierte en un Nested Loop que llama la función 4.664 veces (23.843 de 33.507 buffers, 196 ms); sin RLS, el mismo query plan es un Hash Join de una pasada (27 ms). Halazgo con implicación mayor: `get_account_balances` hace el mismo join bajo las mismas políticas, casi con certeza la razón real por la que RUM-001/006 ya lo habían medido como la llamada más cara del sistema. Migración redactada (`20260924120000_rum004_rls_select_policy_perf.sql`) que reescribe esas 5 políticas al patrón de subquery que recomienda la guía de RLS de Supabase — misma semántica de autorización, sin invocar la función por fila. El usuario confirmó por chat que la aplicara en el momento, pero el clasificador de auto-mode del harness bloqueó la acción (`[Protected-Scope IaC Apply]`) incluso con esa confirmación explícita; nueva entrada B-6 documenta el bloqueo y los comandos exactos para que el usuario la aplique él mismo. Sin "después" medido todavía. Detalle completo en la entrada de RUM-004 §4. |

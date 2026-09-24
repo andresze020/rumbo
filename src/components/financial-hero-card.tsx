@@ -12,32 +12,13 @@ type FinancialHeroCardProps = {
   currency: string
   /** Net-worth values for the last N months, oldest→newest, for the sparkline. */
   spark: number[]
-  /**
-   * BR-021 month-health score (0–100). Real, documented formula in
-   * lib/health/score.ts (weighted savings rate + budget adherence). Guidance,
-   * not financial advice — explained via the health tooltip.
-   */
-  healthScore: number
   labels: {
     netWorth: string
     assets: string
     liabilities: string
     projected: string
-    monthHealth: string
     vsPrev: string
-    healthTooltip: string
   }
-}
-
-/** Letter grade for the month-health score (matches lib/health/score). */
-function healthGrade(score: number) {
-  if (score >= 90) return 'A+'
-  if (score >= 80) return 'A'
-  if (score >= 70) return 'B+'
-  if (score >= 60) return 'B'
-  if (score >= 50) return 'C+'
-  if (score >= 40) return 'C'
-  return 'D'
 }
 
 /** Builds an SVG polyline (200×28 viewBox) from net-worth history. */
@@ -101,11 +82,8 @@ export function FinancialHeroCard({
   deltaPct,
   currency,
   spark,
-  healthScore,
   labels,
 }: FinancialHeroCardProps) {
-  const score = Math.round(healthScore)
-  const grade = healthGrade(score)
   const points = sparkPoints(spark)
   const netWorthClass = netWorth < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'
 
@@ -133,7 +111,7 @@ export function FinancialHeroCard({
       </div>
 
       {/* ── Desktop: control-center hero ──────────────────────────────── */}
-      <div className="hidden items-center gap-6 rounded-2xl border bg-card p-5 shadow-sm shadow-black/[0.03] lg:grid lg:grid-cols-[1fr_auto_auto_auto_auto]">
+      <div className="hidden items-center gap-6 rounded-2xl border bg-card p-5 shadow-sm shadow-black/[0.03] lg:grid lg:grid-cols-[1fr_auto_auto_auto]">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             {labels.netWorth}
@@ -186,18 +164,6 @@ export function FinancialHeroCard({
           <p className="whitespace-nowrap text-[17px] font-semibold tabular-nums text-sky-600 dark:text-sky-400">
             {formatCurrency(projected, currency)}
           </p>
-        </div>
-
-        {/* Month-health score (BR-021) */}
-        <div className="border-l pl-5 text-center">
-          <div className="mb-1.5 flex items-center justify-center gap-1 text-[11px] text-muted-foreground">
-            {labels.monthHealth}
-            <InfoTooltip text={labels.healthTooltip} label={labels.monthHealth} />
-          </div>
-          <div className="mx-auto mb-1 flex size-12 items-center justify-center rounded-full border-[3px] border-primary bg-primary/10">
-            <span className="text-sm font-bold text-primary">{grade}</span>
-          </div>
-          <p className="text-[10.5px] text-muted-foreground">{score}/100</p>
         </div>
       </div>
     </>
