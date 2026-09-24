@@ -122,7 +122,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | RUM-004 — Consultas de Transactions | P2 | **Hecho, aplicado y verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#76](https://github.com/andresze020/rumbo/pull/76) | 2026-09-24 |
 | RUM-008 — IA del Dashboard | P2 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#77](https://github.com/andresze020/rumbo/pull/77) | 2026-09-24 |
 | RUM-009 — Month health e Insights | P2 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#78](https://github.com/andresze020/rumbo/pull/78) | 2026-09-24 |
-| RUM-010b — Suite de regresión y gate | P0 transversal | **Hecho** — gate operativo; veredicto del release actual: **no aprobado** (B-7) | `claude/next-backlog-ticket-2azpv2` | PR pendiente | 2026-09-24 |
+| RUM-010b — Suite de regresión y gate | P0 transversal | **Hecho** — gate operativo; veredicto del release actual: **no aprobado** (B-7) | `claude/next-backlog-ticket-2azpv2` | [#79](https://github.com/andresze020/rumbo/pull/79) | 2026-09-24 |
 
 ---
 
@@ -198,7 +198,7 @@ quedaban cortos.
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
 
-### RUM-010b — Suite de regresión, carga y release gate · 2026-09-24 · rama `claude/next-backlog-ticket-2azpv2` · PR pendiente
+### RUM-010b — Suite de regresión, carga y release gate · 2026-09-24 · rama `claude/next-backlog-ticket-2azpv2` · PR [#79](https://github.com/andresze020/rumbo/pull/79)
 
 **Qué hay ahora.** Un gate de release ejecutable y documentado
 ([`release-checklist.md`](./release-checklist.md)), con tres piezas:
