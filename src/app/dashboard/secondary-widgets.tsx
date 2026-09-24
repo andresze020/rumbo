@@ -211,7 +211,6 @@ export async function DashboardSecondaryWidgets({
       .from('goals')
       .select('id, name, target_amount, current_amount, status')
       .eq('household_id', householdId)
-      .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(3),
     supabase
@@ -409,7 +408,13 @@ export async function DashboardSecondaryWidgets({
   const nextPayment = activeDebtRows.reduce((s, d) => s + Number(d.minimum_payment ?? 0), 0)
 
   // ── Goals mini. ───────────────────────────────────────────────────────────
-  const goalsMini = ((goalRows ?? []) as Goal[]).map((g, i) => {
+  // `anyGoalsConfigured` reads the unfiltered rows so a household with only
+  // paused/completed goals (RUM-008 review, Codex P2) doesn't land in
+  // "Finish setting up" — it has configured goals, just none active right
+  // now. `goalsMini` itself still only lists active ones, same as before.
+  const allGoalRows = (goalRows ?? []) as Goal[]
+  const anyGoalsConfigured = allGoalRows.length > 0
+  const goalsMini = allGoalRows.filter((g) => g.status === 'active').map((g, i) => {
     const target = Number(g.target_amount)
     const pct = target > 0 ? Math.round(Math.min(1, Number(g.current_amount) / target) * 100) : 0
     return { id: g.id, name: g.name, pct, color: SERIES[i % SERIES.length] }
@@ -483,7 +488,7 @@ export async function DashboardSecondaryWidgets({
   // done.") treats zero debts as a positive outcome, not an incomplete setup,
   // so it keeps its own card exactly as before.
   const budgetNeedsSetup = !budgetError && !hasBudget
-  const goalsNeedSetup = goalsMini.length === 0
+  const goalsNeedSetup = !anyGoalsConfigured
 
   return (
     <>
@@ -669,19 +674,26 @@ export async function DashboardSecondaryWidgets({
                 <PiggyBank className="size-[14px] text-primary" aria-hidden="true" />
                 {t('dashboard.goalsMiniTitle')}
               </h2>
-              <div className="space-y-2.5">
-                {goalsMini.map((g) => (
-                  <div key={g.id}>
-                    <div className="mb-1 flex items-center justify-between text-[11.5px]">
-                      <span className="text-muted-foreground">{g.name}</span>
-                      <span className="font-semibold tabular-nums">{g.pct}%</span>
+              {goalsMini.length > 0 ? (
+                <div className="space-y-2.5">
+                  {goalsMini.map((g) => (
+                    <div key={g.id}>
+                      <div className="mb-1 flex items-center justify-between text-[11.5px]">
+                        <span className="text-muted-foreground">{g.name}</span>
+                        <span className="font-semibold tabular-nums">{g.pct}%</span>
+                      </div>
+                      <div className="h-[5px] overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full" style={{ width: `${g.pct}%`, backgroundColor: g.color }} />
+                      </div>
                     </div>
-                    <div className="h-[5px] overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full" style={{ width: `${g.pct}%`, backgroundColor: g.color }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                // Configured (anyGoalsConfigured) but none are currently
+                // active — a real household state (paused/completed goals),
+                // not the "never set up" case "Finish setting up" covers.
+                <p className="text-xs text-muted-foreground">{t('dashboard.goalsMiniEmpty')}</p>
+              )}
               <Link href="/dashboard/goals" className="mt-3 inline-block text-[11.5px] font-semibold text-primary hover:underline">
                 {t('dashboard.viewGoals')} →
               </Link>
