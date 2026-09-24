@@ -19,7 +19,7 @@ import type { TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { formatCurrency, formatMonthLabel, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { getDisplayedLiabilityBalance } from '@/lib/net-worth/valuation'
+import { computeValuation, getDisplayedLiabilityBalance } from '@/lib/net-worth/valuation'
 import { monthEndDate } from '@/lib/periods/month'
 import {
   buildDashboardInsights,
@@ -418,10 +418,14 @@ export async function DashboardSecondaryWidgets({
   const nextPayment = activeDebtRows.reduce((s, d) => s + Number(d.minimum_payment ?? 0), 0)
   // RUM-009: the card reads Debt Planner records; account liabilities can
   // exist without one (a credit card), so never say "no debt" over them.
+  // Reconciled against ALL liability accounts, not the net-worth total:
+  // `totalDebt` above reads unfiltered balances, so comparing it with a
+  // figure that drops include_in_net_worth=false accounts would mix scopes.
+  const allAccountLiabilities = computeValuation(balances).totalLiabilities
   const debtsSummary = summarizeDebts({
     activeDebtCount: activeDebtRows.length,
     plannerTotal: totalDebt,
-    totalLiabilities,
+    totalLiabilities: allAccountLiabilities,
   })
   const debtsOwed = debtsSummary.state !== 'none'
 

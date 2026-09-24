@@ -233,7 +233,10 @@ Planner" y, si las liabilities de cuentas superan ese total, añade
 registros pero las cuentas deben dinero: "No debts in the Debt Planner yet.
 Your accounts owe X (e.g. credit cards)…") y `none` (solo entonces "No active
 debts. Nicely done."). Ya no se dice "sin deuda" con una tarjeta de crédito
-con saldo.
+con saldo. La reconciliación usa las liabilities de **todas** las cuentas
+(`computeValuation(balances)`), no el total de net worth, porque el total del
+planner también lee balances sin filtrar — hallazgo P2 de Codex en #78: una
+tarjeta excluida de net worth habría producido "No active debts".
 
 *Scheduled activity* — renombrada (contiene ingresos y gastos). El badge
 "N this month" era falso (la lista son las próximas 4 ejecuciones por fecha,
