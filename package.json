@@ -12,9 +12,11 @@
     "i18n:check": "node scripts/check-i18n-coverage.mjs",
     "perf:census": "node scripts/perf-census.mjs",
     "perf:baseline": "node scripts/perf-baseline.mjs",
+    "perf:nav": "node scripts/perf-nav.mjs",
     "db:status": "node scripts/db-push.mjs status",
     "db:push": "node scripts/db-push.mjs push",
-    "db:test": "node scripts/db-test.mjs"
+    "db:test": "node scripts/db-test.mjs",
+    "db:local": "node scripts/db-local.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",

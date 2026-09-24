@@ -60,10 +60,24 @@ select
   ) as passed;
 
 -- 2. Exact agreement with get_account_balances(household) — the
---    include-archived, current_date-only overload Accounts calls for its
---    primary balance list.
+--    include-archived overload Accounts calls for its primary balance list —
+--    for every account with nothing dated after today.
+--    That overload has NO date filter (deliberately: Accounts shows booked
+--    future-dated entries, see accounts/page.tsx), while the multi-date one
+--    stops at the as-of date. So an account holding a future-dated entry
+--    legitimately differs by exactly those entries; RUM-010b's
+--    "Accounts − as-of-today = future-dated entries" check reconciles that
+--    difference to the cent instead of this check pretending it is zero.
 with params as (
   select '__HOUSEHOLD_ID__'::uuid as household_id
+),
+future_dated_accounts as (
+  select distinct te.account_id
+  from public.transaction_entries te
+  join public.transactions t on t.id = te.transaction_id
+  where t.household_id = (select household_id from params)
+    and t.deleted_at is null
+    and t.transaction_date > current_date
 ),
 multi as (
   select *
@@ -76,19 +90,20 @@ single as (
   from public.get_account_balances((select household_id from params))
 )
 select
-  'RUM-006 multi-date (include_archived) matches get_account_balances(household) exactly' as check_name,
+  'RUM-006 multi-date (include_archived) matches get_account_balances(household) exactly (accounts with nothing future-dated)' as check_name,
   not exists (
     select 1
     from single s
     full outer join multi m on m.account_id = s.account_id
-    where m.account_id is null
+    where coalesce(m.account_id, s.account_id) not in (select account_id from future_dated_accounts)
+      and (m.account_id is null
        or s.account_id is null
        or m.posted_balance_account_currency is distinct from s.posted_balance_account_currency
        or m.pending_balance_account_currency is distinct from s.pending_balance_account_currency
        or m.projected_balance_account_currency is distinct from s.projected_balance_account_currency
        or m.posted_balance_base_currency is distinct from s.posted_balance_base_currency
        or m.pending_balance_base_currency is distinct from s.pending_balance_base_currency
-       or m.projected_balance_base_currency is distinct from s.projected_balance_base_currency
+       or m.projected_balance_base_currency is distinct from s.projected_balance_base_currency)
   ) as passed;
 
 -- 3. Every account reads zero for an as-of date before any activity could

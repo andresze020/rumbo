@@ -8,8 +8,12 @@ five SQL invariant files in `supabase/tests/` are unchanged and still run with
 `npm run db:test`. No schema, RLS or ledger change.
 
 Ticket: [`performance-ux-backlog.md` §7 · RUM-010a](../performance-ux-backlog.md).
-Multi-year fixtures and the full regression suite are **RUM-010b**, not this
-document's job yet.
+
+**Extended (RUM-010b, 2026-09-24).** The SQL invariants now also run against
+**generated fixtures** in a throwaway local Postgres — `npm run db:local`, in CI
+on every pull request — and `npm run perf:nav` times the §3.1 navigation flows in
+a real browser. What a release must pass is in
+[`release-checklist.md`](./release-checklist.md).
 
 ---
 
@@ -73,7 +77,9 @@ second test file needs belongs there rather than in a sibling test.
 | Suite | Command | Covers | Needs a database |
 |---|---|---|---|
 | Vitest unit | `npm test` | Pure logic in `src/lib/` — formulas, parsers, formatters, date/period math | No |
-| SQL invariants | `npm run db:test` | Ledger rules where the ledger lives: double entry, transfers, refunds, installments, goals | Yes (runs against the linked project) |
+| SQL invariants (live) | `npm run db:test` | Ledger rules where the ledger lives: double entry, transfers, refunds, installments, goals, isolation | Yes (runs against the linked project, read-only) |
+| SQL invariants (fixtures) | `npm run db:local` | The same files, against generated multi-year data for two households, as member and as non-member | A private local Postgres it starts and deletes itself — no credentials |
+| Navigation | `npm run perf:nav` | §3.1 flows cold and warm, p50/p75/p95, lost navigations | A running app and a test account |
 
 The two do not overlap and neither replaces the other. A rule that is enforced
 by a constraint or an RPC is tested in SQL; a rule that is computed in
@@ -103,6 +109,37 @@ sub-scores are plain `number` arithmetic. That is context for **RUM-003**
 
 ---
 
+## Fixtures and the local database (RUM-010b)
+
+`npm run db:local` (`scripts/db-local.mjs`) needs only the stock PostgreSQL
+server binaries and `psql` — no Docker, no Supabase CLI, no credentials:
+
+1. starts a private cluster in a temp dir;
+2. applies `supabase/local/supabase-shim.sql` (the API roles, `auth.users`,
+   `auth.uid()` read from `request.jwt.claims`) and then every migration,
+   unmodified;
+3. loads `supabase/local/fixtures.sql` — every write through the app's own RPCs
+   as `authenticated`, so RLS and every guard apply;
+4. runs every `supabase/tests/*.sql` for both fixture households, and the
+   `run-as=non-member` files as the other household's owner and as a user with
+   no household;
+5. runs `supabase/local/fixture-expectations.sql`;
+6. deletes the cluster (`--keep` leaves it running; `--bench` times the RPCs).
+
+Both runners share one engine (`runFile` in `scripts/db-test.mjs`), so a check
+means the same thing on fixtures and on the live household. Two additions to
+the check-file format:
+
+- `-- rumbo-test: run-as=non-member` on a file makes the runner execute it as a
+  user outside the household (live: a random uuid).
+- A `do` block preceded by `-- check: <name>` passes by finishing without an
+  error, so assertion-style checks can be named.
+
+The multi-year household fixtures live in `supabase/local/`, not
+`tests/fixtures/`: they are SQL loaded through RPCs, not TypeScript data.
+
+---
+
 ## The gate
 
 `npm test` is now part of the validation gate, before the build:
@@ -116,5 +153,7 @@ npm run build
 
 `rumbo-verify` is the source of truth for that list; `AGENTS.md` and
 `.github/workflows/ci.yml` follow it. CI runs the unit suite on every pull
-request. `npm run db:test` is **not** in CI — it needs credentials for the live
-project, and there is no staging copy of that database.
+request, and — since RUM-010b — a second job, `ledger invariants on fixtures`
+(`npm run db:local -- --bench`). `npm run db:test` is still **not** in CI: it
+needs credentials for the live project, and there is no staging copy of that
+database. It is step 3 of [`release-checklist.md`](./release-checklist.md).

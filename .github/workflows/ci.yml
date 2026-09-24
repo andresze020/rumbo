@@ -58,3 +58,25 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-publishable-key
+
+  # RUM-010b: the ledger invariants (supabase/tests/) against GENERATED data,
+  # never the live project. A private Postgres is started from the server
+  # binaries the ubuntu image already ships, every migration is applied, the
+  # fixtures in supabase/local/ are loaded through the app's own RPCs, and
+  # every check must pass for both fixture households. No secrets, no
+  # network beyond checkout. See docs/testing.md and docs/release-checklist.md.
+  db-invariants:
+    name: ledger invariants on fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Only node built-ins and psql are needed — no npm ci.
+      - name: Ledger invariants (local Postgres + fixtures)
+        run: npm run db:local -- --bench

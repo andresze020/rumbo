@@ -35,7 +35,9 @@ large test framework before the app has one.
 - Transfers have no income/expense allocations.
 - Same-currency posted transfers net to zero in base currency.
 - Non-base CSV rows use the same non-1 FX rate on entries and allocations.
-- Voided transactions do not contribute to account balances.
+- Voided transactions do not contribute to account balances. (Until RUM-010b this
+  check summed voided entries anyway — a LEFT JOIN kept them — and only passed
+  because the live household had no voids; the generated fixtures exposed it.)
 - Dashboard/reporting actuals come from allocations, not raw entries.
 
 The file is intentionally read-only. It does not create, update, or delete
@@ -71,5 +73,10 @@ Vitest-based, once the project chooses a test stack.~~ **Closed twice over:**
 **RUM-010a** (2026-09-21) added Vitest as the JS/TS unit runner, wired into the
 validation gate and CI. See [`docs/testing.md`](../testing.md).
 
-Still open: porting these invariants to run against seeded fixtures rather than
-the live household, so they can run unattended in CI. That is **RUM-010b**.
+~~Still open: porting these invariants to run against seeded fixtures rather
+than the live household, so they can run unattended in CI.~~ **Closed by
+RUM-010b** (2026-09-24): `npm run db:local` runs every file in
+`supabase/tests/` against generated fixtures in a private local Postgres, in CI
+on every pull request. RUM-010b also added `rum_010b_release_invariants.sql`
+and `rum_010b_household_isolation.sql`. See
+[`docs/release-checklist.md`](../release-checklist.md).
