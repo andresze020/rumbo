@@ -44,6 +44,7 @@
 // This runs against production. There is no staging copy of this database.
 // ============================================================
 
+import { randomUUID } from 'node:crypto'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { apiContext, fail, log, runScript, runSql } from './lib/supabase-api.mjs'
@@ -53,25 +54,50 @@ const HOUSEHOLD_PLACEHOLDER = '__HOUSEHOLD_ID__'
 
 // ── CLI plumbing ────────────────────────────────────────────────────────────
 
-const KNOWN_FLAGS = new Set(['household', 'file', 'user'])
+const KNOWN_FLAGS = new Set(['household', 'file', 'user', 'outsider'])
 
 function parseArgs(argv) {
   const options = {}
   for (const token of argv) {
     const match = token.match(/^--([a-z-]+)(?:=(.*))?$/)
     if (!match || !KNOWN_FLAGS.has(match[1])) {
-      fail(`Unrecognised argument: ${token}\n  Usage: node scripts/db-test.mjs [--household=<uuid>] [--file=<substring>] [--user=<uuid>]`)
+      fail(`Unrecognised argument: ${token}\n  Usage: node scripts/db-test.mjs [--household=<uuid>] [--file=<substring>] [--user=<uuid>] [--outsider=<uuid>]`)
     }
     options[match[1]] = match[2] ?? true
   }
   return options
 }
 
+/**
+ * A `do` block (or begin…rollback group) that passes by finishing without an
+ * error names itself with a `-- check: <name>` comment line (RUM-010b). Such a
+ * chunk returns no rows, so without the name it could only ever report failure.
+ */
+function annotatedCheck(chunk) {
+  const match = chunk.match(/^\s*--\s*check:\s*(.+?)\s*$/m)
+  return match ? match[1] : null
+}
+
 /** The check's own name, so a failure reads as a check and not as raw SQL. */
 function checkName(chunk) {
+  const annotated = annotatedCheck(chunk)
+  if (annotated) return annotated
   const named = chunk.match(/'([^']+)'\s*(?:::text\s*)?as\s+check_name/i)
   if (named) return named[1]
   return leadingVerb(chunk).replace(/\s+/g, ' ').trim() || '(unnamed statement)'
+}
+
+/**
+ * A file-level directive on a `-- rumbo-test: key=value` line. Today only
+ * `run-as=non-member`: the file asserts what a signed-in user who does NOT
+ * belong to the household can see, so it must never run as a member.
+ */
+export function fileDirectives(sql) {
+  const directives = {}
+  for (const match of sql.matchAll(/^--\s*rumbo-test:\s*([a-z-]+)=([a-z-]+)\s*$/gm)) {
+    directives[match[1]] = match[2]
+  }
+  return directives
 }
 
 // ── SQL splitting ───────────────────────────────────────────────────────────
@@ -229,7 +255,7 @@ async function resolveHousehold(context, requested) {
 
 // ── Running ─────────────────────────────────────────────────────────────────
 
-function testFiles(filter) {
+export function testFiles(filter) {
   if (!existsSync(TESTS_DIR)) fail(`No ${TESTS_DIR} directory.`)
 
   const files = readdirSync(TESTS_DIR)
@@ -248,7 +274,7 @@ function testFiles(filter) {
  * this affects exactly the chunk it is prepended to, whether that chunk is a
  * plain check or a whole `begin; … rollback;` block.
  */
-function asMember(chunk, userId) {
+export function asMember(chunk, userId) {
   if (!userId) return chunk
   const claims = JSON.stringify({ sub: userId, role: 'authenticated' })
   return `set local role authenticated;
@@ -256,7 +282,14 @@ set local request.jwt.claims = '${claims}';
 ${chunk}`
 }
 
-async function runFile(context, file, householdId, userId) {
+/**
+ * Runs one test file. `execute(sql)` runs one chunk and resolves to its result
+ * rows (or throws): the Management API for the live project, `psql` for the
+ * local fixture database (scripts/db-local.mjs). Everything else — splitting,
+ * naming, the placeholder, the pass/fail rules — is shared, so a check means
+ * the same thing wherever it runs.
+ */
+export async function runFile(execute, file, householdId, userId) {
   const raw = readFileSync(`${TESTS_DIR}/${file}`, 'utf8')
 
   if (!raw.includes(HOUSEHOLD_PLACEHOLDER)) {
@@ -269,11 +302,17 @@ async function runFile(context, file, householdId, userId) {
   for (const chunk of splitStatements(sql)) {
     let rows
     try {
-      rows = await runSql(context, asMember(chunk, userId), { throwOnError: true })
+      rows = await execute(asMember(chunk, userId))
     } catch (error) {
       // A raised assert inside a `do` block lands here, and so does a genuine
       // SQL error. Both are failures; the message says which.
       results.push({ name: checkName(chunk), passed: false, error: error.message })
+      continue
+    }
+
+    const annotated = annotatedCheck(chunk)
+    if (annotated && (!Array.isArray(rows) || rows.every((row) => typeof row?.passed !== 'boolean'))) {
+      results.push({ name: annotated, passed: true })
       continue
     }
 
@@ -307,9 +346,17 @@ async function main() {
   let failed = 0
   let passed = 0
 
+  const execute = (sql) => runSql(context, sql, { throwOnError: true })
+
   for (const file of testFiles(options.file)) {
-    log(file)
-    const results = await runFile(context, file, householdId, options.user)
+    const directives = fileDirectives(readFileSync(`${TESTS_DIR}/${file}`, 'utf8'))
+    // A non-member file runs as a stranger: --outsider if given, else a fresh
+    // random uuid, which by construction belongs to no household.
+    const runAs = directives['run-as'] === 'non-member'
+      ? options.outsider ?? randomUUID()
+      : options.user
+    log(directives['run-as'] === 'non-member' ? `${file}  (as non-member ${runAs})` : file)
+    const results = await runFile(execute, file, householdId, runAs)
 
     if (results.length === 0) {
       log('  (no checks reported a passed column)')

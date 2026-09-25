@@ -449,8 +449,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           {/* Budget, category breakdown, upcoming bills, insights, debts,
               goals, recent activity — RUM-005: streams in behind its own
-              Suspense boundary instead of blocking everything above. */}
+              Suspense boundary instead of blocking everything above.
+              `key={selectedMonth}` (B-7): without it, a month change is a
+              transition that keeps this already-revealed boundary on screen
+              until its new content streams in — and with this much streamed
+              content that transition intermittently never committed, so the
+              ‹ / › click was silently lost (5/7 in perf:nav). Keying by month
+              makes each month a fresh boundary: the click commits at once and
+              this section shows its skeleton while the new month streams. */}
           <Suspense
+            key={selectedMonth}
             fallback={
               <div role="status" aria-live="polite">
                 <span className="sr-only">Loading more of your dashboard…</span>

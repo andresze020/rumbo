@@ -148,7 +148,12 @@ official_balances as (
 manual_balances as (
   select
     a.id as account_id,
-    coalesce(sum(te.amount_account_currency), 0)::numeric(18,4) as projected_balance_account_currency
+    -- `filter`: the status/deleted conditions live on the LEFT JOIN to
+    -- transactions, so an entry of a voided transaction still arrives here
+    -- with t = null. Without the filter its amount was summed anyway, and the
+    -- check failed for any household with a voided row (found by the RUM-010b
+    -- fixtures, which void ~2% of expenses).
+    coalesce(sum(te.amount_account_currency) filter (where t.id is not null), 0)::numeric(18,4) as projected_balance_account_currency
   from public.accounts a
   left join public.transaction_entries te
     on te.account_id = a.id

@@ -8,7 +8,22 @@
 > Este archivo registra *qué pasó*. El backlog registra *qué hay que hacer*. No
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
-> **Actualizado 2026-09-24 — RUM-009 cerrado: Month health muestra su
+> **Actualizado 2026-09-25 — B-7 arreglado, B-8 decidido.** El cambio de mes
+> del Dashboard ya no pierde clics (`key={selectedMonth}` en el `<Suspense>` de
+> los widgets; 0/7 en `perf:nav`) y "Expenses" de Transactions netea reembolsos
+> como el Dashboard (migración `20260925120000_b8_…`, **pendiente de aplicar en
+> producción**). Veredicto del gate: aprobado una vez aplicada. Ver §2.1.
+>
+> **2026-09-24 — RUM-010b cerrado: el backlog RUM tiene gate de
+> release, y el primer veredicto es "no aprobado".** `npm run db:local` corre
+> todos los invariantes SQL contra fixtures generadas en un Postgres local (en
+> CI), `npm run perf:nav` mide los flujos de §3.1 en navegador, y
+> [`release-checklist.md`](./release-checklist.md) define los criterios. Todas
+> las cifras reconcilian (112/112 fixtures, 46/46 household real); los flujos
+> entre rutas ya están bajo objetivo (p75 428–770 ms). Bloquea: B-7, el cambio
+> de mes del Dashboard pierde 5/7 clics. Ver la entrada de RUM-010b en §4.
+>
+> **2026-09-24 — RUM-009 cerrado: Month health muestra su
 > desglose numérico, Insights deterministas y con acción, Debts distingue
 > Debt Planner de liabilities de cuenta, "Scheduled activity" y review queue
 > acotada al mes.** Sin fórmula nueva: `healthBreakdown()` en
@@ -113,7 +128,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | RUM-004 — Consultas de Transactions | P2 | **Hecho, aplicado y verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#76](https://github.com/andresze020/rumbo/pull/76) | 2026-09-24 |
 | RUM-008 — IA del Dashboard | P2 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#77](https://github.com/andresze020/rumbo/pull/77) | 2026-09-24 |
 | RUM-009 — Month health e Insights | P2 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#78](https://github.com/andresze020/rumbo/pull/78) | 2026-09-24 |
-| RUM-010b — Suite de regresión y gate | P0 transversal | Pendiente | — | — | — |
+| RUM-010b — Suite de regresión y gate | P0 transversal | **Hecho** — gate operativo; veredicto del release actual: **no aprobado** (B-7) | `claude/next-backlog-ticket-2azpv2` | [#79](https://github.com/andresze020/rumbo/pull/79) | 2026-09-24 |
 
 ---
 
@@ -124,10 +139,13 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | B-2 | No hay baseline de performance atribuido por etapa | RUM-004, RUM-005, RUM-006 y las decisiones grandes de RUM-007 | RUM-001 |
 | B-5 | Falta la capa B del baseline (timings de servidor): necesita la app corriendo con `NEXT_PUBLIC_SUPABASE_*`. Las capas A y C ya están medidas, así que esto ya no bloquea a RUM-005/006 — solo impide separar red+PostgREST del render | Afinar `experimental.staleTimes` del Router Cache (RUM-007 lo dejó como decisión explícita pendiente, no bloqueada — el resto del ticket no lo necesitaba) | Que el usuario corra `RUMBO_PERF=1 npm run dev`, navegue y pegue las líneas `[rumbo-perf]` |
 
+
 ### 2.1 Bloqueos cerrados
 
 | # | Bloqueo | Cerrado por | Fecha |
 |---|---|---|---|
+| B-7 | El cambio de mes del Dashboard perdía clics (5/7 en `perf:nav`; la request RSC terminaba pero el router nunca confirmaba la navegación) | **Causa raíz por bisección sobre builds de producción:** los widgets secundarios se transmiten por streaming dentro de un `<Suspense>` ya revelado; un cambio de mes es una transición, React mantiene el contenido viejo hasta que llega el nuevo, y con un bloque grande transmitido esa transición a veces nunca se confirmaba (400 filas sintéticas estáticas: 6/6 perdidos; la misma respuesta sin streaming: 0/6; descartados demora, links, prefetch, localizador y queries). **Fix:** `key={selectedMonth}` en ese boundary (`dashboard/page.tsx`). 0/24 perdidos en los scripts de reproducción, 0/7 en `perf:nav` | 2026-09-25 |
+| B-8 | "Expenses" de Transactions no descontaba reembolsos (BR-040) y el Dashboard sí | **Decisión del usuario (2026-09-25): netear reembolsos.** Migración `20260925120000_b8_transactions_totals_net_refunds.sql` (reemplazo de función, sin cambio de esquema; rollback = definición de BR-045). La expectativa de fixtures pasó de "divergencia fijada" a igualdad lista (posted) = Dashboard cada mes. **Pendiente: aplicar en producción** (`npm run db:push -- --apply`) | 2026-09-25 |
 | B-1 | No había runner de tests de JS/TS en el repositorio | RUM-010a — Vitest, `npm test`, en CI ([`testing.md`](./testing.md)) | 2026-09-21 |
 | B-3 | No hay contrato autoritativo de valoración | RUM-002 — `src/lib/net-worth/valuation.ts`, adoptado por Net worth, Dashboard, `trend-actions.ts`, `secondary-widgets.tsx`, Accounts y `plan/page.tsx` | 2026-09-21 |
 | B-4 | El invariante de net worth no estaba decidido | RUM-002 — decisión: `Net worth = Total assets + Signed liabilities`, sin cambios respecto al código (Assets − Liabilities al centavo habría expulsado un crédito legítimo). Ver la entrada de RUM-002 en §4 para el razonamiento completo | 2026-09-21 |
@@ -139,18 +157,22 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 
 ### 3.1 Baseline
 
-Solo hay estimaciones visuales de video (§3.1 del backlog). **No hay baseline
-instrumentado todavía** — eso es RUM-001. No uses estos números como before/after
-de un ticket; sirven únicamente para saber si vamos en la dirección correcta.
+Antes: estimaciones visuales de video (§3.1 del backlog; RUM-001 nunca capturó
+la mitad de navegador). **Después (RUM-010b, 2026-09-24):** `npm run perf:nav`,
+build de producción (`next start`) en el contenedor cloud contra Supabase real,
+escritorio, 7 corridas + 1 de calentamiento, cuenta de prueba con pocos datos;
+"listo" = URL de destino y ningún skeleton en pantalla. El antes es de otro
+dispositivo y otro household: la comparación es direccional, no un A/B
+controlado. Detalle en [`release-checklist.md`](./release-checklist.md) §4.
 
-| Flujo | Video 2026-09-21 | Instrumentado | Después | Objetivo |
-|---|---:|---:|---:|---:|
-| Dashboard → Transactions (frío) | 4.25 s | — | — | p75 ≤ 1.5 s |
-| Transactions → Dashboard | 3.25 s | — | — | p75 ≤ 1.5 s |
-| Transactions → Dashboard (2ª visita) | 3.00 s | — | — | p75 ≤ 1.0 s |
-| Dashboard → Accounts | 1.50 s | — | — | p75 ≤ 1.2 s |
-| Accounts → Transactions | 1.75 s | — | — | p75 ≤ 1.5 s |
-| Cambio de mes | 0.25–0.50 s | — | — | p75 ≤ 0.5 s |
+| Flujo | Video 2026-09-21 | Después p75 (p95) | Objetivo |
+|---|---:|---:|---:|
+| Dashboard → Transactions (frío) | 4.25 s | 770 ms (868) ✅ | p75 ≤ 1.5 s |
+| Transactions → Dashboard | 3.25 s | 731 ms (760) ✅ | p75 ≤ 1.5 s |
+| Dashboard → Transactions (2ª visita) | 3.00 s | 534 ms (568) ✅ | p75 ≤ 1.0 s |
+| Dashboard → Accounts | 1.50 s | 428 ms (435) ✅ | p75 ≤ 1.2 s |
+| Accounts → Transactions | 1.75 s | 565 ms (629) ✅ | p75 ≤ 1.5 s |
+| Cambio de mes | 0.25–0.50 s | 725 ms (759) ⚠️, **0/7 perdidos** tras el fix de B-7 (antes: 531 ms solo sobre los clics que funcionaban, y 5/7 perdidos). Ahora el clic confirma al instante y la sección secundaria muestra su skeleton mientras llega el mes; «listo» la espera | p75 ≤ 0.5 s |
 
 ### 3.2 Round-trips por carga
 
@@ -181,6 +203,80 @@ quedaban cortos.
 
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
+
+### RUM-010b — Suite de regresión, carga y release gate · 2026-09-24 · rama `claude/next-backlog-ticket-2azpv2` · PR [#79](https://github.com/andresze020/rumbo/pull/79)
+
+**Qué hay ahora.** Un gate de release ejecutable y documentado
+([`release-checklist.md`](./release-checklist.md)), con tres piezas:
+
+1. **`npm run db:local`** (`scripts/db-local.mjs`): arranca un Postgres privado
+   desde los binarios del sistema (sin Docker ni Supabase CLI), aplica un shim
+   mínimo de Supabase (`supabase/local/supabase-shim.sql`: roles de API,
+   `auth.users`, `auth.uid()` leído de `request.jwt.claims`) y las 61
+   migraciones **sin modificar**, carga fixtures generadas y corre todo
+   `supabase/tests/` para los dos households — como miembro, y los archivos de
+   aislamiento como dueño del *otro* household y como usuario sin household —
+   más `supabase/local/fixture-expectations.sql`. ~20 s. **En CI** como segundo
+   job (`ledger invariants on fixtures`), sin secretos. Nunca toca producción.
+2. **Fixtures** (`supabase/local/fixtures.sql`): deterministas (`setseed`), sin
+   datos reales, escritas **por las RPC de la app como `authenticated`** (RLS y
+   guards aplican igual que en producción). 2 households, ~3,5k transacciones,
+   ~4k entries, ~3,1k allocations, 29 cuentas, 3–4 años, CAD/COP/USD/EUR,
+   transferencias (misma moneda y cruzadas), saldos iniciales, anulaciones,
+   reembolsos, pendientes y filas con fecha futura, tarjeta con deuda y tarjeta
+   con saldo a favor, cuentas archivadas y excluidas de net worth, deuda,
+   presupuestos, meta y un caso controlado de FX faltante (EUR sin tasas).
+3. **`npm run perf:nav`** (`scripts/perf-nav.mjs`): la capa de navegador que
+   RUM-001 dejó pendiente. Mide en Chromium los flujos de §3.1, frío y
+   caliente, p50/p75/p95, hasta que **no queda skeleton** (una optimización que
+   solo cambia pantalla vacía por skeleton no mejora el número) y cuenta las
+   **navegaciones perdidas** aparte; si hay alguna, termina con código 1.
+
+**Tests nuevos.** `rum_010b_release_invariants.sql` (9 checks, portables: corren
+igual en fixtures y en el household real): ahorro = ingresos − gastos y tasa
+nula sin ingresos, **mes por mes de toda la historia**; cada allocation posted
+cuenta una vez y en su propio mes (sin anuladas ni pendientes); breakdown por
+categoría = gastos del dashboard; transferencias sin ingreso; filas de la lista
+= `total_count` = ledger y badge de pendientes; importes base = importe × tasa
+propia (dentro del redondeo de la tasa); hijos en el household del padre;
+**Accounts − "a hoy" = exactamente las entradas con fecha futura**.
+`rum_010b_household_isolation.sql` (5 checks, corre como no-miembro): cero filas
+visibles en toda tabla con `household_id` (descubiertas en tiempo de ejecución, 23 hoy), 7 RPC de reporte rechazan o devuelven vacío, y dos
+sondas de escritura (RPC e `insert` directo, este último debe fallar
+exactamente con 42501 de RLS). 12 tests de Vitest para el motor compartido
+(`scripts/*.test.ts`, junto a cada script). Resultado: **112/112 en fixtures, 46/46 en el
+household real** (`db:test`, solo lectura).
+
+**Bugs encontrados en tests existentes** (corregidos, no debilitados):
+- BR-006 "balances oficiales = entries posted/pending" sumaba las entries de
+  transacciones **anuladas** (el `LEFT JOIN` dejaba `t` nulo pero sumaba
+  `te.amount` igual). Pasaba en producción solo porque ese household no tiene
+  anulaciones. Arreglado con `filter (where t.id is not null)`.
+- RUM-006 afirmaba que `get_account_balances(household)` coincide exactamente
+  con el snapshot a hoy; es falso por diseño para cuentas con entradas futuras
+  (Accounts las muestra a propósito, ver `accounts/page.tsx`). El check quedó
+  acotado a cuentas sin futuras y la diferencia ahora se **reconcilia al
+  centavo** con un check nuevo.
+- El check nuevo de FX falló en producción: 674 filas COP no cumplen
+  base = importe × tasa guardada exacto (máx. 0,19 CAD). Causa: la tasa se guarda
+  en `numeric(18,8)`, ~4 cifras significativas para COP→CAD. 0 filas fuera de la
+  cota de redondeo demostrable; el check usa esa cota. Documentado como riesgo.
+
+**Hallazgos que no arreglé (fuera de alcance o requieren decisión):** B-7 (el
+cambio de mes del Dashboard pierde clics — bloquea el release) y B-8 (Expenses
+de Transactions no descuenta reembolsos). Ver §2 y
+[`release-checklist.md`](./release-checklist.md) "Known issues".
+
+**Métricas.** §3.1 ya tiene números medidos (todos los flujos entre rutas bajo
+objetivo; cambio de mes 531 ms p75 y 5/7 perdidos). Carga en BD con fixtures
+(`--bench`, RLS activo): todas las RPC de reporte < 3 ms p95 salvo
+`get_account_balances_as_of_many` con 13 fechas (52 ms p95) y
+`search_household_transactions` histórico (7 ms p95).
+
+**Gate.** `npm run lint` ✅ · `npx tsc --noEmit` ✅ · `npm test` 135/135 ✅ ·
+`npm run i18n:check` ✅ · `npm run build` ✅ · `npm run db:local` 112/112 ✅ ·
+`npm run db:test` (household real) 46/46 ✅ · `npm run perf:nav` ❌ (B-7, por
+diseño del gate). Sin migraciones ni cambios de RLS ni de código de la app.
 
 ### RUM-009 — Corregir semántica de Month health, Insights y módulos secundarios · 2026-09-24 · rama `claude/next-backlog-ticket-2azpv2` · PR [#78](https://github.com/andresze020/rumbo/pull/78)
 
@@ -1875,6 +1971,8 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-25 | **B-7 arreglado y B-8 decidido: el gate de RUM-010b pasa a «aprobado al aplicar una migración».** B-7 (cambio de mes del Dashboard perdía clics): causa raíz aislada por bisección — contenido grande transmitido dentro del `<Suspense>` ya revelado de los widgets secundarios dejaba la transición sin confirmar —; fix `key={selectedMonth}`; 0/7 perdidos en `perf:nav`. B-8 (Transactions no descontaba reembolsos): el usuario pidió «lo que tenga más sentido» → la lista netea reembolsos como el Dashboard; migración `20260925120000_b8_…` verificada en fixtures (112/112, igualdad lista = Dashboard cada mes) y pendiente de aplicar en producción. |
+| 2026-09-24 | **RUM-010b cerrado: gate de release operativo; el release actual no se aprueba.** `npm run db:local` (Postgres privado + shim + 61 migraciones + fixtures generadas por las RPC de la app) corre todo `supabase/tests/` en CI; checks nuevos de invariantes mes a mes, reconciliación Accounts ↔ as-of-today y aislamiento entre households; `npm run perf:nav` mide §3.1 en navegador. 112/112 en fixtures, 46/46 en el household real. Arreglados dos bugs en tests existentes (BR-006 sumaba anuladas; RUM-006 ignoraba fechas futuras). Encontrados: B-7 (cambio de mes del Dashboard pierde clics, bloqueante) y B-8 (decisión: Transactions no descuenta reembolsos). |
 | 2026-09-24 | **RUM-009 cerrado: Month health con desglose numérico (misma fórmula), Insights deterministas/trazables/accionables, Debts distingue Debt Planner de liabilities de cuenta, "Scheduled activity", review queue acotada al mes.** `healthBreakdown()` como única fuente para dashboard y Month review (80 = 80 verificado en vivo); módulo puro `lib/insights/dashboard.ts` con 15 tests; badge `LIVE` y el insight de "upcoming" retirados; transferencias programadas sin signo e importes en la moneda de la regla; conteo de revisión alineado entre Home y Month review. 31 claves nuevas vía `i18n-scribe`. Gate completo en verde. |
 | 2026-09-24 | **RUM-008 cerrado: label de mes dinámico, Budget/Goals consolidados en una tarjeta compacta, Insights bajado a 2.** Alcance acotado a los tres puntos concretos de los criterios de aceptación (no la jerarquía completa del ticket, que ya se aproxima razonablemente en mobile con la estructura actual). Verificado en vivo con Playwright contra `npm run dev` y Supabase real: cuenta de prueba nueva con un household de una sola cuenta, sin budget/debts/goals/transacciones, capturada en 320/375/430/768px, claro y oscuro. Confirmado visualmente que "September 2026" reemplaza "This month", que Budget y Goals ya no tienen tarjetas propias vacías (solo aparecen como líneas dentro de "Finish setting up"), y que Debts conserva su copy positivo ("No active debts. Nicely done.") sin tocar — decisión deliberada, no un olvido, porque cero deudas es un resultado bueno, no una configuración pendiente. Dos claves de i18n vía `i18n-scribe`: `dashboard.setupTitle` nueva, `dashboard.thisMonthTitle` eliminada (huérfana en las 3 locales). Gate completo en verde. |
 | 2026-09-24 | **RUM-004 cerrado: migración aplicada, mejora confirmada en producción.** El usuario pusheó el commit con la migración redactada desde su máquina (el harness había bloqueado el push desde esta sesión); un `db-push.mjs push --apply` pedido de nuevo por el usuario sí pasó el clasificador esta vez (61/61 migraciones). `EXPLAIN (ANALYZE, BUFFERS)` inmediatamente después, mismo household real, mismo método que encontró el problema: `get_account_balances` 192 ms/36.778 buffers → **25 ms/3.024 buffers** (~7,7×/~12,2×); `search_household_transactions` (all-time) 186 ms/34.791 buffers → **22 ms/1.731 buffers** (~8,4×/~20×). Antes/después real, no proyectado. El resto del alcance original del ticket (índices, keyset pagination) no hacía falta — la causa raíz era el plan de RLS, no la query ni la paginación. B-6 se cierra como "superado para esta migración puntual", no como resuelto en general: el mismo comando fue bloqueado y luego permitido sin cambiar nada explícito. |

@@ -23,6 +23,19 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **RUM-010b: the release gate exists** (2026-09-24, PR #79). `npm run db:local`
+  runs every `supabase/tests/*.sql` against generated fixtures in a private
+  local Postgres (in CI), `npm run perf:nav` times §3.1 navigation in a real
+  browser, and `docs/release-checklist.md` holds the approval criteria, the
+  metrics and the known issues. First verdict: not approved (B-7, B-8).
+- **B-7 fixed, B-8 decided** (2026-09-25). Dashboard ‹ / › month clicks were
+  silently lost: a large chunk streamed into the already-revealed secondary-
+  widgets `<Suspense>` left the month transition uncommitted. Fix:
+  `key={selectedMonth}` on that boundary — do not remove it. The Transactions
+  "Expenses" total now nets BR-040 refunds like the Dashboard, via migration
+  `20260925120000_b8_transactions_totals_net_refunds.sql` (**apply it to the
+  live project**: `npm run db:push -- --apply`).
+
 - **The Transactions screen was rebuilt as a phone list, and the period got
   one owner** (2026-09-19 → 09-20, PR #66). Three commits, one review round
   from Codex. No migrations, no schema/RLS/ledger change.
@@ -235,6 +248,8 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
   - `npx tsc --noEmit`  (there is no `typecheck` npm script)
   - `npm test`  (Vitest unit suite — no database, runs in ~200 ms)
   - `npm run build` when feasible
+  - `npm run db:local` when the change touches migrations, RPCs, RLS or
+    `supabase/tests/` (also runs in CI)
 - The typecheck above is also enforced by a `Stop` hook, so a turn that leaves
   broken types cannot be closed. Subagents, slash commands and hooks are
   documented in `docs/ai-agents-workflow.md`.
@@ -243,8 +258,8 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
 ## Tests
 
-Two suites, no overlap. Full conventions and the stack decision live in
-`docs/testing.md`.
+Three layers, no overlap. Full conventions and the stack decision live in
+`docs/testing.md`; what a release must pass is `docs/release-checklist.md`.
 
 - **Performance — `npm run perf:census`** (static round-trip count per route, no
   credentials) and **`npm run perf:baseline`** (database timings, read-only,
@@ -254,17 +269,28 @@ Two suites, no overlap. Full conventions and the stack decision live in
   no database, no credentials, no browser. Part of the gate above and of
   `.github/workflows/ci.yml`. `npm run test:watch` while working.
   - Tests are **co-located** with their subject as `<module>.test.ts`
-    (`src/lib/health/score.ts` → `src/lib/health/score.test.ts`).
+    (`src/lib/health/score.ts` → `src/lib/health/score.test.ts`;
+    `scripts/db-test.mjs` → `scripts/db-test.test.ts`).
   - Shared fixtures go in `tests/fixtures/` as typed TypeScript modules, never
     JSON, and only once a second test file needs them.
   - Expected values are literals, not expressions re-deriving the formula under
     test. Confirm a new test fails when you break the code it covers.
   - Config: `vitest.config.mts` (`@/…` → `src/…`, node environment, no globals).
   - Seeded with 11 tests over `src/lib/health/score.ts`.
-- **SQL invariants — `npm run db:test`**. The 6 files in `supabase/tests/`,
-  run against the **live** project via the Management API. Run when the change
-  touches the ledger, transfers, refunds, installments or goals. Not in CI:
-  there is no staging copy of that database.
+- **SQL invariants on fixtures — `npm run db:local`** (RUM-010b). Starts a
+  private Postgres from the stock server binaries (no Docker, no credentials),
+  applies `supabase/local/supabase-shim.sql` + every migration unmodified,
+  loads `supabase/local/fixtures.sql` (2 households, ~3.5k transactions, every
+  edge case, written through the app's RPCs under RLS), and runs every file in
+  `supabase/tests/` for both households — `run-as=non-member` files as the other
+  household's owner and as a user with no household — plus
+  `supabase/local/fixture-expectations.sql`. ~20 s, in CI on every PR. Run it
+  whenever a change touches migrations, RPCs, RLS or `supabase/tests/`.
+  `--keep` leaves the cluster up; `--bench` times the reporting RPCs.
+- **SQL invariants on the live project — `npm run db:test`**. The same files
+  in `supabase/tests/`, against the **live** project via the Management API,
+  read-only. Not in CI: there is no staging copy of that database. Step 3 of
+  the release checklist.
   - **Pass `--user=<a member's uuid>` for any check that calls an
     `is_household_member()`-gated RPC** (`get_account_balances`,
     `get_exchange_rate(_as_of)`, `get_account_balances_as_of_many`). Without
@@ -275,8 +301,14 @@ Two suites, no overlap. Full conventions and the stack decision live in
     this way since it was written; found and fixed 2026-09-21 (RUM-006).
     Every check in the suite ran successfully for the first time that day:
     31 passed, 1 failed (`BR-006 official balances match posted/pending
-    entries only` — pre-existing, unrelated to RUM-006, not yet
-    investigated).
+    entries only`). RUM-010b found why: the check summed the entries of voided
+    transactions (a LEFT JOIN kept them); fixed 2026-09-24.
+  - Two file-format additions (RUM-010b): `-- rumbo-test: run-as=non-member`
+    makes a file run as a user outside the household, and a `do` block named
+    by a `-- check: <name>` line passes by finishing without an error.
+- **Navigation — `npm run perf:nav`** (RUM-010b). Real Chromium against a
+  running app and a test account: the §3.1 flows cold and warm, p50/p75/p95
+  until no skeleton is left, and lost navigations (exit 1 if any).
 
 ## Git rules
 
