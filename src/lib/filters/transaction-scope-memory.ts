@@ -9,14 +9,15 @@
  * `localStorage` because the server component has to read it before it renders
  * to decide where a bare landing should go.
  *
- * It expires within the day on purpose. Filters should survive "I created a
- * transaction and came back", not "it is September and I am still pinned to
- * August".
+ * It expires after 30 minutes on purpose. Filters should survive "I created a
+ * transaction and came back", not the next time the app is opened: a scope
+ * remembered for 12 hours meant a morning's first open still landed on last
+ * night's "Last 6 months" (reported 2026-09-25).
  */
 export const TRANSACTION_SCOPE_COOKIE = 'af_tx_scope'
 
-/** 12 hours — long enough for a session, short enough not to outlive the month. */
-export const TRANSACTION_SCOPE_MAX_AGE = 60 * 60 * 12
+/** 30 minutes: covers a round trip to another screen, not the next app open. */
+export const TRANSACTION_SCOPE_MAX_AGE = 60 * 30
 
 /** Cookies are sent on every request; a runaway filter list is not worth that. */
 export const TRANSACTION_SCOPE_MAX_LENGTH = 1200
