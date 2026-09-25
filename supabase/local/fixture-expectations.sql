@@ -43,6 +43,32 @@ begin
   assert exists (select 1 from public.budgets where household_id = a), 'A: no budget';
 end $$;
 
+-- Every household-scoped table (any public table with a household_id column)
+-- has at least one row in BOTH households, so "a non-member sees zero rows" in
+-- rum_010b_household_isolation.sql is never trivially true. A new
+-- household-scoped table fails this until the fixtures seed it — and should
+-- then be added to the isolation check too.
+-- check: every household-scoped table has rows in both fixture households
+do $$
+declare
+  t text;
+  n_a bigint;
+  n_b bigint;
+  empty text[] := '{}';
+begin
+  for t in
+    select c.table_name from information_schema.columns c
+    join information_schema.tables tb on tb.table_schema = c.table_schema and tb.table_name = c.table_name
+    where c.table_schema = 'public' and c.column_name = 'household_id' and tb.table_type = 'BASE TABLE'
+    order by 1
+  loop
+    execute format('select count(*) filter (where household_id = %L), count(*) filter (where household_id = %L) from public.%I',
+      '__HOUSEHOLD_ID__', '10000000-0000-4000-a000-00000000000b', t) into n_a, n_b;
+    if n_a = 0 or n_b = 0 then empty := empty || format('%s (A=%s, B=%s)', t, n_a, n_b); end if;
+  end loop;
+  assert cardinality(empty) = 0, 'household-scoped tables with no fixture rows: ' || array_to_string(empty, ', ');
+end $$;
+
 -- check: overpaid credit card holds a positive (favourable) balance
 do $$
 begin

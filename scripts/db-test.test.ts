@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { asMember, fileDirectives, splitStatements } from '../scripts/db-test.mjs'
-import { parseCsv } from '../scripts/db-local.mjs'
+import { asMember, fileDirectives, splitStatements } from './db-test.mjs'
 
 /**
  * RUM-010b — the plumbing both SQL runners share. `db-test.mjs` (live project)
@@ -54,33 +53,5 @@ describe('asMember', () => {
 
   it('leaves the chunk untouched without a user (runs as postgres)', () => {
     expect(asMember('select 1;', undefined)).toBe('select 1;')
-  })
-})
-
-describe('parseCsv (psql --csv output)', () => {
-  it('maps rows to header keys', () => {
-    expect(parseCsv('check_name,passed\nfoo,t\nbar,f\n')).toEqual([
-      { check_name: 'foo', passed: 't' },
-      { check_name: 'bar', passed: 'f' },
-    ])
-  })
-
-  it('handles quoted fields with commas, quotes and newlines', () => {
-    expect(parseCsv('check_name,passed\n"a, ""b""\nc",t\n')).toEqual([{ check_name: 'a, "b"\nc', passed: 't' }])
-  })
-
-  it('returns no rows for empty output (a do block)', () => {
-    expect(parseCsv('')).toEqual([])
-  })
-})
-
-describe('percentile (perf-nav, nearest rank)', () => {
-  it('picks the nearest-rank sample, never interpolating a value nobody measured', async () => {
-    const { percentile } = await import('../scripts/perf-nav.mjs')
-    const samples = [900, 100, 300, 500, 700]
-    expect(percentile(samples, 50)).toBe(500)
-    expect(percentile(samples, 75)).toBe(700)
-    expect(percentile(samples, 95)).toBe(900)
-    expect(percentile([], 50)).toBeNull()
   })
 })

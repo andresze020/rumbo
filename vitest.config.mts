@@ -23,7 +23,9 @@ export default defineConfig({
     // Node only: nothing under test touches the DOM yet. Adding a jsdom
     // project later is a config change, not a migration.
     environment: 'node',
-    include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
+    // scripts/ since RUM-010b: the SQL runners' parsing helpers are tested
+    // next to the scripts that own them, like everything else.
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts', 'tests/**/*.test.ts'],
     // `supabase/tests/` is SQL run by `npm run db:test`, not Vitest.
     exclude: ['node_modules/**', '.next/**', 'supabase/**'],
     // Explicit `import { describe, it, expect } from 'vitest'` in every file,

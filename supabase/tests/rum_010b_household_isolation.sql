@@ -20,31 +20,41 @@ select
   'RUM-010b non-member: is_household_member() is false' as check_name,
   not public.is_household_member('__HOUSEHOLD_ID__'::uuid) as passed;
 
-select
-  'RUM-010b non-member sees no row of the household in any household-scoped table' as check_name,
-  (
-    (select count(*) from public.households where id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.household_members where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.accounts where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.categories where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.transactions where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.transaction_entries where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.transaction_allocations where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.transaction_tags where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.budgets where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.budget_lines where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.debts where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.goals where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.recurring_transactions where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.exchange_rates where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.payees where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.tags where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.notes where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.month_closures where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.installment_plans where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.import_batches where household_id = '__HOUSEHOLD_ID__'::uuid)
-    + (select count(*) from public.categorization_rules where household_id = '__HOUSEHOLD_ID__'::uuid)
-  ) = 0 as passed;
+-- Discovered at run time, not listed by hand: every public base table with a
+-- household_id column (23 today), plus households itself — so a table added
+-- later is covered the day it ships. fixture-expectations.sql makes sure each
+-- one actually has rows in the fixtures, so "zero visible" is never vacuous.
+-- check: RUM-010b non-member sees no row of the household in any household-scoped table
+do $$
+declare
+  t text;
+  n bigint;
+  checked int := 0;
+  leaked text[] := '{}';
+begin
+  select count(*) into n from public.households where id = '__HOUSEHOLD_ID__'::uuid;
+  if n > 0 then leaked := leaked || format('households (%s)', n); end if;
+  -- pg_catalog, not information_schema: the latter hides tables the current
+  -- role has no grant on, which would make this loop silently check nothing.
+  for t in
+    select c.relname::text
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace ns on ns.oid = c.relnamespace
+    join pg_catalog.pg_attribute a on a.attrelid = c.oid and a.attname = 'household_id' and not a.attisdropped
+    where ns.nspname = 'public' and c.relkind in ('r', 'p')
+    order by 1
+  loop
+    checked := checked + 1;
+    execute format('select count(*) from public.%I where household_id = %L', t, '__HOUSEHOLD_ID__') into n;
+    if n > 0 then leaked := leaked || format('%s (%s)', t, n); end if;
+  end loop;
+  if checked < 20 then
+    raise exception 'only % household-scoped tables found — the check would be vacuous', checked;
+  end if;
+  if cardinality(leaked) > 0 then
+    raise exception 'LEAK: non-member can see rows in: %', array_to_string(leaked, ', ');
+  end if;
+end $$;
 
 -- The reporting RPCs the Dashboard, Accounts, Net worth and Transactions pages
 -- call. Each must refuse (raise) or return nothing for a non-member.
@@ -75,7 +85,10 @@ begin
   end loop;
 end $$;
 
--- check: RUM-010b non-member cannot write a transaction into the household
+-- The RPC's own membership guard must be what refuses it — not a later
+-- validation. (As a non-member the account lookup below is NULL under RLS, so
+-- "any error" would pass even without the guard; the message pins the cause.)
+-- check: RUM-010b non-member cannot write a transaction into the household (membership guard)
 do $$
 begin
   begin
@@ -84,7 +97,10 @@ begin
       (select id from public.accounts where household_id = '__HOUSEHOLD_ID__'::uuid limit 1),
       null, 1, 'isolation probe', null, null, 'posted', 1, null);
   exception when others then
-    return; -- refused, as it must be
+    if sqlerrm ilike 'Not authorized%' then
+      return; -- refused by the membership guard, as it must be
+    end if;
+    raise exception 'expected the membership guard (Not authorized…), got % (%)', sqlstate, sqlerrm;
   end;
   raise exception 'LEAK: a non-member created a transaction in another household';
 end $$;

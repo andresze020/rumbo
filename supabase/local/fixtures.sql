@@ -439,5 +439,88 @@ begin
 end $$;
 commit;
 
+-- ============================================================
+-- Every household-scoped table gets at least one row in EACH household, so the
+-- isolation check ("a non-member sees zero rows") is never trivially true for
+-- an empty table (RUM-010b review). fixture-expectations.sql enforces it.
+-- ============================================================
+
+-- As each household's owner (RLS applies), through RPCs where they exist.
+create function fixture.seed_household_extras(
+  p_household uuid, p_owner uuid, p_account uuid, p_expense_cat uuid, p_currency text
+) returns void
+language plpgsql as $$
+declare
+  v_tag uuid;
+  v_batch uuid;
+  v_tx uuid;
+begin
+  insert into public.tags (household_id, name) values (p_household, 'fixture-tag') returning id into v_tag;
+  select id into v_tx from public.transactions
+  where household_id = p_household and transaction_type = 'expense' and status = 'posted'
+  order by transaction_date desc, id limit 1;
+  perform public.set_transaction_tags(v_tx, array[v_tag]);
+
+  insert into public.notes (household_id, note_date, title, created_by)
+  values (p_household, date '2026-08-15', 'Fixture note', p_owner);
+  insert into public.month_closures (household_id, closure_month, closed_by)
+  values (p_household, date '2026-07-01', p_owner);
+  insert into public.csv_import_presets (household_id, name, created_by)
+  values (p_household, 'Fixture preset', p_owner);
+  insert into public.categorization_rules (household_id, match_field, operator, match_value, category_id)
+  values (p_household, 'description', 'contains', 'fixture', p_expense_cat);
+  insert into public.import_batches (household_id, uploaded_by, file_name)
+  values (p_household, p_owner, 'fixture.csv') returning id into v_batch;
+  insert into public.import_rows (household_id, import_batch_id, row_number)
+  values (p_household, v_batch, 1);
+
+  -- A real plan: the RPC writes all N installments (BR-035 checks that).
+  perform public.create_installment_plan(p_household, p_account, p_expense_cat, 600, 3,
+    date '2026-06-01', 'Fixture laptop', null, null, 1);
+end $$;
+grant execute on function fixture.seed_household_extras(uuid, uuid, uuid, uuid, text) to authenticated;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"00000000-0000-4000-a000-0000000000a1","role":"authenticated"}', true);
+select fixture.seed_household_extras('10000000-0000-4000-a000-00000000000a', '00000000-0000-4000-a000-0000000000a1',
+  '20000000-0000-4000-a000-000000000006', fixture.cat('10000000-0000-4000-a000-00000000000a', 'Shopping'), 'CAD');
+commit;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"00000000-0000-4000-a000-0000000000b1","role":"authenticated"}', true);
+do $$
+declare
+  hh constant uuid := '10000000-0000-4000-a000-00000000000b';
+  b1 constant uuid := '00000000-0000-4000-a000-0000000000b1';
+  budget uuid;
+begin
+  -- B's planning modules, so they are not empty either.
+  budget := public.create_monthly_budget(hh, date '2026-09-01');
+  perform public.upsert_budget_line(budget, fixture.cat(hh, 'Groceries'), 1500000);
+  perform public.create_debt_with_account(hh, 'Préstamo', null, 'debt', 'COP', 5000000, date '2024-01-15', 1,
+    8000000, 18.5, 'annual', 350000, 5, 'Banco Fixture', 'fixture');
+  insert into public.goals (household_id, name, goal_type, target_amount, current_amount, currency_code, created_by)
+  values (hh, 'Viaje', 'travel', 6000000, 0, 'COP', b1);
+  insert into public.recurring_transactions
+    (household_id, name, transaction_type, account_id, category_id, amount, currency_code, frequency, start_date, next_run_date, created_by)
+  values (hh, 'Arriendo', 'expense', '30000000-0000-4000-a000-000000000001', fixture.cat(hh, 'Rent'),
+    1800000, 'COP', 'monthly', date '2026-10-01', date '2026-10-01', b1);
+end $$;
+select fixture.seed_household_extras('10000000-0000-4000-a000-00000000000b', '00000000-0000-4000-a000-0000000000b1',
+  '30000000-0000-4000-a000-000000000004', fixture.cat('10000000-0000-4000-a000-00000000000b', 'Shopping'), 'COP');
+commit;
+
+-- recurring_autopost_log is written only by the autopost job (it has a SELECT
+-- policy and nothing else), so its row is inserted as the table owner, the way
+-- that job does.
+insert into public.recurring_autopost_log (household_id, recurring_id, run_date, status)
+select r.household_id, r.id, date '2026-09-01', 'posted'
+from public.recurring_transactions r
+where r.id in (select distinct on (household_id) id from public.recurring_transactions order by household_id, created_at, id);
+
 -- Planner stats so plans resemble a real, analysed database.
 analyze;

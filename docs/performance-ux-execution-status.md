@@ -13,7 +13,7 @@
 > todos los invariantes SQL contra fixtures generadas en un Postgres local (en
 > CI), `npm run perf:nav` mide los flujos de §3.1 en navegador, y
 > [`release-checklist.md`](./release-checklist.md) define los criterios. Todas
-> las cifras reconcilian (111/111 fixtures, 46/46 household real); los flujos
+> las cifras reconcilian (112/112 fixtures, 46/46 household real); los flujos
 > entre rutas ya están bajo objetivo (p75 428–770 ms). Bloquea: B-7, el cambio
 > de mes del Dashboard pierde 5/7 clics. Ver la entrada de RUM-010b en §4.
 >
@@ -235,10 +235,10 @@ categoría = gastos del dashboard; transferencias sin ingreso; filas de la lista
 propia (dentro del redondeo de la tasa); hijos en el household del padre;
 **Accounts − "a hoy" = exactamente las entradas con fecha futura**.
 `rum_010b_household_isolation.sql` (5 checks, corre como no-miembro): cero filas
-visibles en 21 tablas, 7 RPC de reporte rechazan o devuelven vacío, y dos
+visibles en toda tabla con `household_id` (descubiertas en tiempo de ejecución, 23 hoy), 7 RPC de reporte rechazan o devuelven vacío, y dos
 sondas de escritura (RPC e `insert` directo, este último debe fallar
 exactamente con 42501 de RLS). 12 tests de Vitest para el motor compartido
-(`tests/db-scripts.test.ts`). Resultado: **111/111 en fixtures, 46/46 en el
+(`scripts/*.test.ts`, junto a cada script). Resultado: **112/112 en fixtures, 46/46 en el
 household real** (`db:test`, solo lectura).
 
 **Bugs encontrados en tests existentes** (corregidos, no debilitados):
@@ -268,7 +268,7 @@ objetivo; cambio de mes 531 ms p75 y 5/7 perdidos). Carga en BD con fixtures
 `search_household_transactions` histórico (7 ms p95).
 
 **Gate.** `npm run lint` ✅ · `npx tsc --noEmit` ✅ · `npm test` 135/135 ✅ ·
-`npm run i18n:check` ✅ · `npm run build` ✅ · `npm run db:local` 111/111 ✅ ·
+`npm run i18n:check` ✅ · `npm run build` ✅ · `npm run db:local` 112/112 ✅ ·
 `npm run db:test` (household real) 46/46 ✅ · `npm run perf:nav` ❌ (B-7, por
 diseño del gate). Sin migraciones ni cambios de RLS ni de código de la app.
 
@@ -1965,7 +1965,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
-| 2026-09-24 | **RUM-010b cerrado: gate de release operativo; el release actual no se aprueba.** `npm run db:local` (Postgres privado + shim + 61 migraciones + fixtures generadas por las RPC de la app) corre todo `supabase/tests/` en CI; checks nuevos de invariantes mes a mes, reconciliación Accounts ↔ as-of-today y aislamiento entre households; `npm run perf:nav` mide §3.1 en navegador. 111/111 en fixtures, 46/46 en el household real. Arreglados dos bugs en tests existentes (BR-006 sumaba anuladas; RUM-006 ignoraba fechas futuras). Encontrados: B-7 (cambio de mes del Dashboard pierde clics, bloqueante) y B-8 (decisión: Transactions no descuenta reembolsos). |
+| 2026-09-24 | **RUM-010b cerrado: gate de release operativo; el release actual no se aprueba.** `npm run db:local` (Postgres privado + shim + 61 migraciones + fixtures generadas por las RPC de la app) corre todo `supabase/tests/` en CI; checks nuevos de invariantes mes a mes, reconciliación Accounts ↔ as-of-today y aislamiento entre households; `npm run perf:nav` mide §3.1 en navegador. 112/112 en fixtures, 46/46 en el household real. Arreglados dos bugs en tests existentes (BR-006 sumaba anuladas; RUM-006 ignoraba fechas futuras). Encontrados: B-7 (cambio de mes del Dashboard pierde clics, bloqueante) y B-8 (decisión: Transactions no descuenta reembolsos). |
 | 2026-09-24 | **RUM-009 cerrado: Month health con desglose numérico (misma fórmula), Insights deterministas/trazables/accionables, Debts distingue Debt Planner de liabilities de cuenta, "Scheduled activity", review queue acotada al mes.** `healthBreakdown()` como única fuente para dashboard y Month review (80 = 80 verificado en vivo); módulo puro `lib/insights/dashboard.ts` con 15 tests; badge `LIVE` y el insight de "upcoming" retirados; transferencias programadas sin signo e importes en la moneda de la regla; conteo de revisión alineado entre Home y Month review. 31 claves nuevas vía `i18n-scribe`. Gate completo en verde. |
 | 2026-09-24 | **RUM-008 cerrado: label de mes dinámico, Budget/Goals consolidados en una tarjeta compacta, Insights bajado a 2.** Alcance acotado a los tres puntos concretos de los criterios de aceptación (no la jerarquía completa del ticket, que ya se aproxima razonablemente en mobile con la estructura actual). Verificado en vivo con Playwright contra `npm run dev` y Supabase real: cuenta de prueba nueva con un household de una sola cuenta, sin budget/debts/goals/transacciones, capturada en 320/375/430/768px, claro y oscuro. Confirmado visualmente que "September 2026" reemplaza "This month", que Budget y Goals ya no tienen tarjetas propias vacías (solo aparecen como líneas dentro de "Finish setting up"), y que Debts conserva su copy positivo ("No active debts. Nicely done.") sin tocar — decisión deliberada, no un olvido, porque cero deudas es un resultado bueno, no una configuración pendiente. Dos claves de i18n vía `i18n-scribe`: `dashboard.setupTitle` nueva, `dashboard.thisMonthTitle` eliminada (huérfana en las 3 locales). Gate completo en verde. |
 | 2026-09-24 | **RUM-004 cerrado: migración aplicada, mejora confirmada en producción.** El usuario pusheó el commit con la migración redactada desde su máquina (el harness había bloqueado el push desde esta sesión); un `db-push.mjs push --apply` pedido de nuevo por el usuario sí pasó el clasificador esta vez (61/61 migraciones). `EXPLAIN (ANALYZE, BUFFERS)` inmediatamente después, mismo household real, mismo método que encontró el problema: `get_account_balances` 192 ms/36.778 buffers → **25 ms/3.024 buffers** (~7,7×/~12,2×); `search_household_transactions` (all-time) 186 ms/34.791 buffers → **22 ms/1.731 buffers** (~8,4×/~20×). Antes/después real, no proyectado. El resto del alcance original del ticket (índices, keyset pagination) no hacía falta — la causa raíz era el plan de RLS, no la query ni la paginación. B-6 se cierra como "superado para esta migración puntual", no como resuelto en general: el mismo comando fue bloqueado y luego permitido sin cambiar nada explícito. |

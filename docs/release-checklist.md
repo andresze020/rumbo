@@ -63,7 +63,7 @@ Backlog §2 invariants → where each one is tested:
 | Savings rate = Savings / Income; null with zero income | same file, every month + fixture month B 2025-02 (zero income) |
 | Transfers do not affect Income/Expenses | BR-006 (no reporting allocation on transfers) + RUM-010b (never income) |
 | Voided transactions do not affect totals | RUM-010b "each posted allocation counts once, in its own month (no voided/pending)" + BR-006 balances (fixed, see below) |
-| Every aggregate scoped to one household | `rum_010b_household_isolation.sql` (tables, 7 RPCs, write probes) + "children share the transaction's household" |
+| Every aggregate scoped to one household | `rum_010b_household_isolation.sql` (every `household_id` table, discovered at run time; 7 RPCs; write probes) + "children share the transaction's household" |
 | Historical values use the intended date and FX | RUM-010b "base = amount × own stored rate" + FX revaluation check + fixture COP revaluation / EUR missing-FX fallback |
 | Month boundaries (current and historical) | RUM-010b month check iterates every month of history |
 | Dashboard ↔ Accounts ↔ Net worth | RUM-006 multi-date = single-date; RUM-010b "Accounts − as-of-today = future-dated entries"; category breakdown = dashboard expenses |
@@ -128,7 +128,7 @@ RUM-005 (`npm run perf:census`, [execution status §3.2](./performance-ux-execut
 ### 4.3 Build
 
 `npm run build`: compiled successfully (Next.js 16.2.6, Turbopack), all routes
-dynamic. Unit suite: 135 tests in 12 files. Invariants: 111 checks locally, 46 on the live
+dynamic. Unit suite: 135 tests in 14 files. Invariants: 112 checks locally, 46 on the live
 household.
 
 ---
