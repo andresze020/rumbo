@@ -134,7 +134,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | RUM-010a — Stack de tests | P0 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | [#68](https://github.com/andresze020/rumbo/pull/68) | 2026-09-21 |
 | RUM-001 — Instrumentación y baseline | P0 | **Hecho** (capa B medida 2026-09-25, `/dashboard`) | `claude/backlog-rum-10a-tmlee1` | [#69](https://github.com/andresze020/rumbo/pull/69) | 2026-09-21 |
 | RUM-002 — Reconciliar net worth | P0 | **Hecho** | `claude/rum-002-net-worth-valuation` | [#73](https://github.com/andresze020/rumbo/pull/73) | 2026-09-21 |
-| RUM-005 — Carga del Dashboard | P0 | **Hecho, verificado en vivo** (orquestación + streaming 2026-09-21; Router Cache + invalidación 2026-09-25) | `claude/next-backlog-ticket-2azpv2` | pendiente | 2026-09-25 |
+| RUM-005 — Carga del Dashboard | P0 | **Hecho, verificado en vivo** (orquestación + streaming 2026-09-21; Router Cache + invalidación 2026-09-25) | `claude/next-backlog-ticket-2azpv2` | [#81](https://github.com/andresze020/rumbo/pull/81) | 2026-09-25 |
 | RUM-003 — Periodos, FX y decimales | P0 | **Hecho** | `claude/rum-003-fx-period-precision` | — | 2026-09-22 |
 | RUM-006 — Balances repetidos | P1 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | — | 2026-09-21 |
 | RUM-007 — Cache, prefetch y loading | P1 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#75](https://github.com/andresze020/rumbo/pull/75) | 2026-09-24 |
@@ -217,7 +217,7 @@ quedaban cortos.
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
 
-### RUM-005 — Cache e invalidación (cierre del ticket) · 2026-09-25 · rama `claude/next-backlog-ticket-2azpv2` · PR pendiente
+### RUM-005 — Cache e invalidación (cierre del ticket) · 2026-09-25 · rama `claude/next-backlog-ticket-2azpv2` · PR [#81](https://github.com/andresze020/rumbo/pull/81)
 
 **Qué faltaba.** Dos criterios de aceptación que las entregas de 2026-09-21
 (orquestación y streaming) dejaron deferidos a propósito: "la segunda visita
