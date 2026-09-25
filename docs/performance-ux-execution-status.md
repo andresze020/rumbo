@@ -149,13 +149,14 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 
 | # | Bloqueo | Afecta a | Desbloquea |
 |---|---|---|---|
-| B-2 | No hay baseline de performance atribuido por etapa | RUM-004, RUM-005, RUM-006 y las decisiones grandes de RUM-007 | RUM-001 |
+| — | Ninguno abierto | — | — |
 
 
 ### 2.1 Bloqueos cerrados
 
 | # | Bloqueo | Cerrado por | Fecha |
 |---|---|---|---|
+| B-2 | No había baseline de performance atribuido por etapa | RUM-001: capas A y C medidas 2026-09-21 ([`performance-baseline.md`](./performance-baseline.md)); la fila seguía en «abiertos» por descuido | 2026-09-21 |
 | B-5 | Faltaba la capa B del baseline (timings de servidor), que bloqueaba afinar `staleTimes` | **Medida 2026-09-25** con `RUMBO_PERF=1 npm start` (build de producción) y una cuenta QA: el render de servidor de `/dashboard` hace 26 queries, wall p50 ~400 ms (9 cargas), `serialRatio` ~0,3, `maxConcurrency` 7; cada round-trip a Supabase cuesta ~50 ms desde el contenedor. Ver [`performance-baseline.md`](./performance-baseline.md) §4. Con eso se decidió `staleTimes` (RUM-005) | 2026-09-25 |
 | B-7 | El cambio de mes del Dashboard perdía clics (5/7 en `perf:nav`; la request RSC terminaba pero el router nunca confirmaba la navegación) | **Causa raíz por bisección sobre builds de producción:** los widgets secundarios se transmiten por streaming dentro de un `<Suspense>` ya revelado; un cambio de mes es una transición, React mantiene el contenido viejo hasta que llega el nuevo, y con un bloque grande transmitido esa transición a veces nunca se confirmaba (400 filas sintéticas estáticas: 6/6 perdidos; la misma respuesta sin streaming: 0/6; descartados demora, links, prefetch, localizador y queries). **Fix:** `key={selectedMonth}` en ese boundary (`dashboard/page.tsx`). 0/24 perdidos en los scripts de reproducción, 0/7 en `perf:nav` | 2026-09-25 |
 | B-8 | "Expenses" de Transactions no descontaba reembolsos (BR-040) y el Dashboard sí | **Decisión del usuario (2026-09-25): netear reembolsos.** Migración `20260925120000_b8_transactions_totals_net_refunds.sql` (reemplazo de función, sin cambio de esquema; rollback = definición de BR-045). La expectativa de fixtures pasó de "divergencia fijada" a igualdad lista (posted) = Dashboard cada mes. **Aplicada en producción el 2026-09-25** (62/62, 0 pendientes; `db:test` 46/46; lista = Dashboard al centavo en los 12 últimos meses del household real) | 2026-09-25 |
