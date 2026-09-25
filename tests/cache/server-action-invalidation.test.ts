@@ -59,6 +59,39 @@ describe('auditServerActions', () => {
     expect(r.writes).toEqual([])
   })
 
+  it('flags an exit after a committed write that skips the invalidation (Codex, PR #81)', () => {
+    const [r] = auditServerActions(`
+      async function advance() {
+        const { error } = await supabase.from('recurring_transactions').update({}).eq('id', 1)
+        if (error) redirect('/dashboard/recurring?posted=1&advance_warning=1')
+        revalidateSurfaces()
+        redirect('/dashboard/recurring?posted=1')
+      }
+      function revalidateSurfaces() { revalidatePath('/dashboard') }
+      export async function postAction() {
+        const { error } = await supabase.rpc('create_manual_transaction', {})
+        if (error) redirectWithError('Could not post.')
+        await advance()
+      }`)
+    expect(r.invalidates).toBe(true)
+    expect(r.uninvalidatedExits).toEqual(["redirect('/dashboard/recurring?posted=1&advance_warning=1')"])
+  })
+
+  it("does not flag a write's own error check, nor an exit after an invalidation", () => {
+    const [r] = auditServerActions(`
+      function redirectWithError(m) { revalidatePath('/dashboard', 'layout'); redirect('/x?error=' + m) }
+      export async function createAction() {
+        if (!name) redirect('/x?error=name')
+        const { error } = await supabase.from('a').insert({})
+        if (error) redirect('/x?error=insert')
+        const { error: e2 } = await supabase.rpc('set_transaction_tags', {})
+        if (e2) redirectWithError('tags')
+        revalidatePath('/x')
+        redirect('/x?created=1')
+      }`)
+    expect(r.uninvalidatedExits).toEqual([])
+  })
+
   it('treats starting or ending a session as a write', () => {
     const [r] = auditServerActions(`
       export async function signOutAction() { await supabase.auth.signOut(); redirect('/login') }`)
@@ -90,6 +123,16 @@ describe('RUM-005 Router Cache safety', () => {
       .filter((r) => !r.invalidates)
       .map((r) => `${r.file} · ${r.name} (${r.writes.join(', ')})`)
     expect(missing).toEqual([])
+  })
+
+  // Codex, PR #81: "calls revalidatePath somewhere" is not enough. Once a write
+  // has committed, an error exit that skips the invalidation (the transaction
+  // posted, then its tags failed) leaves that write invisible for up to 30 s.
+  it('no exit after a committed write skips the invalidation', () => {
+    const partial = writers
+      .filter((r) => r.uninvalidatedExits.length > 0)
+      .map((r) => `${r.file} · ${r.name}: ${r.uninvalidatedExits.join(' | ')}`)
+    expect(partial).toEqual([])
   })
 
   it('the freshness window stays short', () => {

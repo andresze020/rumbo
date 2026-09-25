@@ -9,6 +9,10 @@ import { createClient } from '@/lib/supabase/server'
 const UNIQUE_VIOLATION = '23505'
 
 function redirectWithError(message: string): never {
+  // An error can follow a write that already committed (e.g. the payee
+  // was renamed, then copying the name to its transactions failed): purge the Router Cache so that write
+  // shows (RUM-005). Harmless on validation errors, where nothing was written.
+  revalidatePath('/dashboard', 'layout')
   redirect(`/dashboard/payees?error=${encodeURIComponent(message)}`)
 }
 

@@ -262,6 +262,19 @@ Server Action llama `revalidatePath`. Auditoría de todas las escrituras:
   una acción nueva escribe sin invalidar. Comprobado quitando la línea de
   `signOutAction`: el test la nombra. También fija `staleTimes` en 30/30:
   subirlo es una decisión de producto, no un ajuste.
+- **Corrección post-review (Codex, PR #81):** "llama `revalidatePath` en
+  algún lado" no bastaba. Si una escritura ya se confirmó y un paso posterior
+  falla, la salida de error se saltaba la invalidación. Ejemplos: la
+  transacción recurrente se publicó pero avanzar su calendario falló; el
+  movimiento se creó pero sus tags fallaron. La auditoría ahora es sensible al
+  camino: inserta los helpers en línea y exige una invalidación antes de toda
+  salida (`redirect`/`throw`) posterior a una escritura confirmada, contando
+  como confirmada una escritura cuando le sigue otra. Encontró 7 acciones:
+  crear/editar movimiento, crear transferencia, importar CSV, renombrar payee,
+  publicar recurrente y onboarding. Arreglo: sus helpers de error
+  (`redirectWithError` y similares) invalidan antes de redirigir, lo que es
+  inofensivo en errores de validación. Recurrente invalida antes del aviso;
+  onboarding usa `failSetup()`. El test falla si alguna vuelve.
 - "Invalidan únicamente los datos afectados": cada acción revalida sus rutas
   (auditado en RUM-007). Next 16 purga todo el Router Cache de la pestaña ante
   cualquier `revalidatePath` en una Server Action. La granularidad fina solo

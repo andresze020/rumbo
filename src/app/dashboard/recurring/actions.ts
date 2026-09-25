@@ -464,6 +464,8 @@ async function advanceTemplateSchedule(
 
   if (advanceError) {
     // The transaction posted successfully; surface a soft warning but don't fail.
+    // It did post, so the cached pages must show it (RUM-005).
+    revalidateRecurringSurfaces()
     redirect('/dashboard/recurring?posted=1&advance_warning=1')
   }
 
