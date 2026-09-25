@@ -522,5 +522,17 @@ select r.household_id, r.id, date '2026-09-01', 'posted'
 from public.recurring_transactions r
 where r.id in (select distinct on (household_id) id from public.recurring_transactions order by household_id, created_at, id);
 
+-- A category excluded from reports WITH real activity (as A1, through the same
+-- update the categories screen does): its expenses stay in the Transactions
+-- list and in balances but leave every Dashboard/report total — so the checks
+-- that relate those two views are exercised with a non-zero difference.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"00000000-0000-4000-a000-0000000000a1","role":"authenticated"}', true);
+update public.categories set exclude_from_reports = true
+where household_id = '10000000-0000-4000-a000-00000000000a' and name = 'Fees';
+commit;
+
 -- Planner stats so plans resemble a real, analysed database.
 analyze;

@@ -194,15 +194,21 @@ end $$;
 
 -- B-8 (decided 2026-09-25): the Transactions page's "Expenses" total nets
 -- BR-040 refunds, like the Dashboard. Restricted to posted rows (the list also
--- counts pending, deliberately), the two now agree to the cent every month —
--- the fixtures have refunds in a third of the months, so this is not vacuous.
--- check: Transactions list expenses (posted) = Dashboard expenses, every month (refunds netted)
+-- counts pending, deliberately), the ONLY remaining difference is by design:
+-- the Dashboard skips categories marked exclude_from_reports (self or parent),
+-- the entry-based list does not. So, to the cent, every month:
+--   list expenses = Dashboard expenses + net expenses in excluded categories
+-- (household A's "Fees" is excluded and has expenses, so that term is really
+-- exercised). Refunds occur in a third of the months, so is the netting.
+-- check: Transactions list expenses (posted) = Dashboard expenses + excluded-category expenses, every month
 do $$
 declare
   m date;
   v_list numeric;
   v_dashboard numeric;
+  v_excluded numeric;
   v_refund_months int := 0;
+  v_excluded_months int := 0;
 begin
   perform set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-0000000000a1","role":"authenticated"}', true);
   for m in select g::date from generate_series(date '2022-10-01', date '2026-09-01', interval '1 month') g loop
@@ -211,8 +217,22 @@ begin
       null, array['posted'], null, null, null, null, null, null, 1, 0);
     select monthly_expenses into v_dashboard
     from public.get_monthly_dashboard_summary('__HOUSEHOLD_ID__'::uuid, m);
-    assert round(v_list, 4) = round(v_dashboard, 4),
-      format('%s: list expenses %s ≠ dashboard expenses %s', m, v_list, v_dashboard);
+    select coalesce(-sum(e.amount_base_currency), 0) into v_excluded
+    from public.transactions t
+    join public.transaction_entries e on e.transaction_id = t.id
+    where t.household_id = '__HOUSEHOLD_ID__'::uuid and t.status = 'posted'
+      and t.transaction_type in ('expense', 'refund')
+      and t.transaction_date >= m and t.transaction_date < (m + interval '1 month')::date
+      and exists (
+        select 1 from public.transaction_allocations a
+        join public.categories c on c.id = a.category_id
+        left join public.categories pc on pc.id = c.parent_category_id
+        where a.transaction_id = t.id
+          and (c.exclude_from_reports or coalesce(pc.exclude_from_reports, false))
+      );
+    if v_excluded <> 0 then v_excluded_months := v_excluded_months + 1; end if;
+    assert round(v_list, 4) = round(v_dashboard + v_excluded, 4),
+      format('%s: list expenses %s ≠ dashboard %s + excluded-category %s', m, v_list, v_dashboard, v_excluded);
     if exists (
       select 1 from public.transactions
       where household_id = '__HOUSEHOLD_ID__'::uuid and transaction_type = 'refund' and status = 'posted'
@@ -220,4 +240,5 @@ begin
     ) then v_refund_months := v_refund_months + 1; end if;
   end loop;
   assert v_refund_months >= 10, format('expected refunds in ≥10 months, found %s', v_refund_months);
+  assert v_excluded_months >= 10, format('expected excluded-category expenses in ≥10 months, found %s', v_excluded_months);
 end $$;
