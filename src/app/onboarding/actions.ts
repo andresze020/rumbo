@@ -1,8 +1,16 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { isActiveCurrency } from '@/lib/currencies'
+
+// Once the first setup write has run, a later failure leaves part of the
+// household behind: purge the Router Cache before failing (RUM-005).
+function failSetup(message: string): never {
+  revalidatePath('/', 'layout')
+  throw new Error(message)
+}
 
 export async function createHouseholdAction(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim()
@@ -41,7 +49,7 @@ export async function createHouseholdAction(formData: FormData) {
   )
 
   if (profileError) {
-    throw new Error('Could not prepare your profile. Please try again.')
+    failSetup('Could not prepare your profile. Please try again.')
   }
 
   const { data: household, error: householdError } = await supabase
@@ -55,7 +63,7 @@ export async function createHouseholdAction(formData: FormData) {
     .single()
 
   if (householdError) {
-    throw new Error('Could not create your household. Please try again.')
+    failSetup('Could not create your household. Please try again.')
   }
 
   const { error: memberError } = await supabase
@@ -69,7 +77,7 @@ export async function createHouseholdAction(formData: FormData) {
     })
 
   if (memberError) {
-    throw new Error('Could not finish household setup. Please try again.')
+    failSetup('Could not finish household setup. Please try again.')
   }
 
   const { error: defaultCategoriesError } = await supabase.rpc(
@@ -80,7 +88,7 @@ export async function createHouseholdAction(formData: FormData) {
   )
 
   if (defaultCategoriesError) {
-    throw new Error('Could not finish household setup. Please try again.')
+    failSetup('Could not finish household setup. Please try again.')
   }
 
   const { error: updateProfileError } = await supabase
@@ -91,8 +99,10 @@ export async function createHouseholdAction(formData: FormData) {
     .eq('id', user.id)
 
   if (updateProfileError) {
-    throw new Error('Could not finish household setup. Please try again.')
+    failSetup('Could not finish household setup. Please try again.')
   }
 
+  // A new household changes every page: drop anything the Router Cache kept.
+  revalidatePath('/', 'layout')
   redirect('/onboarding/account')
 }

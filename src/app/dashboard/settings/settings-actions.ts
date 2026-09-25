@@ -289,5 +289,6 @@ export async function updateUiPreferencesAction(formData: FormData) {
 export async function signOutAllAction() {
   const supabase = await createClient()
   await supabase.auth.signOut({ scope: 'global' })
+  revalidatePath('/', 'layout')
   redirect('/login')
 }

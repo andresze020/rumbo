@@ -29,6 +29,14 @@
 //   PERF_EMAIL=… PERF_PASSWORD=… node scripts/perf-nav.mjs --base=http://localhost:3000
 //   node scripts/perf-nav.mjs --base=… --runs=10 --json > perf.json
 //   node scripts/perf-nav.mjs --base=… --viewport=mobile
+//   node scripts/perf-nav.mjs --base=… --think=500
+//
+// --think=<ms> pauses before each flow, untimed: a person does not click
+// within a few ms of a page appearing. Default 0 (the robot pace every
+// earlier run used). Why it exists: after RUM-005 a revisit can render from
+// the Router Cache in ~80 ms, and a click that lands while that page's own
+// prefetches are still being sent waits for them (~380 ms). Report both
+// paces when that matters (release-checklist.md §4.1).
 //
 // Needs Playwright (not a project dependency): `npm install --no-save playwright`.
 // Uses PLAYWRIGHT_CHROMIUM_EXECUTABLE if set (e.g. /opt/pw-browsers/chromium).
@@ -38,14 +46,18 @@
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 
-function parseArgs(argv) {
-  const options = { base: 'http://localhost:3000', runs: 7, viewport: 'desktop', json: false }
+export function parseArgs(argv) {
+  const options = { base: 'http://localhost:3000', runs: 7, viewport: 'desktop', json: false, think: 0 }
   for (const token of argv) {
     const match = token.match(/^--([a-z]+)(?:=(.*))?$/)
     if (!match) throw new Error(`Unrecognised argument: ${token}`)
     const [, key, value] = match
     if (key === 'json') options.json = true
     else if (key === 'runs') options.runs = Number(value)
+    else if (key === 'think') {
+      options.think = Number(value)
+      if (!Number.isInteger(options.think) || options.think < 0) throw new Error(`--think must be a whole number of ms: ${token}`)
+    }
     else if (key === 'base' || key === 'viewport') options[key] = value
     else throw new Error(`Unrecognised argument: ${token}`)
   }
@@ -132,41 +144,46 @@ async function oneRun(browser, options, storageState, results) {
   const context = await browser.newContext({ storageState, viewport })
   const page = await context.newPage()
   const base = options.base
+  // Untimed think time before each flow (see --think above).
+  const flow = async (label, action, recoverTo) => {
+    if (options.think > 0) await page.waitForTimeout(options.think)
+    await timed(label, results, action, page, recoverTo)
+  }
 
-  await timed('Dashboard full load (hard)', results, async () => {
+  await flow('Dashboard full load (hard)', async () => {
     await page.goto(`${base}/dashboard`)
     await waitUntilReady(page, '/dashboard')
-  }, page, `${base}/dashboard`)
-  await timed('Dashboard → Transactions (cold)', results, async () => {
+  }, `${base}/dashboard`)
+  await flow('Dashboard → Transactions (cold)', async () => {
     await clickNav(page, '/dashboard/transactions')
     await waitUntilReady(page, '/dashboard/transactions')
-  }, page, `${base}/dashboard/transactions`)
-  await timed('Transactions → Dashboard', results, async () => {
+  }, `${base}/dashboard/transactions`)
+  await flow('Transactions → Dashboard', async () => {
     await clickNav(page, '/dashboard')
     await waitUntilReady(page, '/dashboard')
-  }, page, `${base}/dashboard`)
-  await timed('Dashboard → Transactions (2nd visit)', results, async () => {
+  }, `${base}/dashboard`)
+  await flow('Dashboard → Transactions (2nd visit)', async () => {
     await clickNav(page, '/dashboard/transactions')
     await waitUntilReady(page, '/dashboard/transactions')
-  }, page, `${base}/dashboard/transactions`)
+  }, `${base}/dashboard/transactions`)
   await clickNav(page, '/dashboard')
   await waitUntilReady(page, '/dashboard')
-  await timed('Dashboard → Accounts', results, async () => {
+  await flow('Dashboard → Accounts', async () => {
     await clickNav(page, '/dashboard/accounts')
     await waitUntilReady(page, '/dashboard/accounts')
-  }, page, `${base}/dashboard/accounts`)
-  await timed('Accounts → Transactions', results, async () => {
+  }, `${base}/dashboard/accounts`)
+  await flow('Accounts → Transactions', async () => {
     await clickNav(page, '/dashboard/transactions')
     await waitUntilReady(page, '/dashboard/transactions')
-  }, page, `${base}/dashboard/transactions`)
+  }, `${base}/dashboard/transactions`)
   await clickNav(page, '/dashboard')
   await waitUntilReady(page, '/dashboard')
-  await timed('Month change (Dashboard)', results, async () => {
+  await flow('Month change (Dashboard)', async () => {
     const previous = page.locator('a[href^="/dashboard?month="]:visible').first()
     const href = await previous.getAttribute('href')
     await previous.click()
     await waitUntilReady(page, '/dashboard', href.slice(href.indexOf('month=')))
-  }, page, `${base}/dashboard`)
+  }, `${base}/dashboard`)
 
   await context.close()
 }
@@ -212,7 +229,7 @@ async function main() {
   if (lostTotal > 0) process.exitCode = 1
 
   if (options.json) {
-    console.log(JSON.stringify({ base: options.base, viewport: options.viewport, runs: options.runs, lostTotal, summary }, null, 2))
+    console.log(JSON.stringify({ base: options.base, viewport: options.viewport, runs: options.runs, thinkMs: options.think, lostTotal, summary }, null, 2))
     return
   }
   console.log(`\nNavigation timings — ${options.base} (${options.viewport}, ${options.runs} runs + 1 warm-up)`)

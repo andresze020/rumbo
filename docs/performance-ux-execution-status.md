@@ -8,7 +8,19 @@
 > Este archivo registra *qué pasó*. El backlog registra *qué hay que hacer*. No
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
-> **Actualizado 2026-09-25 — B-7 arreglado, B-8 decidido.** El cambio de mes
+> **Actualizado 2026-09-25 — RUM-005 cerrado: la segunda visita usa el
+> Router Cache (30 s) y cada escritura lo invalida; B-5 cerrado.** Decisión del
+> usuario: `experimental.staleTimes` `{ dynamic: 30, static: 30 }` en
+> `next.config.ts`, sin cache de datos en servidor (RLS sigue aplicándose en
+> cada render). Revisitas p75 734/504/493 ms → 86/85/80 ms (`perf:nav`, 0
+> perdidas). Un test audita las 71 Server Actions que escriben: todas llaman
+> `revalidatePath` (dos no lo hacían — onboarding e idioma — y sign-in/out
+> ahora también). Verificado en vivo: escritura en la pestaña → se ve al
+> instante; escritura desde otro dispositivo → hasta 30 s (el trade-off
+> aceptado); sign-out/sign-in → nunca una página cacheada. Timings de servidor
+> (capa B) medidos. Ver la entrada de RUM-005 (cache) en §4.
+>
+> **2026-09-25 — B-7 arreglado, B-8 decidido.** El cambio de mes
 > del Dashboard ya no pierde clics (`key={selectedMonth}` en el `<Suspense>` de
 > los widgets; 0/7 en `perf:nav`) y "Expenses" de Transactions netea reembolsos
 > como el Dashboard (migración `20260925120000_b8_…`, **aplicada en producción**:
@@ -120,9 +132,9 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | Ticket | Prioridad | Estado | Rama | PR | Cerrado |
 |---|---|---|---|---|---|
 | RUM-010a — Stack de tests | P0 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | [#68](https://github.com/andresze020/rumbo/pull/68) | 2026-09-21 |
-| RUM-001 — Instrumentación y baseline | P0 | **Hecho** (capa B pendiente) | `claude/backlog-rum-10a-tmlee1` | [#69](https://github.com/andresze020/rumbo/pull/69) | 2026-09-21 |
+| RUM-001 — Instrumentación y baseline | P0 | **Hecho** (capa B medida 2026-09-25, `/dashboard`) | `claude/backlog-rum-10a-tmlee1` | [#69](https://github.com/andresze020/rumbo/pull/69) | 2026-09-21 |
 | RUM-002 — Reconciliar net worth | P0 | **Hecho** | `claude/rum-002-net-worth-valuation` | [#73](https://github.com/andresze020/rumbo/pull/73) | 2026-09-21 |
-| RUM-005 — Carga del Dashboard | P0 | **🟡 Orquestación + streaming hechos** (cache/invalidación deferida) | `claude/rum-005-suspense-streaming` | — | — |
+| RUM-005 — Carga del Dashboard | P0 | **Hecho, verificado en vivo** (orquestación + streaming 2026-09-21; Router Cache + invalidación 2026-09-25) | `claude/next-backlog-ticket-2azpv2` | [#81](https://github.com/andresze020/rumbo/pull/81) | 2026-09-25 |
 | RUM-003 — Periodos, FX y decimales | P0 | **Hecho** | `claude/rum-003-fx-period-precision` | — | 2026-09-22 |
 | RUM-006 — Balances repetidos | P1 | **Hecho** | `claude/backlog-rum-10a-tmlee1` | — | 2026-09-21 |
 | RUM-007 — Cache, prefetch y loading | P1 | **Hecho, verificado en vivo** | `claude/next-backlog-ticket-2azpv2` | [#75](https://github.com/andresze020/rumbo/pull/75) | 2026-09-24 |
@@ -138,13 +150,13 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | # | Bloqueo | Afecta a | Desbloquea |
 |---|---|---|---|
 | B-2 | No hay baseline de performance atribuido por etapa | RUM-004, RUM-005, RUM-006 y las decisiones grandes de RUM-007 | RUM-001 |
-| B-5 | Falta la capa B del baseline (timings de servidor): necesita la app corriendo con `NEXT_PUBLIC_SUPABASE_*`. Las capas A y C ya están medidas, así que esto ya no bloquea a RUM-005/006 — solo impide separar red+PostgREST del render | Afinar `experimental.staleTimes` del Router Cache (RUM-007 lo dejó como decisión explícita pendiente, no bloqueada — el resto del ticket no lo necesitaba) | Que el usuario corra `RUMBO_PERF=1 npm run dev`, navegue y pegue las líneas `[rumbo-perf]` |
 
 
 ### 2.1 Bloqueos cerrados
 
 | # | Bloqueo | Cerrado por | Fecha |
 |---|---|---|---|
+| B-5 | Faltaba la capa B del baseline (timings de servidor), que bloqueaba afinar `staleTimes` | **Medida 2026-09-25** con `RUMBO_PERF=1 npm start` (build de producción) y una cuenta QA: el render de servidor de `/dashboard` hace 26 queries, wall p50 ~400 ms (9 cargas), `serialRatio` ~0,3, `maxConcurrency` 7; cada round-trip a Supabase cuesta ~50 ms desde el contenedor. Ver [`performance-baseline.md`](./performance-baseline.md) §4. Con eso se decidió `staleTimes` (RUM-005) | 2026-09-25 |
 | B-7 | El cambio de mes del Dashboard perdía clics (5/7 en `perf:nav`; la request RSC terminaba pero el router nunca confirmaba la navegación) | **Causa raíz por bisección sobre builds de producción:** los widgets secundarios se transmiten por streaming dentro de un `<Suspense>` ya revelado; un cambio de mes es una transición, React mantiene el contenido viejo hasta que llega el nuevo, y con un bloque grande transmitido esa transición a veces nunca se confirmaba (400 filas sintéticas estáticas: 6/6 perdidos; la misma respuesta sin streaming: 0/6; descartados demora, links, prefetch, localizador y queries). **Fix:** `key={selectedMonth}` en ese boundary (`dashboard/page.tsx`). 0/24 perdidos en los scripts de reproducción, 0/7 en `perf:nav` | 2026-09-25 |
 | B-8 | "Expenses" de Transactions no descontaba reembolsos (BR-040) y el Dashboard sí | **Decisión del usuario (2026-09-25): netear reembolsos.** Migración `20260925120000_b8_transactions_totals_net_refunds.sql` (reemplazo de función, sin cambio de esquema; rollback = definición de BR-045). La expectativa de fixtures pasó de "divergencia fijada" a igualdad lista (posted) = Dashboard cada mes. **Aplicada en producción el 2026-09-25** (62/62, 0 pendientes; `db:test` 46/46; lista = Dashboard al centavo en los 12 últimos meses del household real) | 2026-09-25 |
 | B-1 | No había runner de tests de JS/TS en el repositorio | RUM-010a — Vitest, `npm test`, en CI ([`testing.md`](./testing.md)) | 2026-09-21 |
@@ -204,6 +216,167 @@ quedaban cortos.
 
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
+
+### RUM-005 — Cache e invalidación (cierre del ticket) · 2026-09-25 · rama `claude/next-backlog-ticket-2azpv2` · PR [#81](https://github.com/andresze020/rumbo/pull/81)
+
+**Qué faltaba.** Dos criterios de aceptación que las entregas de 2026-09-21
+(orquestación y streaming) dejaron deferidos a propósito: "la segunda visita
+puede usar datos existentes mientras revalida" y "las mutaciones invalidan
+únicamente los datos afectados". RUM-007 tampoco tocó `staleTimes` porque B-5
+bloqueaba decidirlo a ciegas.
+
+**Decisión (del usuario, 2026-09-25).** Ventana del Router Cache del cliente de
+30 s, no cache de datos en servidor. Opciones que se le presentaron:
+- **Router Cache 30 s (elegida).** `experimental.staleTimes: { dynamic: 30,
+  static: 30 }`. Cache por pestaña, en memoria del navegador; ningún dato de un
+  household se guarda en el servidor bajo ninguna clave, y RLS se sigue
+  aplicando en cada render.
+- Cache de datos en servidor (`use cache`/`revalidateTag` por household):
+  invalidación más fina y compartida entre dispositivos. Descartada porque las
+  queries cacheadas correrían fuera de la sesión del usuario, así que RLS dejaría
+  de aplicarse por request. Eso es un cambio de aislamiento por household (§4.3).
+- Cerrar sin cache.
+
+`static` también a 30 s (el mínimo que Next acepta; el default era 5 min): las
+tres pestañas con `prefetch={true}` (RUM-007) usan esa ventana. Antes podían
+mostrar datos de hasta 5 minutos después de un cambio hecho desde otro
+dispositivo; ahora tienen la misma ventana que todo lo demás.
+
+**Por qué es seguro: la invalidación.** El Router Cache se purga cuando una
+Server Action llama `revalidatePath`. Auditoría de todas las escrituras:
+- Ningún componente cliente escribe directo en Supabase. Las 4 coincidencias de
+  `.delete(` eran `URLSearchParams#delete`.
+- Toda escritura pasa por uno de los 26 archivos `'use server'`.
+- Nuevo `tests/cache/server-action-invalidation.ts`, con el API de TypeScript,
+  recorre cada acción exportada y detecta escrituras: `.insert/.update/.upsert`,
+  `.delete()`, RPC que no son de lectura, e inicio o fin de sesión. Resuelve
+  helpers del mismo archivo y exige `revalidatePath`/`revalidateTag`.
+  Resultado: 69 de 71 lo hacían. Faltaban `createHouseholdAction` (onboarding)
+  y `setLocaleAction` (idioma). Ambas ya purgaban por efecto secundario (un
+  cookie escrito en una Server Action también purga, y el selector de idioma
+  hace `router.refresh()`), pero ahora es explícito.
+- Sign-in, sign-up, sign-out y sign-out-all también llaman `revalidatePath('/',
+  'layout')`, para que la siguiente persona que entre en la pestaña nunca vea
+  una página cacheada de la anterior.
+- El test (`tests/cache/server-action-invalidation.test.ts`, 8 casos) falla si
+  una acción nueva escribe sin invalidar. Comprobado quitando la línea de
+  `signOutAction`: el test la nombra. También fija `staleTimes` en 30/30:
+  subirlo es una decisión de producto, no un ajuste.
+- **Corrección post-review (Codex, PR #81):** "llama `revalidatePath` en
+  algún lado" no bastaba. Si una escritura ya se confirmó y un paso posterior
+  falla, la salida de error se saltaba la invalidación. Ejemplos: la
+  transacción recurrente se publicó pero avanzar su calendario falló; el
+  movimiento se creó pero sus tags fallaron. La auditoría ahora es sensible al
+  camino: inserta los helpers en línea y exige una invalidación antes de toda
+  salida (`redirect`/`throw`) posterior a una escritura confirmada, contando
+  como confirmada una escritura cuando le sigue otra. Encontró 7 acciones:
+  crear/editar movimiento, crear transferencia, importar CSV, renombrar payee,
+  publicar recurrente y onboarding. Arreglo: sus helpers de error
+  (`redirectWithError` y similares) invalidan antes de redirigir, lo que es
+  inofensivo en errores de validación. Recurrente invalida antes del aviso;
+  onboarding usa `failSetup()`. El test falla si alguna vuelve.
+- "Invalidan únicamente los datos afectados": cada acción revalida sus rutas
+  (auditado en RUM-007). Next 16 purga todo el Router Cache de la pestaña ante
+  cualquier `revalidatePath` en una Server Action. La granularidad fina solo
+  existiría con cache de servidor, que es la opción descartada. En el cliente,
+  purgar de más solo cuesta un render (~400 ms), nunca un dato viejo.
+
+**Métricas** (`perf:nav`, build de producción, Supabase real, cuenta QA
+`rum005-qa-…` con 78 transacciones en 13 meses, 7 corridas + 1 de
+calentamiento, desktop). p75 (p50):
+
+| Flujo | Antes | Después | Antes, `--think=500` | Después, `--think=500` |
+|---|---:|---:|---:|---:|
+| Dashboard carga completa | 808 (782) | 831 (807) | 895 (822) | 843 (827) |
+| Dashboard → Transactions (fría) | 566 (554) | 593 (555) | 554 (528) | 609 (578) |
+| Transactions → Dashboard (revisita) | 734 (698) | **86 (73)** | 852 (696) | **74 (63)** |
+| Dashboard → Transactions (2ª visita) | 504 (470) | **85 (75)** | 753 (484) | **70 (69)** |
+| Dashboard → Accounts | 371 (359) | 416 (395) | 605 (491) | 540 (434) |
+| Accounts → Transactions (revisita) | 493 (481) | **80 (73)** | 799 (472) | **65 (63)** |
+| Cambio de mes (Dashboard) | 692 (689) | 1101 (1091) | 1205 (706) | 773 (742) |
+
+0 navegaciones perdidas en las 4 corridas.
+
+**El cambio de mes en la columna "Después" no es una regresión del cambio de
+mes.** Aislado con un probe (18 clics):
+- Con el Dashboard recién cargado del servidor, clic inmediato: 688–761 ms,
+  igual que antes.
+- Con el Dashboard servido desde el cache y el clic en los primeros ~100 ms: el
+  router retiene la request de navegación ~380 ms. En esos ms salen las
+  prefetches de la página recién montada.
+- Con 1 s de pausa: 702–727 ms.
+- No es el prefetch de las flechas: con `prefetch={false}` la espera es la
+  misma, así que se revirtió.
+- No es CPU: el hilo principal queda libre a los ~70 ms, sin long tasks.
+
+`perf:nav` hace clic a velocidad de robot justo después de una revisita que
+ahora tarda 80 ms. Por eso gana la opción `--think=<ms>`: una pausa sin medir
+antes de cada flujo, default 0 para que las corridas viejas sigan comparables.
+Con 500 ms el cambio de mes queda en 742 (p50), frente a 706. El 1205 del p75
+"antes" es una sola muestra atípica.
+
+**Confirmado en el household real** (credenciales del usuario, corridas de
+solo lectura; las comprobaciones que escriben no se corrieron ahí):
+- Revisitas p75 841/495/499 → 94/99/102 ms.
+- Cambio de mes a ritmo humano: 777 ms (p50), frente a 742 ms antes.
+- Checks 3/3: revisitas sin servidor, re-render pasados 30 s, sign-out/in sin
+  cache.
+- Servidor: `/dashboard` 26 queries, ~447 ms (p50).
+
+Tabla completa en [`release-checklist.md`](./release-checklist.md) §4.1.
+
+**Verificación en vivo** (build de producción, Playwright, 6/6 PASS):
+1. Revisitas dentro de 30 s: 0 renders de servidor.
+2. Escritura desde "otro dispositivo" (RPC con supabase-js): dentro de la
+   ventana la pestaña sigue mostrando la página vieja (el trade-off aceptado);
+   pasados 30 s aparece.
+3. Void hecho en la pestaña (Server Action): el Dashboard cacheado se vuelve a
+   renderizar en el servidor en la siguiente visita. El void se confirmó en la
+   base.
+4. Sign-out y sign-in dentro de la ventana: Transactions muestra una escritura
+   hecha justo antes, así que no es la página cacheada de la sesión anterior.
+
+Hallazgo durante la verificación: el refresh automático de FX (una Server
+Action, una vez por sesión) purga el Router Cache al terminar, porque el
+cliente de Supabase puede reescribir los cookies de auth. Es inofensivo (del
+lado fresco), pero una prueba debe esperar a que termine
+(`sessionStorage.af_fx_refreshed_on`).
+
+**Capa B (B-5).** Ver [`performance-baseline.md`](./performance-baseline.md)
+§4. Hallazgo sobre el instrumento: el colector cuelga del layout de
+`/dashboard`, que una navegación de cliente no vuelve a renderizar. Por eso solo
+registra cargas completas, y las celdas de las otras rutas siguen vacías.
+
+**Archivos modificados:**
+- `next.config.ts`: `experimental.staleTimes`, con el trade-off en el comentario.
+- `src/app/login/actions.ts`, `src/app/dashboard/session-actions.ts`,
+  `src/app/dashboard/settings/settings-actions.ts`: `revalidatePath('/',
+  'layout')` al iniciar o cerrar sesión.
+- `src/app/onboarding/actions.ts`, `src/lib/i18n/actions.ts`: invalidación
+  explícita (las 2 que faltaban).
+- `tests/cache/server-action-invalidation.ts` y `.test.ts`: auditoría y test.
+- `scripts/perf-nav.mjs` y `.test.ts`: `--think`, `parseArgs` exportado y
+  testeado, `thinkMs` en el JSON.
+- Docs: este archivo, backlog §6.1, `release-checklist.md`,
+  `performance-baseline.md`, `AGENTS.md`.
+
+**Sin migraciones.** Sin cambios de RLS, ledger, FX ni esquema.
+
+**Riesgos residuales:**
+- Un cambio hecho por otro miembro del household, o desde otro dispositivo,
+  tarda hasta 30 s en verse en una pestaña que ya tenía la página.
+- `staleTimes` es `experimental` en Next 16. Una actualización de Next que
+  cambie su semántica rompería el test de config (a propósito), no
+  silenciosamente.
+- El cambio de mes sigue sobre el objetivo de 0,5 s (~740 ms). El costo es el
+  render de servidor, capa B: ~400 ms y 26 queries a ~50 ms cada una.
+- Cuenta QA `rum005-qa-…@example.com` creada en producción (su propio
+  household). Se suma a las de RUM-007…009 para la limpieza.
+
+**Checklist manual:** con dos pestañas del mismo usuario, crear una
+transacción en la A y abrir Dashboard en la B antes de 30 s: B puede mostrar el
+dato viejo. Pasados 30 s, o tras cualquier escritura en B, se ve. En una sola
+pestaña, cualquier alta, edición o void se ve al instante.
 
 ### RUM-010b — Suite de regresión, carga y release gate · 2026-09-24 · rama `claude/next-backlog-ticket-2azpv2` · PR [#79](https://github.com/andresze020/rumbo/pull/79)
 
@@ -1972,6 +2145,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-25 | **RUM-005 cerrado: Router Cache de 30 s + invalidación auditada; B-5 cerrado.** Decisión del usuario: `staleTimes` `{ dynamic: 30, static: 30 }`, sin cache de servidor (RLS intacta). Revisitas p75 ~500–730 ms → ~80 ms, 0 perdidas. Test nuevo: las 71 Server Actions que escriben o cambian sesión invalidan (2 faltaban: onboarding, idioma; sign-in/out explícitos). Verificado en vivo 6/6 (revisita sin servidor, escritura propia al instante, otro dispositivo ≤30 s, sign-out/in nunca cacheado). `perf:nav --think` añadido: el cambio de mes tras una revisita instantánea espera ~380 ms si el clic llega en <100 ms (prefetches de la página recién montada); con pausa humana no cambia. Capa B medida: `/dashboard` 26 queries, ~400 ms de servidor. |
 | 2026-09-25 | **Migración de B-8 aplicada en producción (a pedido del usuario): release aprobado.** `db-push push --apply` → 62/62, 0 pendientes; `db:test` en el household real 46/46; Transactions (posted) = Dashboard al centavo en los 12 últimos meses. |
 | 2026-09-25 | **B-7 arreglado y B-8 decidido: el gate de RUM-010b pasa a «aprobado al aplicar una migración».** B-7 (cambio de mes del Dashboard perdía clics): causa raíz aislada por bisección — contenido grande transmitido dentro del `<Suspense>` ya revelado de los widgets secundarios dejaba la transición sin confirmar —; fix `key={selectedMonth}`; 0/7 perdidos en `perf:nav`. B-8 (Transactions no descontaba reembolsos): el usuario pidió «lo que tenga más sentido» → la lista netea reembolsos como el Dashboard; migración `20260925120000_b8_…` verificada en fixtures (112/112, igualdad lista = Dashboard cada mes) y pendiente de aplicar en producción. |
 | 2026-09-24 | **RUM-010b cerrado: gate de release operativo; el release actual no se aprueba.** `npm run db:local` (Postgres privado + shim + 61 migraciones + fixtures generadas por las RPC de la app) corre todo `supabase/tests/` en CI; checks nuevos de invariantes mes a mes, reconciliación Accounts ↔ as-of-today y aislamiento entre households; `npm run perf:nav` mide §3.1 en navegador. 112/112 en fixtures, 46/46 en el household real. Arreglados dos bugs en tests existentes (BR-006 sumaba anuladas; RUM-006 ignoraba fechas futuras). Encontrados: B-7 (cambio de mes del Dashboard pierde clics, bloqueante) y B-8 (decisión: Transactions no descuenta reembolsos). |

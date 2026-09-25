@@ -18,6 +18,11 @@ months. Every financial figure reconciles.
 History: the first verdict (2026-09-24, `main` @ RUM-009) was **not approved**
 — B-7, 5/7 month clicks lost.
 
+**RUM-005 (2026-09-25, this branch):** the Router Cache now keeps a visited
+page for 30 s. Revisits fall from ~500–730 ms to ~80 ms p75, with 0 lost
+navigations. Every write still shows at once in the tab that made it. A change
+made on another device can take up to 30 s to appear (§4.1).
+
 ---
 
 ## 1. Approval criteria
@@ -54,7 +59,13 @@ npm run build && npm start &
 npm install --no-save playwright
 PERF_EMAIL=… PERF_PASSWORD=… PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium \
   npm run perf:nav -- --base=http://localhost:3000 --runs=7
+# the same with a person's pace: an untimed 500 ms before each flow
+  npm run perf:nav -- --base=http://localhost:3000 --runs=7 --think=500
 ```
+
+Run both paces when a change makes a page appear faster: a robot click that
+lands within ~100 ms of a page shown from the Router Cache waits for that
+page's own prefetches (~380 ms). A person never clicks that fast.
 
 ---
 
@@ -120,6 +131,56 @@ different device and a larger household, so the ratio is directional, not a
 controlled A/B. The p75/p95 of 7 samples are nearest-rank values. The test
 household is small; the database half at scale is §4.2.
 
+#### After RUM-005 (Router Cache 30 s), 2026-09-25
+
+Same setup, a fresh test account (78 transactions, 13 months), 7 runs. p75,
+with p50 in brackets, in ms. Both builds were measured the same day, so the
+"before" column is `main` rather than the table above.
+
+| Flow | Before | After | Before, `--think=500` | After, `--think=500` | Target p75 |
+|---|---:|---:|---:|---:|---:|
+| Dashboard full load (hard) | 808 (782) | 831 (807) | 895 (822) | 843 (827) | — |
+| Dashboard → Transactions (cold) | 566 (554) | 593 (555) | 554 (528) | 609 (578) | ≤ 1.5 s ✅ |
+| Transactions → Dashboard | 734 (698) | **86 (73)** | 852 (696) | **74 (63)** | ≤ 1.5 s ✅ |
+| Dashboard → Transactions (2nd visit) | 504 (470) | **85 (75)** | 753 (484) | **70 (69)** | ≤ 1.0 s ✅ |
+| Dashboard → Accounts | 371 (359) | 416 (395) | 605 (491) | 540 (434) | ≤ 1.2 s ✅ |
+| Accounts → Transactions | 493 (481) | **80 (73)** | 799 (472) | **65 (63)** | ≤ 1.5 s ✅ |
+| Month change (Dashboard) | 692 (689) | 1101 (1091) | 1205 (706) | 773 (742) | ≤ 0.5 s ⚠️ |
+
+0 lost navigations in all four runs.
+
+**Confirmed on the real household** (the user's account, 2026-09-25, same
+builds and setup, read-only runs). p75, with p50 in brackets, in ms. Columns:
+before, after, before at `--think=500`, after at `--think=500`. 0 lost.
+
+| Flow | Before | After | Before, think | After, think |
+|---|---:|---:|---:|---:|
+| Dashboard full load (hard) | 835 (797) | 834 (815) | 833 (799) | 849 (824) |
+| Dashboard → Transactions (cold) | 769 (611) | 603 (586) | 595 (552) | 615 (586) |
+| Transactions → Dashboard | 841 (764) | **94 (81)** | 760 (748) | **73 (69)** |
+| Dashboard → Transactions (2nd visit) | 495 (476) | **99 (95)** | 506 (490) | **77 (72)** |
+| Dashboard → Accounts | 573 (561) | 580 (547) | 579 (569) | 688 (655) |
+| Accounts → Transactions | 499 (498) | **102 (84)** | 499 (475) | **84 (77)** |
+| Month change (Dashboard) | 782 (765) | 1105 (1101) | 774 (742) | 815 (777) |
+
+The same shape as the test account: revisits ~80–100 ms. The month change is
+unchanged at a person's pace (777 ms p50 against 742 ms), and slower only at
+robot pace, for the reason below. Dashboard → Accounts at `--think=500` (655
+against 569 p50) is within this run-to-run spread: the robot-pace pair is
+547 against 561. A read-only check on this account also passed 3/3:
+- 3 revisits inside 30 s made 0 server renders;
+- after 30 s, the next visit asks the server again;
+- sign-out then sign-in never shows the previous session's cached page.
+
+Month change "after" at robot pace is not a slower month change. In that flow
+the Dashboard now appears from the cache in ~80 ms, and the click lands while
+that page's prefetches are still being sent. The router holds it for ~380 ms.
+With a 1 s pause the same click takes 702–727 ms, the same as before (18-click
+probe: not CPU, and not the arrows' own prefetch). At a person's pace (`--think=500`)
+it is 742 ms p50, against 706 ms before. It stays over the 0.5 s target for the
+reason already recorded above: the server render costs ~400 ms, as 26 queries
+at ~50 ms each ([performance-baseline.md §4](./performance-baseline.md)).
+
 ### 4.2 Database (load, fixtures)
 
 `npm run db:local -- --bench`: household A (≈2.7k transactions, 22 accounts, 4
@@ -184,6 +245,18 @@ still includes pending rows and follows its own filters, by design. **Applied
 to the live project 2026-09-25**; re-checked there (46/46, list = Dashboard for
 12 of 12 months).
 
+### By design — up to 30 s for another device's change (RUM-005)
+
+`next.config.ts` `experimental.staleTimes` is 30 s. A page a tab has already
+rendered can be shown again for 30 s without asking the server.
+- A write in that tab (any Server Action) purges it at once. So do sign-in,
+  sign-out and a household switch.
+- A write from another device or another household member reaches that tab when
+  the window ends. Verified live: inside the window the old page shows, after
+  it the change does.
+- `tests/cache/server-action-invalidation.test.ts` fails if a new Server Action
+  writes without `revalidatePath`.
+
 ### By design, now reconciled — Accounts shows future-dated entries
 
 Accounts uses the unbounded balance (booked future-dated entries included, as
@@ -204,5 +277,5 @@ with more scale or as CAD→COP.
 
 ### Housekeeping
 
-QA accounts created by RUM-007…RUM-009 visual checks (`rum00X-qa-*@example.com`)
-still exist in the production project.
+QA accounts created by RUM-007…RUM-009 visual checks and RUM-005 measurements
+(`rum00X-qa-*@example.com`) still exist in the production project.

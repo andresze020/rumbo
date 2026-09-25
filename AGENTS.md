@@ -35,6 +35,14 @@ The product is household-first. All financial data must belong to a household.
   "Expenses" total now nets BR-040 refunds like the Dashboard, via migration
   `20260925120000_b8_transactions_totals_net_refunds.sql` (applied to the live
   project 2026-09-25; release gate verdict: approved).
+- **RUM-005 closed: 30 s Router Cache** (2026-09-25). `next.config.ts`
+  `experimental.staleTimes` `{ dynamic: 30, static: 30 }`, with no server-side
+  data cache, so RLS still applies on every render. Revisits drop from
+  ~500–730 ms to ~80 ms. Rule: **every Server Action that writes (or signs in or
+  out) must call `revalidatePath`**. That is what purges the cache;
+  `tests/cache/server-action-invalidation.test.ts` enforces it and pins the
+  30 s window. Accepted trade-off: a change made on another device can take up
+  to 30 s to show.
 
 - **The Transactions screen was rebuilt as a phone list, and the period got
   one owner** (2026-09-19 → 09-20, PR #66). Three commits, one review round
@@ -309,6 +317,8 @@ Three layers, no overlap. Full conventions and the stack decision live in
 - **Navigation — `npm run perf:nav`** (RUM-010b). Real Chromium against a
   running app and a test account: the §3.1 flows cold and warm, p50/p75/p95
   until no skeleton is left, and lost navigations (exit 1 if any).
+  `--think=<ms>` adds an untimed pause before each flow (a person's pace).
+  Report both paces when a change makes pages appear faster (RUM-005).
 
 ## Git rules
 

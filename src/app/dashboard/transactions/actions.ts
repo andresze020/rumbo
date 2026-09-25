@@ -26,10 +26,18 @@ function isReviewStatus(value: string): value is ReviewStatus {
 }
 
 function redirectWithError(message: string): never {
+  // An error can follow a write that already committed (e.g. the transaction
+  // posted, then a later step failed): purge the Router Cache so that write
+  // shows (RUM-005). Harmless on validation errors, where nothing was written.
+  revalidatePath('/dashboard', 'layout')
   redirect(`/dashboard/transactions?error=${encodeURIComponent(message)}`)
 }
 
 function redirectWithTransactionError(message: string, returnTo?: string): never {
+  // An error can follow a write that already committed (e.g. the transaction
+  // posted, then a later step failed): purge the Router Cache so that write
+  // shows (RUM-005). Harmless on validation errors, where nothing was written.
+  revalidatePath('/dashboard', 'layout')
   redirect(addQueryParam(returnTo, 'error', message))
 }
 
