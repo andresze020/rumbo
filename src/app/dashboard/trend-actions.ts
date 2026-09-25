@@ -1,9 +1,15 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { groupByAsOfDate } from '@/lib/balances/multi-date'
-import { computeValuation, selectNetWorthAccounts } from '@/lib/net-worth/valuation'
-import { snapshotDateForMonth } from '@/lib/periods/month'
+import { getRequestProfile, getRequestUser } from '@/lib/supabase/request'
+import {
+  balanceTrendDates,
+  balanceTrendFromRows,
+  lastNMonthDates,
+  trendMonthLabel,
+  type BalanceTrendRow,
+  type TrendPoint as BalanceTrendPoint,
+} from '@/lib/net-worth/trend'
 
 export type TrendMetric =
   | 'monthly-income'
@@ -15,41 +21,14 @@ export type TrendMetric =
   | 'total-liabilities'
   | 'projected-net-worth'
 
-export type TrendPoint = {
-  month: string
-  label: string
-  value: number
-}
+
+// A local alias, not `export type { … } from`: the Server Actions compiler
+// treats a re-export in a 'use server' file as an action and fails the build.
+export type TrendPoint = BalanceTrendPoint
 
 export type TrendResult =
   | { ok: true; data: TrendPoint[] }
   | { ok: false; error: string }
-
-function getLastNMonthDates(currentMonth: string, n: number): string[] {
-  const [year, mon] = currentMonth.split('-').map(Number)
-  const months: string[] = []
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(year, mon - 1 - i, 1)
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`)
-  }
-  return months
-}
-
-function formatMonthLabel(monthDate: string): string {
-  const [year, mon] = monthDate.slice(0, 7).split('-').map(Number)
-  const d = new Date(year, mon - 1, 1)
-  const monthStr = d.toLocaleDateString('en-CA', { month: 'short' })
-  return `${monthStr} '${String(year).slice(2)}`
-}
-
-type AccountBalanceRow = {
-  as_of_date: string
-  account_class: string
-  include_in_net_worth: boolean
-  is_archived: boolean
-  posted_balance_base_currency: number | string
-  projected_balance_base_currency: number | string
-}
 
 type MonthlySummaryRow = {
   monthly_income: number | string
@@ -63,21 +42,16 @@ export async function getDashboardTrend(
   currentMonth: string,
   numMonths = 6
 ): Promise<TrendResult> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Shared with the rest of this request (lib/supabase/request).
+  const user = await getRequestUser()
   if (!user) return { ok: false, error: 'Unauthorized' }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('default_household_id')
-    .eq('id', user.id)
-    .maybeSingle()
+  const profile = await getRequestProfile()
   if (!profile?.default_household_id) return { ok: false, error: 'No household' }
 
+  const supabase = await createClient()
   const householdId = profile.default_household_id
-  const monthDates = getLastNMonthDates(currentMonth, numMonths)
+  const monthDates = lastNMonthDates(currentMonth, numMonths)
 
   const isMonthlyMetric =
     metric === 'monthly-income' ||
@@ -104,7 +78,7 @@ export async function getDashboardTrend(
         else if (metric === 'monthly-savings') value = Number(row.monthly_savings ?? 0)
         else if (metric === 'savings-rate') value = Number(row.savings_rate ?? 0)
       }
-      return { month: monthDates[i].slice(0, 7), label: formatMonthLabel(monthDates[i]), value }
+      return { month: monthDates[i].slice(0, 7), label: trendMonthLabel(monthDates[i]), value }
     })
 
     return { ok: true, data }
@@ -122,36 +96,18 @@ export async function getDashboardTrend(
   // i=0 case) — snapshotDateForMonth resolves that one point to today instead
   // of an unrealized month-end, same fix as Dashboard/Net worth.
   const todayIso = new Date().toISOString().slice(0, 10)
-  const snapshotDates = monthDates.map((d) => snapshotDateForMonth(d.slice(0, 7), todayIso))
+  const dates = balanceTrendDates(currentMonth, numMonths, todayIso)
   const { data: multiDateBalances } = await supabase.rpc('get_account_balances_as_of_many', {
     p_household_id: householdId,
-    p_as_of_dates: snapshotDates,
+    p_as_of_dates: dates.snapshotDates,
   })
-  const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as AccountBalanceRow[])
-
-  // RUM-002: was its own 4th reimplementation of the assets/liabilities/net
-  // worth formula (undocumented until this ticket's audit), including a
-  // divergence from the other three: 'total-liabilities' used to clamp the
-  // *summed* signed liabilities (max(0, -sum)) instead of summing each
-  // account's own clamped magnitude — the same class of bug this ticket
-  // fixes elsewhere, just not yet visible as a cent-level discrepancy.
-  // computeValuation is the one shared formula every screen now uses; the
-  // `!a.is_archived` filter this file had is dropped as dead code —
-  // get_account_balances_as_of_many already excludes archived accounts by
-  // default (p_include_archived), so it never did anything here.
-  const data: TrendPoint[] = monthDates.map((d, i) => {
-    const valuation = computeValuation(
-      selectNetWorthAccounts(balancesByDate.get(snapshotDates[i]) ?? [])
-    )
-
-    let value = 0
-    if (metric === 'net-worth') value = valuation.netWorth
-    else if (metric === 'total-assets') value = valuation.totalAssets
-    else if (metric === 'total-liabilities') value = valuation.totalLiabilities
-    else if (metric === 'projected-net-worth') value = valuation.projectedNetWorth
-
-    return { month: d.slice(0, 7), label: formatMonthLabel(d), value }
-  })
+  // RUM-002: valued through the one shared formula (lib/net-worth/trend →
+  // computeValuation); see that module for the history of this block.
+  const data: TrendPoint[] = balanceTrendFromRows(
+    (multiDateBalances ?? []) as BalanceTrendRow[],
+    dates,
+    metric as Parameters<typeof balanceTrendFromRows>[2]
+  )
 
   return { ok: true, data }
 }

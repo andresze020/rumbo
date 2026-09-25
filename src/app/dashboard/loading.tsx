@@ -1,130 +1,57 @@
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SecondaryWidgetsSkeleton } from './secondary-widgets-skeleton'
 
-function MetricCardSkeleton() {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center gap-2.5">
-          <Skeleton className="size-8 shrink-0 rounded-lg" />
-          <Skeleton className="h-4 w-20" />
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-2 pt-0">
-        <Skeleton className="h-7 w-24" />
-        <Skeleton className="h-3 w-32" />
-      </CardContent>
-    </Card>
-  )
-}
+const cardClass = 'rounded-2xl border bg-card shadow-sm shadow-black/[0.03]'
 
+/**
+ * Mirrors the Dashboard's real layout (2026-09-25 redesign): header with the
+ * month switcher, net-worth hero, the cash-flow card, then the streamed
+ * section's own skeleton — so nothing jumps when the page arrives.
+ */
 export default function DashboardLoading() {
   return (
     <main
       role="status"
       aria-live="polite"
-      className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6"
+      className="mx-auto flex w-full max-w-[1340px] flex-col gap-4 p-4 sm:p-6"
     >
       <span className="sr-only">Loading dashboard…</span>
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0 space-y-2">
-          <Skeleton className="h-3 w-24" />
-          <Skeleton className="h-8 w-40" />
-          <Skeleton className="h-4 w-56" />
-        </div>
-        <Skeleton className="h-8 w-32" />
+
+      {/* Header + month switcher */}
+      <div className="flex items-center justify-between gap-3" aria-hidden="true">
+        <Skeleton className="h-8 w-36" />
+        <Skeleton className="h-9 w-48" />
       </div>
 
-      {/* ── Financial position ─────────────────────────────────────────── */}
-      <section className="space-y-3">
-        <div className="space-y-1.5">
-          <Skeleton className="h-4 w-40" />
-          <Skeleton className="h-3 w-64" />
+      {/* Net worth hero */}
+      <div className={`${cardClass} space-y-3 p-5`} aria-hidden="true">
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-9 w-48" />
+        <div className="grid grid-cols-2 gap-3 pt-2 lg:w-1/2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <MetricCardSkeleton key={i} />
-          ))}
-        </div>
-      </section>
+      </div>
 
-      {/* ── This month ─────────────────────────────────────────────────── */}
-      <section className="space-y-3">
-        <div className="space-y-1.5">
-          <Skeleton className="h-4 w-28" />
-          <Skeleton className="h-3 w-72" />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <MetricCardSkeleton key={i} />
-          ))}
-        </div>
-      </section>
-
-      {/* ── Budget vs Actual ──────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-3 w-48" />
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-4 w-12" />
-              <Skeleton className="h-4 w-24" />
+      {/* Cash flow */}
+      <div className={`${cardClass} space-y-4 p-4 sm:p-5`} aria-hidden="true">
+        <Skeleton className="h-4 w-40" />
+        <div className="grid grid-cols-3 gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-3 w-14" />
+              <Skeleton className="h-6 w-full max-w-28" />
             </div>
-            <Skeleton className="h-2 w-full rounded-full" />
-          </div>
-        </CardContent>
-      </Card>
+          ))}
+        </div>
+        <Skeleton className="h-1.5 w-full rounded-full" />
+        <div className="flex items-center gap-3 border-t pt-3">
+          <Skeleton className="size-9 shrink-0 rounded-full" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+      </div>
 
-      {/* ── Expenses by category ─────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-4 w-40" />
-          <Skeleton className="h-3 w-56" />
-        </CardHeader>
-        <CardContent>
-          <div className="divide-y rounded-lg border">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="grid gap-3 p-4 sm:grid-cols-[1fr_auto]">
-                <div className="min-w-0 space-y-2">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-24" />
-                  <Skeleton className="h-2 w-full rounded-lg" />
-                </div>
-                <div className="space-y-1 sm:text-right">
-                  <Skeleton className="h-4 w-16 sm:ml-auto" />
-                  <Skeleton className="h-3 w-10 sm:ml-auto" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Accounts ───────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-3 w-48" />
-        </CardHeader>
-        <CardContent>
-          <div className="divide-y rounded-lg border">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 p-3">
-                <Skeleton className="size-10 shrink-0 rounded-full" />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-24" />
-                </div>
-                <Skeleton className="h-4 w-16 shrink-0" />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <SecondaryWidgetsSkeleton />
     </main>
   )
 }

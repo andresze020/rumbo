@@ -85,6 +85,9 @@ export function FinancialHeroCard({
   labels,
 }: FinancialHeroCardProps) {
   const points = sparkPoints(spark)
+  // Projected only adds information when pending or future-dated entries move
+  // it; otherwise it repeats the net worth next to it (2026-09-25 redesign).
+  const showProjected = Math.abs(projected - netWorth) >= 0.005
   const netWorthClass = netWorth < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'
 
   return (
@@ -111,7 +114,12 @@ export function FinancialHeroCard({
       </div>
 
       {/* ── Desktop: control-center hero ──────────────────────────────── */}
-      <div className="hidden items-center gap-6 rounded-2xl border bg-card p-5 shadow-sm shadow-black/[0.03] lg:grid lg:grid-cols-[1fr_auto_auto_auto]">
+      <div
+        className={cn(
+          'hidden items-center gap-6 rounded-2xl border bg-card p-5 shadow-sm shadow-black/[0.03] lg:grid',
+          showProjected ? 'lg:grid-cols-[1fr_auto_auto_auto]' : 'lg:grid-cols-[1fr_auto_auto]'
+        )}
+      >
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             {labels.netWorth}
@@ -159,12 +167,14 @@ export function FinancialHeroCard({
             {formatCurrency(liabilities, currency)}
           </p>
         </div>
-        <div className="border-l pl-5 text-right">
-          <p className="mb-1 text-[10.5px] text-muted-foreground">{labels.projected}</p>
-          <p className="whitespace-nowrap text-[17px] font-semibold tabular-nums text-sky-600 dark:text-sky-400">
-            {formatCurrency(projected, currency)}
-          </p>
-        </div>
+        {showProjected ? (
+          <div className="border-l pl-5 text-right">
+            <p className="mb-1 text-[10.5px] text-muted-foreground">{labels.projected}</p>
+            <p className="whitespace-nowrap text-[17px] font-semibold tabular-nums text-sky-600 dark:text-sky-400">
+              {formatCurrency(projected, currency)}
+            </p>
+          </div>
+        ) : null}
       </div>
     </>
   )

@@ -23,6 +23,7 @@ import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { Callout } from '@/components/callout'
 import { createClient } from '@/lib/supabase/server'
+import { getRequestProfile, getRequestUser } from '@/lib/supabase/request'
 import { getUiPreferences } from '@/lib/preferences/server'
 import {
   TRANSACTION_SCOPE_COOKIE,
@@ -590,16 +591,11 @@ export default async function TransactionsPage({
   const rememberedScopeQuery = hasActiveFilters ? returnTo.split('?')[1] ?? '' : ''
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Shared with the layout's reads in this request (lib/supabase/request).
+  const user = await getRequestUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('default_household_id')
-    .eq('id', user.id)
-    .maybeSingle()
+  const profile = await getRequestProfile()
   if (!profile?.default_household_id) redirect('/onboarding')
 
   const { data: household, error: householdError } = await supabase

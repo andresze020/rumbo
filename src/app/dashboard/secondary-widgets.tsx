@@ -14,13 +14,11 @@ import { createClient } from '@/lib/supabase/server'
 import { Callout } from '@/components/callout'
 import { InsightCard } from '@/components/insight-card'
 import { CategoryDonut, type DonutSlice } from '@/components/category-donut'
-import { RecentActivity, type RecentActivityRow } from '@/components/recent-activity'
 import type { TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { formatCurrency, formatMonthLabel, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { computeValuation, getDisplayedLiabilityBalance } from '@/lib/net-worth/valuation'
-import { monthEndDate } from '@/lib/periods/month'
 import {
   buildDashboardInsights,
   scheduledDirection,
@@ -96,23 +94,6 @@ type Goal = {
   status: string
 }
 
-type RecentTransaction = {
-  id: string
-  transaction_date: string
-  transaction_type: string
-  description: string | null
-  merchant_name: string | null
-}
-
-type RecentEntry = {
-  transaction_id: string
-  account_id: string
-  amount_account_currency: number | string
-  currency_code: string
-}
-
-type RecentAllocation = { transaction_id: string; category_id: string }
-
 function getCategoryPath(
   category: { category_id: string; category_name: string; parent_category_id: string | null },
   categoriesById: Map<string, CategoryLookup>
@@ -145,7 +126,6 @@ type DashboardSecondaryWidgetsProps = {
   prevLiabilities: number
   locale: Locale
   t: (key: TranslationKey, vars?: Record<string, string | number>) => string
-  dateFmt: Intl.DateTimeFormat
 }
 
 // RUM-005: everything below the top-of-fold (Budget, category breakdown,
@@ -175,7 +155,6 @@ export async function DashboardSecondaryWidgets({
   prevLiabilities,
   locale,
   t,
-  dateFmt,
 }: DashboardSecondaryWidgetsProps) {
   const supabase = await createClient()
   const selectedMonthDate = `${selectedMonth}-01`
@@ -186,9 +165,7 @@ export async function DashboardSecondaryWidgets({
     { data: categoryLookupRows, error: categoryLookupError },
     { data: recurringRows },
     { data: debtRows },
-    { data: recentTxRows },
     { data: goalRows },
-    { count: needsReviewCount },
   ] = await Promise.all([
     supabase.rpc('get_monthly_expenses_by_category', {
       p_household_id: householdId,
@@ -213,61 +190,17 @@ export async function DashboardSecondaryWidgets({
       .eq('household_id', householdId)
       .is('deleted_at', null),
     supabase
-      .from('transactions')
-      .select('id, transaction_date, transaction_type, description, merchant_name')
-      .eq('household_id', householdId)
-      .neq('transaction_type', 'opening_balance')
-      .neq('status', 'voided')
-      .is('deleted_at', null)
-      .order('transaction_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(6),
-    supabase
       .from('goals')
       .select('id, name, target_amount, current_amount, status')
       .eq('household_id', householdId)
       .order('created_at', { ascending: false })
       .limit(3),
-    supabase
-      .from('transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('household_id', householdId)
-      .eq('review_status', 'unreviewed')
-      .neq('transaction_type', 'opening_balance')
-      .neq('status', 'voided')
-      .is('deleted_at', null)
-      // RUM-009: Home shows the month on screen's review backlog, not the
-      // all-time one — the data is untouched, only what Home surfaces.
-      .gte('transaction_date', selectedMonthDate)
-      .lte('transaction_date', monthEndDate(selectedMonth)),
   ])
-
-  const recentTransactions = (recentTxRows ?? []) as RecentTransaction[]
-  const recentTxIds = recentTransactions.map((tx) => tx.id)
-  let recentEntries: RecentEntry[] = []
-  let recentAllocations: RecentAllocation[] = []
-  if (recentTxIds.length) {
-    const [{ data: entryRows }, { data: allocationRows }] = await Promise.all([
-      supabase
-        .from('transaction_entries')
-        .select('transaction_id, account_id, amount_account_currency, currency_code')
-        .eq('household_id', householdId)
-        .in('transaction_id', recentTxIds),
-      supabase
-        .from('transaction_allocations')
-        .select('transaction_id, category_id')
-        .eq('household_id', householdId)
-        .in('transaction_id', recentTxIds),
-    ])
-    recentEntries = (entryRows ?? []) as RecentEntry[]
-    recentAllocations = (allocationRows ?? []) as RecentAllocation[]
-  }
 
   const expenseCategories = (expenseCategoryRows ?? []) as MonthlyExpenseCategory[]
   const categoriesById = new Map(
     ((categoryLookupRows ?? []) as CategoryLookup[]).map((c) => [c.id, c])
   )
-  const accountNameById = new Map(balances.map((b) => [b.account_id, b.account_name]))
 
   const sortedExpenseCategories = [...expenseCategories].sort(
     (a, b) => Number(b.amount_base_currency) - Number(a.amount_base_currency)
@@ -440,58 +373,6 @@ export async function DashboardSecondaryWidgets({
     const target = Number(g.target_amount)
     const pct = target > 0 ? Math.round(Math.min(1, Number(g.current_amount) / target) * 100) : 0
     return { id: g.id, name: g.name, pct, color: SERIES[i % SERIES.length] }
-  })
-
-  // ── Recent activity rows. ────────────────────────────────────────────────
-  const entriesByTxId = new Map<string, RecentEntry[]>()
-  for (const entry of recentEntries) {
-    const list = entriesByTxId.get(entry.transaction_id)
-    if (list) list.push(entry)
-    else entriesByTxId.set(entry.transaction_id, [entry])
-  }
-  const allocationByTxId = new Map(recentAllocations.map((a) => [a.transaction_id, a]))
-
-  function recentTypeOf(type: string): RecentActivityRow['type'] {
-    if (type === 'income') return 'income'
-    if (type === 'expense') return 'expense'
-    if (type === 'transfer' || type === 'debt_payment') return 'transfer'
-    return 'other'
-  }
-
-  const recentActivityRows: RecentActivityRow[] = recentTransactions.map((tx) => {
-    const entries = entriesByTxId.get(tx.id) ?? []
-    const type = recentTypeOf(tx.transaction_type)
-    const allocation = allocationByTxId.get(tx.id)
-    const outEntry = entries.find((e) => Number(e.amount_account_currency) < 0) ?? entries[0]
-    const inEntry = entries.find((e) => Number(e.amount_account_currency) > 0) ?? entries[0]
-    const isMovement = type === 'transfer'
-    const primaryEntry = isMovement ? inEntry : entries[0]
-    const rawAmount = Number(primaryEntry?.amount_account_currency ?? 0)
-    const amount = isMovement ? Math.abs(rawAmount) : rawAmount
-    const categoryName = isMovement
-      ? t('transactionForm.typeTransfer')
-      : allocation
-      ? categoriesById.get(allocation.category_id)?.name ?? t('common.notAvailable')
-      : t('common.notAvailable')
-    const accountName = isMovement
-      ? `${accountNameById.get(outEntry?.account_id ?? '') ?? '—'} → ${accountNameById.get(inEntry?.account_id ?? '') ?? '—'}`
-      : accountNameById.get(primaryEntry?.account_id ?? '') ?? t('common.notAvailable')
-    const merchantName = tx.merchant_name?.trim() || null
-    const title =
-      tx.description?.trim() ||
-      merchantName ||
-      (isMovement ? t('transactionForm.typeTransfer') : categoryName)
-    const subtitle = merchantName && merchantName !== title ? `${categoryName} · ${merchantName}` : categoryName
-    return {
-      id: tx.id,
-      title,
-      subtitle,
-      accountName,
-      dateLabel: dateFmt.format(new Date(`${tx.transaction_date}T00:00:00`)),
-      amount,
-      currency: primaryEntry?.currency_code ?? baseCurrency,
-      type,
-    }
   })
 
   const cardClass = 'rounded-2xl border bg-card shadow-sm shadow-black/[0.03]'
@@ -746,28 +627,6 @@ export async function DashboardSecondaryWidgets({
             </div>
           ) : null}
         </aside>
-      </div>
-
-      {/* Recent activity */}
-      <div className={cn(cardClass, 'overflow-hidden')}>
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold">{t('dashboard.recentActivityTitle')}</h2>
-            {needsReviewCount ? (
-              <Link
-                href={`/dashboard/transactions?review=unreviewed&status=posted&status=pending&month=${selectedMonth}`}
-                className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-400"
-              >
-                {t('dashboard.needsReviewMonth', {
-                  count: needsReviewCount,
-                  month: formatMonthLabel(selectedMonth, locale),
-                })}
-              </Link>
-            ) : null}
-          </div>
-          <Link href="/dashboard/transactions" className="text-xs font-semibold text-primary hover:underline">{t('common.viewAll')} →</Link>
-        </div>
-        <RecentActivity rows={recentActivityRows} emptyLabel={t('dashboard.recentActivityEmpty')} />
       </div>
 
       {/* RUM-008: unconfigured Budget/Goals, consolidated into one compact

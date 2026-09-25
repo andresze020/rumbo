@@ -4,9 +4,10 @@ import { cn } from '@/lib/utils'
 const cardClass = 'rounded-2xl border bg-card shadow-sm shadow-black/[0.03]'
 
 // Placeholder shown while DashboardSecondaryWidgets streams in. Roughly
-// mirrors that component's real layout (two-column grid + full-width recent
-// activity below) just enough to avoid a layout jump when it resolves — no
-// pixel-perfect fidelity needed, and no text (nothing to translate).
+// mirrors that component's real layout (two-column grid: budget, category and
+// scheduled on the left, insights/debts/goals on the right) just enough to
+// avoid a layout jump when it resolves — no pixel-perfect fidelity needed, and
+// no text (nothing to translate).
 export function SecondaryWidgetsSkeleton() {
   return (
     <div className="flex flex-col gap-4" aria-hidden="true">
@@ -41,12 +42,6 @@ export function SecondaryWidgetsSkeleton() {
             </div>
           ))}
         </aside>
-      </div>
-      <div className={cn(cardClass, 'space-y-3 p-4')}>
-        <Skeleton className="h-4 w-40" />
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-12 w-full" />
-        ))}
       </div>
     </div>
   )

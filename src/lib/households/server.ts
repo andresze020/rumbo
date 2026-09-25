@@ -1,5 +1,6 @@
 import 'server-only'
 import { createClient } from '@/lib/supabase/server'
+import { getRequestProfile, getRequestUser } from '@/lib/supabase/request'
 import type { HouseholdOption } from '@/components/household-switcher'
 
 export type HouseholdContext = {
@@ -21,18 +22,12 @@ const EMPTY: HouseholdContext = { currentId: null, households: [] }
  */
 export async function getHouseholdContext(): Promise<HouseholdContext> {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const user = await getRequestUser()
     if (!user) return EMPTY
 
-    const [{ data: profile }, { data: memberships }] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('default_household_id')
-        .eq('id', user.id)
-        .maybeSingle(),
+    const supabase = await createClient()
+    const [profile, { data: memberships }] = await Promise.all([
+      getRequestProfile(),
       supabase
         .from('household_members')
         .select('household_id, households(id, name)')

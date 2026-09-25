@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { formatPercent } from '@/lib/format'
 import {
   HEALTH_BUDGET_WEIGHT,
@@ -44,11 +45,14 @@ export function MonthHealthBreakdown({
   month,
   locale,
   className,
+  showAction = true,
 }: {
   breakdown: HealthBreakdown
   month: string
   locale: Locale
   className?: string
+  /** False where the caller already shows the action (MonthHealthSummary). */
+  showAction?: boolean
 }) {
   const t = (key: TranslationKey, vars?: Record<string, string | number>) => translate(locale, key, vars)
   const pct = (value: number) => formatPercent(value, locale, { minimumFractionDigits: 0 })
@@ -99,6 +103,7 @@ export function MonthHealthBreakdown({
         ))}
       </dl>
       {!budget ? <p className="text-muted-foreground">{t('dashboard.healthNoBudget')}</p> : null}
+      {showAction ? (
       <p className="leading-relaxed text-foreground">
         {t(copy.text)}
         {copy.cta && href ? (
@@ -110,6 +115,7 @@ export function MonthHealthBreakdown({
           </>
         ) : null}
       </p>
+      ) : null}
       <details className="group text-muted-foreground">
         <summary className="cursor-pointer font-semibold text-primary hover:underline">
           {t('dashboard.healthHowCalculated')}
@@ -125,6 +131,64 @@ export function MonthHealthBreakdown({
           </li>
           <li>{t('dashboard.healthThresholdGrades')}</li>
         </ul>
+      </details>
+    </div>
+  )
+}
+
+/**
+ * The one-line Month health for the Dashboard's cash-flow card (2026-09-25
+ * redesign): grade, score and the suggested action, with the full RUM-009
+ * breakdown one click away under "Details". Same numbers as Month review.
+ */
+export function MonthHealthSummary({
+  breakdown,
+  month,
+  locale,
+  tooltip,
+}: {
+  breakdown: HealthBreakdown
+  month: string
+  locale: Locale
+  tooltip?: ReactNode
+}) {
+  const t = (key: TranslationKey, vars?: Record<string, string | number>) => translate(locale, key, vars)
+  const copy = ACTION_COPY[breakdown.action]
+  const href = healthActionHref(breakdown.action, month)
+
+  return (
+    <div className="text-xs">
+      <div className="flex items-start gap-3">
+        <span
+          className="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-primary/10 text-sm font-bold text-primary"
+          aria-hidden="true"
+        >
+          {breakdown.grade}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1">
+            <span className="font-semibold">{t('dashboard.monthHealth')}</span>
+            <span className="text-muted-foreground">· {breakdown.score}/100</span>
+            {tooltip}
+          </p>
+          <p className="mt-0.5 leading-relaxed text-muted-foreground">
+            {t(copy.text)}
+            {copy.cta && href ? (
+              <>
+                {' '}
+                <Link href={href} className="font-semibold text-primary hover:underline">
+                  {t(copy.cta)} →
+                </Link>
+              </>
+            ) : null}
+          </p>
+        </div>
+      </div>
+      <details className="mt-2 pl-12">
+        <summary className="cursor-pointer font-semibold text-primary hover:underline">
+          {t('dashboard.healthDetails')}
+        </summary>
+        <MonthHealthBreakdown breakdown={breakdown} month={month} locale={locale} showAction={false} className="mt-2" />
       </details>
     </div>
   )
