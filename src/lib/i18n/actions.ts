@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { isLocale, LOCALE_COOKIE } from './server'
@@ -30,4 +31,6 @@ export async function setLocaleAction(locale: string) {
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
   })
+  // Every page renders in the locale: none kept by the Router Cache may survive.
+  revalidatePath('/', 'layout')
 }

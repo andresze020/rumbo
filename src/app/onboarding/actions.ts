@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { isActiveCurrency } from '@/lib/currencies'
@@ -94,5 +95,7 @@ export async function createHouseholdAction(formData: FormData) {
     throw new Error('Could not finish household setup. Please try again.')
   }
 
+  // A new household changes every page: drop anything the Router Cache kept.
+  revalidatePath('/', 'layout')
   redirect('/onboarding/account')
 }

@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { LOCALE_COOKIE, normalizeLocale } from '@/lib/i18n/server'
@@ -48,6 +49,8 @@ export async function signInAction(formData: FormData) {
     }
   }
 
+  // A new session: nothing the Router Cache kept for a previous one may show.
+  revalidatePath('/', 'layout')
   redirect('/dashboard')
 }
 
@@ -93,5 +96,6 @@ export async function signUpAction(formData: FormData) {
     }
   }
 
+  revalidatePath('/', 'layout')
   redirect('/onboarding')
 }

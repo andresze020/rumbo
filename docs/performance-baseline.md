@@ -2,7 +2,7 @@
 
 ## Status
 
-**Capas A y C medidas contra producción el 2026-09-21. Capa B pendiente.** El
+**Capas A y C medidas contra producción el 2026-09-21. Capa B medida el 2026-09-25 (§4), solo `/dashboard`.** El
 ticket [RUM-001](./performance-ux-backlog.md) pide evidencia, no optimización, y
 nada aquí cambia comportamiento financiero, esquema, RLS ni caching.
 
@@ -12,9 +12,9 @@ datos** del proyecto (2.101 s de 2.976 s, ventana de 112 días en
 household, no con la fecha de corte. Es la única query del sistema con costo
 medible; todas las demás están en el ruido.
 
-Falta la capa B (timings de servidor con `RUMBO_PERF=1`): necesita la app
-corriendo con credenciales, y esta sesión no las tiene. Su tabla está construida
-y trae el comando que la llena. **Ningún número de este documento está
+La capa B (timings de servidor con `RUMBO_PERF=1`) se midió el 2026-09-25 con
+un build de producción y una cuenta QA (§4). Solo tiene la fila de `/dashboard`;
+§4 explica por qué las otras siguen vacías. **Ningún número de este documento está
 inventado: lo que no se midió aparece como `—`.**
 
 Household de referencia: 4.688 transacciones, 2022-06-12 → 2026-09-20, 26
@@ -173,7 +173,7 @@ La conclusión anterior venía de un probe que no ejercitaba el caso del ticket.
 
 ---
 
-## 4. Capa B — timings de servidor (pendiente de medir)
+## 4. Capa B — timings de servidor (medida 2026-09-25, `/dashboard`)
 
 ### Cómo se corre
 
@@ -204,11 +204,30 @@ server; caliente = segunda navegación a la misma ruta.
 
 | Ruta | Queries | wallMs frío | wallMs caliente | serialRatio | maxConcurrency |
 |---|---:|---:|---:|---:|---:|
-| `/dashboard` | — | — | — | — | — |
+| `/dashboard` | 26 (22 en frío) | 462 | 402 (mediana de 8) | ~0,30 | 7 |
 | `/dashboard/transactions` | — | — | — | — | — |
 | `/dashboard/accounts` | — | — | — | — | — |
 | `/dashboard/net-worth` | — | — | — | — | — |
 | Cambio de mes en `/dashboard` | — | — | — | — | — |
+
+**Cómo se midió (2026-09-25, RUM-005).** `RUMBO_PERF=1 npm start` (build de
+producción, no `next dev`), Supabase real, cuenta QA `rum005-qa-…` (78
+transacciones, 3 cuentas, 13 meses), 9 cargas completas hechas por
+`perf:nav`. Rango de `wallMs` 349–624. Lo que dicen las líneas:
+
+- **~50 ms por round-trip a Supabase** desde el contenedor. Ninguna query es
+  cara: el costo es la cantidad (26) por el costo de red.
+- **Repetidas en cada carga:** `auth:user` ×5, `from:profiles` ×4,
+  `get_account_balances_as_of_many` ×2, `get_monthly_dashboard_summary` ×2.
+  Es el mismo patrón que la capa A contó en §3.2.
+- `serialRatio` ~0,3: la orquestación de RUM-005 (un `Promise.all`) sí solapa.
+
+**Por qué solo `/dashboard`.** El colector se registra en el layout de
+`/dashboard` (`reportPerfAfterResponse`), y una navegación de cliente no vuelve
+a renderizar el layout. Por eso solo aparecen las cargas completas (9 líneas
+para 8 corridas + el login), no las navegaciones entre pestañas. Llenar las
+otras filas pide cargar cada ruta con `page.goto` o mover el hook al nivel de
+página.
 
 ---
 
