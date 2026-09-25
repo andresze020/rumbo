@@ -8,7 +8,13 @@
 > Este archivo registra *qué pasó*. El backlog registra *qué hay que hacer*. No
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
-> **Actualizado 2026-09-24 — RUM-010b cerrado: el backlog RUM tiene gate de
+> **Actualizado 2026-09-25 — B-7 arreglado, B-8 decidido.** El cambio de mes
+> del Dashboard ya no pierde clics (`key={selectedMonth}` en el `<Suspense>` de
+> los widgets; 0/7 en `perf:nav`) y "Expenses" de Transactions netea reembolsos
+> como el Dashboard (migración `20260925120000_b8_…`, **pendiente de aplicar en
+> producción**). Veredicto del gate: aprobado una vez aplicada. Ver §2.1.
+>
+> **2026-09-24 — RUM-010b cerrado: el backlog RUM tiene gate de
 > release, y el primer veredicto es "no aprobado".** `npm run db:local` corre
 > todos los invariantes SQL contra fixtures generadas en un Postgres local (en
 > CI), `npm run perf:nav` mide los flujos de §3.1 en navegador, y
@@ -133,13 +139,13 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | B-2 | No hay baseline de performance atribuido por etapa | RUM-004, RUM-005, RUM-006 y las decisiones grandes de RUM-007 | RUM-001 |
 | B-5 | Falta la capa B del baseline (timings de servidor): necesita la app corriendo con `NEXT_PUBLIC_SUPABASE_*`. Las capas A y C ya están medidas, así que esto ya no bloquea a RUM-005/006 — solo impide separar red+PostgREST del render | Afinar `experimental.staleTimes` del Router Cache (RUM-007 lo dejó como decisión explícita pendiente, no bloqueada — el resto del ticket no lo necesitaba) | Que el usuario corra `RUMBO_PERF=1 npm run dev`, navegue y pegue las líneas `[rumbo-perf]` |
 
-| B-7 | **El cambio de mes del Dashboard pierde clics.** La request RSC de `/dashboard?month=…` sale y termina, pero el router nunca la confirma (URL, etiqueta y datos siguen en el mes anterior, sin error en consola). 5/7 en `perf:nav`; 3–5/6 con el Dashboard recién cargado y 1,5 s de espera. No es regresión de RUM-009 (misma tasa en el build anterior), no es una carrera con el streaming de la página, no es el `LanguageProvider`. Solo el Dashboard: el mismo control en Budgets y toda navegación entre rutas perdieron 0/6 | El veredicto del release (criterio 5 de [`release-checklist.md`](./release-checklist.md)) | Ticket de fix propio; sospechoso principal: el `<Suspense>` con streaming de servidor que solo tiene el Dashboard |
-| B-8 | **Decisión de producto:** el total "Expenses" de Transactions no descuenta reembolsos (BR-040) y el Dashboard sí; para un mismo mes difieren exactamente en los reembolsos | Consistencia lista ↔ dashboard (fijada hoy como divergencia conocida en `fixture-expectations.sql`) | Que el usuario decida si la lista debe netear reembolsos |
 
 ### 2.1 Bloqueos cerrados
 
 | # | Bloqueo | Cerrado por | Fecha |
 |---|---|---|---|
+| B-7 | El cambio de mes del Dashboard perdía clics (5/7 en `perf:nav`; la request RSC terminaba pero el router nunca confirmaba la navegación) | **Causa raíz por bisección sobre builds de producción:** los widgets secundarios se transmiten por streaming dentro de un `<Suspense>` ya revelado; un cambio de mes es una transición, React mantiene el contenido viejo hasta que llega el nuevo, y con un bloque grande transmitido esa transición a veces nunca se confirmaba (400 filas sintéticas estáticas: 6/6 perdidos; la misma respuesta sin streaming: 0/6; descartados demora, links, prefetch, localizador y queries). **Fix:** `key={selectedMonth}` en ese boundary (`dashboard/page.tsx`). 0/24 perdidos en los scripts de reproducción, 0/7 en `perf:nav` | 2026-09-25 |
+| B-8 | "Expenses" de Transactions no descontaba reembolsos (BR-040) y el Dashboard sí | **Decisión del usuario (2026-09-25): netear reembolsos.** Migración `20260925120000_b8_transactions_totals_net_refunds.sql` (reemplazo de función, sin cambio de esquema; rollback = definición de BR-045). La expectativa de fixtures pasó de "divergencia fijada" a igualdad lista (posted) = Dashboard cada mes. **Pendiente: aplicar en producción** (`npm run db:push -- --apply`) | 2026-09-25 |
 | B-1 | No había runner de tests de JS/TS en el repositorio | RUM-010a — Vitest, `npm test`, en CI ([`testing.md`](./testing.md)) | 2026-09-21 |
 | B-3 | No hay contrato autoritativo de valoración | RUM-002 — `src/lib/net-worth/valuation.ts`, adoptado por Net worth, Dashboard, `trend-actions.ts`, `secondary-widgets.tsx`, Accounts y `plan/page.tsx` | 2026-09-21 |
 | B-4 | El invariante de net worth no estaba decidido | RUM-002 — decisión: `Net worth = Total assets + Signed liabilities`, sin cambios respecto al código (Assets − Liabilities al centavo habría expulsado un crédito legítimo). Ver la entrada de RUM-002 en §4 para el razonamiento completo | 2026-09-21 |
@@ -166,7 +172,7 @@ controlado. Detalle en [`release-checklist.md`](./release-checklist.md) §4.
 | Dashboard → Transactions (2ª visita) | 3.00 s | 534 ms (568) ✅ | p75 ≤ 1.0 s |
 | Dashboard → Accounts | 1.50 s | 428 ms (435) ✅ | p75 ≤ 1.2 s |
 | Accounts → Transactions | 1.75 s | 565 ms (629) ✅ | p75 ≤ 1.5 s |
-| Cambio de mes | 0.25–0.50 s | 531 ms (531) ⚠️ — y **5/7 clics perdidos** ❌ (B-7) | p75 ≤ 0.5 s |
+| Cambio de mes | 0.25–0.50 s | 725 ms (759) ⚠️, **0/7 perdidos** tras el fix de B-7 (antes: 531 ms solo sobre los clics que funcionaban, y 5/7 perdidos). Ahora el clic confirma al instante y la sección secundaria muestra su skeleton mientras llega el mes; «listo» la espera | p75 ≤ 0.5 s |
 
 ### 3.2 Round-trips por carga
 
@@ -1965,6 +1971,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-25 | **B-7 arreglado y B-8 decidido: el gate de RUM-010b pasa a «aprobado al aplicar una migración».** B-7 (cambio de mes del Dashboard perdía clics): causa raíz aislada por bisección — contenido grande transmitido dentro del `<Suspense>` ya revelado de los widgets secundarios dejaba la transición sin confirmar —; fix `key={selectedMonth}`; 0/7 perdidos en `perf:nav`. B-8 (Transactions no descontaba reembolsos): el usuario pidió «lo que tenga más sentido» → la lista netea reembolsos como el Dashboard; migración `20260925120000_b8_…` verificada en fixtures (112/112, igualdad lista = Dashboard cada mes) y pendiente de aplicar en producción. |
 | 2026-09-24 | **RUM-010b cerrado: gate de release operativo; el release actual no se aprueba.** `npm run db:local` (Postgres privado + shim + 61 migraciones + fixtures generadas por las RPC de la app) corre todo `supabase/tests/` en CI; checks nuevos de invariantes mes a mes, reconciliación Accounts ↔ as-of-today y aislamiento entre households; `npm run perf:nav` mide §3.1 en navegador. 112/112 en fixtures, 46/46 en el household real. Arreglados dos bugs en tests existentes (BR-006 sumaba anuladas; RUM-006 ignoraba fechas futuras). Encontrados: B-7 (cambio de mes del Dashboard pierde clics, bloqueante) y B-8 (decisión: Transactions no descuenta reembolsos). |
 | 2026-09-24 | **RUM-009 cerrado: Month health con desglose numérico (misma fórmula), Insights deterministas/trazables/accionables, Debts distingue Debt Planner de liabilities de cuenta, "Scheduled activity", review queue acotada al mes.** `healthBreakdown()` como única fuente para dashboard y Month review (80 = 80 verificado en vivo); módulo puro `lib/insights/dashboard.ts` con 15 tests; badge `LIVE` y el insight de "upcoming" retirados; transferencias programadas sin signo e importes en la moneda de la regla; conteo de revisión alineado entre Home y Month review. 31 claves nuevas vía `i18n-scribe`. Gate completo en verde. |
 | 2026-09-24 | **RUM-008 cerrado: label de mes dinámico, Budget/Goals consolidados en una tarjeta compacta, Insights bajado a 2.** Alcance acotado a los tres puntos concretos de los criterios de aceptación (no la jerarquía completa del ticket, que ya se aproxima razonablemente en mobile con la estructura actual). Verificado en vivo con Playwright contra `npm run dev` y Supabase real: cuenta de prueba nueva con un household de una sola cuenta, sin budget/debts/goals/transacciones, capturada en 320/375/430/768px, claro y oscuro. Confirmado visualmente que "September 2026" reemplaza "This month", que Budget y Goals ya no tienen tarjetas propias vacías (solo aparecen como líneas dentro de "Finish setting up"), y que Debts conserva su copy positivo ("No active debts. Nicely done.") sin tocar — decisión deliberada, no un olvido, porque cero deudas es un resultado bueno, no una configuración pendiente. Dos claves de i18n vía `i18n-scribe`: `dashboard.setupTitle` nueva, `dashboard.thisMonthTitle` eliminada (huérfana en las 3 locales). Gate completo en verde. |

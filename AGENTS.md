@@ -27,9 +27,14 @@ The product is household-first. All financial data must belong to a household.
   runs every `supabase/tests/*.sql` against generated fixtures in a private
   local Postgres (in CI), `npm run perf:nav` times §3.1 navigation in a real
   browser, and `docs/release-checklist.md` holds the approval criteria, the
-  metrics and the known issues. **First verdict: not approved** — Dashboard
-  month navigation drops clicks (B-7), and the Transactions "Expenses" total
-  ignoring refunds awaits a product decision (B-8). No migrations, no app code.
+  metrics and the known issues. First verdict: not approved (B-7, B-8).
+- **B-7 fixed, B-8 decided** (2026-09-25). Dashboard ‹ / › month clicks were
+  silently lost: a large chunk streamed into the already-revealed secondary-
+  widgets `<Suspense>` left the month transition uncommitted. Fix:
+  `key={selectedMonth}` on that boundary — do not remove it. The Transactions
+  "Expenses" total now nets BR-040 refunds like the Dashboard, via migration
+  `20260925120000_b8_transactions_totals_net_refunds.sql` (**apply it to the
+  live project**: `npm run db:push -- --apply`).
 
 - **The Transactions screen was rebuilt as a phone list, and the period got
   one owner** (2026-09-19 → 09-20, PR #66). Three commits, one review round

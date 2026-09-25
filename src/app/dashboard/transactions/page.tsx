@@ -1013,10 +1013,12 @@ export default async function TransactionsPage({
   // Totals for the WHOLE filtered set (every page), converted to the household
   // base currency by the RPC. Transfers, debt payments, opening balances and
   // voided rows are excluded server-side so the figures stay aligned with
-  // income/expense reporting.
+  // income/expense reporting; refunds reduce expenses (B-8), as on the
+  // Dashboard. A refunds-only filter therefore reads as a negative expense,
+  // which still deserves the summary — hence `!== 0`, not `> 0`.
   const filteredIncomeBase = totalIncomeBase
   const filteredExpenseBase = totalExpenseBase
-  const hasFilteredTotals = filteredIncomeBase > 0 || filteredExpenseBase > 0
+  const hasFilteredTotals = filteredIncomeBase !== 0 || filteredExpenseBase !== 0
 
   const selectedEditRow = transactionRows.find(
     (row) => row.transaction.id === editTransactionId

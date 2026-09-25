@@ -7,9 +7,15 @@ when every box below is checked. Ticket:
 [`performance-ux-backlog.md` · RUM-010b](./performance-ux-backlog.md). Testing
 stack and conventions: [`testing.md`](./testing.md).
 
-**Current verdict for `main` @ RUM-009 (1657f44): NOT APPROVED — 1 blocker.**
-Dashboard month navigation drops clicks (see [Known issues](#known-issues)).
-Every financial figure reconciles.
+**Current verdict (2026-09-25): APPROVED once one migration is applied.** The
+blocker found by the first run — Dashboard month navigation dropping clicks
+(B-7) — is fixed, and `perf:nav` loses 0 navigations. The refunds decision
+(B-8) is implemented; its migration
+(`20260925120000_b8_transactions_totals_net_refunds.sql`) must be applied to the
+live project, then re-run step 3. Every financial figure reconciles.
+
+History: the first verdict (2026-09-24, `main` @ RUM-009) was **not approved**
+— B-7, 5/7 month clicks lost.
 
 ---
 
@@ -37,7 +43,7 @@ numbers say.
 ```bash
 # 1–2  (what CI runs on every pull request)
 npm run lint && npx tsc --noEmit && npm run i18n:check && npm test && npm run build
-npm run db:local -- --bench          # ~20 s: private Postgres + 61 migrations + fixtures + all checks
+npm run db:local -- --bench          # ~20 s: private Postgres + every migration + fixtures + all checks
 
 # 3  live, read-only (needs SUPABASE_ACCESS_TOKEN; there is no staging copy)
 npm run db:test -- --household=<uuid> --user=<member uuid>
@@ -98,7 +104,15 @@ browser half).
 | Dashboard → Transactions (2nd visit) | 3.00 s | 514 ms | 534 ms | 568 ms | ≤ 1.0 s ✅ | 0/7 |
 | Dashboard → Accounts | 1.50 s | 394 ms | 428 ms | 435 ms | ≤ 1.2 s ✅ | 0/7 |
 | Accounts → Transactions | 1.75 s | 500 ms | 565 ms | 629 ms | ≤ 1.5 s ✅ | 0/7 |
-| Month change (Dashboard) | 0.25–0.50 s | 516 ms | 531 ms | 531 ms | ≤ 0.5 s ⚠️ | **5/7 ❌** |
+| Month change (Dashboard) — before B-7 fix | 0.25–0.50 s | 516 ms | 531 ms | 531 ms | ≤ 0.5 s ⚠️ | **5/7 ❌** |
+| Month change (Dashboard) — after B-7 fix | 0.25–0.50 s | 696 ms | 725 ms | 759 ms | ≤ 0.5 s ⚠️ | 0/7 ✅ |
+
+After the B-7 fix (2026-09-25 run, same setup; the other flows moved within
+noise: p75 419–812 ms), the month click commits immediately and the secondary
+section shows its skeleton while the new month streams; "ready" waits for that
+section too, hence ~725 ms. The earlier 531 ms was measured only over the clicks
+that happened to work. 225 ms over target is recorded, not hidden: the
+secondary section's queries are the remaining cost.
 
 Caveats, stated rather than hidden: the "before" is a video estimate on a
 different device and a larger household, so the ratio is directional, not a
@@ -138,27 +152,35 @@ household.
 Found by this suite. Listed so the release decision is made with them in view,
 not after.
 
-### Blocker — Dashboard month navigation drops clicks
+### Fixed — Dashboard month navigation dropped clicks (B-7)
 
-Clicking ‹ / › on the Dashboard often does nothing: the RSC request for
-`/dashboard?month=…` is sent and **completes**, but the router never commits
-it — URL, label and data stay on the old month, with no console error.
-Reproduced 5/7 in `perf:nav`, and 3–5/6 on a hard-loaded Dashboard with a
-1.5 s pause before the click. It is **not** a RUM-009 regression (same rate on
-the build before it), **not** a race with the page's own streaming (still lost
-with nothing in flight), and **not** the `LanguageProvider` tree localizer
-(still lost with it disabled). Dashboard-only: Budgets' identical month
-navigation and every cross-route navigation lost 0/6. The Dashboard is the one
-page with a server-streamed `<Suspense>` inside it, which makes it the prime
-suspect for the follow-up. Needs its own fix ticket.
+Clicking ‹ / › on the Dashboard often did nothing: the RSC request for
+`/dashboard?month=…` was sent and completed, but the router never committed
+it (no `history.pushState`, no console error). 5/7 lost in `perf:nav`.
 
-### Decision needed — Transactions page "Expenses" ignores refunds
+Root cause, by bisection on production builds: the Dashboard's secondary
+widgets stream into an already-revealed `<Suspense>` boundary. A month change is
+a transition, so React keeps that boundary's old content on screen until the new
+content arrives — and with a large streamed chunk that transition intermittently
+never committed. A synthetic 400-row static block in the same boundary lost 6/6;
+the same response buffered (not streamed) lost 0/6; delay alone, links,
+prefetch, the localizer and the widgets' queries were each ruled out.
 
-The Transactions summary sums expense-type entries only, so a BR-040 refund
-does not reduce it, while the Dashboard nets refunds. For the same month the two
-screens show different expenses, off by exactly the refunds (pinned by a fixture
-expectation; the list also counts pending rows, which is deliberate). Changing
-it changes reporting semantics — a product decision, not made here.
+Fix: `key={selectedMonth}` on that boundary (`dashboard/page.tsx`). Each month is
+a fresh boundary, so the click commits at once and the section shows its
+skeleton while the month streams. 0/24 lost in the reproduction scripts, 0/7 in
+`perf:nav`. The Dashboard is the only page with an inner streamed boundary.
+
+### Decided — Transactions "Expenses" nets refunds (B-8)
+
+The Transactions summary summed expense-type entries only, so a BR-040 refund
+did not reduce it, while the Dashboard nets refunds. Decision (2026-09-25): the
+list nets refunds too. Migration
+`20260925120000_b8_transactions_totals_net_refunds.sql` (a function replacement,
+no schema change; rollback = re-run the BR-045 definition). A fixture
+expectation now asserts list (posted) = Dashboard expenses every month. The list
+still includes pending rows and follows its own filters, by design. **Pending:**
+apply the migration to the live project (`npm run db:push -- --apply`).
 
 ### By design, now reconciled — Accounts shows future-dated entries
 

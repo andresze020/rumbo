@@ -192,19 +192,17 @@ begin
   assert owner_view = member_view, format('owner %s vs member %s', owner_view, member_view);
 end $$;
 
--- KNOWN DIVERGENCE (pinned, not endorsed — see docs/release-checklist.md):
--- the Transactions page's "Expenses" total is the gross of expense-type rows;
--- it does not net BR-040 refunds, which the Dashboard does. Restricted to
--- posted rows, the difference must be exactly the month's refunds — nothing
--- else. If the list starts netting refunds, this check fails and must be
--- updated together with that decision.
--- check: Transactions list expenses − Dashboard expenses = that month's refunds (known divergence)
+-- B-8 (decided 2026-09-25): the Transactions page's "Expenses" total nets
+-- BR-040 refunds, like the Dashboard. Restricted to posted rows (the list also
+-- counts pending, deliberately), the two now agree to the cent every month —
+-- the fixtures have refunds in a third of the months, so this is not vacuous.
+-- check: Transactions list expenses (posted) = Dashboard expenses, every month (refunds netted)
 do $$
 declare
   m date;
   v_list numeric;
   v_dashboard numeric;
-  v_refunds numeric;
+  v_refund_months int := 0;
 begin
   perform set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-0000000000a1","role":"authenticated"}', true);
   for m in select g::date from generate_series(date '2022-10-01', date '2026-09-01', interval '1 month') g loop
@@ -213,11 +211,13 @@ begin
       null, array['posted'], null, null, null, null, null, null, 1, 0);
     select monthly_expenses into v_dashboard
     from public.get_monthly_dashboard_summary('__HOUSEHOLD_ID__'::uuid, m);
-    select coalesce(-sum(ta.amount_base_currency), 0) into v_refunds
-    from public.transactions t join public.transaction_allocations ta on ta.transaction_id = t.id
-    where t.household_id = '__HOUSEHOLD_ID__'::uuid and t.status = 'posted' and t.transaction_type = 'refund'
-      and t.transaction_date >= m and t.transaction_date < (m + interval '1 month')::date;
-    assert round(v_list - v_dashboard, 4) = round(v_refunds, 4),
-      format('%s: list %s − dashboard %s should be refunds %s', m, v_list, v_dashboard, v_refunds);
+    assert round(v_list, 4) = round(v_dashboard, 4),
+      format('%s: list expenses %s ≠ dashboard expenses %s', m, v_list, v_dashboard);
+    if exists (
+      select 1 from public.transactions
+      where household_id = '__HOUSEHOLD_ID__'::uuid and transaction_type = 'refund' and status = 'posted'
+        and transaction_date >= m and transaction_date < (m + interval '1 month')::date
+    ) then v_refund_months := v_refund_months + 1; end if;
   end loop;
+  assert v_refund_months >= 10, format('expected refunds in ≥10 months, found %s', v_refund_months);
 end $$;
