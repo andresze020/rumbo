@@ -149,6 +149,29 @@ with p50 in brackets, in ms. Both builds were measured the same day, so the
 
 0 lost navigations in all four runs.
 
+**Confirmed on the real household** (the user's account, 2026-09-25, same
+builds and setup, read-only runs). p75, with p50 in brackets, in ms. Columns:
+before, after, before at `--think=500`, after at `--think=500`. 0 lost.
+
+| Flow | Before | After | Before, think | After, think |
+|---|---:|---:|---:|---:|
+| Dashboard full load (hard) | 835 (797) | 834 (815) | 833 (799) | 849 (824) |
+| Dashboard → Transactions (cold) | 769 (611) | 603 (586) | 595 (552) | 615 (586) |
+| Transactions → Dashboard | 841 (764) | **94 (81)** | 760 (748) | **73 (69)** |
+| Dashboard → Transactions (2nd visit) | 495 (476) | **99 (95)** | 506 (490) | **77 (72)** |
+| Dashboard → Accounts | 573 (561) | 580 (547) | 579 (569) | 688 (655) |
+| Accounts → Transactions | 499 (498) | **102 (84)** | 499 (475) | **84 (77)** |
+| Month change (Dashboard) | 782 (765) | 1105 (1101) | 774 (742) | 815 (777) |
+
+The same shape as the test account: revisits ~80–100 ms. The month change is
+unchanged at a person's pace (777 ms p50 against 742 ms), and slower only at
+robot pace, for the reason below. Dashboard → Accounts at `--think=500` (655
+against 569 p50) is within this run-to-run spread: the robot-pace pair is
+547 against 561. A read-only check on this account also passed 3/3:
+- 3 revisits inside 30 s made 0 server renders;
+- after 30 s, the next visit asks the server again;
+- sign-out then sign-in never shows the previous session's cached page.
+
 Month change "after" at robot pace is not a slower month change. In that flow
 the Dashboard now appears from the cache in ~80 ms, and the click lands while
 that page's prefetches are still being sent. The router holds it for ~380 ms.

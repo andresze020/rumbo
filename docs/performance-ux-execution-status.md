@@ -302,6 +302,16 @@ antes de cada flujo, default 0 para que las corridas viejas sigan comparables.
 Con 500 ms el cambio de mes queda en 742 (p50), frente a 706. El 1205 del p75
 "antes" es una sola muestra atípica.
 
+**Confirmado en el household real** (credenciales del usuario, corridas de
+solo lectura; las comprobaciones que escriben no se corrieron ahí):
+- Revisitas p75 841/495/499 → 94/99/102 ms.
+- Cambio de mes a ritmo humano: 777 ms (p50), frente a 742 ms antes.
+- Checks 3/3: revisitas sin servidor, re-render pasados 30 s, sign-out/in sin
+  cache.
+- Servidor: `/dashboard` 26 queries, ~447 ms (p50).
+
+Tabla completa en [`release-checklist.md`](./release-checklist.md) §4.1.
+
 **Verificación en vivo** (build de producción, Playwright, 6/6 PASS):
 1. Revisitas dentro de 30 s: 0 renders de servidor.
 2. Escritura desde "otro dispositivo" (RPC con supabase-js): dentro de la

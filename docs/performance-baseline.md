@@ -222,6 +222,12 @@ transacciones, 3 cuentas, 13 meses), 9 cargas completas hechas por
   Es el mismo patrón que la capa A contó en §3.2.
 - `serialRatio` ~0,3: la orquestación de RUM-005 (un `Promise.all`) sí solapa.
 
+**Household real (2026-09-25, lectura solamente):** mismas 26 queries por
+render de `/dashboard`; `wallMs` p50 ~447 ms (18 cargas, 391–652), `serialRatio`
+~0,31. Con un historial mucho más grande, el render de servidor cuesta casi lo
+mismo que en la cuenta QA. Eso confirma que el costo lo pone el número de
+round-trips, no el volumen de datos.
+
 **Por qué solo `/dashboard`.** El colector se registra en el layout de
 `/dashboard` (`reportPerfAfterResponse`), y una navegación de cliente no vuelve
 a renderizar el layout. Por eso solo aparecen las cargas completas (9 líneas
