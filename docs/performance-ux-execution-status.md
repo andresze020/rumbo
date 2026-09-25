@@ -11,8 +11,9 @@
 > **Actualizado 2026-09-25 — B-7 arreglado, B-8 decidido.** El cambio de mes
 > del Dashboard ya no pierde clics (`key={selectedMonth}` en el `<Suspense>` de
 > los widgets; 0/7 en `perf:nav`) y "Expenses" de Transactions netea reembolsos
-> como el Dashboard (migración `20260925120000_b8_…`, **pendiente de aplicar en
-> producción**). Veredicto del gate: aprobado una vez aplicada. Ver §2.1.
+> como el Dashboard (migración `20260925120000_b8_…`, **aplicada en producción**:
+> 62/62, `db:test` 46/46, lista = Dashboard los 12 últimos meses). Veredicto del
+> gate: **aprobado**. Ver §2.1.
 >
 > **2026-09-24 — RUM-010b cerrado: el backlog RUM tiene gate de
 > release, y el primer veredicto es "no aprobado".** `npm run db:local` corre
@@ -145,7 +146,7 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 | # | Bloqueo | Cerrado por | Fecha |
 |---|---|---|---|
 | B-7 | El cambio de mes del Dashboard perdía clics (5/7 en `perf:nav`; la request RSC terminaba pero el router nunca confirmaba la navegación) | **Causa raíz por bisección sobre builds de producción:** los widgets secundarios se transmiten por streaming dentro de un `<Suspense>` ya revelado; un cambio de mes es una transición, React mantiene el contenido viejo hasta que llega el nuevo, y con un bloque grande transmitido esa transición a veces nunca se confirmaba (400 filas sintéticas estáticas: 6/6 perdidos; la misma respuesta sin streaming: 0/6; descartados demora, links, prefetch, localizador y queries). **Fix:** `key={selectedMonth}` en ese boundary (`dashboard/page.tsx`). 0/24 perdidos en los scripts de reproducción, 0/7 en `perf:nav` | 2026-09-25 |
-| B-8 | "Expenses" de Transactions no descontaba reembolsos (BR-040) y el Dashboard sí | **Decisión del usuario (2026-09-25): netear reembolsos.** Migración `20260925120000_b8_transactions_totals_net_refunds.sql` (reemplazo de función, sin cambio de esquema; rollback = definición de BR-045). La expectativa de fixtures pasó de "divergencia fijada" a igualdad lista (posted) = Dashboard cada mes. **Pendiente: aplicar en producción** (`npm run db:push -- --apply`) | 2026-09-25 |
+| B-8 | "Expenses" de Transactions no descontaba reembolsos (BR-040) y el Dashboard sí | **Decisión del usuario (2026-09-25): netear reembolsos.** Migración `20260925120000_b8_transactions_totals_net_refunds.sql` (reemplazo de función, sin cambio de esquema; rollback = definición de BR-045). La expectativa de fixtures pasó de "divergencia fijada" a igualdad lista (posted) = Dashboard cada mes. **Aplicada en producción el 2026-09-25** (62/62, 0 pendientes; `db:test` 46/46; lista = Dashboard al centavo en los 12 últimos meses del household real) | 2026-09-25 |
 | B-1 | No había runner de tests de JS/TS en el repositorio | RUM-010a — Vitest, `npm test`, en CI ([`testing.md`](./testing.md)) | 2026-09-21 |
 | B-3 | No hay contrato autoritativo de valoración | RUM-002 — `src/lib/net-worth/valuation.ts`, adoptado por Net worth, Dashboard, `trend-actions.ts`, `secondary-widgets.tsx`, Accounts y `plan/page.tsx` | 2026-09-21 |
 | B-4 | El invariante de net worth no estaba decidido | RUM-002 — decisión: `Net worth = Total assets + Signed liabilities`, sin cambios respecto al código (Assets − Liabilities al centavo habría expulsado un crédito legítimo). Ver la entrada de RUM-002 en §4 para el razonamiento completo | 2026-09-21 |
@@ -1971,6 +1972,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-25 | **Migración de B-8 aplicada en producción (a pedido del usuario): release aprobado.** `db-push push --apply` → 62/62, 0 pendientes; `db:test` en el household real 46/46; Transactions (posted) = Dashboard al centavo en los 12 últimos meses. |
 | 2026-09-25 | **B-7 arreglado y B-8 decidido: el gate de RUM-010b pasa a «aprobado al aplicar una migración».** B-7 (cambio de mes del Dashboard perdía clics): causa raíz aislada por bisección — contenido grande transmitido dentro del `<Suspense>` ya revelado de los widgets secundarios dejaba la transición sin confirmar —; fix `key={selectedMonth}`; 0/7 perdidos en `perf:nav`. B-8 (Transactions no descontaba reembolsos): el usuario pidió «lo que tenga más sentido» → la lista netea reembolsos como el Dashboard; migración `20260925120000_b8_…` verificada en fixtures (112/112, igualdad lista = Dashboard cada mes) y pendiente de aplicar en producción. |
 | 2026-09-24 | **RUM-010b cerrado: gate de release operativo; el release actual no se aprueba.** `npm run db:local` (Postgres privado + shim + 61 migraciones + fixtures generadas por las RPC de la app) corre todo `supabase/tests/` en CI; checks nuevos de invariantes mes a mes, reconciliación Accounts ↔ as-of-today y aislamiento entre households; `npm run perf:nav` mide §3.1 en navegador. 112/112 en fixtures, 46/46 en el household real. Arreglados dos bugs en tests existentes (BR-006 sumaba anuladas; RUM-006 ignoraba fechas futuras). Encontrados: B-7 (cambio de mes del Dashboard pierde clics, bloqueante) y B-8 (decisión: Transactions no descuenta reembolsos). |
 | 2026-09-24 | **RUM-009 cerrado: Month health con desglose numérico (misma fórmula), Insights deterministas/trazables/accionables, Debts distingue Debt Planner de liabilities de cuenta, "Scheduled activity", review queue acotada al mes.** `healthBreakdown()` como única fuente para dashboard y Month review (80 = 80 verificado en vivo); módulo puro `lib/insights/dashboard.ts` con 15 tests; badge `LIVE` y el insight de "upcoming" retirados; transferencias programadas sin signo e importes en la moneda de la regla; conteo de revisión alineado entre Home y Month review. 31 claves nuevas vía `i18n-scribe`. Gate completo en verde. |

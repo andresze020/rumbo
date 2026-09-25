@@ -7,12 +7,13 @@ when every box below is checked. Ticket:
 [`performance-ux-backlog.md` · RUM-010b](./performance-ux-backlog.md). Testing
 stack and conventions: [`testing.md`](./testing.md).
 
-**Current verdict (2026-09-25): APPROVED once one migration is applied.** The
-blocker found by the first run — Dashboard month navigation dropping clicks
-(B-7) — is fixed, and `perf:nav` loses 0 navigations. The refunds decision
-(B-8) is implemented; its migration
-(`20260925120000_b8_transactions_totals_net_refunds.sql`) must be applied to the
-live project, then re-run step 3. Every financial figure reconciles.
+**Current verdict (2026-09-25, `main` @ cebb998): APPROVED.** The blocker
+found by the first run — Dashboard month navigation dropping clicks (B-7) — is
+fixed, and `perf:nav` loses 0 navigations. The refunds decision (B-8) is live:
+migration `20260925120000_b8_transactions_totals_net_refunds.sql` applied to the
+live project (62/62, 0 pending), step 3 re-run: 46/46. On the live household the
+Transactions list and the Dashboard agree to the cent for each of the last 12
+months. Every financial figure reconciles.
 
 History: the first verdict (2026-09-24, `main` @ RUM-009) was **not approved**
 — B-7, 5/7 month clicks lost.
@@ -179,8 +180,9 @@ list nets refunds too. Migration
 `20260925120000_b8_transactions_totals_net_refunds.sql` (a function replacement,
 no schema change; rollback = re-run the BR-045 definition). A fixture
 expectation now asserts list (posted) = Dashboard expenses every month. The list
-still includes pending rows and follows its own filters, by design. **Pending:**
-apply the migration to the live project (`npm run db:push -- --apply`).
+still includes pending rows and follows its own filters, by design. **Applied
+to the live project 2026-09-25**; re-checked there (46/46, list = Dashboard for
+12 of 12 months).
 
 ### By design, now reconciled — Accounts shows future-dated entries
 

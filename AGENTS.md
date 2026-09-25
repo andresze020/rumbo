@@ -33,8 +33,8 @@ The product is household-first. All financial data must belong to a household.
   widgets `<Suspense>` left the month transition uncommitted. Fix:
   `key={selectedMonth}` on that boundary — do not remove it. The Transactions
   "Expenses" total now nets BR-040 refunds like the Dashboard, via migration
-  `20260925120000_b8_transactions_totals_net_refunds.sql` (**apply it to the
-  live project**: `npm run db:push -- --apply`).
+  `20260925120000_b8_transactions_totals_net_refunds.sql` (applied to the live
+  project 2026-09-25; release gate verdict: approved).
 
 - **The Transactions screen was rebuilt as a phone list, and the period got
   one owner** (2026-09-19 → 09-20, PR #66). Three commits, one review round
