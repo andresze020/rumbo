@@ -1,67 +1,47 @@
 'use client'
 
-import { useState } from 'react'
 import { LineChart } from '@/components/dashboard/line-chart'
-import { TimeframeSelector } from '@/components/charts/timeframe-selector'
 import { pickTickIndices } from '@/lib/charts/pick-ticks'
-import type { TimeframeOption } from '@/lib/charts/timeframe-options'
 
 type HeroTrendChartProps = {
   /** Net worth for the longest selectable range, oldest first — sliced client-side per timeframe. */
   trend: { values: number[]; labels: string[]; ticks: string[] }
   currency: string
   seriesLabel: string
-  options: TimeframeOption[]
-  defaultMonths: number
+  /** Months to show, controlled by the caller (shared with the timeframe pills elsewhere on the card). */
+  months: number
   /** One pre-translated aria-label per selectable month count (mentions the count in plain language). */
   ariaLabelByMonths: Record<number, string>
-  rangeAriaLabel: string
-  className?: string
 }
 
 /**
- * The Dashboard hero card's net worth trend, with a Wealthsimple-style 3M/6M/1Y
- * switch. The server sends the longest range once; picking a timeframe only
- * re-slices and re-keys the chart (no refetch), which also replays its
- * draw-in animation — same `key` trick the dashboard uses for month changes.
+ * The Dashboard hero card's net worth trend chart. Purely presentational —
+ * the timeframe pills live in the card's header (2026-09-26: moved there so
+ * they read as part of the summary row instead of floating past the chart's
+ * own axis labels) and drive this via the `months` prop. Keying by `months`
+ * replays the draw-in animation on a timeframe change, same trick the
+ * dashboard uses for month navigation.
  */
-export function HeroTrendChart({
-  trend,
-  currency,
-  seriesLabel,
-  options,
-  defaultMonths,
-  ariaLabelByMonths,
-  rangeAriaLabel,
-  className,
-}: HeroTrendChartProps) {
-  const [months, setMonths] = useState(defaultMonths)
-
+export function HeroTrendChart({ trend, currency, seriesLabel, months, ariaLabelByMonths }: HeroTrendChartProps) {
   if (trend.values.length <= 1) return null
 
   const values = trend.values.slice(-months)
   const labels = trend.labels.slice(-months)
   const tickLabels = trend.ticks.slice(-months)
   const ticks = pickTickIndices(values.length).map((index) => ({ index, label: tickLabels[index] }))
+  const ariaLabel = ariaLabelByMonths[months] ?? Object.values(ariaLabelByMonths)[0] ?? ''
 
   return (
-    <div className={className}>
-      <LineChart
-        key={months}
-        series={[{ label: seriesLabel, values, tone: 'primary', area: true }]}
-        xCount={values.length}
-        xLabels={labels}
-        ticks={ticks}
-        currency={currency}
-        className="h-32 lg:h-44"
-        markLast
-        ariaLabel={ariaLabelByMonths[months] ?? ariaLabelByMonths[defaultMonths]}
-      />
-      {options.length > 1 ? (
-        <div className="mt-3 flex justify-center">
-          <TimeframeSelector options={options} value={months} onChange={setMonths} ariaLabel={rangeAriaLabel} />
-        </div>
-      ) : null}
-    </div>
+    <LineChart
+      key={months}
+      series={[{ label: seriesLabel, values, tone: 'primary', area: true }]}
+      xCount={values.length}
+      xLabels={labels}
+      ticks={ticks}
+      currency={currency}
+      className="h-32 lg:h-44"
+      markLast
+      ariaLabel={ariaLabel}
+    />
   )
 }

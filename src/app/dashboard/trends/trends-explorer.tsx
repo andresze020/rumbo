@@ -161,13 +161,25 @@ export function TrendsExplorer({
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className={cn(CARD, 'p-4 transition-shadow hover:shadow-md')}>
-            <p className="text-[13px] font-medium leading-snug text-muted-foreground">{kpi.label}</p>
-            <p className={cn('mt-2.5 text-xl font-semibold tabular-nums sm:text-2xl', kpi.valueClass)}>{kpi.value}</p>
+          <div key={kpi.label} className={cn(CARD, 'min-w-0 p-4 transition-shadow hover:shadow-md')}>
+            {/* Fixed to two lines' worth of height: a label that wraps in one
+                language (e.g. "Ingreso mensual prom.") shouldn't push its
+                value down relative to a sibling card whose label didn't. */}
+            <p className="min-h-[2.25rem] break-words text-[13px] font-medium leading-snug text-muted-foreground">
+              {kpi.label}
+            </p>
+            <p
+              className={cn(
+                'mt-2.5 break-words text-xl font-semibold tabular-nums sm:text-2xl',
+                kpi.valueClass
+              )}
+            >
+              {kpi.value}
+            </p>
             {kpi.sub ? (
               <p
                 className={cn(
-                  'mt-1 text-[11.5px] font-medium',
+                  'mt-1 break-words text-[11.5px] font-medium',
                   kpi.sub.good ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
                 )}
               >

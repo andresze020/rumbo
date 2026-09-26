@@ -22,6 +22,7 @@ import { InfoTooltip } from '@/components/info-tooltip'
 import { SubmitButton } from '@/components/submit-button'
 import { formatCurrency, formatIsoDate, formatPercent } from '@/lib/format'
 import { getLocale } from '@/lib/i18n/server'
+import { translate } from '@/lib/i18n/translate'
 import { healthBreakdown } from '@/lib/health/score'
 import { monthEndDate } from '@/lib/periods/month'
 import { MonthHealthBreakdown } from '@/components/month-health-breakdown'
@@ -344,8 +345,8 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
           <MonthNav
             month={month}
             basePath="/dashboard/month-review"
-            previousLabel="Previous month"
-            nextLabel="Next month"
+            previousLabel={translate(locale, 'common.previousMonth')}
+            nextLabel={translate(locale, 'common.nextMonth')}
           />
         }
       />

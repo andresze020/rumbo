@@ -79,6 +79,9 @@ export const en = {
     ppVsLastMonth: 'pp vs last month',
     previousMonth: 'Previous month',
     nextMonth: 'Next month',
+    previousYear: 'Previous year',
+    nextYear: 'Next year',
+    selectMonth: 'Select month',
   },
   settings: {
     exchangeRates: {
@@ -662,6 +665,9 @@ export const es: DeepStringify<typeof en> = {
     ppVsLastMonth: 'pp vs. mes anterior',
     previousMonth: 'Mes anterior',
     nextMonth: 'Mes siguiente',
+    previousYear: 'Año anterior',
+    nextYear: 'Año siguiente',
+    selectMonth: 'Selecciona un mes',
   },
   settings: {
     exchangeRates: {
@@ -1246,6 +1252,9 @@ export const fr: DeepStringify<typeof en> = {
     ppVsLastMonth: 'pp vs mois précédent',
     previousMonth: 'Mois précédent',
     nextMonth: 'Mois suivant',
+    previousYear: 'Année précédente',
+    nextYear: 'Année suivante',
+    selectMonth: 'Sélectionner un mois',
   },
   settings: {
     exchangeRates: {

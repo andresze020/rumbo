@@ -7,6 +7,7 @@ import { Callout } from '@/components/callout'
 import { CashFlowBars, LineTrendChart } from '@/components/analysis/charts'
 import { formatCurrency, formatCurrencyCompact, formatPercent } from '@/lib/format'
 import { getLocale } from '@/lib/i18n/server'
+import { translate } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { cn } from '@/lib/utils'
 import {
@@ -153,8 +154,8 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
               month={month}
               basePath="/dashboard/cash-flow"
               searchParams={{ range: rangeKey }}
-              previousLabel="Previous month"
-              nextLabel="Next month"
+              previousLabel={translate(locale, 'common.previousMonth')}
+              nextLabel={translate(locale, 'common.nextMonth')}
             />
           </>
         }

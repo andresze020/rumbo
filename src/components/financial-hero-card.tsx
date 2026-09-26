@@ -1,5 +1,9 @@
+'use client'
+
+import { useState } from 'react'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { HeroTrendChart } from '@/components/dashboard/hero-trend-chart'
+import { TimeframeSelector } from '@/components/charts/timeframe-selector'
 import { Money } from '@/components/dashboard/money'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/format'
@@ -80,6 +84,7 @@ export function FinancialHeroCard({
   // Projected only adds information when pending or future-dated entries move
   // it; otherwise it repeats the net worth next to it (2026-09-25 redesign).
   const showProjected = Math.abs(projected - netWorth) >= 0.005
+  const [months, setMonths] = useState(defaultTrendMonths)
 
   return (
     <section
@@ -111,47 +116,56 @@ export function FinancialHeroCard({
             <DeltaPill delta={delta} currency={currency} vsPrev={labels.vsPrev} />
           </div>
 
-          <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-3 border-t pt-4">
-            <div>
-              <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-                {labels.assets}
-              </dt>
-              <dd className="mt-0.5 text-base font-semibold">
-                <Money value={assets} currency={currency} />
-              </dd>
-            </div>
-            <div>
-              <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="size-1.5 rounded-full bg-rose-500" aria-hidden="true" />
-                {labels.liabilities}
-              </dt>
-              <dd className="mt-0.5 text-base font-semibold">
-                <Money value={liabilities} currency={currency} />
-              </dd>
-            </div>
-            {showProjected ? (
+          <div className="mt-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-t pt-4">
+            <dl className="flex flex-wrap gap-x-8 gap-y-3">
               <div>
                 <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="size-1.5 rounded-full bg-sky-500" aria-hidden="true" />
-                  {labels.projected}
+                  <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                  {labels.assets}
                 </dt>
                 <dd className="mt-0.5 text-base font-semibold">
-                  <Money value={projected} currency={currency} />
+                  <Money value={assets} currency={currency} />
                 </dd>
               </div>
+              <div>
+                <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="size-1.5 rounded-full bg-rose-500" aria-hidden="true" />
+                  {labels.liabilities}
+                </dt>
+                <dd className="mt-0.5 text-base font-semibold">
+                  <Money value={liabilities} currency={currency} />
+                </dd>
+              </div>
+              {showProjected ? (
+                <div>
+                  <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="size-1.5 rounded-full bg-sky-500" aria-hidden="true" />
+                    {labels.projected}
+                  </dt>
+                  <dd className="mt-0.5 text-base font-semibold">
+                    <Money value={projected} currency={currency} />
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+
+            {MONTHLY_TIMEFRAME_OPTIONS.length > 1 ? (
+              <TimeframeSelector
+                options={MONTHLY_TIMEFRAME_OPTIONS}
+                value={months}
+                onChange={setMonths}
+                ariaLabel={labels.trendRangeAria}
+              />
             ) : null}
-          </dl>
+          </div>
         </div>
 
         <HeroTrendChart
           trend={trend}
           currency={currency}
           seriesLabel={labels.trendSeries}
-          options={MONTHLY_TIMEFRAME_OPTIONS}
-          defaultMonths={defaultTrendMonths}
+          months={months}
           ariaLabelByMonths={trendAriaByMonths}
-          rangeAriaLabel={labels.trendRangeAria}
         />
       </div>
     </section>
