@@ -1,22 +1,13 @@
 import Link from 'next/link'
-import {
-  AlertTriangle,
-  CalendarClock,
-  Layers,
-  ListChecks,
-  PiggyBank,
-  Scale,
-  Sparkles,
-  TrendingDown,
-} from 'lucide-react'
+import { AlertTriangle, ChevronRight, Layers, PiggyBank, Repeat, TrendingDown } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { Callout } from '@/components/callout'
 import { InsightCard } from '@/components/insight-card'
-import { CategoryDonut, type DonutSlice } from '@/components/category-donut'
+import { Money } from '@/components/dashboard/money'
 import type { TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
-import { formatCurrency, formatMonthLabel, formatPercent } from '@/lib/format'
+import { formatCurrency, formatMonthLabel, formatPercent, localeToBcp47 } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { computeValuation, getDisplayedLiabilityBalance } from '@/lib/net-worth/valuation'
 import {
@@ -27,31 +18,21 @@ import {
 } from '@/lib/insights/dashboard'
 import type { AccountBalance, BudgetDetailRow } from './page'
 
-// Only the accent colors this file's own JSX uses (scheduled-activity icon
-// background, keyed by scheduledDirection). The full ACCENT map stays in page.tsx, where the rest of it is
-// actually used — not worth a shared-constants module for two colors.
-const ACCENT = {
-  in: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
-  out: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
-  neutral: 'bg-muted text-muted-foreground',
-} as const
+// 2026-09-26 redesign: money coming in is the only amount in color; money
+// going out reads in normal ink with a minus sign, so a list of bills is not
+// a wall of red.
 const SCHEDULED_AMOUNT_CLASS = {
   in: 'text-emerald-600 dark:text-emerald-400',
-  out: 'text-rose-600 dark:text-rose-400',
+  out: 'text-foreground',
   neutral: 'text-foreground',
 } as const
 const SCHEDULED_SIGN = { in: '+', out: '−', neutral: '' } as const
 
-// Category identity colors for budget dots/bars + donut alignment + goals mini.
-const SERIES = [
-  'oklch(0.62 0.19 255)', // blue
-  'oklch(0.68 0.14 145)', // green
-  'oklch(0.72 0.17 70)', // amber
-  'oklch(0.62 0.18 300)', // violet
-  'oklch(0.65 0.20 25)', // rose
-  'oklch(0.70 0.15 165)', // teal
-] as const
-const ROSE = 'oklch(0.65 0.20 25)'
+// Budget bars are colored by status, not by category: on track, close to the
+// limit (90 %+), over. Status is also in the figures next to each bar.
+function budgetBarClass(pct: number) {
+  return pct > 1 ? 'bg-rose-500' : pct >= 0.9 ? 'bg-amber-500' : 'bg-primary'
+}
 
 type MonthlyExpenseCategory = {
   category_id: string
@@ -208,28 +189,32 @@ export async function DashboardSecondaryWidgets({
   const largestExpenseCategory = sortedExpenseCategories[0] ?? null
   const largestExpenseAmount = Number(largestExpenseCategory?.amount_base_currency ?? 0)
 
-  // ── Donut: top 6 + "Other". ──────────────────────────────────────────────
-  const TOP_DONUT = 6
-  const donutData: DonutSlice[] = sortedExpenseCategories.slice(0, TOP_DONUT).map((c) => ({
-    name: getCategoryPath(c, categoriesById).name,
-    value: Number(c.amount_base_currency),
-    categoryId: c.category_id,
-  }))
+  // ── Where it went: top 5 + "Other", as ranked bars (2026-09-26: one hue
+  // for magnitude replaces the rainbow donut; lengths compare, arcs don't).
+  const TOP_CATEGORIES = 5
+  const categoryRows: { name: string; value: number; categoryId: string | null }[] = sortedExpenseCategories
+    .slice(0, TOP_CATEGORIES)
+    .map((c) => ({
+      name: getCategoryPath(c, categoriesById).name,
+      value: Number(c.amount_base_currency),
+      categoryId: c.category_id,
+    }))
   const otherTotal = sortedExpenseCategories
-    .slice(TOP_DONUT)
+    .slice(TOP_CATEGORIES)
     .reduce((s, c) => s + Number(c.amount_base_currency), 0)
-  if (otherTotal > 0) donutData.push({ name: t('common.other'), value: otherTotal, categoryId: null })
+  if (otherTotal > 0) categoryRows.push({ name: t('common.other'), value: otherTotal, categoryId: null })
+  const categoryMax = Math.max(0, ...categoryRows.map((c) => c.value))
+  const wholePercent = new Intl.NumberFormat(localeToBcp47(locale), { style: 'percent', maximumFractionDigits: 0 })
 
   // ── Budget top rows. ─────────────────────────────────────────────────────
   const budgetTop = [...budgetLines]
     .sort((a, b) => Number(b.actual_amount ?? 0) - Number(a.actual_amount ?? 0))
     .slice(0, 5)
-    .map((line, i) => {
+    .map((line) => {
       const planned = Number(line.planned_amount ?? 0)
       const actual = Number(line.actual_amount ?? 0)
       const pct = planned > 0 ? actual / planned : 0
       const isOver = actual > planned && planned > 0
-      const color = SERIES[i % SERIES.length]
       return {
         id: line.line_id as string,
         categoryId: line.category_id,
@@ -238,14 +223,11 @@ export async function DashboardSecondaryWidgets({
         planned,
         pct,
         isOver,
-        dotColor: color,
-        barColor: isOver ? ROSE : color,
+        barClass: budgetBarClass(pct),
         barWidth: `${Math.min(100, Math.round(pct * 100))}%`,
         pctLabel: planned > 0 ? `${Math.round(pct * 100)}%` : '—',
       }
     })
-  const overallPctTone =
-    totalBudgetPercent >= 1 ? 'rose' : totalBudgetPercent >= 0.8 ? 'amber' : 'primary'
 
   // ── Insights (RUM-009): deterministic, traceable, actionable — see
   // lib/insights/dashboard for the rules. This file only maps kinds to
@@ -325,8 +307,12 @@ export async function DashboardSecondaryWidgets({
       ? t('dashboard.statusDue')
       : t('dashboard.statusScheduled')
     const tagTone = row.auto_post ? 'muted' : dueSoon ? 'warning' : 'info'
+    const runDate = row.next_run_date ? new Date(`${row.next_run_date}T00:00:00Z`) : null
     return {
       id: row.id,
+      weekday: runDate ? new Intl.DateTimeFormat(localeToBcp47(locale), { weekday: 'short', timeZone: 'UTC' }).format(runDate) : '',
+      day: runDate ? runDate.getUTCDate() : null,
+      autoPost: row.auto_post,
       name: row.name,
       dueText,
       amount: Number(row.amount),
@@ -369,10 +355,10 @@ export async function DashboardSecondaryWidgets({
   // now. `goalsMini` itself still only lists active ones, same as before.
   const allGoalRows = (goalRows ?? []) as Goal[]
   const anyGoalsConfigured = allGoalRows.length > 0
-  const goalsMini = allGoalRows.filter((g) => g.status === 'active').map((g, i) => {
+  const goalsMini = allGoalRows.filter((g) => g.status === 'active').map((g) => {
     const target = Number(g.target_amount)
     const pct = target > 0 ? Math.round(Math.min(1, Number(g.current_amount) / target) * 100) : 0
-    return { id: g.id, name: g.name, pct, color: SERIES[i % SERIES.length] }
+    return { id: g.id, name: g.name, pct }
   })
 
   const cardClass = 'rounded-2xl border bg-card shadow-sm shadow-black/[0.03]'
@@ -397,220 +383,237 @@ export async function DashboardSecondaryWidgets({
     <>
       {hasLoadError ? <Callout variant="error">{t('dashboard.loadError')}</Callout> : null}
       {/* Main + right rail */}
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_304px] [&>*]:min-w-0">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px] [&>*]:min-w-0">
         {/* Main column */}
         <div className="flex min-w-0 flex-col gap-4">
           {/* Budget vs actual */}
           {!budgetError && hasBudget ? (
-            <div className={cn(cardClass, 'p-4 sm:p-5')}>
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-bold">{t('dashboard.budgetTitle')}</h2>
-                <div className="flex items-center gap-2.5">
-                  <span
-                    className={cn(
-                      'rounded-full px-2.5 py-0.5 text-[11px] font-semibold',
-                      overallPctTone === 'rose' && 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
-                      overallPctTone === 'amber' && 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
-                      overallPctTone === 'primary' && 'bg-primary/10 text-primary'
-                    )}
-                  >
-                    {Math.round(totalBudgetPercent * 100)}% {t('dashboard.budgetUsed')}
-                  </span>
-                  <Link href={`/dashboard/budgets?month=${selectedMonth}`} className="text-xs font-semibold text-primary hover:underline">
-                    {t('common.viewAll')} →
-                  </Link>
-                </div>
-              </div>
-              <div className="space-y-3">
+            <section className={cn(cardClass, 'p-5')}>
+              <WidgetHeader
+                title={t('dashboard.budgetTitle')}
+                meta={`${Math.round(totalBudgetPercent * 100)}% ${t('dashboard.budgetUsed')}`}
+                action={{ href: `/dashboard/budgets?month=${selectedMonth}`, label: t('common.viewAll') }}
+              />
+              <div className="mt-4 space-y-4">
                 {budgetTop.map((b) => (
                   <Link
                     key={b.id}
                     href={`/dashboard/transactions?category_id=${b.categoryId}&month=${selectedMonth}&type=expense`}
-                    className="block"
+                    className="group block"
                   >
-                    <div className="mb-1.5 flex items-center gap-2 text-xs">
-                      <span className="size-2 shrink-0 rounded-sm" style={{ backgroundColor: b.dotColor }} aria-hidden="true" />
-                      <span className="flex-1 truncate text-muted-foreground">{b.name}</span>
-                      <span className={cn('font-semibold tabular-nums', b.isOver ? 'text-rose-600 dark:text-rose-400' : 'text-foreground')}>
+                    <div className="mb-1.5 flex items-baseline gap-2 text-sm">
+                      <span className="min-w-0 flex-1 truncate group-hover:underline">{b.name}</span>
+                      <span className={cn('font-semibold tabular-nums', b.isOver && 'text-rose-600 dark:text-rose-400')}>
                         {formatCurrency(b.actual, budgetCurrency)}
                       </span>
-                      <span className="text-[11px] tabular-nums text-muted-foreground">/ {formatCurrency(b.planned, budgetCurrency)}</span>
-                      <span className={cn('min-w-8 text-right text-[11px] font-semibold', b.isOver ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground')}>
-                        {b.pctLabel}
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        / {formatCurrency(b.planned, budgetCurrency)}
                       </span>
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full" style={{ width: b.barWidth, backgroundColor: b.barColor }} />
+                    <div className="flex items-center gap-3">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div className={cn('h-full rounded-full', b.barClass)} style={{ width: b.barWidth }} />
+                      </div>
+                      <span
+                        className={cn(
+                          'w-9 text-right text-xs tabular-nums',
+                          b.isOver ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-muted-foreground'
+                        )}
+                      >
+                        {b.pctLabel}
+                      </span>
                     </div>
                   </Link>
                 ))}
               </div>
-            </div>
+            </section>
           ) : null}
 
-          {/* Donut + upcoming */}
           <div className="grid gap-4 sm:grid-cols-2 [&>*]:min-w-0">
-            {/* Donut */}
+            {/* Where the money went */}
             {!expenseCategoriesError ? (
-              <div className={cn(cardClass, 'p-4')}>
-                <h2 className="mb-3 text-sm font-bold">{t('dashboard.byCategory')}</h2>
-                {donutData.length ? (
-                  <CategoryDonut data={donutData} currency={dashboardCurrency} total={monthlyExpenses} totalLabel={t('dashboard.budgetTotal')} month={selectedMonth} />
+              <section className={cn(cardClass, 'p-5')}>
+                <WidgetHeader
+                  title={t('dashboard.byCategory')}
+                  action={{ href: `/dashboard/reports?month=${selectedMonth}`, label: t('common.viewAll') }}
+                />
+                {categoryRows.length ? (
+                  <ul className="mt-4 space-y-3.5">
+                    {categoryRows.map((c) => {
+                      const share = monthlyExpenses > 0 ? Math.max(0, c.value) / monthlyExpenses : 0
+                      const width = categoryMax > 0 ? Math.max(2, (Math.max(0, c.value) / categoryMax) * 100) : 0
+                      const row = (
+                        <>
+                          <span className="mb-1.5 flex items-baseline gap-2 text-sm">
+                            <span className="min-w-0 flex-1 truncate group-hover:underline">{c.name}</span>
+                            <span className="font-semibold tabular-nums">{formatCurrency(c.value, dashboardCurrency)}</span>
+                          </span>
+                          <span className="flex items-center gap-3">
+                            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                              <span
+                                className={cn('block h-full rounded-full', c.categoryId ? 'bg-primary' : 'bg-muted-foreground/40')}
+                                style={{ width: `${width}%` }}
+                              />
+                            </span>
+                            <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">
+                              {wholePercent.format(share)}
+                            </span>
+                          </span>
+                        </>
+                      )
+                      return (
+                        <li key={c.categoryId ?? 'other'}>
+                          {c.categoryId ? (
+                            <Link
+                              href={`/dashboard/transactions?category_id=${c.categoryId}&month=${selectedMonth}&type=expense`}
+                              className="group block"
+                            >
+                              {row}
+                            </Link>
+                          ) : (
+                            <div className="block">{row}</div>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
                 ) : (
-                  <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                  <p className="mt-4 rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
                     {t('dashboard.expensesByCategoryEmpty', { month: formatMonthLabel(selectedMonth, locale) })}
                   </p>
                 )}
-              </div>
+              </section>
             ) : null}
 
-            {/* Upcoming bills */}
-            <div className={cn(cardClass, 'overflow-hidden')}>
-              <div className="flex items-center justify-between border-b px-4 py-3">
-                {/* RUM-009: income and expenses both appear here, so it is
-                    "Scheduled activity", not "Upcoming payments". The list is
-                    the next few runs by date, not a month total, so there is
-                    no "N this month" count. */}
-                <h2 className="text-sm font-bold">{t('dashboard.scheduledTitle')}</h2>
-                <Link href="/dashboard/recurring" className="text-xs font-semibold text-primary hover:underline">
-                  {t('common.viewAll')} →
-                </Link>
-              </div>
+            {/* Scheduled activity: RUM-009, income and expenses both appear
+                here, so it is "Scheduled activity", not "Upcoming payments".
+                The list is the next few runs by date, not a month total. */}
+            <section className={cn(cardClass, 'p-5')}>
+              <WidgetHeader title={t('dashboard.scheduledTitle')} action={{ href: '/dashboard/recurring', label: t('common.viewAll') }} />
               {upcoming.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">{t('dashboard.scheduledEmpty')}</p>
+                <p className="mt-4 text-sm text-muted-foreground">{t('dashboard.scheduledEmpty')}</p>
               ) : (
-                <div className="divide-y">
+                <ul className="-mx-2 mt-3">
                   {upcoming.map((bl) => (
-                    <div key={bl.id} className="flex items-center gap-2.5 px-4 py-2.5">
+                    <li key={bl.id} className="flex items-center gap-3 rounded-xl px-2 py-2">
                       <span
-                        className={cn(
-                          'flex size-7 shrink-0 items-center justify-center rounded-lg [&_svg]:size-[13px]',
-                          ACCENT[bl.direction]
-                        )}
+                        className="flex w-11 shrink-0 flex-col items-center rounded-xl border bg-background py-1 leading-none"
                         aria-hidden="true"
                       >
-                        <CalendarClock />
+                        <span className="text-[10px] font-medium uppercase text-muted-foreground">{bl.weekday}</span>
+                        <span className="mt-0.5 text-base font-semibold tabular-nums">{bl.day ?? '—'}</span>
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium">{bl.name}</p>
-                        <p className="text-[10.5px] text-muted-foreground">{bl.dueText}</p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className={cn('text-xs font-semibold tabular-nums', bl.amountClass)}>
-                          {bl.sign}
-                          {formatCurrency(bl.amount, bl.currency)}
-                        </p>
-                        <p
-                          className={cn(
-                            'text-[10px] font-bold uppercase tracking-wide',
-                            bl.tagTone === 'warning' && 'text-amber-600 dark:text-amber-400',
-                            bl.tagTone === 'info' && 'text-sky-600 dark:text-sky-400',
-                            bl.tagTone === 'muted' && 'text-muted-foreground'
-                          )}
-                        >
-                          {bl.tag}
+                        <p className="truncate text-sm font-medium">{bl.name}</p>
+                        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span
+                            className={cn(
+                              bl.tagTone === 'warning' && 'font-medium text-amber-700 dark:text-amber-400'
+                            )}
+                          >
+                            {bl.dueText}
+                          </span>
+                          {bl.autoPost ? (
+                            <span className="inline-flex items-center gap-0.5" title={bl.tag}>
+                              · <Repeat className="size-3" aria-hidden="true" />
+                              {bl.tag}
+                            </span>
+                          ) : null}
                         </p>
                       </div>
-                    </div>
+                      <p className={cn('shrink-0 text-sm font-semibold tabular-nums', bl.amountClass)}>
+                        {bl.sign}
+                        {formatCurrency(bl.amount, bl.currency)}
+                      </p>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
-            </div>
+            </section>
           </div>
         </div>
 
         {/* Right rail */}
-        <aside className="flex flex-col gap-3">
+        <aside className="flex flex-col gap-4">
           {/* Insights */}
-          <div className={cn(cardClass, 'overflow-hidden')}>
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <h2 className="flex items-center gap-2 text-sm font-bold">
-                <Sparkles className="size-[15px] text-primary" aria-hidden="true" />
-                {t('dashboard.insightsTitle')}
-              </h2>
-            </div>
+          <section className={cn(cardClass, 'p-5')}>
+            <WidgetHeader title={t('dashboard.insightsTitle')} />
             {visibleInsights.length ? (
-              <div className="flex flex-col gap-2.5 p-3">
-                {visibleInsights.map((ins) => {
-                  const view = renderInsight(ins)
-                  return (
-                    <InsightCard
-                      key={ins.kind}
-                      tone={ins.tone}
-                      icon={view.icon}
-                      action={{ href: ins.href, label: view.actionLabel }}
-                    >
-                      {view.text}
-                    </InsightCard>
-                  )
-                })}
-                <p className="px-0.5 text-[10.5px] text-muted-foreground">
+              <>
+                <ul className="mt-3 divide-y">
+                  {visibleInsights.map((ins) => {
+                    const view = renderInsight(ins)
+                    return (
+                      <li key={ins.kind} className="py-3 first:pt-1 last:pb-1">
+                        <InsightCard tone={ins.tone} icon={view.icon} action={{ href: ins.href, label: view.actionLabel }}>
+                          {view.text}
+                        </InsightCard>
+                      </li>
+                    )
+                  })}
+                </ul>
+                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
                   {t('dashboard.insightsBasis', { month: formatMonthLabel(selectedMonth, locale) })}
                 </p>
-              </div>
+              </>
             ) : (
-              <p className="p-4 text-xs text-muted-foreground">{t('dashboard.insightsEmpty')}</p>
+              <p className="mt-3 text-sm text-muted-foreground">{t('dashboard.insightsEmpty')}</p>
             )}
-          </div>
+          </section>
 
           {/* Debts mini */}
-          <div className={cn(cardClass, 'p-4')}>
-            <div className="mb-2.5 flex items-center justify-between">
-              <h2 className="flex items-center gap-1.5 text-sm font-bold">
-                <Scale className="size-[14px] text-rose-600 dark:text-rose-400" aria-hidden="true" />
-                {t('dashboard.debtsMiniTitle')}
-              </h2>
-              <Link href="/dashboard/debts" className="text-xs font-semibold text-primary hover:underline">{t('dashboard.planDebt')} →</Link>
-            </div>
+          <section className={cn(cardClass, 'p-5')}>
+            <WidgetHeader title={t('dashboard.debtsMiniTitle')} action={{ href: '/dashboard/debts', label: t('dashboard.planDebt') }} />
             {!debtsOwed ? (
-              <p className="text-xs text-muted-foreground">{t('dashboard.debtsMiniEmpty')}</p>
+              <p className="mt-3 text-sm text-muted-foreground">{t('dashboard.debtsMiniEmpty')}</p>
             ) : debtsSummary.state === 'untracked-liabilities' ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 {t('dashboard.debtsMiniUntracked', { amount: formatCurrency(debtsSummary.accountLiabilities, baseCurrency) })}
               </p>
             ) : (
-              <>
-                <p className="text-[11px] text-muted-foreground">{t('dashboard.debtsMiniPlannerTotal')}</p>
-                <p className="mb-2 text-lg font-bold tabular-nums text-rose-600 dark:text-rose-400">{formatCurrency(totalDebt, baseCurrency)}</p>
+              <div className="mt-3">
+                <p className="text-xs text-muted-foreground">{t('dashboard.debtsMiniPlannerTotal')}</p>
+                <p className="mb-3 mt-0.5 text-2xl font-semibold tracking-tight">
+                  <Money value={totalDebt} currency={baseCurrency} />
+                </p>
                 {debtPaidPct !== null ? (
                   <>
                     <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-muted">
                       <div className="h-full rounded-full bg-emerald-500" style={{ width: `${debtPaidPct}%` }} />
                     </div>
-                    <p className="text-[11.5px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {debtPaidPct}% {t('dashboard.debtPaidOff')}
                       {nextPayment > 0 ? ` · ${t('dashboard.nextPaymentLabel')}: ${formatCurrency(nextPayment, baseCurrency)}` : ''}
                     </p>
                   </>
                 ) : nextPayment > 0 ? (
-                  <p className="text-[11.5px] text-muted-foreground">{t('dashboard.nextPaymentLabel')}: {formatCurrency(nextPayment, baseCurrency)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('dashboard.nextPaymentLabel')}: {formatCurrency(nextPayment, baseCurrency)}
+                  </p>
                 ) : null}
                 {debtsSummary.untrackedLiabilities > 0 ? (
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  <p className="mt-1.5 text-xs text-muted-foreground">
                     {t('dashboard.debtsMiniOtherLiabilities', { amount: formatCurrency(debtsSummary.untrackedLiabilities, baseCurrency) })}
                   </p>
                 ) : null}
-              </>
+              </div>
             )}
-          </div>
+          </section>
 
           {/* Goals mini */}
           {!goalsNeedSetup ? (
-            <div className={cn(cardClass, 'p-4')}>
-              <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold">
-                <PiggyBank className="size-[14px] text-primary" aria-hidden="true" />
-                {t('dashboard.goalsMiniTitle')}
-              </h2>
+            <section className={cn(cardClass, 'p-5')}>
+              <WidgetHeader title={t('dashboard.goalsMiniTitle')} action={{ href: '/dashboard/goals', label: t('dashboard.viewGoals') }} />
               {goalsMini.length > 0 ? (
-                <div className="space-y-2.5">
+                <div className="mt-4 space-y-3.5">
                   {goalsMini.map((g) => (
                     <div key={g.id}>
-                      <div className="mb-1 flex items-center justify-between text-[11.5px]">
-                        <span className="text-muted-foreground">{g.name}</span>
-                        <span className="font-semibold tabular-nums">{g.pct}%</span>
+                      <div className="mb-1.5 flex items-center justify-between gap-2 text-sm">
+                        <span className="min-w-0 truncate">{g.name}</span>
+                        <span className="text-xs font-semibold tabular-nums">{g.pct}%</span>
                       </div>
-                      <div className="h-[5px] overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full" style={{ width: `${g.pct}%`, backgroundColor: g.color }} />
+                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${g.pct}%` }} />
                       </div>
                     </div>
                   ))}
@@ -619,12 +622,9 @@ export async function DashboardSecondaryWidgets({
                 // Configured (anyGoalsConfigured) but none are currently
                 // active — a real household state (paused/completed goals),
                 // not the "never set up" case "Finish setting up" covers.
-                <p className="text-xs text-muted-foreground">{t('dashboard.goalsMiniEmpty')}</p>
+                <p className="mt-3 text-sm text-muted-foreground">{t('dashboard.goalsMiniEmpty')}</p>
               )}
-              <Link href="/dashboard/goals" className="mt-3 inline-block text-[11.5px] font-semibold text-primary hover:underline">
-                {t('dashboard.viewGoals')} →
-              </Link>
-            </div>
+            </section>
           ) : null}
         </aside>
       </div>
@@ -633,36 +633,64 @@ export async function DashboardSecondaryWidgets({
           card instead of two more full-size empty ones. Last on the page —
           least urgent of what Home shows. */}
       {budgetNeedsSetup || goalsNeedSetup ? (
-        <div className={cn(cardClass, 'p-4')}>
-          <h2 className="mb-1 flex items-center gap-1.5 text-sm font-bold">
-            <ListChecks className="size-[14px] text-muted-foreground" aria-hidden="true" />
-            {t('dashboard.setupTitle')}
-          </h2>
-          <div className="divide-y">
+        <section className={cn(cardClass, 'p-5')}>
+          <WidgetHeader title={t('dashboard.setupTitle')} />
+          <div className="mt-2 divide-y">
             {budgetNeedsSetup ? (
-              <div className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
-                <p className="text-xs text-muted-foreground">
-                  {t('dashboard.noBudget', { month: formatMonthLabel(selectedMonth, locale) })}
-                </p>
-                <Link
-                  href={`/dashboard/budgets?month=${selectedMonth}`}
-                  className="shrink-0 text-xs font-semibold text-primary hover:underline"
-                >
-                  {t('dashboard.createBudget')} →
-                </Link>
-              </div>
+              <SetupRow
+                text={t('dashboard.noBudget', { month: formatMonthLabel(selectedMonth, locale) })}
+                href={`/dashboard/budgets?month=${selectedMonth}`}
+                label={t('dashboard.createBudget')}
+              />
             ) : null}
             {goalsNeedSetup ? (
-              <div className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
-                <p className="text-xs text-muted-foreground">{t('dashboard.goalsMiniEmpty')}</p>
-                <Link href="/dashboard/goals" className="shrink-0 text-xs font-semibold text-primary hover:underline">
-                  {t('dashboard.viewGoals')} →
-                </Link>
-              </div>
+              <SetupRow text={t('dashboard.goalsMiniEmpty')} href="/dashboard/goals" label={t('dashboard.viewGoals')} />
             ) : null}
           </div>
-        </div>
+        </section>
       ) : null}
     </>
+  )
+}
+
+/** One header for every Dashboard widget: title, an optional quiet figure, an optional link. */
+function WidgetHeader({
+  title,
+  meta,
+  action,
+}: {
+  title: string
+  meta?: string
+  action?: { href: string; label: string }
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="flex min-w-0 items-baseline gap-2 text-sm font-semibold">
+        <span className="truncate">{title}</span>
+        {meta ? <span className="shrink-0 text-xs font-normal tabular-nums text-muted-foreground">{meta}</span> : null}
+      </h2>
+      {action ? <WidgetLink href={action.href}>{action.label}</WidgetLink> : null}
+    </div>
+  )
+}
+
+function WidgetLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="-mr-2 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+    >
+      {children}
+      <ChevronRight className="size-3.5" aria-hidden="true" />
+    </Link>
+  )
+}
+
+function SetupRow({ text, href, label }: { text: string; href: string; label: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5 last:pb-0">
+      <p className="text-sm text-muted-foreground">{text}</p>
+      <WidgetLink href={href}>{label}</WidgetLink>
+    </div>
   )
 }

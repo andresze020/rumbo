@@ -10,7 +10,9 @@
 >
 > **Actualizado 2026-09-25 (después del backlog) — Dashboard rediseñado y
 > Transactions sin pantalla negra al abrir.** Ver
-> [`features/dashboard-layout.md`](./features/dashboard-layout.md).
+> [`features/dashboard-layout.md`](./features/dashboard-layout.md). El 2026-09-26 se añadió
+> una pasada de diseño (gráfico de patrimonio interactivo, tarjeta "Spending
+> pace" conciliada con el RPC mensual; 16 consultas por render).
 >
 > **2026-09-25 — RUM-005 cerrado: la segunda visita usa el
 > Router Cache (30 s) y cada escritura lo invalida; B-5 cerrado.** Decisión del

@@ -156,19 +156,43 @@ export function MonthHealthSummary({
   const copy = ACTION_COPY[breakdown.action]
   const href = healthActionHref(breakdown.action, month)
 
+  // Ring gauge (2026-09-26): the score as a filled arc, in the status color of
+  // its band. The grade sits next to it as text, so color is never the only cue.
+  const radius = 19
+  const circumference = 2 * Math.PI * radius
+  const filled = (Math.max(0, Math.min(100, breakdown.score)) / 100) * circumference
+  const ringTone =
+    breakdown.score >= 70
+      ? 'text-emerald-500'
+      : breakdown.score >= 50
+      ? 'text-amber-500'
+      : 'text-rose-500'
+
   return (
     <div className="text-xs">
       <div className="flex items-start gap-3">
-        <span
-          className="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-primary/10 text-sm font-bold text-primary"
-          aria-hidden="true"
-        >
-          {breakdown.grade}
+        <span className="relative flex size-12 shrink-0 items-center justify-center" aria-hidden="true">
+          <svg viewBox="0 0 48 48" className="absolute inset-0 size-12 -rotate-90">
+            <circle cx="24" cy="24" r={radius} fill="none" stroke="var(--muted)" strokeWidth="4" />
+            <circle
+              cx="24"
+              cy="24"
+              r={radius}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray={`${filled} ${circumference}`}
+              className={ringTone}
+            />
+          </svg>
+          <span className="text-sm font-semibold tabular-nums">{breakdown.score}</span>
         </span>
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1">
-            <span className="font-semibold">{t('dashboard.monthHealth')}</span>
-            <span className="text-muted-foreground">· {breakdown.score}/100</span>
+          <p className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold">{t('dashboard.monthHealth')}</span>
+            <span className="rounded-md bg-muted px-1.5 py-px text-[11px] font-semibold">{breakdown.grade}</span>
+            <span className="sr-only">· {breakdown.score}/100</span>
             {tooltip}
           </p>
           <p className="mt-0.5 leading-relaxed text-muted-foreground">
@@ -176,7 +200,7 @@ export function MonthHealthSummary({
             {copy.cta && href ? (
               <>
                 {' '}
-                <Link href={href} className="font-semibold text-primary hover:underline">
+                <Link href={href} className="whitespace-nowrap font-semibold text-primary hover:underline">
                   {t(copy.cta)} →
                 </Link>
               </>
@@ -184,7 +208,7 @@ export function MonthHealthSummary({
           </p>
         </div>
       </div>
-      <details className="mt-2 pl-12">
+      <details className="mt-2 pl-[3.75rem]">
         <summary className="cursor-pointer font-semibold text-primary hover:underline">
           {t('dashboard.healthDetails')}
         </summary>

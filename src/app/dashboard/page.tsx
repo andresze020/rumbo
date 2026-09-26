@@ -27,9 +27,12 @@ import { SecondaryWidgetsSkeleton } from './secondary-widgets-skeleton'
 import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
-import { formatMonthLabel, formatPercent, localeToBcp47 } from '@/lib/format'
+import { formatCurrency, formatMonthLabel, formatPercent, localeToBcp47 } from '@/lib/format'
 import { healthBreakdown } from '@/lib/health/score'
 import { MonthHealthSummary } from '@/components/month-health-breakdown'
+import { SpendingPaceCard } from '@/components/dashboard/spending-pace-card'
+import { getDailyExpenses } from '@/lib/dashboard/daily-expenses'
+import { buildSpendingPace } from '@/lib/dashboard/spending-pace'
 import { getHomeChecklist } from '@/lib/home-checklist/server'
 
 export type AccountBalance = {
@@ -151,7 +154,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const prevMonthDate = getPreviousMonthDate(selectedMonth)
   const prevMonthEndDate = monthEndDate(prevMonthDate.slice(0, 7))
 
-  // RUM-005: these 6 reads only depend on household.id and the date variables
+  // RUM-005: these reads only depend on household.id and the date variables
   // computed above — none of them reads another's result. Everything that's
   // ONLY needed below the fold (categories, expense-by-category, recurring,
   // debts, goals, recent transactions, review count) now lives in
@@ -173,6 +176,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { data: budgetRows, error: budgetError },
     { count: nonOpeningTransactionCount },
     { count: needsReviewCount },
+    dailyExpenses,
   ] = await Promise.all([
     // RUM-006: get_account_balances has no lower date bound, so one call per
     // date re-aggregated the whole ledger each time; get_account_balances_as_of_many
@@ -211,6 +215,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .is('deleted_at', null)
       .gte('transaction_date', selectedMonthDate)
       .lte('transaction_date', monthEndDate(selectedMonth)),
+    // Spending pace (2026-09-26): expense per day for last month and this
+    // one, the same allocations get_monthly_dashboard_summary adds up.
+    getDailyExpenses(supabase, household.id, prevMonthDate, monthEndDate(selectedMonth)),
   ])
   const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as MultiDateAccountBalance[])
   const accountBalances = balancesByDate.get(selectedSnapshotDate) ?? []
@@ -269,18 +276,56 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     budgetPercent: totalBudgetPercent,
   })
 
-  const spark = balanceTrendFromRows(
+  const bcp47 = localeToBcp47(locale)
+  const monthName = (isoDate: string, month: 'short' | 'long', withYear = false) =>
+    new Intl.DateTimeFormat(bcp47, { month, ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' }).format(
+      new Date(`${isoDate.slice(0, 7)}-01T00:00:00Z`)
+    )
+
+  const trendPoints = balanceTrendFromRows(
     (multiDateBalances ?? []) as BalanceTrendRow[],
     trendDates,
     'net-worth'
-  ).map((d) => d.value)
+  )
+  const heroTrend = {
+    values: trendPoints.map((d) => d.value),
+    labels: trendDates.monthDates.map((d) => monthName(d, 'long', true)),
+    ticks: trendDates.monthDates.map((d) => monthName(d, 'short')),
+  }
+  // Last month's end only compares when there were accounts then; a first
+  // month would otherwise show its whole net worth as "growth".
+  const netWorthDelta = prevBalanceRows.length
+    ? { amount: netWorth - prevNetWorth, pct: netWorthDeltaPct }
+    : null
 
   // "vs Aug": the comparison month, short, in the reader's language.
-  const vsLabel = t('dashboard.vsMonth', {
-    month: new Intl.DateTimeFormat(localeToBcp47(locale), { month: 'short', timeZone: 'UTC' }).format(
-      new Date(`${prevMonthDate}T00:00:00Z`)
-    ),
-  })
+  const vsLabel = t('dashboard.vsMonth', { month: monthName(prevMonthDate, 'short') })
+
+  // ── Spending pace (2026-09-26). Shown only when its running total lands on
+  // exactly the "Spent" figure from get_monthly_dashboard_summary: two
+  // different numbers for the same thing on one screen is worse than no chart.
+  const pace = dailyExpenses.error ? null : buildSpendingPace(selectedMonth, todayIso, dailyExpenses.amounts)
+  const paceSpent = pace ? pace.current[pace.current.length - 1] ?? 0 : 0
+  const paceAgrees = pace !== null && Math.abs(paceSpent - monthlyExpenses) < 0.01
+  if (pace && !paceAgrees) {
+    console.warn('[dashboard] spending pace total differs from the monthly summary', {
+      month: selectedMonth,
+      pace: paceSpent,
+      summary: monthlyExpenses,
+    })
+  }
+  const isOpenMonth = selectedMonth === todayIso.slice(0, 7)
+  const prevMonthLong = monthName(prevMonthDate, 'long')
+  const paceComparison = (() => {
+    if (!pace || !paceAgrees || pace.previous[pace.previous.length - 1] === 0) return null
+    const diff = pace.diffAtSameDay
+    if (Math.abs(diff) < 0.005) return { text: t('dashboard.paceSame', { month: prevMonthLong }), tone: 'neutral' as const }
+    const vars = { amount: formatCurrency(Math.abs(diff), dashboardCurrency), month: prevMonthLong }
+    const key: TranslationKey = isOpenMonth
+      ? diff < 0 ? 'dashboard.paceLessSameDay' : 'dashboard.paceMoreSameDay'
+      : diff < 0 ? 'dashboard.paceLessMonth' : 'dashboard.paceMoreMonth'
+    return { text: t(key, vars), tone: diff < 0 ? ('good' as const) : ('bad' as const) }
+  })()
   const savingsRate = monthlySummary?.savings_rate != null ? Number(monthlySummary.savings_rate) : null
   const spentShare = monthlyIncome > 0 ? monthlyExpenses / monthlyIncome : null
   const barCaption =
@@ -328,61 +373,84 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             assets={totalAssets}
             liabilities={totalLiabilities}
             projected={projectedNetWorth}
-            deltaPct={netWorthDeltaPct}
+            delta={netWorthDelta}
             currency={baseCurrency}
-            spark={spark}
+            trend={heroTrend}
             labels={{
               netWorth: t('dashboard.heroEyebrow'),
               assets: t('dashboard.heroAssets'),
               liabilities: t('dashboard.heroLiabilities'),
               projected: t('dashboard.heroProjected'),
-              vsPrev: t('common.vsLastMonth'),
+              vsPrev: vsLabel,
+              trendSeries: t('dashboard.heroEyebrow'),
+              trendAria: t('dashboard.netWorthTrendAria', { count: heroTrend.values.length }),
             }}
           />
 
-          {/* The month at a glance (2026-09-25 redesign): income, spending
-              and savings in one card instead of four KPI tiles, with Month
-              health (BR-021 / RUM-009) as its footer line — the full
-              breakdown stays one click away under "Details". */}
-          <CashFlowCard
-            title={t('nav.cashFlow')}
-            currency={dashboardCurrency}
-            income={{
-              label: t('dashboard.cashFlowIncome'),
-              amount: monthlyIncome,
-              delta: renderPctDelta(monthlyIncome, prevIncome, locale, vsLabel),
-            }}
-            spent={{
-              label: t('dashboard.cashFlowSpent'),
-              amount: monthlyExpenses,
-              delta: renderPctDelta(monthlyExpenses, prevExpenses, locale, vsLabel, true),
-            }}
-            saved={{
-              label: t('dashboard.cashFlowSaved'),
-              amount: monthlySavings,
-              delta: renderPctDelta(monthlySavings, prevSavings, locale, vsLabel),
-              tone: monthlySavings < 0 ? 'negative' : 'default',
-            }}
-            spentShare={spentShare}
-            barCaption={barCaption}
-            review={
-              needsReviewCount
-                ? {
-                    href: `/dashboard/transactions?review=unreviewed&status=posted&status=pending&month=${selectedMonth}`,
-                    label: t('dashboard.needsReviewShort', { count: needsReviewCount }),
-                  }
-                : null
-            }
-            trends={{ href: `/dashboard/trends?month=${selectedMonth}`, label: t('dashboard.viewTrends') }}
-            footer={
-              <MonthHealthSummary
-                breakdown={health}
-                month={selectedMonth}
-                locale={locale}
-                tooltip={<InfoTooltip text={t('dashboard.healthScoreTooltip')} label={t('dashboard.monthHealth')} />}
+          {/* The month (2026-09-26): spending pace (this month's running
+              total against last month's) beside the cash-flow statement,
+              with Month health (BR-021 / RUM-009) as its footer — the full
+              breakdown stays one click away under "Details". Without a pace
+              chart the cash-flow card takes the whole row. */}
+          <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] [&>*]:min-w-0">
+            {pace && paceAgrees ? (
+              <SpendingPaceCard
+                pace={pace}
+                currency={dashboardCurrency}
+                labels={{
+                  title: t('dashboard.paceTitle'),
+                  comparison: paceComparison?.text ?? null,
+                  comparisonTone: paceComparison?.tone ?? 'neutral',
+                  currentSeries: monthName(selectedMonthDate, 'long'),
+                  previousSeries: prevMonthLong,
+                  dayLabels: Array.from({ length: pace.daysInMonth }, (_, i) =>
+                    t('dashboard.paceDay', { day: i + 1 })
+                  ),
+                  ariaLabel: t('dashboard.paceAria', { month: monthName(selectedMonthDate, 'long'), previous: prevMonthLong }),
+                }}
               />
-            }
-          />
+            ) : null}
+            <CashFlowCard
+              className={pace && paceAgrees ? undefined : 'lg:col-span-2'}
+              title={t('nav.cashFlow')}
+              currency={dashboardCurrency}
+              income={{
+                label: t('dashboard.cashFlowIncome'),
+                amount: monthlyIncome,
+                delta: renderPctDelta(monthlyIncome, prevIncome, locale, vsLabel),
+              }}
+              spent={{
+                label: t('dashboard.cashFlowSpent'),
+                amount: monthlyExpenses,
+                delta: renderPctDelta(monthlyExpenses, prevExpenses, locale, vsLabel, true),
+              }}
+              saved={{
+                label: t('dashboard.cashFlowSaved'),
+                amount: monthlySavings,
+                delta: renderPctDelta(monthlySavings, prevSavings, locale, vsLabel),
+                tone: monthlySavings < 0 ? 'negative' : 'default',
+              }}
+              spentShare={spentShare}
+              barCaption={barCaption}
+              review={
+                needsReviewCount
+                  ? {
+                      href: `/dashboard/transactions?review=unreviewed&status=posted&status=pending&month=${selectedMonth}`,
+                      label: t('dashboard.needsReviewShort', { count: needsReviewCount }),
+                    }
+                  : null
+              }
+              trends={{ href: `/dashboard/trends?month=${selectedMonth}`, label: t('dashboard.viewTrends') }}
+              footer={
+                <MonthHealthSummary
+                  breakdown={health}
+                  month={selectedMonth}
+                  locale={locale}
+                  tooltip={<InfoTooltip text={t('dashboard.healthScoreTooltip')} label={t('dashboard.monthHealth')} />}
+                />
+              }
+            />
+          </div>
 
           {!hasMonthlyActivity ? (
             <Callout variant="info" className="border-dashed text-muted-foreground">
