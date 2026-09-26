@@ -27,11 +27,33 @@ export function localeToBcp47(locale: Locale = 'en'): string {
   }
 }
 
+/**
+ * Joins `Intl.NumberFormat` parts back into a string, turning the one
+ * non-breaking space between the number and a *trailing* currency code/symbol
+ * (e.g. "23 997,20 CAD" in es/fr) into an ordinary breakable space.
+ *
+ * Every other non-breaking space — the thousands grouping separator fr-CA
+ * uses ("23 997") — stays non-breaking, so a number never splits across
+ * lines. Only the boundary before the trailing code is a safe wrap point: at
+ * worst the code drops to its own line, instead of a narrow card's
+ * `overflow-wrap` forcing an ugly break inside "CAD" itself because the nbsp
+ * left it nowhere else to break.
+ */
+function joinAllowingWrapBeforeTrailingCurrency(parts: Intl.NumberFormatPart[]): string {
+  const currencyIndex = parts.findIndex((part) => part.type === 'currency')
+  return parts
+    .map((part, index) =>
+      part.type === 'literal' && index === currencyIndex - 1 ? part.value.replace(' ', ' ') : part.value
+    )
+    .join('')
+}
+
 export function formatCurrency(value: number | string, currencyCode: string, locale: Locale = 'en') {
-  return new Intl.NumberFormat(localeToBcp47(locale), {
+  const formatter = new Intl.NumberFormat(localeToBcp47(locale), {
     style: 'currency',
     currency: currencyCode,
-  }).format(Number(value))
+  })
+  return joinAllowingWrapBeforeTrailingCurrency(formatter.formatToParts(Number(value)))
 }
 
 /**
@@ -43,12 +65,13 @@ export function formatCurrencyCompact(value: number | string, currencyCode: stri
   if (Math.abs(numeric) < 10_000) {
     return formatCurrency(numeric, currencyCode, locale)
   }
-  return new Intl.NumberFormat(localeToBcp47(locale), {
+  const formatter = new Intl.NumberFormat(localeToBcp47(locale), {
     style: 'currency',
     currency: currencyCode,
     notation: 'compact',
     maximumFractionDigits: 1,
-  }).format(numeric)
+  })
+  return joinAllowingWrapBeforeTrailingCurrency(formatter.formatToParts(numeric))
 }
 
 /**
