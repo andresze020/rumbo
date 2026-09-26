@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, PiggyBank, TrendingUp } from 'lucide-react'
 import { Callout } from '@/components/callout'
 import { LineChart } from '@/components/dashboard/line-chart'
 import { TimeframeSelector } from '@/components/charts/timeframe-selector'
@@ -126,32 +125,24 @@ export function TrendsExplorer({
       value: formatCurrency(avgIncome, currency, locale),
       valueClass: 'text-emerald-600 dark:text-emerald-400',
       sub: incomeDelta,
-      icon: <ArrowUpRight />,
-      accent: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
     },
     {
       label: 'Avg. monthly spending',
       value: formatCurrency(avgExpenses, currency, locale),
       valueClass: 'text-red-600 dark:text-red-400',
       sub: expensesDelta,
-      icon: <ArrowDownRight />,
-      accent: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
     },
     {
       label: 'Avg. monthly savings',
       value: `${avgSavings >= 0 ? '+' : '−'}${formatCurrency(Math.abs(avgSavings), currency, locale)}`,
       valueClass: avgSavings >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
       sub: savingsDelta,
-      icon: <PiggyBank />,
-      accent: 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400',
     },
     {
       label: 'Net worth change',
       value: `${netWorthChange >= 0 ? '+' : '−'}${formatCurrency(Math.abs(netWorthChange), currency, locale)}`,
       valueClass: netWorthChange >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
       sub: { text: `over the last ${rangeLabel}`, good: netWorthChange >= 0 },
-      icon: <TrendingUp />,
-      accent: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
     },
   ]
 
@@ -170,16 +161,8 @@ export function TrendsExplorer({
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className={cn(CARD, 'p-4')}>
-            <div className="flex items-center gap-2.5">
-              <span
-                className={cn('flex size-8 shrink-0 items-center justify-center rounded-lg [&_svg]:size-4', kpi.accent)}
-                aria-hidden="true"
-              >
-                {kpi.icon}
-              </span>
-              <span className="truncate text-sm font-medium text-muted-foreground">{kpi.label}</span>
-            </div>
+          <div key={kpi.label} className={cn(CARD, 'p-4 transition-shadow hover:shadow-md')}>
+            <p className="text-[13px] font-medium leading-snug text-muted-foreground">{kpi.label}</p>
             <p className={cn('mt-2.5 text-xl font-semibold tabular-nums sm:text-2xl', kpi.valueClass)}>{kpi.value}</p>
             {kpi.sub ? (
               <p
@@ -215,6 +198,7 @@ export function TrendsExplorer({
           xLabels={longLabels}
           ticks={monthlyTickPoints}
           currency={currency}
+          height={220}
           formatValue={(v) => formatCurrencyCompact(v, currency, locale)}
           ariaLabel={`Income and expenses for each of the last ${rangeLabel}`}
         />
@@ -232,6 +216,7 @@ export function TrendsExplorer({
             xLabels={longLabels}
             ticks={monthlyTickPoints}
             currency={currency}
+            height={200}
             formatValue={(v) => formatCurrencyCompact(v, currency, locale)}
             ariaLabel={`Monthly savings for each of the last ${rangeLabel}`}
           />
@@ -247,6 +232,7 @@ export function TrendsExplorer({
             xLabels={netWorthTooltipLabels}
             ticks={netWorthTicks}
             currency={currency}
+            height={200}
             formatValue={(v) => formatCurrencyCompact(v, currency, locale)}
             ariaLabel={`Net worth at the end of each of the last ${rangeLabel}`}
           />
@@ -271,6 +257,7 @@ export function TrendsExplorer({
           xLabels={longLabels}
           ticks={monthlyTickPoints}
           currency={currency}
+          height={200}
           formatValue={(v) => `${Math.round(v)}%`}
           ariaLabel={`Savings rate for each of the last ${rangeLabel}`}
         />

@@ -1,5 +1,4 @@
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
-import { InfoTooltip } from '@/components/info-tooltip'
 import { HeroTrendChart } from '@/components/dashboard/hero-trend-chart'
 import { Money } from '@/components/dashboard/money'
 import { cn } from '@/lib/utils'
@@ -126,7 +125,6 @@ export function FinancialHeroCard({
               <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span className="size-1.5 rounded-full bg-rose-500" aria-hidden="true" />
                 {labels.liabilities}
-                <InfoTooltip term="liabilities" label={labels.liabilities} />
               </dt>
               <dd className="mt-0.5 text-base font-semibold">
                 <Money value={liabilities} currency={currency} />

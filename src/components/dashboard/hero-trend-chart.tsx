@@ -46,11 +46,6 @@ export function HeroTrendChart({
 
   return (
     <div className={className}>
-      {options.length > 1 ? (
-        <div className="mb-2 flex justify-end">
-          <TimeframeSelector options={options} value={months} onChange={setMonths} ariaLabel={rangeAriaLabel} />
-        </div>
-      ) : null}
       <LineChart
         key={months}
         series={[{ label: seriesLabel, values, tone: 'primary', area: true }]}
@@ -62,6 +57,11 @@ export function HeroTrendChart({
         markLast
         ariaLabel={ariaLabelByMonths[months] ?? ariaLabelByMonths[defaultMonths]}
       />
+      {options.length > 1 ? (
+        <div className="mt-3 flex justify-center">
+          <TimeframeSelector options={options} value={months} onChange={setMonths} ariaLabel={rangeAriaLabel} />
+        </div>
+      ) : null}
     </div>
   )
 }

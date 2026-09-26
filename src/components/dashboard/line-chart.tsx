@@ -183,7 +183,13 @@ export function LineChart({
         tabIndex={0}
         className={cn(
           'relative touch-pan-y rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-          fixedHeight === undefined && 'min-h-0 flex-1'
+          // A caller relying on flex-grow (no `height`) must also give this
+          // component's own root a definite height via `className` (e.g.
+          // `h-32` or `min-h-[200px] flex-1`) — flex-grow has nothing to grow
+          // into otherwise, since every child in the plot below is
+          // absolutely positioned and so contributes no natural height. The
+          // floor here is a safety net, not a substitute for that.
+          fixedHeight === undefined && 'min-h-[160px] flex-1'
         )}
         style={fixedHeight === undefined ? undefined : { height: fixedHeight }}
         onPointerMove={(e) => setActive(indexFromPointer(e))}
