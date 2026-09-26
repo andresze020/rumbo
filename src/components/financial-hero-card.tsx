@@ -1,9 +1,10 @@
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { InfoTooltip } from '@/components/info-tooltip'
-import { LineChart } from '@/components/dashboard/line-chart'
+import { HeroTrendChart } from '@/components/dashboard/hero-trend-chart'
 import { Money } from '@/components/dashboard/money'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/format'
+import { MONTHLY_TIMEFRAME_OPTIONS } from '@/lib/charts/timeframe-options'
 
 type FinancialHeroCardProps = {
   netWorth: number
@@ -13,8 +14,12 @@ type FinancialHeroCardProps = {
   /** Net-worth change vs last month's end, or null when there is nothing to compare. */
   delta: { amount: number; pct: number | null } | null
   currency: string
-  /** Net worth for the last N months, oldest first, with their labels. */
+  /** Net worth for the longest selectable range, oldest first, with their labels. */
   trend: { values: number[]; labels: string[]; ticks: string[] }
+  /** Months shown before the reader picks a different timeframe. */
+  defaultTrendMonths: number
+  /** One pre-translated chart aria-label per selectable month count. */
+  trendAriaByMonths: Record<number, string>
   labels: {
     netWorth: string
     assets: string
@@ -22,7 +27,7 @@ type FinancialHeroCardProps = {
     projected: string
     vsPrev: string
     trendSeries: string
-    trendAria: string
+    trendRangeAria: string
   }
 }
 
@@ -69,12 +74,13 @@ export function FinancialHeroCard({
   delta,
   currency,
   trend,
+  defaultTrendMonths,
+  trendAriaByMonths,
   labels,
 }: FinancialHeroCardProps) {
   // Projected only adds information when pending or future-dated entries move
   // it; otherwise it repeats the net worth next to it (2026-09-25 redesign).
   const showProjected = Math.abs(projected - netWorth) >= 0.005
-  const ticks = trend.ticks.map((label, index) => ({ index, label }))
 
   return (
     <section
@@ -140,18 +146,15 @@ export function FinancialHeroCard({
           </dl>
         </div>
 
-        {trend.values.length > 1 ? (
-          <LineChart
-            series={[{ label: labels.trendSeries, values: trend.values, tone: 'primary', area: true }]}
-            xCount={trend.values.length}
-            xLabels={trend.labels}
-            ticks={ticks}
-            currency={currency}
-            className="h-32 lg:h-44"
-            markLast
-            ariaLabel={labels.trendAria}
-          />
-        ) : null}
+        <HeroTrendChart
+          trend={trend}
+          currency={currency}
+          seriesLabel={labels.trendSeries}
+          options={MONTHLY_TIMEFRAME_OPTIONS}
+          defaultMonths={defaultTrendMonths}
+          ariaLabelByMonths={trendAriaByMonths}
+          rangeAriaLabel={labels.trendRangeAria}
+        />
       </div>
     </section>
   )

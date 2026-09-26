@@ -34,6 +34,7 @@ import { SpendingPaceCard } from '@/components/dashboard/spending-pace-card'
 import { getDailyExpenses } from '@/lib/dashboard/daily-expenses'
 import { buildSpendingPace } from '@/lib/dashboard/spending-pace'
 import { getHomeChecklist } from '@/lib/home-checklist/server'
+import { MAX_MONTHLY_TIMEFRAME_MONTHS, MONTHLY_TIMEFRAME_OPTIONS } from '@/lib/charts/timeframe-options'
 
 export type AccountBalance = {
   account_id: string
@@ -163,10 +164,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   // here (not deferred) because computeHealthScore below needs it and its
   // output renders in the top-of-fold hero card — see the ticket doc for why.
   // One balance pass for everything the page values: this month, last month's
-  // end (the delta) and the six months of the net-worth sparkline. The trend
-  // used to make its own get_account_balances_as_of_many call through
-  // getDashboardTrend, with its own auth + profile lookups (2026-09-25).
-  const trendDates = balanceTrendDates(selectedMonth, 6, todayIso)
+  // end (the delta) and the net-worth sparkline's longest selectable range
+  // (2026-09-26: sent once, sliced client-side per timeframe pill — still
+  // one get_account_balances_as_of_many call, just with more dates in it).
+  // The trend used to make its own get_account_balances_as_of_many call
+  // through getDashboardTrend, with its own auth + profile lookups (2026-09-25).
+  const trendDates = balanceTrendDates(selectedMonth, MAX_MONTHLY_TIMEFRAME_MONTHS, todayIso)
   const balanceDates = [...new Set([...trendDates.snapshotDates, selectedSnapshotDate, prevMonthEndDate])]
 
   const [
@@ -292,6 +295,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     labels: trendDates.monthDates.map((d) => monthName(d, 'long', true)),
     ticks: trendDates.monthDates.map((d) => monthName(d, 'short')),
   }
+  // One pre-translated aria-label per pill (3M/6M/1Y): the count in each
+  // is just that option's months, so there's no need for client-side i18n.
+  const trendAriaByMonths: Record<number, string> = Object.fromEntries(
+    MONTHLY_TIMEFRAME_OPTIONS.map((option) => [
+      option.months,
+      t('dashboard.netWorthTrendAria', { count: option.months }),
+    ])
+  )
   // Last month's end only compares when there were accounts then; a first
   // month would otherwise show its whole net worth as "growth".
   const netWorthDelta = prevBalanceRows.length
@@ -376,6 +387,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             delta={netWorthDelta}
             currency={baseCurrency}
             trend={heroTrend}
+            defaultTrendMonths={6}
+            trendAriaByMonths={trendAriaByMonths}
             labels={{
               netWorth: t('dashboard.heroEyebrow'),
               assets: t('dashboard.heroAssets'),
@@ -383,7 +396,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               projected: t('dashboard.heroProjected'),
               vsPrev: vsLabel,
               trendSeries: t('dashboard.heroEyebrow'),
-              trendAria: t('dashboard.netWorthTrendAria', { count: heroTrend.values.length }),
+              trendRangeAria: t('dashboard.trendRangeAria'),
             }}
           />
 

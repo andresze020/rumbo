@@ -2,13 +2,16 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { formatCurrency } from '@/lib/format'
+import { ACCENT_COLOR, NEGATIVE_COLOR, POSITIVE_COLOR } from '@/lib/chart-colors'
 import { cn } from '@/lib/utils'
+
+export type LineSeriesTone = 'primary' | 'muted' | 'positive' | 'negative' | 'accent'
 
 export type LineSeries = {
   label: string
   /** One value per x index; shorter than the domain when the series stops early (the open month). */
   values: number[]
-  tone: 'primary' | 'muted'
+  tone: LineSeriesTone
   dashed?: boolean
   /** Gradient fill under the line. */
   area?: boolean
@@ -23,6 +26,8 @@ type LineChartProps = {
   /** Axis ticks under the plot; omit for a sparkline-style chart. */
   ticks?: { index: number; label: string }[]
   currency: string
+  /** Overrides the tooltip's default currency formatting, e.g. for a percentage series. */
+  formatValue?: (value: number) => string
   /** Plot height in px; omit to fill the parent's remaining height (a flex column). */
   height?: number
   /** Include 0 in the y domain (cumulative spending). Off: fit to the data (net worth). */
@@ -33,9 +38,12 @@ type LineChartProps = {
   className?: string
 }
 
-const TONE = {
+const TONE: Record<LineSeriesTone, string> = {
   primary: 'var(--primary)',
   muted: 'var(--muted-foreground)',
+  positive: POSITIVE_COLOR,
+  negative: NEGATIVE_COLOR,
+  accent: ACCENT_COLOR,
 } as const
 
 /**
@@ -80,12 +88,14 @@ export function LineChart({
   xLabels,
   ticks,
   currency,
+  formatValue,
   height: fixedHeight,
   zeroBased = false,
   markLast = false,
   ariaLabel,
   className,
 }: LineChartProps) {
+  const formatTooltipValue = formatValue ?? ((v: number) => formatCurrency(v, currency))
   const gradientId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const boxRef = useRef<HTMLDivElement>(null)
   // Real pixel size, so strokes are never stretched; a guess until measured.
@@ -250,11 +260,8 @@ export function LineChart({
             {tooltipRows.map(({ s, v }) => (
               <span
                 key={s.label}
-                className={cn(
-                  'pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-card',
-                  s.tone === 'primary' ? 'bg-primary' : 'bg-muted-foreground'
-                )}
-                style={{ left: `${xPct(active)}%`, top: `${yPct(v)}%` }}
+                className="pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-card"
+                style={{ left: `${xPct(active)}%`, top: `${yPct(v)}%`, backgroundColor: TONE[s.tone] }}
                 aria-hidden="true"
               />
             ))}
@@ -270,12 +277,13 @@ export function LineChart({
                 <p key={s.label} className="flex items-center justify-between gap-3">
                   <span className="flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
                     <span
-                      className={cn('inline-block h-0.5 w-3 rounded-full', s.tone === 'primary' ? 'bg-primary' : 'bg-muted-foreground/60')}
+                      className="inline-block h-0.5 w-3 rounded-full"
+                      style={{ backgroundColor: TONE[s.tone], opacity: s.tone === 'muted' ? 0.6 : 1 }}
                       aria-hidden="true"
                     />
                     {s.label}
                   </span>
-                  <span className="font-semibold tabular-nums">{formatCurrency(v, currency)}</span>
+                  <span className="font-semibold tabular-nums">{formatTooltipValue(v)}</span>
                 </p>
               ))}
             </div>
