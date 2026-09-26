@@ -79,6 +79,9 @@ export const en = {
     ppVsLastMonth: 'pp vs last month',
     previousMonth: 'Previous month',
     nextMonth: 'Next month',
+    previousYear: 'Previous year',
+    nextYear: 'Next year',
+    selectMonth: 'Select month',
   },
   settings: {
     exchangeRates: {
@@ -148,6 +151,7 @@ export const en = {
       'Running total of spending by day in {month}, with {previous} for comparison. Use the left and right arrow keys to read each day.',
     netWorthTrendAria:
       'Net worth at the end of each of the last {count} months. Use the left and right arrow keys to read each month.',
+    trendRangeAria: 'Choose the time range shown in the net worth chart.',
     budgetTitle: 'Budget vs Actual',
     budgetDescription: 'Planned vs posted spend for {month}.',
     viewBudget: 'View budget',
@@ -661,6 +665,9 @@ export const es: DeepStringify<typeof en> = {
     ppVsLastMonth: 'pp vs. mes anterior',
     previousMonth: 'Mes anterior',
     nextMonth: 'Mes siguiente',
+    previousYear: 'Año anterior',
+    nextYear: 'Año siguiente',
+    selectMonth: 'Selecciona un mes',
   },
   settings: {
     exchangeRates: {
@@ -730,6 +737,7 @@ export const es: DeepStringify<typeof en> = {
       'Gasto acumulado por día en {month}, con {previous} como comparación. Usa las flechas izquierda y derecha para leer cada día.',
     netWorthTrendAria:
       'Patrimonio neto al final de cada uno de los últimos {count} meses. Usa las flechas izquierda y derecha para leer cada mes.',
+    trendRangeAria: 'Elige el período de tiempo que se muestra en el gráfico de patrimonio neto.',
     budgetTitle: 'Presupuesto vs. real',
     budgetDescription: 'Gasto planeado vs. contabilizado para {month}.',
     viewBudget: 'Ver presupuesto',
@@ -1244,6 +1252,9 @@ export const fr: DeepStringify<typeof en> = {
     ppVsLastMonth: 'pp vs mois précédent',
     previousMonth: 'Mois précédent',
     nextMonth: 'Mois suivant',
+    previousYear: 'Année précédente',
+    nextYear: 'Année suivante',
+    selectMonth: 'Sélectionner un mois',
   },
   settings: {
     exchangeRates: {
@@ -1313,6 +1324,7 @@ export const fr: DeepStringify<typeof en> = {
       'Total cumulé des dépenses par jour en {month}, comparé à {previous}. Utilisez les flèches gauche et droite pour lire chaque jour.',
     netWorthTrendAria:
       'Valeur nette à la fin de chacun des {count} derniers mois. Utilisez les flèches gauche et droite pour lire chaque mois.',
+    trendRangeAria: 'Choisissez la période affichée dans le graphique de valeur nette.',
     budgetTitle: 'Budget vs réel',
     budgetDescription: 'Dépenses prévues vs comptabilisées pour {month}.',
     viewBudget: 'Voir le budget',

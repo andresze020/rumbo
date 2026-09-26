@@ -298,18 +298,7 @@ export async function getBudgetLines(
 }
 
 // ── Shared chart palette ─────────────────────────────────────────────────────
-
-/** Calm fintech palette aligned with the dashboard donut/budget colors. */
-export const SERIES_PALETTE = [
-  'oklch(0.62 0.19 255)', // blue
-  'oklch(0.70 0.15 165)', // teal
-  'oklch(0.72 0.17 70)', // amber
-  'oklch(0.65 0.20 25)', // rose
-  'oklch(0.62 0.18 300)', // violet
-  'oklch(0.68 0.14 145)', // green
-  'oklch(0.60 0.02 260)', // slate (Other)
-] as const
-
-export const POSITIVE_COLOR = 'oklch(0.70 0.15 165)'
-export const NEGATIVE_COLOR = 'oklch(0.65 0.20 25)'
-export const ACCENT_COLOR = 'oklch(0.62 0.19 255)'
+// Defined in lib/chart-colors (no `server-only`) so client chart components
+// can import the same constants; re-exported here so existing callers don't
+// need to change their import path.
+export { SERIES_PALETTE, POSITIVE_COLOR, NEGATIVE_COLOR, ACCENT_COLOR } from '@/lib/chart-colors'
