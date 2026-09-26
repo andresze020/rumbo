@@ -211,6 +211,7 @@ export function TrendsExplorer({
           ticks={monthlyTickPoints}
           currency={currency}
           height={220}
+          zeroBased
           formatValue={(v) => formatCurrencyCompact(v, currency, locale)}
           ariaLabel={`Income and expenses for each of the last ${rangeLabel}`}
         />
@@ -229,6 +230,7 @@ export function TrendsExplorer({
             ticks={monthlyTickPoints}
             currency={currency}
             height={200}
+            zeroBased
             formatValue={(v) => formatCurrencyCompact(v, currency, locale)}
             ariaLabel={`Monthly savings for each of the last ${rangeLabel}`}
           />
@@ -270,6 +272,7 @@ export function TrendsExplorer({
           ticks={monthlyTickPoints}
           currency={currency}
           height={200}
+          zeroBased
           formatValue={(v) => `${Math.round(v)}%`}
           ariaLabel={`Savings rate for each of the last ${rangeLabel}`}
         />

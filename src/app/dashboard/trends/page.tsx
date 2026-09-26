@@ -25,12 +25,12 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
   const months = lastNMonths(month, MAX_MONTHLY_TIMEFRAME_MONTHS)
   const [monthly, netWorthResult] = await Promise.all([
     getMonthlySeries(ctx, months, locale),
-    getDashboardTrend('net-worth', month, MAX_MONTHLY_TIMEFRAME_MONTHS),
+    getDashboardTrend('net-worth', month, MAX_MONTHLY_TIMEFRAME_MONTHS, locale),
   ])
   const netWorth = netWorthResult.ok ? netWorthResult.data : []
 
   const monthlyLongLabels = monthly.map((m) => longMonthLabel(m.month, locale))
-  const monthlyTicks = monthly.map((m) => trendMonthLabel(m.month))
+  const monthlyTicks = monthly.map((m) => trendMonthLabel(m.month, locale))
   const netWorthLongLabels = netWorth.map((p) => longMonthLabel(p.month, locale))
 
   return (

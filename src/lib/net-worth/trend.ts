@@ -1,6 +1,8 @@
 import { groupByAsOfDate } from '@/lib/balances/multi-date'
 import { computeValuation, selectNetWorthAccounts } from '@/lib/net-worth/valuation'
 import { snapshotDateForMonth } from '@/lib/periods/month'
+import { localeToBcp47 } from '@/lib/format'
+import type { Locale } from '@/lib/i18n/dictionaries'
 
 export type BalanceTrendMetric =
   | 'net-worth'
@@ -34,10 +36,10 @@ export function lastNMonthDates(currentMonth: string, n: number): string[] {
   return months
 }
 
-export function trendMonthLabel(monthDate: string): string {
+export function trendMonthLabel(monthDate: string, locale: Locale = 'en'): string {
   const [year, mon] = monthDate.slice(0, 7).split('-').map(Number)
   const d = new Date(year, mon - 1, 1)
-  const monthStr = d.toLocaleDateString('en-CA', { month: 'short' })
+  const monthStr = d.toLocaleDateString(localeToBcp47(locale), { month: 'short' })
   return `${monthStr} '${String(year).slice(2)}`
 }
 
@@ -58,7 +60,8 @@ export function balanceTrendDates(currentMonth: string, n: number, todayIso: str
 export function balanceTrendFromRows(
   rows: BalanceTrendRow[],
   dates: { monthDates: string[]; snapshotDates: string[] },
-  metric: BalanceTrendMetric
+  metric: BalanceTrendMetric,
+  locale: Locale = 'en'
 ): TrendPoint[] {
   const byDate = groupByAsOfDate(rows)
   return dates.monthDates.map((d, i) => {
@@ -68,6 +71,6 @@ export function balanceTrendFromRows(
     else if (metric === 'total-assets') value = valuation.totalAssets
     else if (metric === 'total-liabilities') value = valuation.totalLiabilities
     else if (metric === 'projected-net-worth') value = valuation.projectedNetWorth
-    return { month: d.slice(0, 7), label: trendMonthLabel(d), value }
+    return { month: d.slice(0, 7), label: trendMonthLabel(d, locale), value }
   })
 }

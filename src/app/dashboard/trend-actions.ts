@@ -10,6 +10,7 @@ import {
   type BalanceTrendRow,
   type TrendPoint as BalanceTrendPoint,
 } from '@/lib/net-worth/trend'
+import type { Locale } from '@/lib/i18n/dictionaries'
 
 export type TrendMetric =
   | 'monthly-income'
@@ -40,7 +41,8 @@ type MonthlySummaryRow = {
 export async function getDashboardTrend(
   metric: TrendMetric,
   currentMonth: string,
-  numMonths = 6
+  numMonths = 6,
+  locale: Locale = 'en'
 ): Promise<TrendResult> {
   // Shared with the rest of this request (lib/supabase/request).
   const user = await getRequestUser()
@@ -78,7 +80,7 @@ export async function getDashboardTrend(
         else if (metric === 'monthly-savings') value = Number(row.monthly_savings ?? 0)
         else if (metric === 'savings-rate') value = Number(row.savings_rate ?? 0)
       }
-      return { month: monthDates[i].slice(0, 7), label: trendMonthLabel(monthDates[i]), value }
+      return { month: monthDates[i].slice(0, 7), label: trendMonthLabel(monthDates[i], locale), value }
     })
 
     return { ok: true, data }
@@ -106,7 +108,8 @@ export async function getDashboardTrend(
   const data: TrendPoint[] = balanceTrendFromRows(
     (multiDateBalances ?? []) as BalanceTrendRow[],
     dates,
-    metric as Parameters<typeof balanceTrendFromRows>[2]
+    metric as Parameters<typeof balanceTrendFromRows>[2],
+    locale
   )
 
   return { ok: true, data }
