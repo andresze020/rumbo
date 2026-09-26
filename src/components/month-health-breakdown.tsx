@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { formatPercent } from '@/lib/format'
 import {
   HEALTH_BUDGET_WEIGHT,
@@ -44,11 +45,14 @@ export function MonthHealthBreakdown({
   month,
   locale,
   className,
+  showAction = true,
 }: {
   breakdown: HealthBreakdown
   month: string
   locale: Locale
   className?: string
+  /** False where the caller already shows the action (MonthHealthSummary). */
+  showAction?: boolean
 }) {
   const t = (key: TranslationKey, vars?: Record<string, string | number>) => translate(locale, key, vars)
   const pct = (value: number) => formatPercent(value, locale, { minimumFractionDigits: 0 })
@@ -99,6 +103,7 @@ export function MonthHealthBreakdown({
         ))}
       </dl>
       {!budget ? <p className="text-muted-foreground">{t('dashboard.healthNoBudget')}</p> : null}
+      {showAction ? (
       <p className="leading-relaxed text-foreground">
         {t(copy.text)}
         {copy.cta && href ? (
@@ -110,6 +115,7 @@ export function MonthHealthBreakdown({
           </>
         ) : null}
       </p>
+      ) : null}
       <details className="group text-muted-foreground">
         <summary className="cursor-pointer font-semibold text-primary hover:underline">
           {t('dashboard.healthHowCalculated')}
@@ -125,6 +131,88 @@ export function MonthHealthBreakdown({
           </li>
           <li>{t('dashboard.healthThresholdGrades')}</li>
         </ul>
+      </details>
+    </div>
+  )
+}
+
+/**
+ * The one-line Month health for the Dashboard's cash-flow card (2026-09-25
+ * redesign): grade, score and the suggested action, with the full RUM-009
+ * breakdown one click away under "Details". Same numbers as Month review.
+ */
+export function MonthHealthSummary({
+  breakdown,
+  month,
+  locale,
+  tooltip,
+}: {
+  breakdown: HealthBreakdown
+  month: string
+  locale: Locale
+  tooltip?: ReactNode
+}) {
+  const t = (key: TranslationKey, vars?: Record<string, string | number>) => translate(locale, key, vars)
+  const copy = ACTION_COPY[breakdown.action]
+  const href = healthActionHref(breakdown.action, month)
+
+  // Ring gauge (2026-09-26): the score as a filled arc, in the status color of
+  // its band. The grade sits next to it as text, so color is never the only cue.
+  const radius = 19
+  const circumference = 2 * Math.PI * radius
+  const filled = (Math.max(0, Math.min(100, breakdown.score)) / 100) * circumference
+  const ringTone =
+    breakdown.score >= 70
+      ? 'text-emerald-500'
+      : breakdown.score >= 50
+      ? 'text-amber-500'
+      : 'text-rose-500'
+
+  return (
+    <div className="text-xs">
+      <div className="flex items-start gap-3">
+        <span className="relative flex size-12 shrink-0 items-center justify-center" aria-hidden="true">
+          <svg viewBox="0 0 48 48" className="absolute inset-0 size-12 -rotate-90">
+            <circle cx="24" cy="24" r={radius} fill="none" stroke="var(--muted)" strokeWidth="4" />
+            <circle
+              cx="24"
+              cy="24"
+              r={radius}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray={`${filled} ${circumference}`}
+              className={ringTone}
+            />
+          </svg>
+          <span className="text-sm font-semibold tabular-nums">{breakdown.score}</span>
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold">{t('dashboard.monthHealth')}</span>
+            <span className="rounded-md bg-muted px-1.5 py-px text-[11px] font-semibold">{breakdown.grade}</span>
+            <span className="sr-only">· {breakdown.score}/100</span>
+            {tooltip}
+          </p>
+          <p className="mt-0.5 leading-relaxed text-muted-foreground">
+            {t(copy.text)}
+            {copy.cta && href ? (
+              <>
+                {' '}
+                <Link href={href} className="whitespace-nowrap font-semibold text-primary hover:underline">
+                  {t(copy.cta)} →
+                </Link>
+              </>
+            ) : null}
+          </p>
+        </div>
+      </div>
+      <details className="mt-2 pl-[3.75rem]">
+        <summary className="cursor-pointer font-semibold text-primary hover:underline">
+          {t('dashboard.healthDetails')}
+        </summary>
+        <MonthHealthBreakdown breakdown={breakdown} month={month} locale={locale} showAction={false} className="mt-2" />
       </details>
     </div>
   )

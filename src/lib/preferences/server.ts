@@ -1,5 +1,5 @@
 import 'server-only'
-import { createClient } from '@/lib/supabase/server'
+import { getRequestProfile } from '@/lib/supabase/request'
 import {
   DEFAULT_UI_PREFERENCES,
   parseUiPreferences,
@@ -13,20 +13,10 @@ import {
  */
 export async function getUiPreferences(): Promise<UiPreferences> {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return DEFAULT_UI_PREFERENCES
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('ui_preferences')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    if (error || !data) return DEFAULT_UI_PREFERENCES
-    return parseUiPreferences(data.ui_preferences)
+    // Shared with every other reader in this request (lib/supabase/request).
+    const profile = await getRequestProfile()
+    if (!profile) return DEFAULT_UI_PREFERENCES
+    return parseUiPreferences(profile.ui_preferences)
   } catch {
     return DEFAULT_UI_PREFERENCES
   }

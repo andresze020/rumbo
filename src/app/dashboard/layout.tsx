@@ -19,7 +19,7 @@ import { createUiTranslator } from '@/lib/i18n/ui'
 import { getHouseholdContext } from '@/lib/households/server'
 import { reportPerfAfterResponse } from '@/lib/perf/collector'
 import { getUiPreferences } from '@/lib/preferences/server'
-import { createClient } from '@/lib/supabase/server'
+import { getRequestUser } from '@/lib/supabase/request'
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   // RUM-001. No-op unless RUMBO_PERF=1. Registered here rather than per page so
@@ -31,10 +31,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const ui = createUiTranslator(locale)
 
   // Signed-in identity for the sidebar's bottom user block (Option D).
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getRequestUser()
   const userEmail = user?.email ?? null
 
   // Read here rather than in the root layout: `<html>` lives up there, but so

@@ -1,14 +1,10 @@
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import Link from 'next/link'
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  Percent,
-  PiggyBank,
-} from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { getRequestProfile, getRequestUser } from '@/lib/supabase/request'
 import { groupByAsOfDate } from '@/lib/balances/multi-date'
+import { balanceTrendDates, balanceTrendFromRows, type BalanceTrendRow } from '@/lib/net-worth/trend'
 import { computeValuation, selectNetWorthAccounts } from '@/lib/net-worth/valuation'
 import { monthEndDate, snapshotDateForMonth } from '@/lib/periods/month'
 import { buttonVariants } from '@/components/ui/button'
@@ -19,32 +15,25 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { MetricCard } from '@/components/metric-card'
+import { CashFlowCard } from '@/components/cash-flow-card'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { HomeChecklist } from '@/components/home-checklist'
 import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { Callout } from '@/components/callout'
 import { FinancialHeroCard } from '@/components/financial-hero-card'
 import { MonthNav } from '@/components/month-nav'
-import { getDashboardTrend } from './trend-actions'
 import { DashboardSecondaryWidgets } from './secondary-widgets'
 import { SecondaryWidgetsSkeleton } from './secondary-widgets-skeleton'
 import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
-import { formatCurrency, formatMonthLabel, formatPercent, formatTransactionCount, localeToBcp47 } from '@/lib/format'
+import { formatCurrency, formatMonthLabel, formatPercent, localeToBcp47 } from '@/lib/format'
 import { healthBreakdown } from '@/lib/health/score'
-import { MonthHealthBreakdown } from '@/components/month-health-breakdown'
+import { MonthHealthSummary } from '@/components/month-health-breakdown'
+import { SpendingPaceCard } from '@/components/dashboard/spending-pace-card'
+import { getDailyExpenses } from '@/lib/dashboard/daily-expenses'
+import { buildSpendingPace } from '@/lib/dashboard/spending-pace'
 import { getHomeChecklist } from '@/lib/home-checklist/server'
-import { cn } from '@/lib/utils'
-
-const ACCENT = {
-  emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
-  rose: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
-  sky: 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400',
-  violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
-  primary: 'bg-primary/10 text-primary',
-} as const
 
 export type AccountBalance = {
   account_id: string
@@ -95,43 +84,30 @@ function getPreviousMonthDate(month: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 
+/**
+ * "↓ 71% vs Aug": compact enough for three columns on a phone. Green or red by
+ * whether the move is good for this line (spending going up is bad).
+ */
 function renderPctDelta(
   current: number,
   previous: number | null,
   locale: Locale,
+  vsLabel: string,
   higherIsBad = false
 ) {
   if (previous === null || previous === 0) return null
   const diff = (current - previous) / Math.abs(previous)
   if (Math.abs(diff) < 0.0005) {
-    return <span className="text-xs text-muted-foreground">{translate(locale, 'common.noChangeVsLastMonth')}</span>
+    return <span className="text-muted-foreground">{translate(locale, 'common.noChangeVsLastMonth')}</span>
   }
   const isUp = diff > 0
   const isGood = higherIsBad ? !isUp : isUp
-  const arrow = isUp ? '↑' : '↓'
   const formatted = new Intl.NumberFormat(localeToBcp47(locale), {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
+    maximumFractionDigits: Math.abs(diff) < 0.1 ? 1 : 0,
   }).format(Math.abs(diff) * 100)
   return (
-    <span className={`text-xs font-medium ${isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-      {arrow} {formatted}% {translate(locale, 'common.vsLastMonth')}
-    </span>
-  )
-}
-
-function renderRateDelta(diff: number | null, locale: Locale) {
-  if (diff === null) return null
-  if (Math.abs(diff) < 0.0001) return <span className="text-xs text-muted-foreground">{translate(locale, 'common.noChangeVsLastMonth')}</span>
-  const isUp = diff > 0
-  const arrow = isUp ? '↑' : '↓'
-  const formatted = new Intl.NumberFormat(localeToBcp47(locale), {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(Math.abs(diff * 100))
-  return (
-    <span className={`text-xs font-medium ${isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-      {arrow} {formatted} {translate(locale, 'common.ppVsLastMonth')}
+    <span className={`font-medium ${isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+      {isUp ? '↑' : '↓'} {formatted}% <span className="font-normal text-muted-foreground">{vsLabel}</span>
     </span>
   )
 }
@@ -159,18 +135,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const supabase = await createClient()
   const locale = await getLocale()
   const t = (key: TranslationKey, vars?: Record<string, string | number>) => translate(locale, key, vars)
-  const dateFmt = new Intl.DateTimeFormat(localeToBcp47(locale), { month: 'short', day: 'numeric' })
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Shared with the layout's reads in this request (lib/supabase/request).
+  const user = await getRequestUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('default_household_id, display_name')
-    .eq('id', user.id)
-    .maybeSingle()
+  const profile = await getRequestProfile()
   if (!profile?.default_household_id) redirect('/onboarding')
 
   const { data: household, error } = await supabase
@@ -184,7 +154,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const prevMonthDate = getPreviousMonthDate(selectedMonth)
   const prevMonthEndDate = monthEndDate(prevMonthDate.slice(0, 7))
 
-  // RUM-005: these 6 reads only depend on household.id and the date variables
+  // RUM-005: these reads only depend on household.id and the date variables
   // computed above — none of them reads another's result. Everything that's
   // ONLY needed below the fold (categories, expense-by-category, recurring,
   // debts, goals, recent transactions, review count) now lives in
@@ -192,22 +162,28 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   // own <Suspense> boundary instead of blocking this render. budgetRows stays
   // here (not deferred) because computeHealthScore below needs it and its
   // output renders in the top-of-fold hero card — see the ticket doc for why.
+  // One balance pass for everything the page values: this month, last month's
+  // end (the delta) and the six months of the net-worth sparkline. The trend
+  // used to make its own get_account_balances_as_of_many call through
+  // getDashboardTrend, with its own auth + profile lookups (2026-09-25).
+  const trendDates = balanceTrendDates(selectedMonth, 6, todayIso)
+  const balanceDates = [...new Set([...trendDates.snapshotDates, selectedSnapshotDate, prevMonthEndDate])]
+
   const [
     { data: multiDateBalances, error: accountBalancesError },
     { data: monthlySummaryRows, error: monthlySummaryError },
     { data: prevSummaryRows },
     { data: budgetRows, error: budgetError },
     { count: nonOpeningTransactionCount },
-    netWorthTrend,
+    { count: needsReviewCount },
+    dailyExpenses,
   ] = await Promise.all([
-    // RUM-006: this month + the previous month used to be 2 separate calls to
-    // get_account_balances, each re-aggregating the whole ledger from scratch
-    // (it has no lower date bound — RUM-001 measured its cost as flat
-    // regardless of as_of_date). One call to get_account_balances_as_of_many
-    // answers both dates from a single pass. See docs/performance-baseline.md.
+    // RUM-006: get_account_balances has no lower date bound, so one call per
+    // date re-aggregated the whole ledger each time; get_account_balances_as_of_many
+    // answers every date from a single pass. See docs/performance-baseline.md.
     supabase.rpc('get_account_balances_as_of_many', {
       p_household_id: household.id,
-      p_as_of_dates: [selectedSnapshotDate, prevMonthEndDate],
+      p_as_of_dates: balanceDates,
     }),
     supabase.rpc('get_monthly_dashboard_summary', {
       p_household_id: household.id,
@@ -227,10 +203,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .eq('household_id', household.id)
       .neq('transaction_type', 'opening_balance')
       .is('deleted_at', null),
-    // Only depends on selectedMonth, known from the top of this function —
-    // previously awaited last, after everything else in this function had
-    // already resolved, for no reason.
-    getDashboardTrend('net-worth', selectedMonth, 6),
+    // RUM-009: the month on screen's review backlog (not all time). Moved up
+    // from the removed Recent activity card to the cash-flow card's header.
+    supabase
+      .from('transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('household_id', household.id)
+      .eq('review_status', 'unreviewed')
+      .neq('transaction_type', 'opening_balance')
+      .neq('status', 'voided')
+      .is('deleted_at', null)
+      .gte('transaction_date', selectedMonthDate)
+      .lte('transaction_date', monthEndDate(selectedMonth)),
+    // Spending pace (2026-09-26): expense per day for last month and this
+    // one, the same allocations get_monthly_dashboard_summary adds up.
+    getDailyExpenses(supabase, household.id, prevMonthDate, monthEndDate(selectedMonth)),
   ])
   const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as MultiDateAccountBalance[])
   const accountBalances = balancesByDate.get(selectedSnapshotDate) ?? []
@@ -270,10 +257,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const prevIncome = prevSummary ? Number(prevSummary.monthly_income) : null
   const prevExpenses = prevSummary ? Number(prevSummary.monthly_expenses) : null
   const prevSavings = prevSummary ? Number(prevSummary.monthly_savings) : null
-  const savingsRateDelta =
-    prevSummary !== null && monthlySummary?.savings_rate != null && prevSummary.savings_rate != null
-      ? Number(monthlySummary.savings_rate) - Number(prevSummary.savings_rate)
-      : null
   const hasMonthlyActivity =
     Number(monthlySummary?.income_transaction_count ?? 0) > 0 ||
     Number(monthlySummary?.expense_transaction_count ?? 0) > 0
@@ -286,49 +269,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const { netWorth: prevNetWorth, totalLiabilities: prevLiabilities } = prevValuation
   const netWorthDeltaPct = prevNetWorth !== 0 ? (netWorth - prevNetWorth) / Math.abs(prevNetWorth) : null
 
-  const incomeTransactionCount = Number(monthlySummary?.income_transaction_count ?? 0)
-  const expenseTransactionCount = Number(monthlySummary?.expense_transaction_count ?? 0)
-
-  const monthlyCards = [
-    {
-      label: t('dashboard.monthlyIncome'),
-      value: formatCurrency(monthlyIncome, dashboardCurrency),
-      description: formatTransactionCount(incomeTransactionCount, 'posted income transaction'),
-      delta: renderPctDelta(monthlyIncome, prevIncome, locale, false),
-      icon: <ArrowUpRight />,
-      accent: ACCENT.emerald,
-      valueClassName: undefined as string | undefined,
-    },
-    {
-      label: t('dashboard.monthlyExpenses'),
-      value: formatCurrency(monthlyExpenses, dashboardCurrency),
-      description: formatTransactionCount(expenseTransactionCount, 'posted expense transaction'),
-      delta: renderPctDelta(monthlyExpenses, prevExpenses, locale, true),
-      icon: <ArrowDownRight />,
-      accent: ACCENT.rose,
-      valueClassName: undefined as string | undefined,
-    },
-    {
-      label: t('dashboard.monthlySavings'),
-      value: formatCurrency(monthlySavings, dashboardCurrency),
-      description: t('dashboard.monthlySavingsDescription'),
-      delta: renderPctDelta(monthlySavings, prevSavings, locale, false),
-      icon: <PiggyBank />,
-      accent: ACCENT.sky,
-      valueClassName: monthlySavings < 0 ? 'text-red-600 dark:text-red-400' : undefined,
-    },
-    {
-      label: t('dashboard.savingsRate'),
-      value: formatPercent(monthlySummary?.savings_rate ?? null, locale),
-      description: t('dashboard.savingsRateDescription'),
-      delta: renderRateDelta(savingsRateDelta, locale),
-      icon: <Percent />,
-      accent: ACCENT.violet,
-      valueClassName: undefined as string | undefined,
-      tooltip: <InfoTooltip term="savingsRate" label={t('dashboard.savingsRate')} />,
-    },
-  ]
-
   // ── Health score (BR-021): shared real formula (see lib/health/score). ─────
   const health = healthBreakdown({
     savingsRate: monthlySummary?.savings_rate != null ? Number(monthlySummary.savings_rate) : null,
@@ -336,21 +276,74 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     budgetPercent: totalBudgetPercent,
   })
 
-  const spark = netWorthTrend.ok ? netWorthTrend.data.map((d) => d.value) : []
+  const bcp47 = localeToBcp47(locale)
+  const monthName = (isoDate: string, month: 'short' | 'long', withYear = false) =>
+    new Intl.DateTimeFormat(bcp47, { month, ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' }).format(
+      new Date(`${isoDate.slice(0, 7)}-01T00:00:00Z`)
+    )
 
-  const firstName = profile.display_name?.trim().split(/\s+/)[0] || household.name
-  const eyebrow = `${t('dashboard.greeting')}, ${firstName}`
+  const trendPoints = balanceTrendFromRows(
+    (multiDateBalances ?? []) as BalanceTrendRow[],
+    trendDates,
+    'net-worth'
+  )
+  const heroTrend = {
+    values: trendPoints.map((d) => d.value),
+    labels: trendDates.monthDates.map((d) => monthName(d, 'long', true)),
+    ticks: trendDates.monthDates.map((d) => monthName(d, 'short')),
+  }
+  // Last month's end only compares when there were accounts then; a first
+  // month would otherwise show its whole net worth as "growth".
+  const netWorthDelta = prevBalanceRows.length
+    ? { amount: netWorth - prevNetWorth, pct: netWorthDeltaPct }
+    : null
+
+  // "vs Aug": the comparison month, short, in the reader's language.
+  const vsLabel = t('dashboard.vsMonth', { month: monthName(prevMonthDate, 'short') })
+
+  // ── Spending pace (2026-09-26). Shown only when its running total lands on
+  // exactly the "Spent" figure from get_monthly_dashboard_summary: two
+  // different numbers for the same thing on one screen is worse than no chart.
+  const pace = dailyExpenses.error ? null : buildSpendingPace(selectedMonth, todayIso, dailyExpenses.amounts)
+  const paceSpent = pace ? pace.current[pace.current.length - 1] ?? 0 : 0
+  const paceAgrees = pace !== null && Math.abs(paceSpent - monthlyExpenses) < 0.01
+  if (pace && !paceAgrees) {
+    console.warn('[dashboard] spending pace total differs from the monthly summary', {
+      month: selectedMonth,
+      pace: paceSpent,
+      summary: monthlyExpenses,
+    })
+  }
+  const isOpenMonth = selectedMonth === todayIso.slice(0, 7)
+  const prevMonthLong = monthName(prevMonthDate, 'long')
+  const paceComparison = (() => {
+    if (!pace || !paceAgrees || pace.previous[pace.previous.length - 1] === 0) return null
+    const diff = pace.diffAtSameDay
+    if (Math.abs(diff) < 0.005) return { text: t('dashboard.paceSame', { month: prevMonthLong }), tone: 'neutral' as const }
+    const vars = { amount: formatCurrency(Math.abs(diff), dashboardCurrency), month: prevMonthLong }
+    const key: TranslationKey = isOpenMonth
+      ? diff < 0 ? 'dashboard.paceLessSameDay' : 'dashboard.paceMoreSameDay'
+      : diff < 0 ? 'dashboard.paceLessMonth' : 'dashboard.paceMoreMonth'
+    return { text: t(key, vars), tone: diff < 0 ? ('good' as const) : ('bad' as const) }
+  })()
+  const savingsRate = monthlySummary?.savings_rate != null ? Number(monthlySummary.savings_rate) : null
+  const spentShare = monthlyIncome > 0 ? monthlyExpenses / monthlyIncome : null
+  const barCaption =
+    spentShare === null
+      ? t('dashboard.cashFlowNoIncome')
+      : t('dashboard.cashFlowSpentShare', {
+          spent: formatPercent(spentShare, locale, { minimumFractionDigits: 0 }),
+          saved: formatPercent(savingsRate, locale),
+        })
 
   // expenseCategoriesError / categoryLookupError moved to DashboardSecondaryWidgets
   // with the fetches they gate — this only covers the two Tier-1 reads.
   const hasLoadError = accountBalancesError || monthlySummaryError
-  const cardClass = 'rounded-2xl border bg-card shadow-sm shadow-black/[0.03]'
 
   return (
     <main className="mx-auto flex w-full max-w-[1340px] flex-col gap-4 p-4 sm:p-6">
       <PageHeader
-        eyebrow={eyebrow}
-        title={t('dashboard.controlCenter')}
+        title={t('dashboard.title')}
         actions={
           <MonthNav month={selectedMonth} basePath="/dashboard" previousLabel={t('common.previousMonth')} nextLabel={t('common.nextMonth')} />
         }
@@ -380,66 +373,84 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             assets={totalAssets}
             liabilities={totalLiabilities}
             projected={projectedNetWorth}
-            deltaPct={netWorthDeltaPct}
+            delta={netWorthDelta}
             currency={baseCurrency}
-            spark={spark}
+            trend={heroTrend}
             labels={{
               netWorth: t('dashboard.heroEyebrow'),
               assets: t('dashboard.heroAssets'),
               liabilities: t('dashboard.heroLiabilities'),
               projected: t('dashboard.heroProjected'),
-              vsPrev: t('common.vsLastMonth'),
+              vsPrev: vsLabel,
+              trendSeries: t('dashboard.heroEyebrow'),
+              trendAria: t('dashboard.netWorthTrendAria', { count: heroTrend.values.length }),
             }}
           />
 
-          {/* Monthly metrics */}
-          <section>
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold">{formatMonthLabel(selectedMonth, locale)}</h2>
-              <Link
-                href={`/dashboard/trends?month=${selectedMonth}`}
-                className="shrink-0 text-xs font-semibold text-primary hover:underline"
-              >
-                {t('dashboard.viewTrends')} →
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 [&>*]:min-w-0">
-              {monthlyCards.map((c) => (
-                <MetricCard
-                  key={c.label}
-                  label={c.label}
-                  value={c.value}
-                  description={c.description}
-                  delta={c.delta}
-                  icon={c.icon}
-                  accent={c.accent}
-                  valueClassName={c.valueClassName}
-                  tooltip={'tooltip' in c ? c.tooltip : undefined}
+          {/* The month (2026-09-26): spending pace (this month's running
+              total against last month's) beside the cash-flow statement,
+              with Month health (BR-021 / RUM-009) as its footer — the full
+              breakdown stays one click away under "Details". Without a pace
+              chart the cash-flow card takes the whole row. */}
+          <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] [&>*]:min-w-0">
+            {pace && paceAgrees ? (
+              <SpendingPaceCard
+                pace={pace}
+                currency={dashboardCurrency}
+                labels={{
+                  title: t('dashboard.paceTitle'),
+                  comparison: paceComparison?.text ?? null,
+                  comparisonTone: paceComparison?.tone ?? 'neutral',
+                  currentSeries: monthName(selectedMonthDate, 'long'),
+                  previousSeries: prevMonthLong,
+                  dayLabels: Array.from({ length: pace.daysInMonth }, (_, i) =>
+                    t('dashboard.paceDay', { day: i + 1 })
+                  ),
+                  ariaLabel: t('dashboard.paceAria', { month: monthName(selectedMonthDate, 'long'), previous: prevMonthLong }),
+                }}
+              />
+            ) : null}
+            <CashFlowCard
+              className={pace && paceAgrees ? undefined : 'lg:col-span-2'}
+              title={t('nav.cashFlow')}
+              currency={dashboardCurrency}
+              income={{
+                label: t('dashboard.cashFlowIncome'),
+                amount: monthlyIncome,
+                delta: renderPctDelta(monthlyIncome, prevIncome, locale, vsLabel),
+              }}
+              spent={{
+                label: t('dashboard.cashFlowSpent'),
+                amount: monthlyExpenses,
+                delta: renderPctDelta(monthlyExpenses, prevExpenses, locale, vsLabel, true),
+              }}
+              saved={{
+                label: t('dashboard.cashFlowSaved'),
+                amount: monthlySavings,
+                delta: renderPctDelta(monthlySavings, prevSavings, locale, vsLabel),
+                tone: monthlySavings < 0 ? 'negative' : 'default',
+              }}
+              spentShare={spentShare}
+              barCaption={barCaption}
+              review={
+                needsReviewCount
+                  ? {
+                      href: `/dashboard/transactions?review=unreviewed&status=posted&status=pending&month=${selectedMonth}`,
+                      label: t('dashboard.needsReviewShort', { count: needsReviewCount }),
+                    }
+                  : null
+              }
+              trends={{ href: `/dashboard/trends?month=${selectedMonth}`, label: t('dashboard.viewTrends') }}
+              footer={
+                <MonthHealthSummary
+                  breakdown={health}
+                  month={selectedMonth}
+                  locale={locale}
+                  tooltip={<InfoTooltip text={t('dashboard.healthScoreTooltip')} label={t('dashboard.monthHealth')} />}
                 />
-              ))}
-            </div>
-          </section>
-
-          {/* Month health (BR-021 / RUM-009): one card on every breakpoint,
-              with the numbers behind the grade — see lib/health/score. */}
-          <section
-            aria-labelledby="month-health-title"
-            className={cn(cardClass, 'flex flex-col gap-4 p-4 sm:flex-row sm:items-start')}
-          >
-            <div className="flex shrink-0 items-center gap-4 sm:w-52">
-              <div className="flex size-14 shrink-0 items-center justify-center rounded-full border-[3px] border-primary bg-primary/10">
-                <span className="text-base font-bold text-primary">{health.grade}</span>
-              </div>
-              <div className="min-w-0">
-                <h2 id="month-health-title" className="flex items-center gap-1 text-sm font-semibold">
-                  {t('dashboard.monthHealth')}
-                  <InfoTooltip text={t('dashboard.healthScoreTooltip')} label={t('dashboard.monthHealth')} />
-                </h2>
-                <p className="text-xs text-muted-foreground">{health.score}/100</p>
-              </div>
-            </div>
-            <MonthHealthBreakdown breakdown={health} month={selectedMonth} locale={locale} className="flex-1" />
-          </section>
+              }
+            />
+          </div>
 
           {!hasMonthlyActivity ? (
             <Callout variant="info" className="border-dashed text-muted-foreground">
@@ -484,7 +495,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               prevLiabilities={prevLiabilities}
               locale={locale}
               t={t}
-              dateFmt={dateFmt}
             />
           </Suspense>
         </>

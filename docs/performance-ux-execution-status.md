@@ -8,7 +8,13 @@
 > Este archivo registra *qué pasó*. El backlog registra *qué hay que hacer*. No
 > dupliques criterios de aceptación aquí; enlaza al ticket.
 >
-> **Actualizado 2026-09-25 — RUM-005 cerrado: la segunda visita usa el
+> **Actualizado 2026-09-25 (después del backlog) — Dashboard rediseñado y
+> Transactions sin pantalla negra al abrir.** Ver
+> [`features/dashboard-layout.md`](./features/dashboard-layout.md). El 2026-09-26 se añadió
+> una pasada de diseño (gráfico de patrimonio interactivo, tarjeta "Spending
+> pace" conciliada con el RPC mensual; 16 consultas por render).
+>
+> **2026-09-25 — RUM-005 cerrado: la segunda visita usa el
 > Router Cache (30 s) y cada escritura lo invalida; B-5 cerrado.** Decisión del
 > usuario: `experimental.staleTimes` `{ dynamic: 30, static: 30 }` en
 > `next.config.ts`, sin cache de datos en servidor (RLS sigue aplicándose en
@@ -149,13 +155,14 @@ Estados posibles: `Pendiente` · `En curso` · `Bloqueado` · `Hecho` · `Descar
 
 | # | Bloqueo | Afecta a | Desbloquea |
 |---|---|---|---|
-| B-2 | No hay baseline de performance atribuido por etapa | RUM-004, RUM-005, RUM-006 y las decisiones grandes de RUM-007 | RUM-001 |
+| — | Ninguno abierto | — | — |
 
 
 ### 2.1 Bloqueos cerrados
 
 | # | Bloqueo | Cerrado por | Fecha |
 |---|---|---|---|
+| B-2 | No había baseline de performance atribuido por etapa | RUM-001: capas A y C medidas 2026-09-21 ([`performance-baseline.md`](./performance-baseline.md)); la fila seguía en «abiertos» por descuido | 2026-09-21 |
 | B-5 | Faltaba la capa B del baseline (timings de servidor), que bloqueaba afinar `staleTimes` | **Medida 2026-09-25** con `RUMBO_PERF=1 npm start` (build de producción) y una cuenta QA: el render de servidor de `/dashboard` hace 26 queries, wall p50 ~400 ms (9 cargas), `serialRatio` ~0,3, `maxConcurrency` 7; cada round-trip a Supabase cuesta ~50 ms desde el contenedor. Ver [`performance-baseline.md`](./performance-baseline.md) §4. Con eso se decidió `staleTimes` (RUM-005) | 2026-09-25 |
 | B-7 | El cambio de mes del Dashboard perdía clics (5/7 en `perf:nav`; la request RSC terminaba pero el router nunca confirmaba la navegación) | **Causa raíz por bisección sobre builds de producción:** los widgets secundarios se transmiten por streaming dentro de un `<Suspense>` ya revelado; un cambio de mes es una transición, React mantiene el contenido viejo hasta que llega el nuevo, y con un bloque grande transmitido esa transición a veces nunca se confirmaba (400 filas sintéticas estáticas: 6/6 perdidos; la misma respuesta sin streaming: 0/6; descartados demora, links, prefetch, localizador y queries). **Fix:** `key={selectedMonth}` en ese boundary (`dashboard/page.tsx`). 0/24 perdidos en los scripts de reproducción, 0/7 en `perf:nav` | 2026-09-25 |
 | B-8 | "Expenses" de Transactions no descontaba reembolsos (BR-040) y el Dashboard sí | **Decisión del usuario (2026-09-25): netear reembolsos.** Migración `20260925120000_b8_transactions_totals_net_refunds.sql` (reemplazo de función, sin cambio de esquema; rollback = definición de BR-045). La expectativa de fixtures pasó de "divergencia fijada" a igualdad lista (posted) = Dashboard cada mes. **Aplicada en producción el 2026-09-25** (62/62, 0 pendientes; `db:test` 46/46; lista = Dashboard al centavo en los 12 últimos meses del household real) | 2026-09-25 |
@@ -2145,6 +2152,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-09-25 | **Después del backlog: rediseño del Dashboard y primera carga de Transactions** ([`features/dashboard-layout.md`](./features/dashboard-layout.md)). Dashboard: una tarjeta de flujo de caja reemplaza los 4 KPI + Month health; sin Recent activity; 26 → 15 queries por render (`cache()` por request para usuario/perfil, una sola llamada de balances). A la misma latencia de red: render de servidor 524 → 442 ms p50; página lista 927 → 628 ms p50. Transactions: la «pantalla negra» al abrir en frío era el `redirect()` del scope recordado (flash de «This page couldn't load» + segundo documento); ahora se renderiza directo y el URL se sincroniza con `history.replaceState`. La memoria del scope baja de 12 h a 30 min. Apertura en frío con 6 meses recordados: 1062–1931 → 656–682 ms. |
 | 2026-09-25 | **RUM-005 cerrado: Router Cache de 30 s + invalidación auditada; B-5 cerrado.** Decisión del usuario: `staleTimes` `{ dynamic: 30, static: 30 }`, sin cache de servidor (RLS intacta). Revisitas p75 ~500–730 ms → ~80 ms, 0 perdidas. Test nuevo: las 71 Server Actions que escriben o cambian sesión invalidan (2 faltaban: onboarding, idioma; sign-in/out explícitos). Verificado en vivo 6/6 (revisita sin servidor, escritura propia al instante, otro dispositivo ≤30 s, sign-out/in nunca cacheado). `perf:nav --think` añadido: el cambio de mes tras una revisita instantánea espera ~380 ms si el clic llega en <100 ms (prefetches de la página recién montada); con pausa humana no cambia. Capa B medida: `/dashboard` 26 queries, ~400 ms de servidor. |
 | 2026-09-25 | **Migración de B-8 aplicada en producción (a pedido del usuario): release aprobado.** `db-push push --apply` → 62/62, 0 pendientes; `db:test` en el household real 46/46; Transactions (posted) = Dashboard al centavo en los 12 últimos meses. |
 | 2026-09-25 | **B-7 arreglado y B-8 decidido: el gate de RUM-010b pasa a «aprobado al aplicar una migración».** B-7 (cambio de mes del Dashboard perdía clics): causa raíz aislada por bisección — contenido grande transmitido dentro del `<Suspense>` ya revelado de los widgets secundarios dejaba la transición sin confirmar —; fix `key={selectedMonth}`; 0/7 perdidos en `perf:nav`. B-8 (Transactions no descontaba reembolsos): el usuario pidió «lo que tenga más sentido» → la lista netea reembolsos como el Dashboard; migración `20260925120000_b8_…` verificada en fixtures (112/112, igualdad lista = Dashboard cada mes) y pendiente de aplicar en producción. |

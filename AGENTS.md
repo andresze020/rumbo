@@ -43,6 +43,23 @@ The product is household-first. All financial data must belong to a household.
   `tests/cache/server-action-invalidation.test.ts` enforces it and pins the
   30 s window. Accepted trade-off: a change made on another device can take up
   to 30 s to show.
+- **Dashboard redesign + Transactions first load** (2026-09-25,
+  [`docs/features/dashboard-layout.md`](docs/features/dashboard-layout.md)).
+  Dashboard: one `CashFlowCard` (Income · Spent · Saved, spent-of-income bar,
+  review chip, Month health line) replaces the 4 KPI tiles + health card, and
+  Recent activity is gone. 26 → 15 queries per render: use
+  `getRequestUser()` / `getRequestProfile()` (`src/lib/supabase/request.ts`,
+  per-request `cache()`) instead of calling `auth.getUser()` or reading
+  `profiles` again. Transactions: the remembered scope (`af_tx_scope`, now
+  30 min) is rendered directly and the URL synced with `SyncScopeUrl`. A
+  server `redirect()` there caused the cold-open black screen; do not bring
+  it back.
+  **Premium pass (2026-09-26):** hero with an interactive 6-month net-worth
+  chart, a **Spending pace** card (this month's running total vs last
+  month's, `src/lib/dashboard/`), `Money` (cents set back) and a plain-SVG
+  `LineChart` in `src/components/dashboard/`. The pace chart is shown only
+  when its total equals the summary RPC's "Spent"; keep
+  `getDailyExpenses` filters in step with `get_monthly_dashboard_summary`.
 
 - **The Transactions screen was rebuilt as a phone list, and the period got
   one owner** (2026-09-19 → 09-20, PR #66). Three commits, one review round

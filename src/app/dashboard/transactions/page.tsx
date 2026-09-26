@@ -15,6 +15,7 @@ import {
 } from './transaction-list'
 import { TransactionToasts } from './transaction-toasts'
 import { RememberTransactionScope } from './remember-scope'
+import { SyncScopeUrl } from './sync-scope-url'
 import { TransactionsHeader } from './transactions-header'
 import { TransactionsSummary } from './transactions-summary'
 import { buttonVariants } from '@/components/ui/button'
@@ -22,6 +23,7 @@ import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { Callout } from '@/components/callout'
 import { createClient } from '@/lib/supabase/server'
+import { getRequestProfile, getRequestUser } from '@/lib/supabase/request'
 import { getUiPreferences } from '@/lib/preferences/server'
 import {
   TRANSACTION_SCOPE_COOKIE,
@@ -424,6 +426,17 @@ function rememberedScopeHref(
   return `/dashboard/transactions?${params.toString()}`
 }
 
+/** A same-page href back into the searchParams shape the page reads. */
+function paramsFromHref(href: string): Awaited<TransactionsPageProps['searchParams']> {
+  const query = new URLSearchParams(href.split('?')[1] ?? '')
+  const out: Record<string, string | string[]> = {}
+  for (const key of new Set(query.keys())) {
+    const values = query.getAll(key)
+    out[key] = values.length > 1 ? values : values[0]
+  }
+  return out as Awaited<TransactionsPageProps['searchParams']>
+}
+
 /**
  * The explicit URL that represents this user's preferred landing view.
  *
@@ -463,7 +476,7 @@ function preferredScopeHref(
 export default async function TransactionsPage({
   searchParams,
 }: TransactionsPageProps) {
-  const params = await searchParams
+  let params = await searchParams
   const locale = await getLocale()
   const ui = createUiTranslator(locale)
   const t = (key: TranslationKey, vars?: Record<string, string | number>) =>
@@ -474,25 +487,33 @@ export default async function TransactionsPage({
   // The landing scope/period only apply to a *bare* URL — the moment any filter
   // param is present, the URL wins (a shared link, a "view transactions" button,
   // or the user clearing a filter must never be silently overridden). When they
-  // do apply, we redirect once to the explicit URL so every later navigation
-  // carries real params and this branch is not re-entered.
+  // do apply, the page renders that scope and writes the explicit URL (see
+  // below), so every later navigation carries real params and this branch is
+  // not re-entered.
   const preferences = await getUiPreferences()
   const hasAnyFilterParam = FILTER_PARAM_KEYS.some((key) => params[key] !== undefined)
 
   // Filters the user applied earlier in the session win over the landing
   // preferences: switching screens, or being redirected back here after
   // creating a transaction, should return to the view they were working in.
+  //
+  // Both used to be a server `redirect()`. On a cold open that was the "black
+  // screen": the loading shell had already streamed, so the redirect could only
+  // happen client-side, after a flash of Next's "This page couldn't load" and a
+  // second full document load (~0.4–1.2 s). Now the page renders the scoped
+  // view directly and <SyncScopeUrl> writes the URL with history.replaceState,
+  // which the App Router picks up without a navigation.
+  let canonicalHref: string | null = null
   if (!hasAnyFilterParam) {
     const rememberedScope = (await cookies()).get(TRANSACTION_SCOPE_COOKIE)?.value
-    const restoredHref = rememberedScope
-      ? rememberedScopeHref(rememberedScope, params)
-      : null
-    if (restoredHref) redirect(restoredHref)
+    canonicalHref = rememberedScope ? rememberedScopeHref(rememberedScope, params) : null
   }
 
-  if (!hasAnyFilterParam && !hasDefaultTransactionScope(preferences)) {
-    redirect(preferredScopeHref(preferences, params))
+  if (!canonicalHref && !hasAnyFilterParam && !hasDefaultTransactionScope(preferences)) {
+    canonicalHref = preferredScopeHref(preferences, params)
   }
+
+  if (canonicalHref) params = paramsFromHref(canonicalHref)
 
   // Type, status and payee are multi-value like account/category/tag: an empty
   // list means "all", so "no filter" and "every option ticked" stay the same
@@ -570,16 +591,11 @@ export default async function TransactionsPage({
   const rememberedScopeQuery = hasActiveFilters ? returnTo.split('?')[1] ?? '' : ''
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Shared with the layout's reads in this request (lib/supabase/request).
+  const user = await getRequestUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('default_household_id')
-    .eq('id', user.id)
-    .maybeSingle()
+  const profile = await getRequestProfile()
   if (!profile?.default_household_id) redirect('/onboarding')
 
   const { data: household, error: householdError } = await supabase
@@ -1340,6 +1356,8 @@ export default async function TransactionsPage({
         periodLabel={periodLabel}
         periodBaseQuery={periodBaseQuery}
       />
+
+      {canonicalHref ? <SyncScopeUrl href={canonicalHref} /> : null}
 
       {/* Keeps these filters for the next bare landing on this screen. */}
       {rememberedScopeQuery ? (

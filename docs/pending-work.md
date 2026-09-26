@@ -95,7 +95,7 @@ decision first.
 |---|---:|---|---|---|
 | BF-022 | P3 | Transactions | Reconciliation flow — mark transactions "cleared" against a bank statement. Needs a schema migration (`reconciled_at`). Deferred to Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
 | Tap payment capture | — | Capture / automation | Design only, **no code**. A tap cannot be detected by the PWA on any platform; detection has to come from the phone's automation layer posting to an ingest endpoint that stages captures in a `capture_inbox` and auto-posts only above a confidence threshold. | [features/tap-payment-capture.md](./features/tap-payment-capture.md) |
-| RUM-001…RUM-010b | P0–P2 | Performance / integridad financiera | Backlog de 11 tickets: reconciliar net worth, instrumentar el baseline, descomponer la carga del Dashboard (8 `await` secuenciales), reducir llamadas repetidas de balances, cache/loading, y montar el primer runner de tests de JS/TS del repo. Prioridades y prompts por ticket en el doc. | [performance-ux-backlog.md](./performance-ux-backlog.md) · [estado](./performance-ux-execution-status.md) |
+| ~~RUM-001…RUM-010b~~ | — | Performance / integridad financiera | **✅ Terminado 2026-09-25 (11/11, último: RUM-005 en #81).** Backlog de 11 tickets: reconciliar net worth, instrumentar el baseline, descomponer la carga del Dashboard (8 `await` secuenciales), reducir llamadas repetidas de balances, cache/loading, y montar el primer runner de tests de JS/TS del repo. Prioridades y prompts por ticket en el doc. | [performance-ux-backlog.md](./performance-ux-backlog.md) · [estado](./performance-ux-execution-status.md) |
 
 > **Tap capture is gated.** The Phase 0 device spike is a hard gate — no code
 > until a real tap is proven to emit a machine-readable event on the user's own
@@ -106,8 +106,8 @@ decision first.
 > aislada, con el prompt ya escrito en su sección. El avance no se registra
 > aquí sino en
 > [performance-ux-execution-status.md](./performance-ux-execution-status.md).
-> **RUM-010a bloquea a casi todos los demás**: hoy el repositorio no tiene
-> runner de tests de JS/TS y varios tickets prometen cobertura.
+> El backlog está completo: los 11 tickets están cerrados y el gate de release
+> ([`release-checklist.md`](./release-checklist.md)) está aprobado.
 
 ## 4. Manual QA gates (no code required)
 
