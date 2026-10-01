@@ -30,7 +30,7 @@
 | [MQ-002](#mq-002--el-shell-se-desplaza-header-y-bottom-nav-se-van-de-la-pantalla) | P1 | Abierto | UI | Shell / navegación | Al llegar al final del scroll el header y la bottom nav se desplazan y dejan media pantalla vacía. |
 | [MQ-003](#mq-003--el-empty-state-de-transactions-parpadea-y-miente) | P1 | Abierto | Funcionamiento | Transactions | El empty state alterna solo entre dos variantes cada 1,5–3 s y dice "No transactions yet" con miles de transacciones. |
 | [MQ-004](#mq-004--el-botón-del-asistente-tapa-contenido-y-la-tab-more) | P1 | Abierto | UI | Global | El botón flotante del asistente tapa montos, botones de fila y la tab "More". |
-| [MQ-005](#mq-005--comparativas-de-mes-en-curso-contra-mes-completo) | P1 | Abierto | Funcionamiento | Dashboard / Budgets / Accounts | Deltas "−100 % vs Sep", "0,0 %" en verde y un Month health "C+" calculados sin datos del mes. |
+| [MQ-005](#mq-005--comparativas-de-mes-en-curso-contra-mes-completo) | P1 | ✅ Hecho (`fix/mq-005-month-to-date-deltas`) | Funcionamiento | Dashboard / Budgets / Accounts | Deltas "−100 % vs Sep", "0,0 %" en verde y un Month health "C+" calculados sin datos del mes. |
 | [MQ-006](#mq-006--goals-resumen-que-ignora-metas-en-otra-moneda-y-cuentas-vinculables-incorrectas) | P1 | Abierto | Funcionamiento | Goals | El resumen ignora metas en moneda no base; se puede vincular una meta de ahorro a una cuenta de deuda. |
 | [MQ-007](#mq-007--sugerencias-de-autofill-del-navegador-en-campos-de-la-app) | P2 | Abierto | UX | Formularios | Brave ofrece nombres de contactos, montos viejos y tarjetas en campos de nombre y monto. |
 | [MQ-008](#mq-008--selects-nativos-con-listas-largas) | P2 | Abierto | UX | Budgets / Goals / Debts | `<select>` nativos con 20–60 opciones planas, sin búsqueda ni jerarquía. |
@@ -430,6 +430,18 @@ no tienen nada encima de montos ni botones.
 ---
 
 ### MQ-005 — Comparativas de mes en curso contra mes completo
+
+> ✅ Hecho el 2026-10-01 — Cash flow (Dashboard y Month review) compara el mes
+> abierto contra el mes anterior **hasta el mismo día** ("vs same day in Sep",
+> `src/lib/dashboard/month-comparison.ts`, con tests de 31-mar vs febrero y
+> bisiesto) leyendo ingresos y gastos diarios de `transaction_allocations` con
+> los filtros del RPC (`daily-cash-flow.ts`, antes `daily-expenses.ts`); sin
+> movimientos posteados no hay delta. Month health sin actividad muestra "Not
+> enough data yet" (`monthHealth`, con test) y el snapshot de cierre no guarda
+> nota. Budgets oculta el % por línea mientras el mes está abierto. Delta 0 →
+> gris y sin flecha (Accounts y Budgets); esto cubre también la mitad "0,0 %
+> en verde" de MQ-017. `ledger-guard`: sin hallazgos críticos; sus 4 menores
+> quedaron resueltos en la misma rama.
 
 | Campo | Valor |
 |---|---|
