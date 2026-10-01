@@ -52,12 +52,25 @@ as a *negative* entry (see `get_account_balances`), so the function flips the si
 | Figure | Definition |
 |---|---|
 | `statement_balance` | The account's balance as of the close date, sign-flipped. What the statement said you owe. |
-| `paid_since_close` | Positive entries posted after the close — payments and refunds, both of which genuinely reduce what is due. |
+| `paid_since_close` | Payments posted after the close (any positive entry that is not a refund), plus the part of post-close refunds that exceeds this cycle's charges. |
 | `payable` | `statement_balance − paid_since_close`, floored at 0. **The** "what do I owe next" number. |
-| `outstanding` | Negative entries since the close: this cycle's new charges, not billed yet. |
+| `outstanding` | This cycle's new charges since the close, net of post-close refunds, floored at 0. Not billed yet. |
 
 `payable` deliberately **excludes** `outstanding`, and the two are never added
 together on screen. `is_overdue` is `payable > 0` with the due date already past.
+
+**Refunds after the close offset the open cycle first** (changed 2026-09-30,
+`20260930130000_br_030_refund_card_cycle.sql`). Whether an issuer applies a
+post-close credit to a statement it already billed varies by issuer, and
+`payable` is the number the user pays by the due date: understating it risks
+interest, overstating it only moves a payment a few weeks earlier. So a refund
+reduces `outstanding` first and only its excess reaches the statement. A refund
+of a statement-period purchase with no new spend still lowers `payable` in full.
+Whenever `payable > 0`, `payable + outstanding` equals what the card owes —
+asserted by `supabase/tests/br_030_card_cycle_invariants.sql`. Before this change a
+refund of a post-close purchase lowered `payable` and left `outstanding` gross
+(50 charged before the close, 80 after, 30 refunded on the 80: 20 / 80 instead of
+50 / 50).
 
 Pending transactions are excluded: a statement bills what actually posted.
 
