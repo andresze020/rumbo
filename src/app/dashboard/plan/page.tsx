@@ -159,15 +159,22 @@ export default async function PlanPage() {
   // stays out here; the Goals page names it).
   const goalRows = (goals ?? []) as Goal[]
   const activeGoals = goalRows.filter((g) => g.status === 'active')
-  const goalRates = await getGoalRatesToBase(
+  const { rates: goalRates, failed: goalRatesFailed } = await getGoalRatesToBase(
     supabase,
     household.id,
     baseCurrency,
     goalRows.filter((g) => g.status !== 'archived').map((g) => g.currency_code)
   )
-  const totalSaved = summarizeGoals(goalRows, baseCurrency, goalRates).saved
+  // MQ-006: a goal in a currency with no usable rate is named under the
+  // figure rather than silently left out of it.
+  const goalSummary = summarizeGoals(goalRows, baseCurrency, goalRates)
+  const totalSaved = goalSummary.saved
+  const unconvertedSaved = goalSummary.unconverted
+    .map((u) => formatCurrency(u.saved, u.currency))
+    .join(', ')
 
-  const hasLoadError = budgetError || debtsError || recurringError || goalsError
+  const hasLoadError =
+    budgetError || debtsError || recurringError || goalsError || goalRatesFailed
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 sm:p-6">
@@ -244,6 +251,15 @@ export default async function PlanPage() {
             <Stat label={t('mobile.activeGoals')} value={String(activeGoals.length)} />
             <Stat label={t('mobile.saved')} value={formatCurrency(totalSaved, baseCurrency)} />
           </div>
+          {unconvertedSaved ? (
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                locale,
+                goalRatesFailed ? 'goals.totalUnconvertedFailed' : 'goals.totalUnconverted',
+                { amounts: unconvertedSaved }
+              )}
+            </p>
+          ) : null}
         </Link>
       </div>
 
