@@ -8,6 +8,17 @@ description: Use before finishing any Rumbo code task or before merging a sprint
 The one place that defines "ready to merge" for Rumbo. Other skills and docs
 point here instead of repeating (and drifting on) validation steps.
 
+## Delegate the run to `verify-runner`
+
+Don't run the gate commands directly in the main session — `npm run build`
+and `npx tsc --noEmit` can print hundreds of lines that are pure noise when
+everything passes, and that cost is paid every time, worse in Claude Code
+Cloud where each invocation starts cold. Dispatch to the `verify-runner`
+subagent (`.claude/agents/verify-runner.md`): it runs the same commands below
+in its own context and returns only the pass/fail table and the real errors.
+This skill still defines *what* the gate is; `verify-runner` is *how* it gets
+run without spending the main context on the raw logs.
+
 ## The real scripts
 
 `package.json` defines: `dev`, `build`, `start`, `lint`, `test`, `test:watch`,

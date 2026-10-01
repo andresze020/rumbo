@@ -39,7 +39,10 @@ This repo automates parts of its own development. See
 `docs/ai-agents-workflow.md` for what exists and why:
 - Subagents (`.claude/agents/`): `ledger-guard` (reviews a diff against the
   ledger rules), `scout` (locates code, returns file:line), `i18n-scribe`
-  (translations), `migration-drafter` (SQL), `sprint-closer` (state docs).
+  (translations), `migration-drafter` (SQL), `sprint-closer` (state docs),
+  `verify-runner` (runs the validation gate, returns pass/fail + real errors),
+  `qa-smoke` (read-only Playwright sweep of dashboard routes, never submits a
+  form).
 - Slash commands (`.claude/commands/`): `/revisar-ledger`, `/buscar`,
   `/contexto`, `/i18n`, `/cerrar-sprint`, `/arreglar` (bugs: instrumenta antes
   de adivinar).

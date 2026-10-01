@@ -7,6 +7,16 @@ description: Use when reviewing alpha readiness, creating QA checklists, testing
 
 Use this skill for alpha readiness, QA, smoke tests, and manual test plans.
 
+## Structural pre-check: `qa-smoke`
+
+Before (or instead of) walking all 20 screens by hand, you can dispatch the
+`qa-smoke` subagent (`.claude/agents/qa-smoke.md`): it drives Playwright
+read-only across the dashboard routes at desktop + mobile width and reports
+which one failed to render, kept a stuck skeleton, or threw a console error —
+without spending main-session context on the Playwright script or its
+output. It never submits a form, so it cannot replace the checklist below —
+only the "does this screen load" part of it.
+
 ## QA objective
 
 The MVP Alpha should be usable for real personal/family finance tracking for at least one month without returning to AndroMoney or spreadsheets for analysis.
