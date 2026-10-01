@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { fetchDirectRate } from '@/lib/fx'
+import { fetchDirectRate, fxToday } from '@/lib/fx'
 
 export type RefreshRatesResult = {
   status: 'updated' | 'fresh' | 'unauthenticated' | 'failed'
@@ -73,10 +73,9 @@ export async function refreshExchangeRatesAction(): Promise<RefreshRatesResult> 
 
   if (!currencies.length) return { status: 'fresh', ...empty }
 
-  // UTC on purpose (MQ-001 left it, like `fetchFxRate`): "fresh" means the
-  // provider's file for its current day, and those files are dated in UTC. The
-  // user's local date would never match a stored rate_date east of UTC.
-  const today = new Date().toISOString().slice(0, 10)
+  // "Fresh" means dated the provider's current day — `fxToday()`, UTC, the
+  // same day the browser's once-a-day gate keys on.
+  const today = fxToday()
 
   const { data: todaysRates } = await supabase
     .from('exchange_rates')

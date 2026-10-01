@@ -213,13 +213,16 @@ fecha local y el formulario de transacción y el servidor coinciden en "hoy".
   usuario: `get_card_cycle_summaries(p_as_of)` y
   `cancel_installment_plan(p_as_of)`.
 - **Cliente:** `debt-create-form` y `recurring-form` reciben `today` del
-  servidor; `assistant-chat` y `exchange-rate-auto-refresh` usan
-  `todayIsoDateLocal()`.
-- **A propósito sin cambio:** `fetchFxRate` en `src/lib/fx.ts` y el chequeo
-  de frescura de `refreshExchangeRatesAction` siguen en UTC — preguntan si el
-  *proveedor* ya publicó el archivo del día, y esos archivos van fechados en
-  UTC (con la fecha local, un usuario al este de UTC re-pediría tasas en cada
-  sesión). La sobrecarga sin fecha de `get_account_balances` (revaluación FX
+  servidor; `assistant-chat` usa `todayIsoDateLocal()`.
+- **FX en UTC, a propósito:** todo lo de tasas usa un solo día, `fxToday()`
+  en `src/lib/fx.ts` (UTC): `fetchFxRate`, el chequeo de frescura de
+  `refreshExchangeRatesAction`, la llave de sesión `af_fx_refreshed_on` de
+  `exchange-rate-auto-refresh` (`fxRefreshDue`), la fecha por defecto del
+  formulario manual de tasas en Settings y la tasa de las metas. Los archivos
+  del proveedor van fechados en UTC y la valoración usa `current_date` de la
+  BD; con el día local, al este de UTC la llave saltaba el día nuevo del
+  proveedor y una tasa manual quedaba fuera del saldo hasta la medianoche UTC
+  (observaciones de Codex en #89, con tests en `src/lib/fx.test.ts`). La sobrecarga sin fecha de `get_account_balances` (revaluación FX
   a `current_date`, usada por el saldo actual de Accounts y por la herramienta
   del asistente) tampoco cambia: solo afecta la fecha de la tasa, y pasarle
   `today` como `p_as_of_date` excluiría los movimientos con fecha futura.

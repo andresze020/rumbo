@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { describeFxNote, fetchDirectRate, fetchFxRate, type FxResult } from './fx'
+import {
+  describeFxNote,
+  fetchDirectRate,
+  fetchFxRate,
+  fxRefreshDue,
+  fxToday,
+  type FxResult,
+} from './fx'
 
 const TODAY = '2026-09-21'
 
@@ -166,5 +173,40 @@ describe('describeFxNote', () => {
     expect(text).toContain('2026-09-10')
     expect(text).toContain(TODAY)
     expect(text.toLowerCase()).toContain('verify')
+  })
+})
+
+// MQ-001: "today" became the user's day everywhere except FX, which must stay
+// on the provider's/valuation's UTC day. These pin the two edges Codex found.
+describe('fxToday', () => {
+  it('is the UTC day east of UTC just after local midnight, the day balances are valued at', () => {
+    // Tokyo, 2 Jan 00:30 = 1 Jan 15:30 UTC. A manual rate defaulting to 2 Jan
+    // would sit outside `current_date` valuation until UTC midnight.
+    expect(fxToday(new Date('2026-01-02T00:30:00+09:00'))).toBe('2026-01-01')
+  })
+
+  it('is the UTC day west of UTC late in the evening', () => {
+    // Toronto, 30 Sep 23:31 EDT = 1 Oct 03:31 UTC — the provider's new file.
+    expect(fxToday(new Date('2026-09-30T23:31:00-04:00'))).toBe('2026-10-01')
+  })
+})
+
+describe('fxRefreshDue', () => {
+  it('runs again when the UTC day turns, even though the local day turned earlier', () => {
+    // Tokyo: the first navigation after local midnight still checks the
+    // provider's 1 Jan file…
+    const first = new Date('2026-01-02T00:30:00+09:00')
+    expect(fxRefreshDue(null, first)).toBe(true)
+    const stored = fxToday(first)
+    // …so later that morning, still 1 Jan in UTC, there is nothing new…
+    expect(fxRefreshDue(stored, new Date('2026-01-02T08:59:00+09:00'))).toBe(false)
+    // …and at 09:00 local the provider's 2 Jan exists: refresh. Keyed on the
+    // local day ("2 Jan" stored at 00:30) this returned false until 3 Jan.
+    expect(fxRefreshDue(stored, new Date('2026-01-02T09:00:00+09:00'))).toBe(true)
+  })
+
+  it('does not run twice within the same UTC day', () => {
+    const now = new Date('2026-10-01T12:00:00Z')
+    expect(fxRefreshDue(fxToday(now), new Date('2026-10-01T23:59:00Z'))).toBe(false)
   })
 })

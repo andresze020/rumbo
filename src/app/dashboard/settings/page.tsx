@@ -27,7 +27,7 @@ import {
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { translate } from '@/lib/i18n/translate'
-import { getRequestToday } from '@/lib/periods/server'
+import { fxToday } from '@/lib/fx'
 
 
 type Props = {
@@ -92,7 +92,11 @@ export default async function SettingsPage({ searchParams }: Props) {
     )
   }
 
-  const today = await getRequestToday()
+  // The manual rate form's default date is the FX day (UTC), not the user's:
+  // balances are valued at the database's `current_date`, so a rate dated the
+  // local day east of UTC would be saved and then left out of every balance
+  // until UTC midnight (MQ-001).
+  const today = fxToday()
   const { data: rateRows } = await supabase
     .from('exchange_rates')
     .select('from_currency_code, rate, rate_date, source')
