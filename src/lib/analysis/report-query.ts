@@ -620,15 +620,16 @@ export async function getReportData(
   // Trend: filter-aware monthly income/expense over the 6-month window.
   const months: string[] = []
   for (let i = 5; i >= 0; i--) months.push(shiftMonth(endMonth, -i))
-  const trendByMonth = new Map<string, { income: number; expenses: number }>()
+  const trendByMonth = new Map<string, { income: number; expenses: number; count: number }>()
   for (const row of trendRows) {
-    const cur = trendByMonth.get(row.month) ?? { income: 0, expenses: 0 }
+    const cur = trendByMonth.get(row.month) ?? { income: 0, expenses: 0, count: 0 }
     if (row.type === 'income') cur.income += row.baseSigned
     else cur.expenses += Math.abs(row.baseSigned)
+    cur.count += 1
     trendByMonth.set(row.month, cur)
   }
   const trend: MonthlyPoint[] = months.map((m) => {
-    const agg = trendByMonth.get(m) ?? { income: 0, expenses: 0 }
+    const agg = trendByMonth.get(m) ?? { income: 0, expenses: 0, count: 0 }
     const savings = agg.income - agg.expenses
     return {
       month: m,
@@ -637,6 +638,7 @@ export async function getReportData(
       expenses: agg.expenses,
       savings,
       savingsRate: agg.income > 0 ? savings / agg.income : null,
+      transactionCount: agg.count,
     }
   })
 

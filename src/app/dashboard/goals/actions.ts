@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { isGoalStatus, isGoalType } from '@/lib/goals/shared'
+import { canLinkAccountToGoal, isGoalStatus, isGoalType } from '@/lib/goals/shared'
 import { cleanSupabaseActionError } from '@/lib/supabase/errors'
 
 const MAX_NAME_LENGTH = 120
@@ -110,7 +110,7 @@ async function parseAndValidateGoal(
   if (linkedAccountId) {
     const { data: account, error: accountError } = await supabase
       .from('accounts')
-      .select('id, is_archived')
+      .select('id, is_archived, account_class')
       .eq('id', linkedAccountId)
       .eq('household_id', householdId)
       .is('deleted_at', null)
@@ -121,6 +121,15 @@ async function parseAndValidateGoal(
     }
     if (account.is_archived) {
       redirectWithError('Select an active account.')
+    }
+    // MQ-006: the same rule the form applies, so a crafted post cannot link a
+    // savings goal to a credit card or a debt payoff goal to a savings account.
+    if (!canLinkAccountToGoal(goalType, account.account_class)) {
+      redirectWithError(
+        goalType === 'debt_payoff'
+          ? 'Link a debt payoff goal to the debt account it pays off.'
+          : 'Link a savings goal to an asset account, not a debt or credit card.'
+      )
     }
   }
 

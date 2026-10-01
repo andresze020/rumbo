@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatCurrency, formatCurrencyCompact } from './format'
+import { formatCurrency, formatCurrencyCompact, getCurrencyPrefix } from './format'
 
 const NBSP = ' '
 
@@ -33,5 +33,19 @@ describe('formatCurrencyCompact', () => {
     const result = formatCurrencyCompact(1_250_000, 'CAD', 'es')
     expect(result).toBe(`1,3${NBSP}M CAD`)
     expect(result.endsWith(' CAD')).toBe(true)
+  })
+})
+
+describe('getCurrencyPrefix (MQ-013)', () => {
+  it('never shows a bare "$" that could be any dollar or peso', () => {
+    expect(getCurrencyPrefix('USD')).toBe('US$')
+    expect(getCurrencyPrefix('CAD')).toBe('CA$')
+    expect(getCurrencyPrefix('COP')).toBe('COP')
+  })
+
+  it('keeps unambiguous symbols and falls back to the code', () => {
+    expect(getCurrencyPrefix('EUR')).toBe('€')
+    expect(getCurrencyPrefix('GBP')).toBe('£')
+    expect(getCurrencyPrefix('XYZ1')).toBe('XYZ1')
   })
 })

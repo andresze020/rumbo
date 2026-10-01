@@ -41,6 +41,11 @@ export type QuickAddTag = {
 }
 
 export type QuickAddFormData = {
+  /**
+   * The household these lists belong to. The dialog caches this payload
+   * between opens (MQ-009), so it must never be shown for another household.
+   */
+  householdId: string
   baseCurrency: string
   accounts: QuickAddAccount[]
   categories: QuickAddCategory[]
@@ -126,6 +131,7 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
       : {}
 
     return {
+      householdId,
       baseCurrency: householdResult.data?.base_currency ?? 'CAD',
       accounts: (accountsResult.data ?? []) as QuickAddAccount[],
       categories: (categoriesResult.data ?? []) as QuickAddCategory[],

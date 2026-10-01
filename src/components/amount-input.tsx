@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Calculator, Delete } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
@@ -11,7 +11,7 @@ import {
 import { roundToCents } from '@/lib/money'
 import {
   formatAmountForDisplay,
-  getCurrencySymbol,
+  getCurrencyPrefix,
   sanitizeAmountInput,
 } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -68,8 +68,11 @@ export function AmountInput({
 }: AmountInputProps) {
   const [internalRaw, setInternalRaw] = useState(() => sanitizeAmountInput(defaultValue))
   const raw = value !== undefined ? sanitizeAmountInput(value) : internalRaw
-  const symbol = getCurrencySymbol(currencyCode)
+  // MQ-013: "COP", "CA$", "US$" — never a bare "$" that could be any of them.
+  const symbol = getCurrencyPrefix(currencyCode)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fieldRef = useRef<HTMLDivElement>(null)
+  const prefixRef = useRef<HTMLSpanElement>(null)
 
   const [calcOpen, setCalcOpen] = useState(false)
   const [expression, setExpression] = useState('')
@@ -147,12 +150,28 @@ export function AmountInput({
     : null
   const showPreview = calcOpen && hasPendingOperation(expression) && previewResult !== null
 
+  // The prefix is 1–3 characters wide now, so the text starts where it ends:
+  // estimated from the character count for the first paint, then measured.
+  useLayoutEffect(() => {
+    const width = prefixRef.current?.getBoundingClientRect().width
+    if (width) fieldRef.current?.style.setProperty('--amount-prefix-width', `${width}px`)
+  }, [symbol, isLarge])
+
   return (
     <div className={className}>
-      <div className="relative">
+      <div
+        ref={fieldRef}
+        className="relative"
+        style={
+          {
+            '--amount-prefix-width': `${symbol.length * (isLarge ? 0.7 : 0.55)}rem`,
+          } as CSSProperties
+        }
+      >
         <span
+          ref={prefixRef}
           className={cn(
-            'pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground',
+            'pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-muted-foreground',
             isLarge ? 'left-3.5 text-lg font-medium' : 'left-3 text-sm'
           )}
         >
@@ -181,8 +200,8 @@ export function AmountInput({
           enterKeyHint={onCommit ? 'next' : undefined}
           className={cn(
             isLarge
-              ? 'h-14 rounded-xl pl-9 text-2xl font-semibold tracking-tight'
-              : 'pl-7',
+              ? 'h-14 rounded-xl pl-[calc(0.875rem+var(--amount-prefix-width)+0.5rem)] text-2xl font-semibold tracking-tight'
+              : 'pl-[calc(0.75rem+var(--amount-prefix-width)+0.375rem)]',
             withCalculator && (isLarge ? 'pr-12' : 'pr-9')
           )}
           required={required}

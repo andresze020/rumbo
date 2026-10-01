@@ -33,7 +33,9 @@ import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import { formatCurrency, formatMonthLabel, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { nativeSelectCls } from '@/lib/form-styles'
+import type { PickerGroup, PickerOption } from '@/components/searchable-picker'
+import { formActionsCls } from '@/lib/form-styles'
+import { BudgetCategoryPicker } from './budget-category-picker'
 
 type BudgetsPageProps = {
   searchParams: Promise<{
@@ -80,8 +82,6 @@ type Category = {
   icon: string | null
   color: string | null
 }
-
-const selectClassName = nativeSelectCls
 
 const fallbackLineColors = [
   '#4f63e0',
@@ -203,7 +203,7 @@ function BudgetKpiCard({
       </div>
       <p
         className={cn(
-          'mt-3 break-words font-mono text-base font-bold tabular-nums md:text-xl',
+          'mt-3 break-words text-base font-bold tabular-nums md:text-xl',
           valueClassName
         )}
       >
@@ -371,6 +371,40 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
       !c.exclude_from_budget &&
       !lineCategoryIds.has(c.id)
   )
+  // MQ-008: the same choices in hierarchy order — each parent, then its
+  // subcategories indented under it. A subcategory whose parent is not on
+  // offer itself (already budgeted, archived) keeps the "Parent / Child" name.
+  const categoryPickerGroups: PickerGroup[] = (() => {
+    const available = new Set(categoryOptions.map((c) => c.id))
+    const options: PickerOption[] = []
+    const label = (c: Category, name: string) => `${name}${c.exclude_from_reports ? ' - no reports' : ''}`
+    const children = (parentId: string) =>
+      categoryOptions.filter((c) => c.parent_category_id === parentId)
+    const parents = allCategories.filter(
+      (c) => c.category_type === 'expense' && c.parent_category_id === null
+    )
+    for (const parent of parents) {
+      const parentOffered = available.has(parent.id)
+      if (parentOffered) options.push({ value: parent.id, label: label(parent, parent.name), icon: parent.icon })
+      for (const child of children(parent.id)) {
+        options.push({
+          value: child.id,
+          label: label(child, parentOffered ? child.name : getCategoryPath(child, categoriesById)),
+          icon: child.icon,
+          searchText: parent.name,
+          indent: parentOffered,
+        })
+      }
+    }
+    // Anything left (a subcategory whose parent is not an expense category).
+    const placed = new Set(options.map((o) => o.value))
+    for (const c of categoryOptions) {
+      if (!placed.has(c.id)) {
+        options.push({ value: c.id, label: label(c, getCategoryPath(c, categoriesById)), icon: c.icon })
+      }
+    }
+    return [{ options }]
+  })()
   const selectedEditLine = editLineId
     ? budgetLines.find((line) => line.line_id === editLineId && line.category_id) ?? null
     : null
@@ -536,6 +570,11 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
 
       {!budgetError && budget ? (
         <>
+          {/* MQ-014: with no lines the KPIs are four zeros and "How this month
+              was paid" an empty table — both wait for the first line, so the
+              lines card and its empty state come first. */}
+          {budgetLines.length ? (
+          <>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
             <BudgetKpiCard
               label="Total budgeted"
@@ -633,7 +672,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                   return (
                     <div key={row.key} className="rounded-lg border bg-background p-2.5">
                       <p className="text-[11px] font-medium text-muted-foreground">{row.label}</p>
-                      <p className="mt-1 font-mono text-sm font-bold tabular-nums">
+                      <p className="mt-1 text-sm font-bold tabular-nums">
                         {formatCurrency(row.value, budgetCurrency)}
                       </p>
                       {/* Share and hint are separate text nodes on purpose: the
@@ -663,6 +702,8 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
               </p>
             ) : null}
           </section>
+          </>
+          ) : null}
 
           {isAddingLine ? (
             <FormDialog
@@ -683,24 +724,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="category_id">Category</Label>
-                      <select
-                        id="category_id"
-                        name="category_id"
-                        defaultValue=""
-                        required
-                        className={selectClassName}
-                      >
-                        <option value="" disabled>
-                          Select category
-                        </option>
-                        {categoryOptions.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.icon ? `${c.icon} ` : ''}
-                            {getCategoryPath(c, categoriesById)}
-                            {c.exclude_from_reports ? ' - no reports' : ''}
-                          </option>
-                        ))}
-                      </select>
+                      <BudgetCategoryPicker groups={categoryPickerGroups} />
                     </div>
 
                     <div className="space-y-2">
@@ -714,9 +738,11 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                     </div>
                   </div>
 
-                  <SubmitButton type="submit" pendingText="Adding...">
-                    Add line
-                  </SubmitButton>
+                  <div className={formActionsCls}>
+                    <SubmitButton type="submit" pendingText="Adding...">
+                      Add line
+                    </SubmitButton>
+                  </div>
                 </form>
               )}
             </FormDialog>
@@ -828,6 +854,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                               ? previousActualByCategoryId.get(line.category_id) ?? null
                               : null
                           }
+                          monthIsOpen={selectedMonth >= currentMonthParam()}
                         />
                       )
                     })}

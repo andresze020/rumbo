@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { Store, X } from 'lucide-react'
 import { TransactionEditForm } from './transaction-edit-form'
 import { RefundForm } from './refund-form'
@@ -20,6 +21,7 @@ import { TransactionsHeader } from './transactions-header'
 import { TransactionsSummary } from './transactions-summary'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
+import { transactionsEmptyState } from '@/lib/transactions/empty-state'
 import { FormDialog } from '@/components/form-dialog'
 import { Callout } from '@/components/callout'
 import { createClient } from '@/lib/supabase/server'
@@ -576,8 +578,10 @@ export default async function TransactionsPage({
     (selectedPayeeIds.length > 0 ? 1 : 0) +
     (selectedTagIds.length > 0 ? 1 : 0)
   const hasGeneralFilters = generalFilterCount > 0
-  // Whether the *view* is narrowed at all, period included. Drives the empty
-  // states and what gets remembered for the next bare landing.
+  // Whether the URL narrows the view at all, period included. Decides what gets
+  // remembered for the next bare landing — and deliberately not the empty
+  // state's copy any more: that read "yet" or "found" depending on whether the
+  // same period was spelled out in the URL (MQ-003, see `lib/transactions/empty-state`).
   const hasActiveFilters =
     hasGeneralFilters || searchText.length > 0 || hasPeriodParam(params)
 
@@ -773,6 +777,34 @@ export default async function TransactionsPage({
     void_reason: r.void_reason,
   }))
   const totalCount = rpcData.length ? Number(rpcData[0].total_count) : 0
+
+  // A page past the end comes back empty even when earlier pages are not — the
+  // last rows of the last page were voided, or a filter changed under a stale
+  // `page=` link. Its empty rows say nothing about the period, so instead of
+  // classifying them (and claiming "No transactions in …"), go back to page 1.
+  if (totalCount === 0 && currentPage > 1) redirect(transactionsPath(filters))
+
+  // MQ-003: "No transactions yet" is a claim about the household, so it is
+  // checked against the household — one row, and only when this view came back
+  // empty. A failed read counts as "has history": better to say "nothing in
+  // this period" to an empty household than "yet" to one with years of it.
+  let householdHasTransactions = true
+  if (totalCount === 0) {
+    const { data: anyTransaction } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('household_id', household.id)
+      .is('deleted_at', null)
+      .limit(1)
+    householdHasTransactions = anyTransaction ? anyTransaction.length > 0 : true
+  }
+  const emptyState = transactionsEmptyState({
+    householdHasTransactions,
+    reviewUnreviewed: selectedReview === 'unreviewed',
+    hasSearch: searchText.length > 0,
+    hasGeneralFilters,
+  })
+
   const totalIncomeBase = rpcData.length
     ? Number(rpcData[0].total_income_base)
     : 0
@@ -1339,6 +1371,65 @@ export default async function TransactionsPage({
     ])
   ).sort((a, b) => a.localeCompare(b))
 
+  // MQ-003: one card per state of the data and the view — see
+  // `lib/transactions/empty-state` for why the URL's shape no longer decides it.
+  let emptyStateCard: ReactNode
+  switch (emptyState) {
+    case 'caught-up':
+      emptyStateCard = (
+        <EmptyState
+          title="You're all caught up"
+          description="Nothing is waiting for review in this range. Widen the date range or view all transactions."
+          actionHref={transactionsPath({ ...filters, review: 'all' })}
+          actionLabel="View all transactions"
+        />
+      )
+      break
+    case 'search':
+      emptyStateCard = (
+        <EmptyState
+          title="No transactions match your search"
+          description="Try a shorter search, a different spelling, or a wider period."
+          actionHref={CLEAR_FILTERS_HREF}
+          actionLabel="Clear filters"
+        />
+      )
+      break
+    case 'filters':
+      emptyStateCard = (
+        <EmptyState
+          title="No transactions found for these filters"
+          description="Clear filters or adjust the date range to see more activity."
+          actionHref={CLEAR_FILTERS_HREF}
+          actionLabel="Clear filters"
+        />
+      )
+      break
+    case 'period':
+      emptyStateCard = (
+        <EmptyState
+          title={t('transactionsList.emptyPeriodTitle', { period: periodLabel })}
+          description={t('transactionsList.emptyPeriodDescription')}
+          actionHref={transactionsPath(filters, { mode: 'create' })}
+          actionLabel="Add transaction"
+          // All time is already the widest view; offering it again is a no-op.
+          secondaryActionHref={period.bounded ? CLEAR_FILTERS_HREF : undefined}
+          secondaryActionLabel={t('transactionsList.showAllTime')}
+        />
+      )
+      break
+    case 'household-empty':
+      emptyStateCard = (
+        <EmptyState
+          title="No transactions yet"
+          description="A transaction is any money movement — a purchase, a payment you received, or a transfer between your own accounts."
+          actionHref={transactionsPath(filters, { mode: 'create' })}
+          actionLabel="Add transaction"
+        />
+      )
+      break
+  }
+
   return (
     // `pb-20` on phones: the bottom nav is a real flex row under the scroller,
     // but its centre "+" is lifted 12px above it and rings the background, so
@@ -1537,39 +1628,8 @@ export default async function TransactionsPage({
             compact={preferences.transactions.compactList}
             meta={listMeta}
           />
-        ) : selectedReview === 'unreviewed' ? (
-          <EmptyState
-            title="You're all caught up"
-            description="Nothing is waiting for review in this range. Widen the date range or view all transactions."
-            actionHref={transactionsPath({ ...filters, review: 'all' })}
-            actionLabel="View all transactions"
-          />
-        ) : searchText ? (
-          <EmptyState
-            title="No transactions match your search"
-            description="Try a shorter search, a different spelling, or a wider period."
-            actionHref={CLEAR_FILTERS_HREF}
-            actionLabel="Clear filters"
-          />
         ) : (
-          <EmptyState
-            title={
-              hasActiveFilters
-                ? 'No transactions found for these filters'
-                : 'No transactions yet'
-            }
-            description={
-              hasActiveFilters
-                ? 'Clear filters or adjust the date range to see more activity.'
-                : 'A transaction is any money movement — a purchase, a payment you received, or a transfer between your own accounts.'
-            }
-            actionHref={
-              hasActiveFilters
-                ? CLEAR_FILTERS_HREF
-                : transactionsPath(filters, { mode: 'create' })
-            }
-            actionLabel={hasActiveFilters ? 'Clear filters' : 'Add transaction'}
-          />
+          emptyStateCard
         )}
 
         {/* ── Pagination ──────────────────────────────────────────────── */}
