@@ -124,6 +124,8 @@ const allowedUnchanged = new Set([
   'Type',
   'transaction',
   'tx',
+  // Percentage points: the same abbreviation in French.
+  'pp',
   '· incl.',
 ])
 

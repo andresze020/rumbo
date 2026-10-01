@@ -90,7 +90,7 @@ function PctDelta({
   )
 }
 
-function RateDelta({ diff }: { diff: number | null }) {
+function RateDelta({ diff, vsLabel }: { diff: number | null; vsLabel?: string }) {
   if (diff === null) return null
   if (Math.abs(diff) < 0.0001) {
     return <span className="text-[11.5px] font-medium text-muted-foreground">No change vs prev. month</span>
@@ -107,7 +107,7 @@ function RateDelta({ diff }: { diff: number | null }) {
         isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
       )}
     >
-      {isUp ? '↑' : '↓'} {formatted} pp vs prev. month
+      {isUp ? '↑' : '↓'} {formatted} {vsLabel ? <>pp {vsLabel}</> : <>pp vs prev. month</>}
     </span>
   )
 }
@@ -143,6 +143,10 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
   // every line).
   const todayIso = new Date().toISOString().slice(0, 10)
   const isOpenMonth = month === todayIso.slice(0, 7)
+  // A month that has not started (reachable through MonthNav) may already hold
+  // a future-dated posting; that partial month against all of the one before
+  // it is not a comparison either.
+  const isFutureMonth = month > todayIso.slice(0, 7)
   const dailyCashFlow = isOpenMonth
     ? await getDailyCashFlow(ctx.supabase, ctx.household.id, `${prevMonth}-01`, monthEndDate(month))
     : null
@@ -150,7 +154,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
   let comparePrevious: CashFlowTotals | null = null
   if (hasActivity && comparison?.kind === 'same-day') {
     comparePrevious = dailyCashFlow?.error ? null : comparison.previous
-  } else if (hasActivity) {
+  } else if (hasActivity && !isFutureMonth) {
     comparePrevious = { income: prev.income, expenses: prev.expenses, savings: prev.savings }
   }
   const vsLabel =
@@ -161,8 +165,17 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
           ),
         })
       : undefined
+  // Same window as the three amounts above it: the previous rate comes from
+  // `comparePrevious` (same day last month when this month is open), with the
+  // RPC's own formula — savings ÷ income, undefined without income.
+  const previousSavingsRate =
+    comparePrevious && comparePrevious.income > 0
+      ? comparePrevious.savings / comparePrevious.income
+      : null
   const savingsRateDelta =
-    curr.savingsRate != null && prev.savingsRate != null ? curr.savingsRate - prev.savingsRate : null
+    curr.savingsRate != null && previousSavingsRate != null
+      ? curr.savingsRate - previousSavingsRate
+      : null
 
   // ── Budget performance. ────────────────────────────────────────────────────
   const budgetLines = budget.lines.filter((l) => l.planned > 0)
@@ -366,7 +379,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       label: 'Savings rate',
       value: formatPercent(curr.savingsRate, locale),
       valueClass: undefined as string | undefined,
-      delta: <RateDelta diff={hasActivity ? savingsRateDelta : null} />,
+      delta: <RateDelta diff={savingsRateDelta} vsLabel={vsLabel} />,
       icon: <Percent />,
       accent: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
     },
