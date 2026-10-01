@@ -6,7 +6,7 @@ import { MobileNav } from '@/components/mobile-nav'
 import { MobileBottomNav } from '@/components/mobile-bottom-nav'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import { TransactionDialogProvider } from '@/components/transaction-dialog-provider'
-import { AssistantDrawer } from '@/components/assistant-drawer'
+import { AssistantProvider } from '@/components/assistant-drawer'
 import { InstallAppHint } from '@/components/install-app-hint'
 import { ExchangeRateAutoRefresh } from './exchange-rate-auto-refresh'
 import { LanguageProvider } from '@/components/language-provider'
@@ -76,6 +76,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             `fixed`, and still want re-boxing onto the screen under pinch zoom.
             It is the two bars that stop needing it.
           */}
+          {/* Owns the assistant sheet, so the mobile top bar can open it. */}
+          <AssistantProvider>
           <div className="flex h-dvh overflow-hidden">
           {/* Desktop sidebar */}
           <AppSidebar
@@ -118,8 +120,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             <MobileBottomNav className="lg:hidden" />
           </div>
 
-          {/* FABs — assistant + add transaction (desktop only for add) */}
-          <AssistantDrawer />
+          {/* Add-transaction FAB, desktop only. The assistant's FAB (also
+              desktop only) renders from `AssistantProvider`. */}
           <GlobalAddTransactionButton
             aria-label={ui('Add transaction')}
             title={ui('Add transaction')}
@@ -128,6 +130,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             <Plus className="size-6" aria-hidden="true" />
           </GlobalAddTransactionButton>
           </div>
+          </AssistantProvider>
         </LocalizedClientBoundary>
       </TransactionDialogProvider>
     </LanguageProvider>

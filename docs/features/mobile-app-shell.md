@@ -88,6 +88,19 @@ it started at y=0 and rendered under the top bar. Page content belongs
 
 ---
 
+## One floating action on a phone
+
+Since MQ-004 (2026-10-01) the assistant is opened from a button in the top bar
+(`MobileNav`, beside the theme toggle) below `lg`, and its floating button is
+desktop-only. On a phone the FAB hung at the right edge every amount is
+aligned to: it covered row figures, row actions, "Copy previous" in Budgets
+and, with the shell displaced, the More tab. The bottom nav's "+" is the only
+floating action left on a phone. The sheet itself lives in
+`AssistantProvider` (`assistant-drawer.tsx`), which wraps the shell so the
+top bar can open it via `useOpenAssistant()`.
+
+---
+
 ## What `ViewportPin` still does
 
 `ViewportPin` was not deleted — it was narrowed. It stays for the boxes that
