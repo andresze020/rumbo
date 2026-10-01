@@ -25,6 +25,7 @@ import {
 import { useTransactionDialog } from '@/components/transaction-dialog-provider'
 import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
+import { useTransactionsLinkClick } from '@/lib/filters/transaction-scope-link'
 import type { TranslationKey } from '@/lib/i18n/translate'
 
 type Tab = {
@@ -35,7 +36,8 @@ type Tab = {
   // `loading.tsx` boundary for a dynamic page, not its data. The three tabs
   // people actually bounce between (RUM-007, baseline §3.1) opt into full
   // prefetch so the Router Cache already holds their RSC payload by the time
-  // the tap lands — More stays on the default, it is a low-traffic hub.
+  // the tap lands. More too since MQ-009: it has no data, so its full payload
+  // costs the server next to nothing and the tab opens with no wait at all.
   prefetch?: boolean
 }
 
@@ -54,7 +56,7 @@ const rightTabs: Tab[] = [
   // Accounts is opened far more often than Plan, so it earns the primary slot.
   // Plan stays reachable from the budgets page and via its own route.
   { href: '/dashboard/accounts', labelKey: 'nav.accounts', icon: Wallet, prefetch: true },
-  { href: '/dashboard/more', labelKey: 'nav.more', icon: MoreHorizontal },
+  { href: '/dashboard/more', labelKey: 'nav.more', icon: MoreHorizontal, prefetch: true },
 ]
 
 export function MobileBottomNav({ className }: { className?: string }) {
@@ -196,10 +198,14 @@ export function MobileBottomNav({ className }: { className?: string }) {
 
 function BottomTab({ tab, active, label }: { tab: Tab; active: boolean; label: string }) {
   const Icon = tab.icon
+  // MQ-003: Transactions goes to the remembered scope's own URL, not to the
+  // prefetched render of the bare one — see `lib/filters/transaction-scope-link`.
+  const onClick = useTransactionsLinkClick(tab.href)
   return (
     <Link
       href={tab.href}
       prefetch={tab.prefetch}
+      onClick={onClick}
       aria-current={active ? 'page' : undefined}
       className={cn(
         // `active:` gives the tab the press-down a native tab bar has; without

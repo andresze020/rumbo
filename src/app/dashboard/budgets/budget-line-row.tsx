@@ -41,6 +41,12 @@ type BudgetLineRowProps = {
    * from `null`, so the two are kept apart.
    */
   previousActual: number | null
+  /**
+   * MQ-005: the month on screen is still open (or has not started). Its spend
+   * so far against all of last month read "−100%" in green on the 1st, so the
+   * percentage waits for the month to close; last month's amount still shows.
+   */
+  monthIsOpen: boolean
 }
 
 const NEAR_LIMIT_THRESHOLD = 0.8
@@ -97,6 +103,7 @@ export function BudgetLineRow({
   rolloverEnabled,
   carryover,
   previousActual,
+  monthIsOpen,
 }: BudgetLineRowProps) {
   const [open, setOpen] = useState(false)
   const { t } = useLanguage()
@@ -123,9 +130,11 @@ export function BudgetLineRow({
   // month gives a meaningful percentage; "spent 40 after spending nothing" is a
   // fact, not a +∞ % increase, so it shows the amounts instead.
   const previousDelta =
-    previousActual !== null && previousActual > 0
+    !monthIsOpen && previousActual !== null && previousActual > 0
       ? actualAmount / previousActual - 1
       : null
+  // A move that rounds to 0% is no move: grey, and no sign (MQ-005).
+  const previousDeltaFlat = previousDelta !== null && Math.abs(previousDelta) < 0.005
 
   return (
     <div className={cn(overBudget && 'bg-destructive/5')}>
@@ -353,14 +362,14 @@ export function BudgetLineRow({
                     <p
                       className={cn(
                         'mt-0.5 text-[11px] font-semibold tabular-nums',
-                        previousDelta > 0
-                          ? 'text-destructive'
-                          : previousDelta < 0
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-muted-foreground'
+                        previousDeltaFlat
+                          ? 'text-muted-foreground'
+                          : previousDelta > 0
+                            ? 'text-destructive'
+                            : 'text-emerald-600 dark:text-emerald-400'
                       )}
                     >
-                      {previousDelta >= 0 ? '+' : '−'}
+                      {previousDeltaFlat ? '' : previousDelta > 0 ? '+' : '−'}
                       {formatPercent(Math.abs(previousDelta), 'en', { minimumFractionDigits: 0 })}
                     </p>
                   ) : null}

@@ -127,6 +127,21 @@ export function healthBreakdown({
 }
 
 /**
+ * MQ-005 — the month's health, or null when there is nothing to grade yet.
+ *
+ * With no posted income and no posted expense, every input is a default: the
+ * savings rate is missing (neutral 50) and an untouched budget is "within
+ * plan" (100). The formula then hands an empty month a "C+", which reads as a
+ * verdict on spending nobody has recorded. Surfaces show "Not enough data yet"
+ * instead. The formula itself is unchanged for any month with activity.
+ */
+export function monthHealth(
+  input: HealthScoreInput & { hasActivity: boolean }
+): HealthBreakdown | null {
+  return input.hasActivity ? healthBreakdown(input) : null
+}
+
+/**
  * Combined month-health score (0–100, integer). Weighted savings + budget
  * adherence, renormalised to savings-only when there is no budget.
  */

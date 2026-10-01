@@ -1,7 +1,8 @@
 # Mobile App Shell — Chrome That Does Not Move
 
 ## Status
-**Implemented — 2026-08-29 (PR #61).** UI only, no database changes.
+**Implemented — 2026-08-29 (PR #61); hardened 2026-10-01 (MQ-002).** UI only,
+no database changes.
 
 This doc exists because the decision it records is easy to undo by accident.
 The dashboard's top bar and bottom nav are **deliberately not `position: fixed`**.
@@ -52,7 +53,7 @@ correction. PR #61 stopped chasing.
   <div className="flex min-w-0 flex-1 flex-col">
     <MobileNav />                                   ← flex row, not fixed
     <main id={APP_SCROLL_ID}                        ← the ONLY scroller
-          className="flex-1 overflow-y-auto overscroll-contain">
+          className="relative flex-1 overflow-y-auto overscroll-contain">
       …
     </main>
     <MobileBottomNav />                             ← flex row, not fixed
@@ -66,6 +67,23 @@ correction. PR #61 stopped chasing.
   handed to the document behind it.
 - **Content ends above the nav, not behind it.** The nav takes real space in
   flow now, so screens no longer need bottom padding to clear it.
+- **`relative` on the scroller** (MQ-002, 2026-10-01) — `main` is the
+  containing block of every `absolute` element a screen renders. Without it,
+  an `absolute` box with no positioned ancestor of its own resolves against
+  the root: `main` neither clips nor scrolls it, and it lands at its in-flow
+  offset in *document* coordinates, so the document grows past the screen.
+  Measured in Chromium at 360×780: one such box at the end of an 1800px screen
+  made the document 1880px tall, and a drag on the top bar moved the whole
+  shell 1100px up — the top bar gone, the nav off-screen, an empty band below
+  (the PR #59 symptom, reproduced without any `fixed` chrome).
+- **The document is locked** (MQ-002) — `html:has(#app-scroll)` is
+  `overflow: hidden`, so whatever else makes the document taller than the
+  screen (a popup portalled into `body`) cannot be dragged either. Only the
+  layout viewport is locked: under pinch zoom the visual viewport still pans
+  (checked: scale 2, a drag pans it 100px). `overscroll-behavior-y: none` sits
+  on `html` as well as `body`, because Chromium takes the viewport's
+  overscroll behaviour from the root element only — on `body` alone the
+  browser's pull-to-refresh still fired.
 
 ---
 
@@ -85,6 +103,19 @@ Two things were repointed in PR #61 and are the precedent for anything new:
 A third followed in PR #60: the install hint was a sibling *above* `main`, so
 it started at y=0 and rendered under the top bar. Page content belongs
 **inside** `main`.
+
+---
+
+## One floating action on a phone
+
+Since MQ-004 (2026-10-01) the assistant is opened from a button in the top bar
+(`MobileNav`, beside the theme toggle) below `lg`, and its floating button is
+desktop-only. On a phone the FAB hung at the right edge every amount is
+aligned to: it covered row figures, row actions, "Copy previous" in Budgets
+and, with the shell displaced, the More tab. The bottom nav's "+" is the only
+floating action left on a phone. The sheet itself lives in
+`AssistantProvider` (`assistant-drawer.tsx`), which wraps the shell so the
+top bar can open it via `useOpenAssistant()`.
 
 ---
 

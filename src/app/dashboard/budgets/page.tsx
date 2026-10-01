@@ -868,6 +868,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                               ? previousActualByCategoryId.get(line.category_id) ?? null
                               : null
                           }
+                          monthIsOpen={selectedMonth >= currentMonthParam()}
                         />
                       )
                     })}
