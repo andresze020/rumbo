@@ -1,15 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { Wallet } from 'lucide-react'
+import { Bot, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { Button } from '@/components/ui/button'
+import { useOpenAssistant } from '@/components/assistant-drawer'
+import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { HouseholdSwitcher, type HouseholdOption } from '@/components/household-switcher'
 import { useLanguage } from '@/components/language-provider'
 
 /**
- * Slim mobile top bar: brand, the active household, theme. Navigation lives in
- * the bottom nav (`MobileBottomNav`) and the "More" page.
+ * Slim mobile top bar: brand, the active household, the assistant, theme.
+ * Navigation lives in the bottom nav (`MobileBottomNav`) and the "More" page.
+ *
+ * The assistant is a button here rather than a floating one (MQ-004): a FAB
+ * over a phone screen covered the amounts and row actions on the right edge.
  *
  * The household sits here rather than on the screens themselves. It scopes all
  * of them, and the bar already had the empty middle to hold it — which is how
@@ -25,6 +31,8 @@ export function MobileNav({
   currentHouseholdId?: string | null
 }) {
   const { t } = useLanguage()
+  const ui = useUiTranslation()
+  const openAssistant = useOpenAssistant()
 
   return (
     <header
@@ -54,7 +62,17 @@ export function MobileNav({
         className="min-w-0 shrink"
       />
 
-      <div className="ml-auto shrink-0">
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={openAssistant}
+          aria-label={ui('Open assistant')}
+          title={ui('AI Assistant')}
+          className="size-8 shrink-0"
+        >
+          <Bot className="size-4" aria-hidden="true" />
+        </Button>
         <ThemeToggle />
       </div>
     </header>

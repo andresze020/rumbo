@@ -15,6 +15,8 @@ import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { ArchiveToast } from '@/components/archive-toast'
 import { formatCurrency } from '@/lib/format'
+import { getGoalRatesToBase } from '@/lib/goals/server'
+import { summarizeGoals } from '@/lib/goals/summary'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import { setGoalStatusAction } from './actions'
@@ -53,6 +55,8 @@ type Account = {
   currency_code: string
   institution_name: string | null
   is_archived: boolean
+  account_class: string
+  account_type: string
 }
 
 export default async function GoalsPage({ searchParams }: GoalsPageProps) {
@@ -96,7 +100,7 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
       .order('created_at', { ascending: false }),
     supabase
       .from('accounts')
-      .select('id, name, currency_code, institution_name, is_archived')
+      .select('id, name, currency_code, institution_name, is_archived, account_class, account_type')
       .eq('household_id', household.id)
       .is('deleted_at', null)
       .order('sort_order', { ascending: true, nullsFirst: false })
@@ -112,11 +116,37 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
   const completedGoals = allGoals.filter((g) => g.status === 'completed')
   const archivedGoals = allGoals.filter((g) => g.status === 'archived')
 
-  const baseCurrencyGoals = allGoals.filter(
-    (g) => g.currency_code === baseCurrency && g.status !== 'archived'
+  // MQ-006: every non-archived goal counts, converted to base currency at the
+  // household's latest rate; a currency with no rate is named, not dropped.
+  const { rates: goalRates, failed: goalRatesFailed } = await getGoalRatesToBase(
+    supabase,
+    household.id,
+    baseCurrency,
+    allGoals.filter((g) => g.status !== 'archived').map((g) => g.currency_code)
   )
-  const totalSaved = baseCurrencyGoals.reduce((sum, g) => sum + Number(g.current_amount), 0)
-  const totalTarget = baseCurrencyGoals.reduce((sum, g) => sum + Number(g.target_amount), 0)
+  const goalTotals = summarizeGoals(allGoals, baseCurrency, goalRates)
+  const totalSaved = goalTotals.saved
+  const totalTarget = goalTotals.target
+  const totalSavedNotes = [
+    goalTotals.converted.length
+      ? translate(locale, 'goals.totalConverted', { currencies: goalTotals.converted.join(', ') })
+      : null,
+    // Saved *and* target per currency: the base total above omits both, so
+    // naming only the saved part hid the size of the goal (an unfunded goal
+    // read "COP 0"). A failed lookup is not "no rate on file".
+    goalTotals.unconverted.length
+      ? translate(locale, goalRatesFailed ? 'goals.totalUnconvertedFailed' : 'goals.totalUnconverted', {
+          amounts: goalTotals.unconverted
+            .map((u) =>
+              translate(locale, 'goals.unconvertedAmount', {
+                saved: formatCurrency(u.saved, u.currency, locale),
+                target: formatCurrency(u.target, u.currency, locale),
+              })
+            )
+            .join(', '),
+        })
+      : null,
+  ].filter(Boolean)
 
   const formAccounts = allAccounts
     .filter((a) => !a.is_archived)
@@ -125,6 +155,8 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
       name: a.name,
       currency_code: a.currency_code,
       institution_name: a.institution_name,
+      account_class: a.account_class,
+      account_type: a.account_type,
     }))
 
   const editGoal = editId ? allGoals.find((g) => g.id === editId) : null
@@ -183,8 +215,11 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
         undoValue="active"
       />
 
-      {/* Summary */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* Summary. MQ-014: only once there is a goal — three zero cards pushed
+          "No goals yet" off a phone screen. Compact on a phone: the two counts
+          side by side, the total (a long figure) across the row. */}
+      {allGoals.length ? (
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
         <MetricCard
           label="Active goals"
           value={String(activeGoals.length)}
@@ -202,14 +237,18 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
         <MetricCard
           label="Total saved"
           value={formatCurrency(totalSaved, baseCurrency, locale)}
-          description={translate(locale, 'goals.totalDescription', {
-            target: formatCurrency(totalTarget, baseCurrency, locale),
-            currency: baseCurrency,
-          })}
+          description={[
+            translate(locale, 'goals.totalDescription', {
+              target: formatCurrency(totalTarget, baseCurrency, locale),
+              currency: baseCurrency,
+            }),
+            ...totalSavedNotes,
+          ].join(' ')}
           icon={<Target />}
           accent="bg-muted text-muted-foreground"
         />
       </div>
+      ) : null}
 
       {/* Dialogs */}
       {isCreating ? (

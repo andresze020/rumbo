@@ -274,3 +274,24 @@ same as with no remembered scope.
 5. Record an expense for today: after the save, the Spending card's figure,
    the end of its line and "Spent" in Cash flow all move by the same amount.
 6. Open next month: there is no Spending card and Cash flow spans the row.
+
+---
+
+## A month with nothing posted (MQ-014, 2026-10-01)
+
+A new month used to stack five empty cards: a flat Spending chart with one
+point, Cash flow in zeros, the "No posted income or expense activity" note,
+"By category — No expenses…" and "Insights — Add transactions…". With no
+posted income or expense in the month on screen (`hasMonthlyActivity`), the
+Dashboard now shows one **"{month} is just starting"** card in place of the
+Spending pace / Cash flow row, with what to do next: add a transaction, post
+due recurring items, and — when the month has no budget — set it up. By
+category is hidden and Insights too unless an insight exists; Scheduled
+activity spans the row. Nothing is recalculated: every figure that does show
+comes from the same queries as before.
+
+Budgets and Goals follow the same rule: Budgets with no lines hides its four
+KPIs and "How this month was paid" so the lines card and its empty state come
+first; Goals with no goals hides its three summary cards, and with goals lays
+them out two counts side by side and the total across the row on a phone.
+

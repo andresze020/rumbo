@@ -8,6 +8,7 @@ import { balanceTrendDates, balanceTrendFromRows, type BalanceTrendRow } from '@
 import { computeValuation, selectNetWorthAccounts } from '@/lib/net-worth/valuation'
 import { monthEndDate, snapshotDateForMonth } from '@/lib/periods/month'
 import { buttonVariants } from '@/components/ui/button'
+import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import {
   Card,
   CardContent,
@@ -431,6 +432,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               with Month health (BR-021 / RUM-009) as its footer — the full
               breakdown stays one click away under "Details". Without a pace
               chart the cash-flow card takes the whole row. */}
+          {/* MQ-014: a month with nothing posted gets one "New month" card
+              (below) instead of a flat pace chart and a cash flow of zeros. */}
+          {hasMonthlyActivity ? (
           <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] [&>*]:min-w-0">
             {pace && paceAgrees ? (
               <SpendingPaceCard
@@ -490,12 +494,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               }
             />
           </div>
-
-          {!hasMonthlyActivity ? (
-            <Callout variant="info" className="border-dashed text-muted-foreground">
-              {t('dashboard.noActivity', { month: formatMonthLabel(selectedMonth, locale) })}
-            </Callout>
-          ) : null}
+          ) : (
+            <section className="rounded-2xl border border-dashed bg-card/50 p-5 shadow-sm shadow-black/[0.03]">
+              <h2 className="text-base font-semibold">
+                {t('dashboard.newMonthTitle', { month: formatMonthLabel(selectedMonth, locale) })}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t('dashboard.noActivity', { month: formatMonthLabel(selectedMonth, locale) })}{' '}
+                {t('dashboard.newMonthBody')}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {/* Opens the quick-add dialog in place. A link to
+                    Transactions with `mode=create` only landed on the list:
+                    nothing reads that param. */}
+                <GlobalAddTransactionButton className={buttonVariants({ size: 'sm' })}>
+                  {t('dashboard.newMonthAdd')}
+                </GlobalAddTransactionButton>
+                <Link href="/dashboard/recurring" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                  {t('dashboard.newMonthRecurring')}
+                </Link>
+                {!hasBudget ? (
+                  <Link
+                    href={`/dashboard/budgets?month=${selectedMonth}`}
+                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  >
+                    {t('dashboard.newMonthBudget')}
+                  </Link>
+                ) : null}
+              </div>
+            </section>
+          )}
 
           {/* Budget, category breakdown, upcoming bills, insights, debts,
               goals, recent activity — RUM-005: streams in behind its own

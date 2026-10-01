@@ -159,7 +159,7 @@ export function BudgetLineRow({
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className={cn('font-mono text-xs font-semibold tabular-nums', overBudget && 'text-destructive')}>
+                  <p className={cn('text-xs font-semibold tabular-nums', overBudget && 'text-destructive')}>
                     {formatCurrency(actualAmount, budgetCurrency)}
                   </p>
                   <p className={cn('mt-0.5 text-[10.5px] font-bold tabular-nums', status.textClassName)}>
@@ -205,13 +205,13 @@ export function BudgetLineRow({
           </div>
         </div>
 
-        <div className="min-w-0 text-right font-mono text-xs text-muted-foreground tabular-nums">
+        <div className="min-w-0 text-right text-xs text-muted-foreground tabular-nums">
           {formatCurrency(plannedAmount, budgetCurrency)}
         </div>
-        <div className={cn('min-w-0 text-right font-mono text-xs font-semibold tabular-nums', overBudget && 'text-destructive')}>
+        <div className={cn('min-w-0 text-right text-xs font-semibold tabular-nums', overBudget && 'text-destructive')}>
           {formatCurrency(actualAmount, budgetCurrency)}
         </div>
-        <div className={cn('min-w-0 text-right font-mono text-xs font-semibold tabular-nums', remainingClassName)}>
+        <div className={cn('min-w-0 text-right text-xs font-semibold tabular-nums', remainingClassName)}>
           {formatCurrency(lineRemaining, budgetCurrency)}
         </div>
         <div className="min-w-0">
@@ -293,7 +293,7 @@ export function BudgetLineRow({
             <div className="grid gap-2 sm:grid-cols-4">
               <div className="rounded-md border bg-background p-2.5">
                 <p className="text-xs text-muted-foreground">Planned</p>
-                <p className="mt-0.5 font-mono text-sm font-medium tabular-nums">
+                <p className="mt-0.5 text-sm font-medium tabular-nums">
                   {formatCurrency(plannedAmount, budgetCurrency)}
                 </p>
               </div>
@@ -303,7 +303,7 @@ export function BudgetLineRow({
                     <p className="text-xs text-muted-foreground">Carryover</p>
                     <p
                       className={cn(
-                        'mt-0.5 font-mono text-sm font-medium tabular-nums',
+                        'mt-0.5 text-sm font-medium tabular-nums',
                         appliedCarryover < 0
                           ? 'text-destructive'
                           : appliedCarryover > 0
@@ -317,7 +317,7 @@ export function BudgetLineRow({
                   </div>
                   <div className="rounded-md border bg-background p-2.5">
                     <p className="text-xs text-muted-foreground">Available</p>
-                    <p className="mt-0.5 font-mono text-sm font-medium tabular-nums">
+                    <p className="mt-0.5 text-sm font-medium tabular-nums">
                       {formatCurrency(availableAmount, budgetCurrency)}
                     </p>
                   </div>
@@ -325,13 +325,13 @@ export function BudgetLineRow({
               ) : null}
               <div className="rounded-md border bg-background p-2.5">
                 <p className="text-xs text-muted-foreground">Spent</p>
-                <p className="mt-0.5 font-mono text-sm font-medium tabular-nums">
+                <p className="mt-0.5 text-sm font-medium tabular-nums">
                   {formatCurrency(actualAmount, budgetCurrency)}
                 </p>
               </div>
               <div className="rounded-md border bg-background p-2.5">
                 <p className="text-xs text-muted-foreground">Remaining</p>
-                <p className={cn('mt-0.5 font-mono text-sm font-medium tabular-nums', remainingClassName)}>
+                <p className={cn('mt-0.5 text-sm font-medium tabular-nums', remainingClassName)}>
                   {formatCurrency(lineRemaining, budgetCurrency)}
                 </p>
               </div>
@@ -342,7 +342,7 @@ export function BudgetLineRow({
               {previousActual !== null ? (
                 <div className="rounded-md border bg-background p-2.5">
                   <p className="text-xs text-muted-foreground">Last month</p>
-                  <p className="mt-0.5 font-mono text-sm font-medium tabular-nums">
+                  <p className="mt-0.5 text-sm font-medium tabular-nums">
                     {formatCurrency(previousActual, budgetCurrency)}
                   </p>
                   {previousDelta !== null ? (

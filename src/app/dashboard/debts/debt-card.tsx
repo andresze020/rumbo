@@ -82,7 +82,7 @@ export function DebtCard({
         </div>
       </div>
 
-      <p className="mt-3.5 font-mono text-2xl font-bold tabular-nums text-rose-600 dark:text-rose-400">
+      <p className="mt-3.5 text-2xl font-bold tabular-nums text-rose-600 dark:text-rose-400">
         {formatCurrency(currentBalance, currency)}
       </p>
 
