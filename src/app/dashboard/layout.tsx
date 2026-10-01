@@ -47,7 +47,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <LanguageProvider locale={locale}>
-      <TransactionDialogProvider>
+      <TransactionDialogProvider householdId={householdContext.currentId}>
         <LocalizedClientBoundary>
           <TextSizeSync value={textSize} />
           {/*

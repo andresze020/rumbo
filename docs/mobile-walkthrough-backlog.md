@@ -34,7 +34,7 @@
 | [MQ-006](#mq-006--goals-resumen-que-ignora-metas-en-otra-moneda-y-cuentas-vinculables-incorrectas) | P1 | ✅ Hecho (`fix/mq-006-goals-summary-accounts`) | Funcionamiento | Goals | El resumen ignora metas en moneda no base; se puede vincular una meta de ahorro a una cuenta de deuda. |
 | [MQ-007](#mq-007--sugerencias-de-autofill-del-navegador-en-campos-de-la-app) | P2 | ✅ Hecho (`fix/mq-007-no-autofill`) | UX | Formularios | Brave ofrece nombres de contactos, montos viejos y tarjetas en campos de nombre y monto. |
 | [MQ-008](#mq-008--selects-nativos-con-listas-largas) | P2 | ✅ Hecho (`fix/mq-008-searchable-pickers`) | UX | Budgets / Goals / Debts | `<select>` nativos con 20–60 opciones planas, sin búsqueda ni jerarquía. |
-| [MQ-009](#mq-009--skeletons-en-cada-navegación-incluida-una-página-estática) | P2 | Abierto | Performance | Navegación | Skeleton de 0,5–2 s en cada módulo, incluso en More (estático); "Loading form…" en blanco; skeleton de Budgets no coincide con el resultado. |
+| [MQ-009](#mq-009--skeletons-en-cada-navegación-incluida-una-página-estática) | P2 | ✅ Hecho (`fix/mq-009-fewer-skeletons`) | Performance | Navegación | Skeleton de 0,5–2 s en cada módulo, incluso en More (estático); "Loading form…" en blanco; skeleton de Budgets no coincide con el resultado. |
 | [MQ-010](#mq-010--sheets-con-teclado-autofocus-que-tapa-el-formulario) | P2 | ✅ Hecho (`fix/mq-010-no-keyboard-on-open`) | UX | Debts / Goals / Budgets | El autofocus abre el teclado al instante y tapa casi todo el formulario. |
 | [MQ-011](#mq-011--debts-no-reconoce-las-cuentas-de-pasivo-existentes) | P2 | ✅ Hecho (`fix/mq-011-track-existing-liabilities`) | UX | Debts | Debts muestra 0 deudas en rojo mientras existe una cuenta tipo Debt con saldo; no ofrece vincularla. |
 | [MQ-012](#mq-012--tipografía-monoespaciada-en-montos) | P2 | ✅ Hecho (`fix/mq-012-proportional-amounts`) | UI | Debts / Budgets / Goals | Montos en `font-mono` con caracteres espaciados, distinto al resto de la app. |
@@ -709,6 +709,18 @@ action.
 ---
 
 ### MQ-009 — Skeletons en cada navegación, incluida una página estática
+
+> ✅ Hecho el 2026-10-01 — More: su `loading.tsx` renderiza la propia página
+> (no tiene datos; borrarlo habría mostrado el skeleton del Dashboard, que es
+> el límite padre) y la tab More hace prefetch completo. Budgets: skeleton con
+> el marco real de la página y un bloque neutro, sin "Loading" ni 4 KPIs. FAB
+> "+": stale-while-revalidate de `getQuickAddFormData` (solo la primera
+> apertura espera; BF-011 se mantiene porque cada apertura revalida). Medido
+> en build de producción contra Supabase simulado con 150 ms por petición:
+> More 394 ms con skeleton → 110 ms sin skeleton; 2.ª apertura del formulario
+> 1011 ms → ~105 ms. Las pantallas con datos (Goals, Recurring, Budgets) siguen
+> mostrando skeleton mientras cargan, como corresponde. Los enlaces de More ya
+> usaban el prefetch por defecto de `<Link>`.
 
 **Evidencia:** 1:28, 1:52, 2:00, 2:02, 2:48, 2:51, 3:35 (skeletons de More,
 Categories, Payees, Tags, Goals, Recurring); 2:13 (Budgets); 0:54 ("Loading
