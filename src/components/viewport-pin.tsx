@@ -16,6 +16,18 @@ const OFFSET_EPSILON = 1
 const KEYBOARD_MIN_RATIO = 0.25
 
 /**
+ * iOS WebKit (every iPhone and iPad browser). Safari places `position: fixed`
+ * on the visual viewport itself — see the clamping notes in `apply` — so a
+ * fixed box is already above the soft keyboard there, while the probes still
+ * answer in layout coordinates as if it were not. iPadOS reports a Mac
+ * platform, hence the touch-point test.
+ */
+function fixedTracksVisualViewport() {
+  const { userAgent, platform, maxTouchPoints } = window.navigator
+  return /iP(hone|od|ad)/.test(userAgent) || (platform === 'MacIntel' && maxTouchPoints > 1)
+}
+
+/**
  * Publishes the visual viewport's geometry as CSS variables on `<html>`, and
  * flags the two states that need the fixed chrome moved: `data-vv-zoomed`
  * (pinch-zoomed) and `data-vv-offset` (the visual viewport is smaller than, or
@@ -70,6 +82,7 @@ export function ViewportPin() {
 
     const root = document.documentElement
     let frame = 0
+    const keyboardLiftNeeded = !fixedTracksVisualViewport()
 
     // Where `position: fixed` actually lands. Deriving that from viewport
     // metrics got this wrong once already: on a page whose root scroller
@@ -172,7 +185,11 @@ export function ViewportPin() {
       // ignores it, as above. `--vv-keyboard-inset` is how far the visible
       // bottom edge sits above the layout viewport's; `--vv-keyboard-height`
       // is the height left on screen.
-      if (keyboard && !zoomed) {
+      //
+      // Not on iOS: Safari has already moved fixed boxes above the keyboard,
+      // and lifting the sheet by the measured inset as well put it a second
+      // keyboard-height up, off the top of the screen.
+      if (keyboard && !zoomed && keyboardLiftNeeded) {
         root.style.setProperty('--vv-keyboard-inset', `${-bottomDelta}px`)
         root.style.setProperty('--vv-keyboard-height', `${vv.height}px`)
         root.setAttribute('data-vv-keyboard', 'true')
