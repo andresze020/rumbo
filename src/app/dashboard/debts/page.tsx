@@ -333,11 +333,15 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                   <p className="truncate text-xs text-muted-foreground">
                     {ui(getAccountVisual(account.account_type).label)}
                   </p>
-                  <p className="text-xs font-medium tabular-nums">
-                    {translate(locale, 'debts.balance', {
-                      amount: formatCurrency(owed, account.currency_code),
-                    })}
-                  </p>
+                  {/* No balances (the RPC failed — the error callout says so):
+                      say nothing rather than a false "Balance 0". */}
+                  {balancesError ? null : (
+                    <p className="text-xs font-medium tabular-nums">
+                      {translate(locale, 'debts.balance', {
+                        amount: formatCurrency(owed, account.currency_code),
+                      })}
+                    </p>
+                  )}
                 </div>
                 <Link
                   href={debtsPath({ mode: 'create', account: account.id })}
