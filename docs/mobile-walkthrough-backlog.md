@@ -45,7 +45,7 @@
 | [MQ-017](#mq-017--accounts-delta-neutro-en-verde-e-indicador-de-swipe-sobre-el-saldo) | P2 | ✅ Hecho (`fix/mq-017-accounts-long-names`) | UI | Accounts | "↑ 0,0 %" en verde; el indicador de swipe "‹" se dibuja encima del saldo. |
 | [MQ-018](#mq-018--more-lista-plana-de-20-ítems) | P3 | ✅ Hecho (`fix/mq-018-more-sections`) | UX | More | Lista plana de 20+ ítems que repite las tabs de la bottom nav. |
 | [MQ-019](#mq-019--budgets-fila-de-línea-y-detalle-poco-legibles) | P3 | ✅ Hecho (`fix/mq-019-budget-line-legibility`) | UX | Budgets | Fila colapsada sin el planificado, detalle en 5 tiles apilados, copy "0 over budget", banner persistente. |
-| [MQ-020](#mq-020--recurring-semántica-de-auto-y-secciones-duplicadas) | P3 | Abierto | UX | Recurring | Plantillas "Auto" vencidas sin postear, chips que envuelven, "Upcoming" y "Upcoming occurrences" duplicadas. |
+| [MQ-020](#mq-020--recurring-semántica-de-auto-y-secciones-duplicadas) | P3 | ✅ Hecho (`fix/mq-020-recurring-auto-clarity`) | UX | Recurring | Plantillas "Auto" vencidas sin postear, chips que envuelven, "Upcoming" y "Upcoming occurrences" duplicadas. |
 
 **Orden sugerido:** MQ-001 primero y solo (toca 30+ sitios y probablemente
 una migración). Luego MQ-002 + MQ-004 juntos (ambos son el shell móvil), luego
@@ -1255,6 +1255,18 @@ Sin cambios de cálculo. Textos vía i18n-scribe.
 ---
 
 ### MQ-020 — Recurring: semántica de "Auto" y secciones duplicadas
+
+> ✅ Hecho el 2026-10-01 — "Auto" se explica según
+> `docs/features/recurring-transactions.md` (UC-4): una corrida diaria a las
+> 06:00 UTC postea toda plantilla auto activa con `next_run_date ≤ hoy`. El
+> chip lleva esa definición como tooltip, el panel de la fila la muestra, y
+> una plantilla Auto vencida y sin error dice en la propia fila que la próxima
+> corrida la registrará (o "Post now" para antes). "Auto-post failed"
+> reemplaza al chip "Auto" en vez de sumarse. Los chips van en su propia fila
+> bajo el nombre, sin envolver. "Upcoming occurrences" queda plegada por
+> defecto (`<details>`) y los KPI son una grilla compacta en móvil. Sin cambio
+> de lógica. "Due" a la medianoche local depende de MQ-001 (#89), que este PR
+> no toca.
 
 **Evidencia:** 3:36–3:57. **Categoría:** UX.
 
