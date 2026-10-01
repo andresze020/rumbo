@@ -38,7 +38,7 @@
 | [MQ-010](#mq-010--sheets-con-teclado-autofocus-que-tapa-el-formulario) | P2 | ✅ Hecho (`fix/mq-010-no-keyboard-on-open`) | UX | Debts / Goals / Budgets | El autofocus abre el teclado al instante y tapa casi todo el formulario. |
 | [MQ-011](#mq-011--debts-no-reconoce-las-cuentas-de-pasivo-existentes) | P2 | ✅ Hecho (`fix/mq-011-track-existing-liabilities`) | UX | Debts | Debts muestra 0 deudas en rojo mientras existe una cuenta tipo Debt con saldo; no ofrece vincularla. |
 | [MQ-012](#mq-012--tipografía-monoespaciada-en-montos) | P2 | ✅ Hecho (`fix/mq-012-proportional-amounts`) | UI | Debts / Budgets / Goals | Montos en `font-mono` con caracteres espaciados, distinto al resto de la app. |
-| [MQ-013](#mq-013--símbolo--para-montos-en-cop-y-fecha-ddmmyyyy-con-ui-en-inglés) | P2 | Abierto | UX | Formularios multi-moneda | Montos en COP con prefijo "$"; inputs de fecha nativos en `dd/mm/yyyy` con la UI en inglés. |
+| [MQ-013](#mq-013--símbolo--para-montos-en-cop-y-fecha-ddmmyyyy-con-ui-en-inglés) | P2 | ✅ Hecho (`fix/mq-013-currency-prefix-dates`) | UX | Formularios multi-moneda | Montos en COP con prefijo "$"; inputs de fecha nativos en `dd/mm/yyyy` con la UI en inglés. |
 | [MQ-014](#mq-014--dashboard-de-mes-nuevo-cinco-empty-states-seguidos) | P2 | Abierto | UX | Dashboard / Budgets / Goals | Mes sin actividad = cinco tarjetas vacías seguidas; KPIs en cero empujan el empty state fuera de la vista. |
 | [MQ-015](#mq-015--payees-cuatro-acciones-por-fila) | P2 | Abierto | UI | Payees | Cuatro acciones por fila truncan el nombre y parten el meta en tres líneas. |
 | [MQ-016](#mq-016--categories-kpi-filtros-y-acciones-ambiguas) | P2 | Abierto | UX | Categories | KPI "Active" no sigue el filtro, tabs truncadas, icono `←\|` sin explicación, chevron con doble función. |
@@ -863,6 +863,14 @@ Cambio solo visual. Verifica con qa-smoke que las páginas tocadas cargan.
 ---
 
 ### MQ-013 — Símbolo "$" para montos en COP y fecha dd/mm/yyyy con UI en inglés
+
+> ✅ Hecho el 2026-10-01 — `AmountInput` usa `getCurrencyPrefix` (símbolo CLDR en
+> inglés salvo el "$" de USD, que pasa a "US$": COP, CA$, US$, €; con test) y
+> mide el ancho real del prefijo para el padding. `DateInput`
+> (`src/components/date-input.tsx`) muestra bajo el input nativo la fecha en el
+> idioma de la UI ("Thu, Oct 1, 2026"); lo usan Create debt, Register payment
+> y New/Edit goal. El formulario de transacciones no tiene un date picker propio
+> reutilizable (usa input nativo + chips de fecha relativa).
 
 **Evidencia:** 3:12–3:27 (Target amount "$ …" con "In COP." debajo),
 1:20 y 3:04–3:23 (inputs de fecha). **Categoría:** UX. **BD:** ninguno.

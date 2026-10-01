@@ -6,6 +6,7 @@ import { createGoalAction, updateGoalAction } from './actions'
 import { AmountInput } from '@/components/amount-input'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/date-input'
 import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
 import { GOAL_TYPES, canLinkAccountToGoal } from '@/lib/goals/shared'
@@ -140,15 +141,13 @@ export function GoalForm({
             defaultValue={template ? Number(template.target_amount).toFixed(2) : ''}
             required
           />
-          <p className="text-xs text-muted-foreground">In {currencyCode}.</p>
         </div>
 
         <div className="space-y-2">
           <Label htmlFor={`target_date_${mode}`}>Target date (optional)</Label>
-          <Input
+          <DateInput
             id={`target_date_${mode}`}
             name="target_date"
-            type="date"
             defaultValue={template?.target_date ?? ''}
           />
         </div>

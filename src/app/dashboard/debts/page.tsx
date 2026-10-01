@@ -9,6 +9,7 @@ import { DebtCard } from './debt-card'
 import { AmountInput } from '@/components/amount-input'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/date-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/empty-state'
@@ -575,10 +576,9 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="pay_payment_date">Payment date</Label>
-                  <Input
+                  <DateInput
                     id="pay_payment_date"
                     name="payment_date"
-                    type="date"
                     defaultValue={todayIsoDate()}
                     required
                   />

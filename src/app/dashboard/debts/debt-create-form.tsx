@@ -8,6 +8,7 @@ import { AmountInput } from '@/components/amount-input'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/date-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
@@ -180,13 +181,12 @@ export function DebtCreateForm({
 
             <div className="space-y-2">
               <Label htmlFor="opening_balance_date">Balance date</Label>
-              <Input
+              <DateInput
                 id="opening_balance_date"
                 name="opening_balance_date"
-                type="date"
                 value={openingBalanceDate}
-                onChange={(e) => {
-                  setOpeningBalanceDate(e.target.value)
+                onValueChange={(next) => {
+                  setOpeningBalanceDate(next)
                   if (isMultiCurrency) {
                     setUserRate('')
                     setFxNote('')
