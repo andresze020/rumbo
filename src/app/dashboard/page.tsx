@@ -8,6 +8,7 @@ import { balanceTrendDates, balanceTrendFromRows, type BalanceTrendRow } from '@
 import { computeValuation, selectNetWorthAccounts } from '@/lib/net-worth/valuation'
 import { monthEndDate, snapshotDateForMonth } from '@/lib/periods/month'
 import { buttonVariants } from '@/components/ui/button'
+import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import {
   Card,
   CardContent,
@@ -477,12 +478,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 {t('dashboard.newMonthBody')}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Link
-                  href={`/dashboard/transactions?month=${selectedMonth}&mode=create`}
-                  className={buttonVariants({ size: 'sm' })}
-                >
+                {/* Opens the quick-add dialog in place. A link to
+                    Transactions with `mode=create` only landed on the list:
+                    nothing reads that param. */}
+                <GlobalAddTransactionButton className={buttonVariants({ size: 'sm' })}>
                   {t('dashboard.newMonthAdd')}
-                </Link>
+                </GlobalAddTransactionButton>
                 <Link href="/dashboard/recurring" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
                   {t('dashboard.newMonthRecurring')}
                 </Link>
