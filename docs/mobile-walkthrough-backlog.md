@@ -44,7 +44,7 @@
 | [MQ-016](#mq-016--categories-kpi-filtros-y-acciones-ambiguas) | P2 | Abierto | UX | Categories | KPI "Active" no sigue el filtro, tabs truncadas, icono `←\|` sin explicación, chevron con doble función. |
 | [MQ-017](#mq-017--accounts-delta-neutro-en-verde-e-indicador-de-swipe-sobre-el-saldo) | P2 | Abierto | UI | Accounts | "↑ 0,0 %" en verde; el indicador de swipe "‹" se dibuja encima del saldo. |
 | [MQ-018](#mq-018--more-lista-plana-de-20-ítems) | P3 | Abierto | UX | More | Lista plana de 20+ ítems que repite las tabs de la bottom nav. |
-| [MQ-019](#mq-019--budgets-fila-de-línea-y-detalle-poco-legibles) | P3 | Abierto | UX | Budgets | Fila colapsada sin el planificado, detalle en 5 tiles apilados, copy "0 over budget", banner persistente. |
+| [MQ-019](#mq-019--budgets-fila-de-línea-y-detalle-poco-legibles) | P3 | ✅ Hecho (`fix/mq-019-budget-line-legibility`) | UX | Budgets | Fila colapsada sin el planificado, detalle en 5 tiles apilados, copy "0 over budget", banner persistente. |
 | [MQ-020](#mq-020--recurring-semántica-de-auto-y-secciones-duplicadas) | P3 | Abierto | UX | Recurring | Plantillas "Auto" vencidas sin postear, chips que envuelven, "Upcoming" y "Upcoming occurrences" duplicadas. |
 
 **Orden sugerido:** MQ-001 primero y solo (toca 30+ sitios y probablemente
@@ -1115,6 +1115,16 @@ Encabezados nuevos vía i18n-scribe.
 ---
 
 ### MQ-019 — Budgets: fila de línea y detalle poco legibles
+
+> ✅ Hecho el 2026-10-01 — La fila móvil muestra "gastado" y "of
+> planificado" (el disponible, si hay rollover), con el % junto a la barra y
+> las barras alineadas entre filas. El detalle es una grilla de 2 columnas en
+> móvil, con Last month a todo el ancho debajo. El subtítulo dice "No lines /
+> 1 line / N lines over budget" (claves `budgets.*` en en/es/fr). "Budget
+> created.", "Budget line saved.", "removed" y "Rollover updated." son ahora
+> un toast que se descarta solo (`FlashToast`, nuevo componente compartido) y
+> la marca sale de la URL; los errores siguen como Callout. Sin cambios de
+> cálculo.
 
 **Evidencia:** 2:17–2:45. **Categoría:** UX.
 

@@ -6,6 +6,7 @@ import { ChevronDown, Pencil, Repeat, Tag } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
+import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
 import { formatCurrency, formatPercent } from '@/lib/format'
 import { deleteBudgetLineAction, setBudgetLineRolloverAction } from './actions'
@@ -98,6 +99,7 @@ export function BudgetLineRow({
   previousActual,
 }: BudgetLineRowProps) {
   const [open, setOpen] = useState(false)
+  const { t } = useLanguage()
 
   const plannedAmount = Number(line.planned_amount ?? 0)
   const actualAmount = Number(line.actual_amount ?? 0)
@@ -149,12 +151,15 @@ export function BudgetLineRow({
                     {txCount} transaction{txCount === 1 ? '' : 's'}
                   </p>
                 </div>
+                {/* MQ-019 — spent *of* what: "$0.00 / 0%" alone read like a
+                    broken line, not an untouched one. The share moves next
+                    to the bar it describes. */}
                 <div className="shrink-0 text-right">
                   <p className={cn('text-xs font-semibold tabular-nums', overBudget && 'text-destructive')}>
                     {formatCurrency(actualAmount, budgetCurrency)}
                   </p>
-                  <p className={cn('mt-0.5 text-[10.5px] font-bold tabular-nums', status.textClassName)}>
-                    {formatPercent(linePercent, 'en', { minimumFractionDigits: 0 })}
+                  <p className="mt-0.5 text-[10.5px] text-muted-foreground tabular-nums">
+                    {t('budgets.ofPlanned', { amount: formatCurrency(availableAmount, budgetCurrency) })}
                   </p>
                 </div>
                 <ChevronDown
@@ -165,15 +170,21 @@ export function BudgetLineRow({
                   aria-hidden="true"
                 />
               </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={cn('h-full rounded-full transition-all', status.barClassName)}
-                  style={
-                    !overBudget && status.label === 'On track' && categoryColor
-                      ? { width: `${barWidth}%`, backgroundColor: categoryColor }
-                      : { width: `${barWidth}%` }
-                  }
-                />
+              <div className="mt-2 flex items-center gap-2">
+                <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn('h-full rounded-full transition-all', status.barClassName)}
+                    style={
+                      !overBudget && status.label === 'On track' && categoryColor
+                        ? { width: `${barWidth}%`, backgroundColor: categoryColor }
+                        : { width: `${barWidth}%` }
+                    }
+                  />
+                </div>
+                {/* Fixed width so every row's bar ends at the same x. */}
+                <span className={cn('w-9 shrink-0 text-right text-[10.5px] font-bold tabular-nums', status.textClassName)}>
+                  {formatPercent(linePercent, 'en', { minimumFractionDigits: 0 })}
+                </span>
               </div>
             </div>
           </div>
@@ -281,7 +292,9 @@ export function BudgetLineRow({
               ) : null}
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-4">
+            {/* Two columns on a phone (MQ-019): five full-width tiles made a
+                tall stack out of four numbers and a comparison. */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div className="rounded-md border bg-background p-2.5">
                 <p className="text-xs text-muted-foreground">Planned</p>
                 <p className="mt-0.5 text-sm font-medium tabular-nums">
@@ -331,7 +344,7 @@ export function BudgetLineRow({
                 <p className="mt-0.5 text-sm font-medium tabular-nums">{formatPercent(linePercent, 'en', { minimumFractionDigits: 0 })}</p>
               </div>
               {previousActual !== null ? (
-                <div className="rounded-md border bg-background p-2.5">
+                <div className="col-span-2 rounded-md border bg-background p-2.5 sm:col-span-1">
                   <p className="text-xs text-muted-foreground">Last month</p>
                   <p className="mt-0.5 text-sm font-medium tabular-nums">
                     {formatCurrency(previousActual, budgetCurrency)}
