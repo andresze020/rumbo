@@ -440,6 +440,8 @@ export const en = {
   categoriesUi: {
     subcategoryOne: '{count} subcategory',
     subcategoryOther: '{count} subcategories',
+    showSubcategories: 'Show subcategories of {name}',
+    hideSubcategories: 'Hide subcategories of {name}',
     editNamed: 'Edit {name}',
     showDetails: 'Show {name} details',
     hideDetails: 'Hide {name} details',
@@ -1051,6 +1053,8 @@ export const es: DeepStringify<typeof en> = {
   categoriesUi: {
     subcategoryOne: '{count} subcategoría',
     subcategoryOther: '{count} subcategorías',
+    showSubcategories: 'Mostrar subcategorías de {name}',
+    hideSubcategories: 'Ocultar subcategorías de {name}',
     editNamed: 'Editar {name}',
     showDetails: 'Mostrar detalles de {name}',
     hideDetails: 'Ocultar detalles de {name}',
@@ -1662,6 +1666,8 @@ export const fr: DeepStringify<typeof en> = {
   categoriesUi: {
     subcategoryOne: '{count} sous-catégorie',
     subcategoryOther: '{count} sous-catégories',
+    showSubcategories: 'Afficher les sous-catégories de {name}',
+    hideSubcategories: 'Masquer les sous-catégories de {name}',
     editNamed: 'Modifier {name}',
     showDetails: 'Afficher les détails de {name}',
     hideDetails: 'Masquer les détails de {name}',

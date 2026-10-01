@@ -41,7 +41,7 @@
 | [MQ-013](#mq-013--símbolo--para-montos-en-cop-y-fecha-ddmmyyyy-con-ui-en-inglés) | P2 | ✅ Hecho (`fix/mq-013-currency-prefix-dates`) | UX | Formularios multi-moneda | Montos en COP con prefijo "$"; inputs de fecha nativos en `dd/mm/yyyy` con la UI en inglés. |
 | [MQ-014](#mq-014--dashboard-de-mes-nuevo-cinco-empty-states-seguidos) | P2 | ✅ Hecho (`fix/mq-014-quiet-empty-months`) | UX | Dashboard / Budgets / Goals | Mes sin actividad = cinco tarjetas vacías seguidas; KPIs en cero empujan el empty state fuera de la vista. |
 | [MQ-015](#mq-015--payees-cuatro-acciones-por-fila) | P2 | ✅ Hecho (`fix/mq-015-payee-row-menu`) | UI | Payees | Cuatro acciones por fila truncan el nombre y parten el meta en tres líneas. |
-| [MQ-016](#mq-016--categories-kpi-filtros-y-acciones-ambiguas) | P2 | Abierto | UX | Categories | KPI "Active" no sigue el filtro, tabs truncadas, icono `←\|` sin explicación, chevron con doble función. |
+| [MQ-016](#mq-016--categories-kpi-filtros-y-acciones-ambiguas) | P2 | ✅ Hecho (`fix/mq-016-categories-clarity`) | UX | Categories | KPI "Active" no sigue el filtro, tabs truncadas, icono `←\|` sin explicación, chevron con doble función. |
 | [MQ-017](#mq-017--accounts-delta-neutro-en-verde-e-indicador-de-swipe-sobre-el-saldo) | P2 | Abierto | UI | Accounts | "↑ 0,0 %" en verde; el indicador de swipe "‹" se dibuja encima del saldo. |
 | [MQ-018](#mq-018--more-lista-plana-de-20-ítems) | P3 | Abierto | UX | More | Lista plana de 20+ ítems que repite las tabs de la bottom nav. |
 | [MQ-019](#mq-019--budgets-fila-de-línea-y-detalle-poco-legibles) | P3 | Abierto | UX | Budgets | Fila colapsada sin el planificado, detalle en 5 tiles apilados, copy "0 over budget", banner persistente. |
@@ -1057,6 +1057,17 @@ la entrega. Textos nuevos vía i18n-scribe.
 ---
 
 ### MQ-016 — Categories: KPI, filtros y acciones ambiguas
+
+> ✅ Hecho el 2026-10-01 — Los dos KPI móviles cuentan la lista filtrada (tipo,
+> búsqueda y archivadas; "Archived" cuando se ven archivadas). Las tabs de tipo
+> ya no se encogen: la fila se desliza, un fade marca el borde con más tabs y
+> la activa se centra al llegar (`categories/type-tabs.tsx`). En móvil el
+> chevron de un padre solo pliega/despliega sus subcategorías; tocar la fila o
+> "⋯" abre detalles y acciones, y "←|" pasa a ese panel como "Move to main
+> level" con texto visible (en desktop sigue en la fila, con aria-label). El
+> panel se monta solo al abrirse: sin cierre a medias ni botones invisibles en
+> el orden de tabulación. "Income" dentro de Income es un dato del household,
+> no de la UI: no se tocó (el ticket prohíbe cambiar jerarquía).
 
 **Evidencia:** 1:33–1:48. **Categoría:** UX. **BD:** ninguno.
 
