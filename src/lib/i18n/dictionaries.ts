@@ -405,6 +405,9 @@ export const en = {
     toastVoided: 'Transaction voided.',
     toastRestored: 'Transaction restored.',
     toastRefunded: 'Refund recorded.',
+    emptyPeriodTitle: 'No transactions in {period}',
+    emptyPeriodDescription: 'Nothing was recorded in this period. Add one, or look through all your history.',
+    showAllTime: 'Show all time',
   },
   debts: {
     untrackedTitle: 'Liability accounts not in the planner',
@@ -1010,6 +1013,9 @@ export const es: DeepStringify<typeof en> = {
     toastVoided: 'Transacción anulada.',
     toastRestored: 'Transacción restaurada.',
     toastRefunded: 'Reembolso registrado.',
+    emptyPeriodTitle: 'Sin transacciones en {period}',
+    emptyPeriodDescription: 'No hay nada registrado en este período. Agrega una o revisa todo tu historial.',
+    showAllTime: 'Ver todo el historial',
   },
   debts: {
     untrackedTitle: 'Cuentas de pasivo fuera del planificador',
@@ -1615,6 +1621,9 @@ export const fr: DeepStringify<typeof en> = {
     toastVoided: 'Transaction annulée.',
     toastRestored: 'Transaction rétablie.',
     toastRefunded: 'Remboursement enregistré.',
+    emptyPeriodTitle: 'Aucune transaction pour {period}',
+    emptyPeriodDescription: 'Rien n’a été enregistré sur cette période. Ajoutez-en une ou parcourez tout votre historique.',
+    showAllTime: 'Voir tout l’historique',
   },
   debts: {
     untrackedTitle: 'Comptes de passif hors du planificateur',
