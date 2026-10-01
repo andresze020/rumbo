@@ -27,6 +27,7 @@ import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
+import { FlashToast, type FlashFlag } from '@/components/flash-toast'
 import { SubmitButton } from '@/components/submit-button'
 import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/server'
@@ -222,6 +223,18 @@ function BudgetKpiCard({
   )
 }
 
+/**
+ * MQ-019 — confirmations after a save toast and dismiss themselves; a pinned
+ * "Budget created." banner outstayed the moment it was about. Errors stay
+ * callouts.
+ */
+const BUDGET_FLASH_FLAGS: FlashFlag[] = [
+  { param: 'created', message: 'Budget created.' },
+  { param: 'lineUpdated', message: 'Budget line saved.' },
+  { param: 'lineRemoved', message: 'Budget line removed.' },
+  { param: 'rolloverUpdated', message: 'Rollover updated.' },
+]
+
 export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   const params = await searchParams
   const locale = await getLocale()
@@ -230,10 +243,6 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   const previousMonth = previousMonthParam(selectedMonth)
   const previousMonthDate = `${previousMonth}-01`
   const errorMessage = typeof params.error === 'string' ? params.error : null
-  const created = params.created === '1'
-  const lineUpdated = params.lineUpdated === '1'
-  const lineRemoved = params.lineRemoved === '1'
-  const rolloverUpdated = params.rolloverUpdated === '1'
   const copiedCount = typeof params.copied === 'string' ? Number(params.copied) : null
   const isAddingLine = params.mode === 'addLine'
   const editLineId = typeof params.edit === 'string' ? params.edit : null
@@ -530,10 +539,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
       {budgetError || categoriesError ? (
         <Callout variant="error">Could not load budget data.</Callout>
       ) : null}
-      {created ? <Callout variant="success">Budget created.</Callout> : null}
-      {lineUpdated ? <Callout variant="success">Budget line saved.</Callout> : null}
-      {lineRemoved ? <Callout variant="info">Budget line removed.</Callout> : null}
-      {rolloverUpdated ? <Callout variant="success">Rollover updated.</Callout> : null}
+      <FlashToast flags={BUDGET_FLASH_FLAGS} />
       {copiedCount !== null && Number.isFinite(copiedCount) ? (
         <Callout variant="info">
           {copiedCount > 0
@@ -801,7 +807,15 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
             <div className="flex items-end justify-between gap-3">
               <SectionHeading
                 title="Budget lines"
-                description={`${formatMonthLabel(selectedMonth, locale)} - ${overBudgetCount} over budget.`}
+                description={`${formatMonthLabel(selectedMonth, locale)} · ${translate(
+                  locale,
+                  overBudgetCount === 0
+                    ? 'budgets.overBudgetNone'
+                    : overBudgetCount === 1
+                      ? 'budgets.overBudgetOne'
+                      : 'budgets.overBudgetMany',
+                  { count: overBudgetCount }
+                )}`}
               />
               <div className="hidden shrink-0 items-center gap-2 md:flex">
                 {renderCopyPreviousForm()}

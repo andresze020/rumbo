@@ -438,6 +438,12 @@ export const en = {
       custom: 'Custom',
     },
   },
+  budgets: {
+    overBudgetNone: 'No lines over budget',
+    overBudgetOne: '1 line over budget',
+    overBudgetMany: '{count} lines over budget',
+    ofPlanned: 'of {amount}',
+  },
   categoriesUi: {
     subcategoryOne: '{count} subcategory',
     subcategoryOther: '{count} subcategories',
@@ -1049,6 +1055,12 @@ export const es: DeepStringify<typeof en> = {
       custom: 'Personalizada',
     },
   },
+  budgets: {
+    overBudgetNone: 'Ninguna línea excedida',
+    overBudgetOne: '1 línea excedida',
+    overBudgetMany: '{count} líneas excedidas',
+    ofPlanned: 'de {amount}',
+  },
   categoriesUi: {
     subcategoryOne: '{count} subcategoría',
     subcategoryOther: '{count} subcategorías',
@@ -1659,6 +1671,12 @@ export const fr: DeepStringify<typeof en> = {
       retirement: 'Retraite',
       custom: 'Personnalisé',
     },
+  },
+  budgets: {
+    overBudgetNone: 'Aucune ligne dépassée',
+    overBudgetOne: '1 ligne dépassée',
+    overBudgetMany: '{count} lignes dépassées',
+    ofPlanned: 'sur {amount}',
   },
   categoriesUi: {
     subcategoryOne: '{count} sous-catégorie',
