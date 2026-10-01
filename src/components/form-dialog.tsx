@@ -40,8 +40,15 @@ export function FormDialog({
       <DialogContent
         className={
           // Centered dialog on desktop; native-style bottom sheet on mobile.
+          //
+          // `translate-none`, not `translate-x-0 translate-y-0`: a zero
+          // translate is still a `translate`, and any value but `none` makes
+          // the sheet the containing block of its `fixed` descendants. The
+          // full-screen pickers inside it (SearchablePicker → SelectorSheet,
+          // MQ-008) then sized themselves to this half-height sheet and ran off
+          // the bottom of the screen instead of covering it.
           `max-h-[90dvh] overflow-y-auto ${wide ? 'sm:max-w-2xl' : 'sm:max-w-xl'} ` +
-          'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 ' +
+          'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-none ' +
           'max-sm:max-h-[92dvh] max-sm:rounded-t-2xl max-sm:rounded-b-none ' +
           'max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] ' +
           'max-sm:data-open:slide-in-from-bottom-10 max-sm:data-closed:slide-out-to-bottom-10'

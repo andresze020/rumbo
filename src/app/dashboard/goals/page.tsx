@@ -56,6 +56,7 @@ type Account = {
   institution_name: string | null
   is_archived: boolean
   account_class: string
+  account_type: string
 }
 
 export default async function GoalsPage({ searchParams }: GoalsPageProps) {
@@ -99,7 +100,7 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
       .order('created_at', { ascending: false }),
     supabase
       .from('accounts')
-      .select('id, name, currency_code, institution_name, is_archived, account_class')
+      .select('id, name, currency_code, institution_name, is_archived, account_class, account_type')
       .eq('household_id', household.id)
       .is('deleted_at', null)
       .order('sort_order', { ascending: true, nullsFirst: false })
@@ -147,6 +148,7 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
       currency_code: a.currency_code,
       institution_name: a.institution_name,
       account_class: a.account_class,
+      account_type: a.account_type,
     }))
 
   const editGoal = editId ? allGoals.find((g) => g.id === editId) : null

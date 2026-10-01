@@ -33,7 +33,7 @@
 | [MQ-005](#mq-005--comparativas-de-mes-en-curso-contra-mes-completo) | P1 | Abierto | Funcionamiento | Dashboard / Budgets / Accounts | Deltas "−100 % vs Sep", "0,0 %" en verde y un Month health "C+" calculados sin datos del mes. |
 | [MQ-006](#mq-006--goals-resumen-que-ignora-metas-en-otra-moneda-y-cuentas-vinculables-incorrectas) | P1 | ✅ Hecho (`fix/mq-006-goals-summary-accounts`) | Funcionamiento | Goals | El resumen ignora metas en moneda no base; se puede vincular una meta de ahorro a una cuenta de deuda. |
 | [MQ-007](#mq-007--sugerencias-de-autofill-del-navegador-en-campos-de-la-app) | P2 | Abierto | UX | Formularios | Brave ofrece nombres de contactos, montos viejos y tarjetas en campos de nombre y monto. |
-| [MQ-008](#mq-008--selects-nativos-con-listas-largas) | P2 | Abierto | UX | Budgets / Goals / Debts | `<select>` nativos con 20–60 opciones planas, sin búsqueda ni jerarquía. |
+| [MQ-008](#mq-008--selects-nativos-con-listas-largas) | P2 | ✅ Hecho (`fix/mq-008-searchable-pickers`) | UX | Budgets / Goals / Debts | `<select>` nativos con 20–60 opciones planas, sin búsqueda ni jerarquía. |
 | [MQ-009](#mq-009--skeletons-en-cada-navegación-incluida-una-página-estática) | P2 | Abierto | Performance | Navegación | Skeleton de 0,5–2 s en cada módulo, incluso en More (estático); "Loading form…" en blanco; skeleton de Budgets no coincide con el resultado. |
 | [MQ-010](#mq-010--sheets-con-teclado-autofocus-que-tapa-el-formulario) | P2 | Abierto | UX | Debts / Goals / Budgets | El autofocus abre el teclado al instante y tapa casi todo el formulario. |
 | [MQ-011](#mq-011--debts-no-reconoce-las-cuentas-de-pasivo-existentes) | P2 | Abierto | UX | Debts | Debts muestra 0 deudas en rojo mientras existe una cuenta tipo Debt con saldo; no ofrece vincularla. |
@@ -612,6 +612,18 @@ New goal: no deben aparecer chips sobre el teclado).
 ---
 
 ### MQ-008 — Selects nativos con listas largas
+
+> ✅ Hecho el 2026-10-01 — `SearchablePicker` (`src/components/searchable-picker.tsx`)
+> reusa el `SelectorSheet` del formulario de transacciones: en móvil, hoja a
+> pantalla completa con búsqueda (sin acentos ni mayúsculas) y opciones
+> agrupadas o indentadas; desde `sm`, `<select>` nativo con `<optgroup>`. Lo
+> usan "Add budget line" (padres y subcategorías indentadas), "Linked account"
+> de Goals y "Existing liability account" de Debts (cuentas agrupadas por
+> tipo). **Corrección del ticket:** `category-picker.tsx` no tiene búsqueda
+> (son dos selects padre/hijo); el patrón con búsqueda es `SelectorSheet`.
+> `FormDialog` pasa a `translate-none` en móvil: con `translate-x-0
+> translate-y-0` seguía siendo containing block de sus `fixed` y la hoja del
+> picker quedaba del alto del diálogo.
 
 **Evidencia:** 2:24–2:30 (categoría de línea de presupuesto, ~60 opciones),
 3:07–3:11 (cuenta vinculada, 22 opciones), 1:16 (Create debt). **Categoría:**
