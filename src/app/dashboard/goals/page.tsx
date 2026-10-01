@@ -215,8 +215,11 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
         undoValue="active"
       />
 
-      {/* Summary */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* Summary. MQ-014: only once there is a goal — three zero cards pushed
+          "No goals yet" off a phone screen. Compact on a phone: the two counts
+          side by side, the total (a long figure) across the row. */}
+      {allGoals.length ? (
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
         <MetricCard
           label="Active goals"
           value={String(activeGoals.length)}
@@ -245,6 +248,7 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
           accent="bg-muted text-muted-foreground"
         />
       </div>
+      ) : null}
 
       {/* Dialogs */}
       {isCreating ? (
