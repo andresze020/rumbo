@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
+import { SearchablePicker, accountPickerGroups } from '@/components/searchable-picker'
+import { useLanguage } from '@/components/language-provider'
 import { describeFxNote, fetchFxRate } from '@/lib/fx'
 import { formatCurrency } from '@/lib/format'
 import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
@@ -32,6 +34,7 @@ export function DebtCreateForm({
   defaultCurrency: string
   linkableLiabilityAccounts: LiabilityAccount[]
 }) {
+  const { t } = useLanguage()
   const today = new Date().toISOString().slice(0, 10)
 
   const [existingAccountId, setExistingAccountId] = useState('')
@@ -97,26 +100,23 @@ export function DebtCreateForm({
 
         <div className="space-y-2">
           <Label htmlFor="existing_account_id">Existing liability account</Label>
-          <select
+          {/* MQ-008: searchable and grouped by account type on a phone. */}
+          <SearchablePicker
             id="existing_account_id"
             name="existing_account_id"
-            className={selectCls}
             value={existingAccountId}
-            onChange={(e) => {
-              setExistingAccountId(e.target.value)
+            onChange={(value) => {
+              setExistingAccountId(value)
               setUserRate('')
               setFxNote('')
               setFxError('')
             }}
-          >
-            <option value="">Create new account</option>
-            {linkableLiabilityAccounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name} · {account.account_type.replace('_', ' ')} ·{' '}
-                {account.currency_code}
-              </option>
-            ))}
-          </select>
+            groups={accountPickerGroups(linkableLiabilityAccounts)}
+            noneLabel="Create new account"
+            placeholder="Create new account"
+            title="Existing liability account"
+            searchPlaceholder={t('common.searchAccounts')}
+          />
         </div>
 
         {isNewAccount ? (

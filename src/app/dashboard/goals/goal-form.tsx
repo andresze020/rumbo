@@ -10,12 +10,14 @@ import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
 import { GOAL_TYPES, canLinkAccountToGoal } from '@/lib/goals/shared'
 import { useLanguage } from '@/components/language-provider'
+import { SearchablePicker, accountPickerGroups } from '@/components/searchable-picker'
 import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
 
 export type GoalFormAccount = {
   id: string
   name: string
+  account_type: string
   currency_code: string
   institution_name: string | null
   /** 'asset' | 'liability' — decides which goal types may link it (MQ-006). */
@@ -33,12 +35,6 @@ export type GoalTemplate = {
 }
 
 const selectClassName = nativeSelectCls
-
-function accountLabel(account: GoalFormAccount) {
-  return [account.name, account.institution_name, account.currency_code]
-    .filter(Boolean)
-    .join(' · ')
-}
 
 export function GoalForm({
   mode,
@@ -120,20 +116,18 @@ export function GoalForm({
 
         <div className="space-y-2">
           <Label htmlFor={`account_${mode}`}>Linked account (optional)</Label>
-          <select
+          {/* MQ-008: searchable and grouped by account type on a phone. */}
+          <SearchablePicker
             id={`account_${mode}`}
+            name="linked_account_id"
             value={linkedAccountId}
-            onChange={(e) => handleAccountChange(e.target.value)}
-            className={selectClassName}
-          >
-            <option value="">No linked account</option>
-            {linkableAccounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {accountLabel(account)}
-              </option>
-            ))}
-          </select>
-          <input type="hidden" name="linked_account_id" value={linkedAccountId} />
+            onChange={handleAccountChange}
+            groups={accountPickerGroups(linkableAccounts)}
+            noneLabel="No linked account"
+            placeholder="No linked account"
+            title="Linked account (optional)"
+            searchPlaceholder={t('common.searchAccounts')}
+          />
           <p className="text-xs text-muted-foreground">{t('goals.progressSourceHint')}</p>
         </div>
 
