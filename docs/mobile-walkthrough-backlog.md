@@ -39,7 +39,7 @@
 | [MQ-011](#mq-011--debts-no-reconoce-las-cuentas-de-pasivo-existentes) | P2 | ✅ Hecho (`fix/mq-011-track-existing-liabilities`) | UX | Debts | Debts muestra 0 deudas en rojo mientras existe una cuenta tipo Debt con saldo; no ofrece vincularla. |
 | [MQ-012](#mq-012--tipografía-monoespaciada-en-montos) | P2 | ✅ Hecho (`fix/mq-012-proportional-amounts`) | UI | Debts / Budgets / Goals | Montos en `font-mono` con caracteres espaciados, distinto al resto de la app. |
 | [MQ-013](#mq-013--símbolo--para-montos-en-cop-y-fecha-ddmmyyyy-con-ui-en-inglés) | P2 | ✅ Hecho (`fix/mq-013-currency-prefix-dates`) | UX | Formularios multi-moneda | Montos en COP con prefijo "$"; inputs de fecha nativos en `dd/mm/yyyy` con la UI en inglés. |
-| [MQ-014](#mq-014--dashboard-de-mes-nuevo-cinco-empty-states-seguidos) | P2 | Abierto | UX | Dashboard / Budgets / Goals | Mes sin actividad = cinco tarjetas vacías seguidas; KPIs en cero empujan el empty state fuera de la vista. |
+| [MQ-014](#mq-014--dashboard-de-mes-nuevo-cinco-empty-states-seguidos) | P2 | ✅ Hecho (`fix/mq-014-quiet-empty-months`) | UX | Dashboard / Budgets / Goals | Mes sin actividad = cinco tarjetas vacías seguidas; KPIs en cero empujan el empty state fuera de la vista. |
 | [MQ-015](#mq-015--payees-cuatro-acciones-por-fila) | P2 | Abierto | UI | Payees | Cuatro acciones por fila truncan el nombre y parten el meta en tres líneas. |
 | [MQ-016](#mq-016--categories-kpi-filtros-y-acciones-ambiguas) | P2 | Abierto | UX | Categories | KPI "Active" no sigue el filtro, tabs truncadas, icono `←\|` sin explicación, chevron con doble función. |
 | [MQ-017](#mq-017--accounts-delta-neutro-en-verde-e-indicador-de-swipe-sobre-el-saldo) | P2 | Abierto | UI | Accounts | "↑ 0,0 %" en verde; el indicador de swipe "‹" se dibuja encima del saldo. |
@@ -909,6 +909,13 @@ Sin cambios de esquema ni de cómo se guardan montos o fechas.
 ---
 
 ### MQ-014 — Dashboard de mes nuevo: cinco empty states seguidos
+
+> ✅ Hecho el 2026-10-01 — Dashboard sin movimientos: una tarjeta "{mes} is just
+> starting" (Add transaction / Post due recurring / Set up the budget) en lugar
+> de Spending + Cash flow; By category oculto e Insights oculto si no hay
+> ninguno. Budgets sin líneas oculta KPIs y "How this month was paid"; Goals sin
+> metas oculta sus KPIs y con metas los compacta. Sin cambios de cálculo.
+> Detalle en [features/dashboard-layout.md](./features/dashboard-layout.md).
 
 **Evidencia:** 0:00–0:11 (Dashboard), 2:17 (Budgets recién creado),
 2:52–2:54 (Goals). **Categoría:** UX. **BD:** ninguno.

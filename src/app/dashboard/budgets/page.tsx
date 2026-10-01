@@ -570,6 +570,11 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
 
       {!budgetError && budget ? (
         <>
+          {/* MQ-014: with no lines the KPIs are four zeros and "How this month
+              was paid" an empty table — both wait for the first line, so the
+              lines card and its empty state come first. */}
+          {budgetLines.length ? (
+          <>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
             <BudgetKpiCard
               label="Total budgeted"
@@ -697,6 +702,8 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
               </p>
             ) : null}
           </section>
+          </>
+          ) : null}
 
           {isAddingLine ? (
             <FormDialog
