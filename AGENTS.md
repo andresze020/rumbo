@@ -23,130 +23,23 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
-- **RUM-010b: the release gate exists** (2026-09-24, PR #79). `npm run db:local`
-  runs every `supabase/tests/*.sql` against generated fixtures in a private
-  local Postgres (in CI), `npm run perf:nav` times §3.1 navigation in a real
-  browser, and `docs/release-checklist.md` holds the approval criteria, the
-  metrics and the known issues. First verdict: not approved (B-7, B-8).
-- **B-7 fixed, B-8 decided** (2026-09-25). Dashboard ‹ / › month clicks were
-  silently lost: a large chunk streamed into the already-revealed secondary-
-  widgets `<Suspense>` left the month transition uncommitted. Fix:
-  `key={selectedMonth}` on that boundary — do not remove it. The Transactions
-  "Expenses" total now nets BR-040 refunds like the Dashboard, via migration
-  `20260925120000_b8_transactions_totals_net_refunds.sql` (applied to the live
-  project 2026-09-25; release gate verdict: approved).
-- **RUM-005 closed: 30 s Router Cache** (2026-09-25). `next.config.ts`
-  `experimental.staleTimes` `{ dynamic: 30, static: 30 }`, with no server-side
-  data cache, so RLS still applies on every render. Revisits drop from
-  ~500–730 ms to ~80 ms. Rule: **every Server Action that writes (or signs in or
-  out) must call `revalidatePath`**. That is what purges the cache;
-  `tests/cache/server-action-invalidation.test.ts` enforces it and pins the
-  30 s window. Accepted trade-off: a change made on another device can take up
-  to 30 s to show.
-- **Dashboard redesign + Transactions first load** (2026-09-25,
-  [`docs/features/dashboard-layout.md`](docs/features/dashboard-layout.md)).
-  Dashboard: one `CashFlowCard` (Income · Spent · Saved, spent-of-income bar,
-  review chip, Month health line) replaces the 4 KPI tiles + health card, and
-  Recent activity is gone. 26 → 15 queries per render: use
-  `getRequestUser()` / `getRequestProfile()` (`src/lib/supabase/request.ts`,
-  per-request `cache()`) instead of calling `auth.getUser()` or reading
-  `profiles` again. Transactions: the remembered scope (`af_tx_scope`, now
-  30 min) is rendered directly and the URL synced with `SyncScopeUrl`. A
-  server `redirect()` there caused the cold-open black screen; do not bring
-  it back.
-  **Premium pass (2026-09-26):** hero with an interactive 6-month net-worth
-  chart, a **Spending pace** card (this month's running total vs last
-  month's, `src/lib/dashboard/`), `Money` (cents set back) and a plain-SVG
-  `LineChart` in `src/components/dashboard/`. The pace chart is shown only
-  when its total equals the summary RPC's "Spent"; keep
-  `getDailyExpenses` filters in step with `get_monthly_dashboard_summary`.
-
+- **RUM-010b: the release gate exists** (2026-09-24, PR #79). See
+  `docs/release-checklist.md`; full detail in `docs/SPRINT-LOG.md`.
+- **B-7 fixed, B-8 decided** (2026-09-25). Dashboard month-nav `<Suspense>`
+  fix + BR-040 refunds netting; full detail in `docs/SPRINT-LOG.md`.
+- **RUM-005 closed: 30 s Router Cache** (2026-09-25). Rule: every Server
+  Action that writes (or signs in or out) must call `revalidatePath`; full
+  detail in `docs/SPRINT-LOG.md`.
+- **Dashboard redesign + Transactions first load, then a premium pass**
+  (2026-09-25 → 09-26). See
+  [`docs/features/dashboard-layout.md`](docs/features/dashboard-layout.md);
+  full detail in `docs/SPRINT-LOG.md`.
 - **The Transactions screen was rebuilt as a phone list, and the period got
-  one owner** (2026-09-19 → 09-20, PR #66). Three commits, one review round
-  from Codex. No migrations, no schema/RLS/ledger change.
-  - **Chrome cut, not content**: the eyebrow/title/description block, the
-    three-tile totals card with its "in CAD" caption, the All/To review/
-    Reviewed/Flagged tab strip and the amber review dot are gone. Review
-    state moved to the expanded row and to a "More filters" accordion; the
-    review column, RPC argument, bulk actions and filter are unchanged. Three
-    rows fit on a 375×812 phone before this; six do now.
-  - **Amounts are colored by direction again** — green in, red out, blue
-    sideways. **This reverses the earlier "only inflows are tinted" call**,
-    on explicit user request; do not "fix" it back.
-  - **The period has one owner.** New `src/lib/periods/transaction-period.ts`
-    parses the URL once into a single `TransactionPeriod` that drives RPC
-    bounds, totals, date headers and the control's label — replacing a
-    `month` (header) / `date_from`+`date_to` (filter sheet) pair that used to
-    disagree silently. The filter sheet has no date fields at all. URL writes
-    `period=this-month|last-month|last-3-months|last-6-months|ytd|all-time`;
-    `month=`/`date_from`/`date_to` are still **read** for the dozen existing
-    links elsewhere (calendar, budget rows, notes, dashboard review queue)
-    that point here with them.
-  - **The household moved into the app bar.** New
-    `src/lib/households/server.ts` (`getHouseholdContext`) feeds a selector in
-    `MobileNav`/`AppSidebar` on every dashboard screen; switching goes through
-    `src/app/dashboard/household-actions.ts` (`switchHouseholdAction`), which
-    re-checks active membership before writing
-    `profiles.default_household_id`. A profile preference, not a policy — RLS
-    untouched. **Cost:** the dashboard layout now runs one extra query per
-    request (`getHouseholdContext` alongside `getUiPreferences`).
-  - **The assistant FAB left this screen**; the bottom nav's "+" is the only
-    floating action on Transactions. `nav.aiAssistant` now points at
-    `/dashboard/assistant` (shipped, previously unlisted) at phase `alpha`;
-    `nav.movements` was deleted, the tab reads "Transactions".
-  - **Not yet exercised against live data** (no Supabase credentials in the
-    build environment — verified with Playwright on a disposable preview
-    route, deleted before commit): the household switch, the period sheet
-    over a payee-/tag-filtered URL, and long-press-to-select on a real touch
-    device (the 8px threshold was tuned by eye).
+  one owner** (2026-09-19 → 09-20, PR #66). Full detail in
+  `docs/SPRINT-LOG.md`.
 - **The category moved to the top of the add-transaction form, and the form
-  now fits one phone screen** (2026-09-15, PR #64). Ten commits, eight rounds
-  of testing on a real Android device plus one review round. No migrations —
-  `profiles.ui_preferences` already stores the new shape as jsonb.
-  - **`quickEntry.fieldOrder`** (default `category_first`) puts the category
-    directly under the amount; the old `account_first` order is one select
-    away in Settings → Preferences → Quick entry. A single ordered chain
-    (`ENTRY_CHAINS` + `nextInChain` in `transaction-form.tsx`) now drives
-    "jump to the next empty field" from every entry point, including the
-    category drill-down that used to skip it.
-  - **Optional autofill from the last entry in the category**
-    (`quickEntry.autofillFromLastInCategory`, off by default): picking a
-    category seeds account, payee and tags from the household's most recent
-    transaction in it, only into empty fields, names what it filled and
-    offers Undo. New `src/lib/quick-entry/category-memory.ts`
-    (`loadCategoryEntryMemory`), one query over the last 400 non-transfer
-    transactions scoped by `household_id`, never run unless the preference is
-    on. Recent descriptions are offered as chips, never filled. **Note:** the
-    commits and code comments label this `BR-046` — that id already belongs
-    to the currency-change confirmation shipped 2026-07-28
-    (`docs/benchmark-review-mobile-money-managers.md` #17). Genuine id
-    collision, not a renumbering; flagged in `docs/SPRINT-LOG.md`, not
-    silently fixed.
-  - **The four selectors are full-screen on mobile** with the search pinned
-    under the header; `SelectorSheet` moved to `src/components/`,
-    `tag-multi-select.tsx` gained a controlled mode, and
-    `useIsMobile`/`useSoftKeyboardInset` are now shared hooks
-    (`src/lib/use-is-mobile.ts`, `src/lib/use-soft-keyboard.ts`).
-    `autoComplete="off"` on every search box and on payee/description stops
-    Android's own saved-address autofill strip.
-  - **Content dropped from 863px to 683px** (measured at 393px wide) with
-    nothing hidden — `sr-only` title/subtitle on phone, one date row instead
-    of two, no separate tag label. The dialog is a full `h-dvh` screen with
-    its own close button; Cancel is gone wherever the dialog already has
-    another way out (Escape/X/backdrop, plus Back in
-    `TransactionDialogProvider` only — the assistant's review dialog has no
-    Back handling and lost its Cancel, see `pending-work.md` §4.5); Create and
-    Save-and-add-next
-    are one split button on mobile; the action bar hides while the keyboard
-    is open.
-  - **Review round: four P2 defects fixed**, all the same shape — a value the
-    autofill *guessed* was being treated as one the user *chose* (re-picking
-    a category, switching transaction type, typing over a seeded field, and
-    a tag created mid-tap).
-  - **Not yet confirmed on a device:** the keyboard-open scroll fix and the
-    four review-round fixes were reasoned from the code, not watched
-    fail-then-pass. iPhone SE / 13 mini still overflow the one-screen target
-    unless BR-032's Repeat/Notes/Status toggles are used.
+  now fits one phone screen** (2026-09-15, PR #64). Full detail in
+  `docs/SPRINT-LOG.md`.
 
 > **Historia anterior:** las entradas de sprint previas viven en
 > `docs/SPRINT-LOG.md` (append-only, más reciente arriba). No se resumen aquí:

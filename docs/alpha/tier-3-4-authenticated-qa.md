@@ -90,6 +90,72 @@ invariant that cannot silently rot.
 no amount column and no foreign key into the ledger, so "no financial side
 effect" is structural. Its RLS half needs a second household session.
 
+## Desk audit — 2026-09-30 (BR-030 and BR-043)
+
+Read `get_card_cycle_summaries` (`20260730140000_br_030_card_statement_cycle.sql`)
+and `get_budget_previous_actuals` / `get_budget_payment_split`
+(`20260729140000_br_043_budget_comparison_split.sql`) against
+`get_monthly_budget_details` (`20260602000300_budget_module.sql`, never redefined
+since). Both findings below were then **reproduced on 2026-09-30** in a
+throwaway household (demo user, one checking account, one card with
+`statement_day` 15 / `payment_day` 5, one budgeted category) built inside a single
+transaction against the live project and rolled back — afterwards 0 rows of any
+kind remained. Real data today: 24 budgets, 58 lines, **no refund anywhere**
+(0 negative expense allocations) and 1 card with a cycle, so neither finding
+shows up in the household yet.
+
+**BR-043: the copied predicate is in sync.** It matches the original clause for
+clause, and `budget_lines_unique_active_category` rules out double counting from
+two lines on one category. The three buckets always sum to Total spent.
+
+**BR-043: confirmed bug — a refund lands in "Other accounts".** The split
+attributes each transaction to its most negative entry (`attributed` CTE). A
+refund (BR-040) is a negative expense allocation whose only entry is positive, so
+it has no paying entry and falls into `other`. Reproduced: 100 from checking, 50
+and 80 on the card, then a 30 refund of the 80. The budget line correctly reads
+200 spent, but the split went from cash 100 / card 130 / other 0 to cash 100 /
+card 130 / **other −30**. Cash and Cards stay gross of the refund and the page
+renders an "Other accounts" card with a negative amount and share
+(`budgets/page.tsx` shows it whenever `other !== 0`). The three buckets still sum
+to Total spent, which is why the sum check cannot catch it. **Fixed on branch
+`fix/br-043-refund-payment-split`** (migration
+`20260930120000_br_043_refund_payment_split.sql`, merged as #84 and applied 2026-09-30): a refund is
+attributed to the account it credited.
+
+**BR-030: confirmed edge — a refund of a post-close charge shrinks the closed
+statement.** `paid_since_close` counts every positive entry after the close.
+Reproduced on the same card (close 09-15, as of 09-25): a 50 charge before the
+close and an 80 charge after it read `payable` 50 / `outstanding` 80; after a 30
+refund of the 80, they read `payable` **20** / `outstanding` **80**, where 50 / 50
+is right. Total owed is the same, but the statement due on the payment date can
+show 30 less than an issuer that does not apply post-close credits to a billed
+statement will ask for. Refunds of charges inside the closed window, and
+payments, are correct. **Fixed on branch `fix/br-030-refund-card-cycle`**
+(migration `20260930130000_br_030_refund_card_cycle.sql`, merged as #85 and applied 2026-09-30): a
+post-close refund offsets the open cycle first, and only its excess reaches the
+statement.
+
+### Hand check — BR-030 (one closed cycle, in the card's currency)
+
+1. Pick a card with `statement_day` / `payment_day` set; note both.
+2. Transactions filtered to that account, dated up to and including the close
+   date: the net of posted entries, sign flipped, is `statement_balance`. Opening
+   balance counts; pending and voided do not.
+3. Posted entries after the close, up to today: positives sum to
+   `paid_since_close`, negatives (absolute value) to `outstanding`.
+4. `payable` = `statement_balance` − `paid_since_close`, floored at 0. Overdue
+   only if `payable` > 0 and the due date is already past.
+5. If a card uses day 29–31, confirm February's close date clamps to the 28th/29th.
+
+### Hand check — BR-043
+
+1. Budgets, a month with spend: "Cash and accounts" + "Cards and debt" + "Other
+   accounts" must equal Total spent.
+2. "Last month" must equal last calendar month's actuals on the same categories
+   (calendar month even under a custom `month_start_day`).
+3. Refund case: pick a month with a refund in a budgeted category. A negative
+   "Other accounts" card confirms the bug above.
+
 ## QA Summary
 
 - Passed: none yet — the authenticated pass has not been run.

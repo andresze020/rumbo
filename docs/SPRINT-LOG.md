@@ -15,6 +15,63 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Dashboard redesign + Transactions first load, then a premium pass (2026-09-25 → 2026-09-26)
+- Goal: Dashboard redesign + Transactions first load (see
+  [`docs/features/dashboard-layout.md`](docs/features/dashboard-layout.md)).
+- Shipped: Dashboard: one `CashFlowCard` (Income · Spent · Saved,
+  spent-of-income bar, review chip, Month health line) replaces the 4 KPI
+  tiles + health card, and Recent activity is gone. 26 → 15 queries per
+  render: use `getRequestUser()` / `getRequestProfile()`
+  (`src/lib/supabase/request.ts`, per-request `cache()`) instead of calling
+  `auth.getUser()` or reading `profiles` again. Transactions: the remembered
+  scope (`af_tx_scope`, now 30 min) is rendered directly and the URL synced
+  with `SyncScopeUrl`. A server `redirect()` there caused the cold-open black
+  screen; do not bring it back.
+  **Premium pass (2026-09-26):** hero with an interactive 6-month net-worth
+  chart, a **Spending pace** card (this month's running total vs last
+  month's, `src/lib/dashboard/`), `Money` (cents set back) and a plain-SVG
+  `LineChart` in `src/components/dashboard/`. The pace chart is shown only
+  when its total equals the summary RPC's "Spent"; keep `getDailyExpenses`
+  filters in step with `get_monthly_dashboard_summary`.
+- Migrations added: none mentioned in the source note.
+- Tables changed: not specified in the source note.
+
+## RUM-005 closed: 30 s Router Cache (2026-09-25)
+- Goal: RUM-005 closed: 30 s Router Cache.
+- Shipped: `next.config.ts` `experimental.staleTimes` `{ dynamic: 30, static:
+  30 }`, with no server-side data cache, so RLS still applies on every
+  render. Revisits drop from ~500–730 ms to ~80 ms. Rule: **every Server
+  Action that writes (or signs in or out) must call `revalidatePath`**. That
+  is what purges the cache; `tests/cache/server-action-invalidation.test.ts`
+  enforces it and pins the 30 s window. Accepted trade-off: a change made on
+  another device can take up to 30 s to show.
+- Migrations added: none.
+- Tables changed: none.
+
+## B-7 fixed, B-8 decided (2026-09-25)
+- Goal: B-7 fixed, B-8 decided — the two findings from RUM-010b's first
+  release-gate verdict.
+- Shipped: Dashboard ‹ / › month clicks were silently lost: a large chunk
+  streamed into the already-revealed secondary-widgets `<Suspense>` left the
+  month transition uncommitted. Fix: `key={selectedMonth}` on that boundary —
+  do not remove it. The Transactions "Expenses" total now nets BR-040 refunds
+  like the Dashboard, via migration
+  `20260925120000_b8_transactions_totals_net_refunds.sql` (applied to the
+  live project 2026-09-25; release gate verdict: approved).
+- Migrations added: `20260925120000_b8_transactions_totals_net_refunds.sql`
+  — applied to the live project 2026-09-25.
+- Tables changed: not specified in the source note.
+
+## RUM-010b: the release gate exists (2026-09-24, PR #79)
+- Goal: RUM-010b: the release gate exists.
+- Shipped: `npm run db:local` runs every `supabase/tests/*.sql` against
+  generated fixtures in a private local Postgres (in CI), `npm run perf:nav`
+  times §3.1 navigation in a real browser, and `docs/release-checklist.md`
+  holds the approval criteria, the metrics and the known issues. First
+  verdict: not approved (B-7, B-8).
+- Migrations added: none.
+- Tables changed: none.
+
 ## Rebuild the Transactions screen for a phone, and give the period one owner (2026-09-19 → 2026-09-20)
 - Goal: PR #66, three commits on the Transactions screen squashed into
   `d102a8c`, merged 2026-09-20. Started from the screen spending its first
