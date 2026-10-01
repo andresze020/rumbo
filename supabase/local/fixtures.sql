@@ -314,6 +314,45 @@ begin
   perform public.create_debt_with_account(hh, 'Car loan', null, 'debt', 'CAD', 14000, date '2023-03-01', 1,
     18000, 6.9, 'annual', 380, 15, 'Fixture Bank', 'fixture');
 
+  -- BR-030: three cards with a statement cycle (closes on the 15th, due on the
+  -- 5th, paid from Main checking). Each holds only the rows below, so
+  -- fixture-expectations.sql can assert literal figures as of 2026-08-25
+  -- (closed statement ends 2026-08-15).
+  --   …22 refund of a post-close charge: 50 before the close, 80 after, 30 refunded on the 80
+  --   …23 refund of a statement charge:  60 before the close, 25 of it refunded after
+  --   …24 payment, then charge + refund: 70 before, 70 paid from Main, 40 charged, 10 refunded on the 70
+  insert into public.accounts
+    (id, household_id, name, account_type, account_class, currency_code,
+     opening_balance_date, include_in_net_worth, created_by,
+     statement_day, payment_day, billing_account_id)
+  values
+    ('20000000-0000-4000-a000-000000000022', hh, 'Cycle card: post-close refund', 'credit_card', 'liability', 'CAD',
+     date '2026-07-01', true, '00000000-0000-4000-a000-0000000000a1', 15, 5, main),
+    ('20000000-0000-4000-a000-000000000023', hh, 'Cycle card: statement refund', 'credit_card', 'liability', 'CAD',
+     date '2026-07-01', true, '00000000-0000-4000-a000-0000000000a1', 15, 5, main),
+    ('20000000-0000-4000-a000-000000000024', hh, 'Cycle card: payment and refund', 'credit_card', 'liability', 'CAD',
+     date '2026-07-01', true, '00000000-0000-4000-a000-0000000000a1', 15, 5, main);
+
+  perform public.create_manual_transaction(hh, 'expense', date '2026-08-06', '20000000-0000-4000-a000-000000000022',
+    fixture.cat(hh, 'Shopping'), 50, 'Cycle card A: before close', null, null, 'posted', 1, null);
+  tx := public.create_manual_transaction(hh, 'expense', date '2026-08-20', '20000000-0000-4000-a000-000000000022',
+    fixture.cat(hh, 'Shopping'), 80, 'Cycle card A: after close', null, null, 'posted', 1, null);
+  perform public.create_refund_transaction(hh, '20000000-0000-4000-a000-000000000022',
+    fixture.cat(hh, 'Shopping'), 30, date '2026-08-22', 'Cycle card A: refund', tx, null, null, 1);
+
+  tx := public.create_manual_transaction(hh, 'expense', date '2026-08-08', '20000000-0000-4000-a000-000000000023',
+    fixture.cat(hh, 'Shopping'), 60, 'Cycle card B: before close', null, null, 'posted', 1, null);
+  perform public.create_refund_transaction(hh, '20000000-0000-4000-a000-000000000023',
+    fixture.cat(hh, 'Shopping'), 25, date '2026-08-18', 'Cycle card B: refund', tx, null, null, 1);
+
+  tx := public.create_manual_transaction(hh, 'expense', date '2026-08-10', '20000000-0000-4000-a000-000000000024',
+    fixture.cat(hh, 'Shopping'), 70, 'Cycle card C: before close', null, null, 'posted', 1, null);
+  perform fixture.xfer(hh, main, '20000000-0000-4000-a000-000000000024', 70, date '2026-08-17', 'Cycle card C: payment');
+  perform public.create_manual_transaction(hh, 'expense', date '2026-08-21', '20000000-0000-4000-a000-000000000024',
+    fixture.cat(hh, 'Shopping'), 40, 'Cycle card C: after close', null, null, 'posted', 1, null);
+  perform public.create_refund_transaction(hh, '20000000-0000-4000-a000-000000000024',
+    fixture.cat(hh, 'Shopping'), 10, date '2026-08-24', 'Cycle card C: refund', tx, null, null, 1);
+
   -- Budgets for the last 12 months.
   for m in select g::date from generate_series(date '2025-10-01', date '2026-09-01', interval '1 month') g loop
     tx := public.create_monthly_budget(hh, m);

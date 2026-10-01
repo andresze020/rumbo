@@ -242,3 +242,39 @@ begin
   assert v_refund_months >= 10, format('expected refunds in ≥10 months, found %s', v_refund_months);
   assert v_excluded_months >= 10, format('expected excluded-category expenses in ≥10 months, found %s', v_excluded_months);
 end $$;
+
+-- check: BR-030 a refund after the close offsets the open cycle before the statement
+-- The three "Cycle card" accounts in fixtures.sql, as of 2026-08-25 (statement
+-- closed 2026-08-15). Card …22 is the 2026-09-30 finding: before the fix it
+-- read payable 20 / outstanding 80. Card …24 read outstanding 40 while owing 30.
+do $$
+declare
+  r record;
+  got text;
+begin
+  perform set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-0000000000a1","role":"authenticated"}', true);
+  for r in
+    select * from (values
+      ('20000000-0000-4000-a000-000000000022'::uuid, 50::numeric,  0::numeric, 50::numeric, 50::numeric),
+      ('20000000-0000-4000-a000-000000000023'::uuid, 60::numeric, 25::numeric, 35::numeric,  0::numeric),
+      ('20000000-0000-4000-a000-000000000024'::uuid, 70::numeric, 70::numeric,  0::numeric, 30::numeric)
+    ) v(card_id, statement_balance, paid_since_close, payable, outstanding)
+  loop
+    select format('statement %s / paid %s / payable %s / outstanding %s',
+                  c.statement_balance, c.paid_since_close, c.payable, c.outstanding)
+      into got
+    from public.get_card_cycle_summaries('__HOUSEHOLD_ID__'::uuid, date '2026-08-25') c
+    where c.account_id = r.card_id;
+    assert got is not null, format('card %s has no cycle summary', r.card_id);
+    assert exists (
+      select 1
+      from public.get_card_cycle_summaries('__HOUSEHOLD_ID__'::uuid, date '2026-08-25') c
+      where c.account_id = r.card_id
+        and c.statement_balance = r.statement_balance
+        and c.paid_since_close = r.paid_since_close
+        and c.payable = r.payable
+        and c.outstanding = r.outstanding
+    ), format('card %s: expected statement %s / paid %s / payable %s / outstanding %s, got %s',
+              r.card_id, r.statement_balance, r.paid_since_close, r.payable, r.outstanding, got);
+  end loop;
+end $$;

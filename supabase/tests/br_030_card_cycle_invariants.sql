@@ -6,9 +6,11 @@
 -- which is is_household_member()-gated: under `npm run db:test`, pass
 -- `--user=<a member's uuid>`.
 --
--- Evaluated as of today, over every card with a configured cycle. The local
--- fixtures configure no cycle, so under `npm run db:local` these pass
--- vacuously; they bite against real data.
+-- Evaluated as of today, over every card with a configured cycle. These guard
+-- reconciliation, not the refund rule itself; the rule is pinned with literal
+-- figures by the "BR-030 a refund after the close…" check in
+-- supabase/local/fixture-expectations.sql, over the three "Cycle card"
+-- accounts seeded in supabase/local/fixtures.sql.
 -- ============================================================
 
 -- 1. The closed statement and the open cycle together are exactly what the

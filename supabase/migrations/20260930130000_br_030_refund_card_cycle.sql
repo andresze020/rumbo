@@ -141,6 +141,14 @@ begin
           and t.transaction_date <= p.closed_end
       ), 0)::numeric(18,4) as statement_balance_calc,
       -- After the close, split three ways: payments, refunds, new charges.
+      -- Kept as separate subqueries on purpose: each one is bounded by
+      -- idx_transactions_household_date to the post-close window (a handful
+      -- of rows), while the statement pass above reads the card's whole
+      -- history. Folding all four into one conditional-aggregate pass forces
+      -- the post-close figures through that full scan: measured 2026-09-30
+      -- on the live project (one card, 2,532 entries, 100 interleaved calls)
+      -- at 180.9 ms per call, against 165.8 ms for this shape and 163.4 ms
+      -- for the previous three-subquery function.
       coalesce((
         select sum(te.amount_account_currency)
         from public.transaction_entries te
