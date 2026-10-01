@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import type { LucideIcon } from 'lucide-react'
 import { ChevronLeft, ChevronRight, LogOut, Settings, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTransactionsLinkClick } from '@/lib/filters/transaction-scope-link'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { SubmitButton } from '@/components/submit-button'
@@ -31,9 +32,11 @@ type SidebarLinkProps = {
 
 function SidebarLink({ href, label, icon: Icon, active, collapsed, phase, phaseLabel, hint }: SidebarLinkProps) {
   const showTooltip = collapsed && Boolean(hint)
+  const onClick = useTransactionsLinkClick(href)
   const link = (
     <Link
       href={href}
+      onClick={onClick}
       aria-current={active ? 'page' : undefined}
       title={collapsed && !showTooltip ? label : undefined}
       className={cn(

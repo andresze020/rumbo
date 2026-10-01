@@ -28,7 +28,7 @@
 |---|---|---|---|---|---|
 | [MQ-001](#mq-001--today-y-el-mes-actual-se-calculan-en-utc) | P0 | Abierto | Funcionamiento | Fechas (global) | "Hoy" y "mes actual" se calculan en UTC: a las 23:31 locales del 30-sep la app ya vive en octubre. |
 | [MQ-002](#mq-002--el-shell-se-desplaza-header-y-bottom-nav-se-van-de-la-pantalla) | P1 | Abierto | UI | Shell / navegación | Al llegar al final del scroll el header y la bottom nav se desplazan y dejan media pantalla vacía. |
-| [MQ-003](#mq-003--el-empty-state-de-transactions-parpadea-y-miente) | P1 | Abierto | Funcionamiento | Transactions | El empty state alterna solo entre dos variantes cada 1,5–3 s y dice "No transactions yet" con miles de transacciones. |
+| [MQ-003](#mq-003--el-empty-state-de-transactions-parpadea-y-miente) | P1 | ✅ Hecho (`fix/mq-003-transactions-empty-state`) | Funcionamiento | Transactions | El empty state alterna solo entre dos variantes cada 1,5–3 s y dice "No transactions yet" con miles de transacciones. |
 | [MQ-004](#mq-004--el-botón-del-asistente-tapa-contenido-y-la-tab-more) | P1 | Abierto | UI | Global | El botón flotante del asistente tapa montos, botones de fila y la tab "More". |
 | [MQ-005](#mq-005--comparativas-de-mes-en-curso-contra-mes-completo) | P1 | Abierto | Funcionamiento | Dashboard / Budgets / Accounts | Deltas "−100 % vs Sep", "0,0 %" en verde y un Month health "C+" calculados sin datos del mes. |
 | [MQ-006](#mq-006--goals-resumen-que-ignora-metas-en-otra-moneda-y-cuentas-vinculables-incorrectas) | P1 | Abierto | Funcionamiento | Goals | El resumen ignora metas en moneda no base; se puede vincular una meta de ahorro a una cuenta de deuda. |
@@ -302,6 +302,23 @@ documento, y deja en la entrega los pasos exactos para probarlo en el teléfono.
 ---
 
 ### MQ-003 — El empty state de Transactions parpadea y miente
+
+> ✅ Hecho el 2026-10-01 — el copy ya no depende de la forma de la URL sino de
+> los datos (`src/lib/transactions/empty-state.ts`, con test): "No transactions
+> yet" solo para un household sin transacciones; con historia, "No transactions
+> in {período}" + "Add transaction" / "Show all time". La tab Transactions
+> (bottom nav y sidebar) navega a la URL del alcance recordado, leído al tocar
+> (`src/lib/filters/transaction-scope-link.ts`).
+>
+> **Causa confirmada** (build de producción contra un Supabase simulado): el
+> mismo octubre vacío decía *yet* en `/dashboard/transactions` y *found* en
+> `?month=2026-10`, así que cualquier re-render que solo cambiara la forma de
+> la URL volteaba la tarjeta y su botón. El punto 4 era el Router Cache: la tab
+> hace prefetch completo de la URL pelada, cuyo render depende de la cookie
+> `af_tx_scope`; un re-tap reproducía el render viejo (el mes anterior) y su
+> `RememberTransactionScope` reescribía la cookie con ese mes. El disparador
+> exacto del parpadeo periódico del video no se reprodujo en headless; con el
+> copy derivado de los datos ambas formas de URL pintan la misma tarjeta.
 
 | Campo | Valor |
 |---|---|

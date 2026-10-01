@@ -398,6 +398,9 @@ export const en = {
     toastVoided: 'Transaction voided.',
     toastRestored: 'Transaction restored.',
     toastRefunded: 'Refund recorded.',
+    emptyPeriodTitle: 'No transactions in {period}',
+    emptyPeriodDescription: 'Nothing was recorded in this period. Add one, or look through all your history.',
+    showAllTime: 'Show all time',
   },
   goals: {
     totalDescription: 'Of {target} target, {currency} goals',
@@ -985,6 +988,9 @@ export const es: DeepStringify<typeof en> = {
     toastVoided: 'Transacción anulada.',
     toastRestored: 'Transacción restaurada.',
     toastRefunded: 'Reembolso registrado.',
+    emptyPeriodTitle: 'Sin transacciones en {period}',
+    emptyPeriodDescription: 'No hay nada registrado en este período. Agrega una o revisa todo tu historial.',
+    showAllTime: 'Ver todo el historial',
   },
   goals: {
     totalDescription: 'De una meta de {target} para objetivos en {currency}',
@@ -1572,6 +1578,9 @@ export const fr: DeepStringify<typeof en> = {
     toastVoided: 'Transaction annulée.',
     toastRestored: 'Transaction rétablie.',
     toastRefunded: 'Remboursement enregistré.',
+    emptyPeriodTitle: 'Aucune transaction pour {period}',
+    emptyPeriodDescription: 'Rien n’a été enregistré sur cette période. Ajoutez-en une ou parcourez tout votre historique.',
+    showAllTime: 'Voir tout l’historique',
   },
   goals: {
     totalDescription: 'Sur un objectif de {target} pour les objectifs en {currency}',
