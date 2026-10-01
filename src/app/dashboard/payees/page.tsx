@@ -335,6 +335,9 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
           <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border bg-background px-3">
             <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <input
+              type="search"
+              // The list's own filter, not a form to fill (MQ-007).
+              autoComplete="off"
               name="q"
               defaultValue={searchQuery}
               placeholder={ui('Search payees...')}
