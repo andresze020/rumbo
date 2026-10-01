@@ -25,6 +25,7 @@ import {
 import { useTransactionDialog } from '@/components/transaction-dialog-provider'
 import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
+import { useTransactionsLinkClick } from '@/lib/filters/transaction-scope-link'
 import type { TranslationKey } from '@/lib/i18n/translate'
 
 type Tab = {
@@ -197,10 +198,14 @@ export function MobileBottomNav({ className }: { className?: string }) {
 
 function BottomTab({ tab, active, label }: { tab: Tab; active: boolean; label: string }) {
   const Icon = tab.icon
+  // MQ-003: Transactions goes to the remembered scope's own URL, not to the
+  // prefetched render of the bare one — see `lib/filters/transaction-scope-link`.
+  const onClick = useTransactionsLinkClick(tab.href)
   return (
     <Link
       href={tab.href}
       prefetch={tab.prefetch}
+      onClick={onClick}
       aria-current={active ? 'page' : undefined}
       className={cn(
         // `active:` gives the tab the press-down a native tab bar has; without

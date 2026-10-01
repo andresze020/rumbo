@@ -10,6 +10,9 @@ type EmptyStateProps = {
   description: string
   actionHref?: string
   actionLabel?: string
+  /** A quieter second way out, beside the main action (e.g. "Show all time"). */
+  secondaryActionHref?: string
+  secondaryActionLabel?: string
 }
 
 export function EmptyState({
@@ -17,6 +20,8 @@ export function EmptyState({
   description,
   actionHref,
   actionLabel,
+  secondaryActionHref,
+  secondaryActionLabel,
 }: EmptyStateProps) {
   const ui = useUiTranslation()
   return (
@@ -29,13 +34,25 @@ export function EmptyState({
           <p className="font-semibold text-foreground">{ui(title)}</p>
           <p className="text-sm text-muted-foreground">{ui(description)}</p>
         </div>
-        {actionHref && actionLabel ? (
-          <Link
-            href={actionHref}
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            {ui(actionLabel)}
-          </Link>
+        {(actionHref && actionLabel) || (secondaryActionHref && secondaryActionLabel) ? (
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {actionHref && actionLabel ? (
+              <Link
+                href={actionHref}
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                {ui(actionLabel)}
+              </Link>
+            ) : null}
+            {secondaryActionHref && secondaryActionLabel ? (
+              <Link
+                href={secondaryActionHref}
+                className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+              >
+                {ui(secondaryActionLabel)}
+              </Link>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>
