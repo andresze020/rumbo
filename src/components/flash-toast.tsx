@@ -2,8 +2,9 @@
 
 import { useEffect, useRef } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useLanguage } from '@/components/language-provider'
 import { useToast } from '@/components/toast-provider'
-import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
+import { translateUi } from '@/lib/i18n/ui'
 
 export type FlashFlag = {
   /** Search param a server-action redirect sets to `1`, e.g. `created`. */
@@ -21,35 +22,46 @@ export type FlashFlag = {
  * already three lines into the budget — and came back on a refresh. Errors are
  * not for this: they should stay until read.
  *
- * Same consume-once pattern as `ArchiveToast` and `TransactionToasts`, without
- * their undo plumbing.
+ * The redirect usually lands on the page this component is already mounted on,
+ * so it is kept rather than remounted: it consumes on every URL change, not
+ * only on mount. Each flagged URL is consumed once — marked when its toast
+ * actually fires, so a Strict Mode cleanup that cancels the frame does not
+ * swallow it — and the mark clears as soon as a URL without flags is seen, so
+ * saving the same line twice toasts twice.
  */
 export function FlashToast({ flags }: { flags: FlashFlag[] }) {
   const { toast } = useToast()
-  const ui = useUiTranslation()
+  // The provider's locale, not useUiTranslation(): that one reads English
+  // until its first frame, the same frame this toast fires in on a fresh load.
+  const { locale } = useLanguage()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const hasRun = useRef(false)
+  const consumedUrl = useRef<string | null>(null)
 
   useEffect(() => {
-    if (hasRun.current) return
     const present = flags.filter((flag) => searchParams.get(flag.param) === '1')
-    if (!present.length) return
-    hasRun.current = true
+    if (!present.length) {
+      consumedUrl.current = null
+      return
+    }
+
+    const query = searchParams.toString()
+    const url = `${pathname}?${query}`
+    if (consumedUrl.current === url) return
 
     const frame = window.requestAnimationFrame(() => {
-      for (const flag of present) toast({ message: ui(flag.message) })
+      consumedUrl.current = url
+      for (const flag of present) toast({ message: translateUi(locale, flag.message) })
 
-      const params = new URLSearchParams(searchParams.toString())
+      // Only the consumed flags go; month, filters and the rest stay.
+      const params = new URLSearchParams(query)
       for (const flag of present) params.delete(flag.param)
       router.replace(params.size ? `${pathname}?${params.toString()}` : pathname, { scroll: false })
     })
 
     return () => window.cancelAnimationFrame(frame)
-    // Run once on mount to consume the redirect flags from the URL.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [flags, locale, pathname, router, searchParams, toast])
 
   return null
 }
