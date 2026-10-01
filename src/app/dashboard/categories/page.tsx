@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { CategoryForm } from './category-form'
 import { SortableCategoryList, type CategoryVM } from './sortable-category-list'
+import { TypeTabs } from './type-tabs'
 import { archiveCategoryAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
@@ -353,11 +354,16 @@ export default async function CategoriesPage({
       ) : null}
 
       {/* ── Summary cards ──────────────────────────────────────────────── */}
+      {/* Both figures count the list below — same type tab, same search, same
+          archived toggle — so they never mix a global total with a filtered
+          one (MQ-016). The desktop cards already did. */}
       <div className="grid grid-cols-2 gap-2 md:hidden">
         <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
-          <p className="mb-1 text-[10px] text-muted-foreground">{ui('Active')}</p>
+          <p className="mb-1 text-[10px] text-muted-foreground">
+            {ui(showArchived ? 'Archived' : 'Active')}
+          </p>
           <p className="text-sm font-bold leading-snug tabular-nums">
-            {activeCategories.length}
+            {displayCategories.length}
           </p>
         </div>
         <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
@@ -441,7 +447,7 @@ export default async function CategoriesPage({
         <section className="min-w-0 space-y-4">
           {/* ── Toolbar ─────────────────────────────────────────────────── */}
           <div className="flex flex-col gap-3 md:rounded-xl md:border md:bg-card md:p-3 md:shadow-sm md:shadow-black/[0.03] sm:flex-row sm:items-center">
-            <div className="flex overflow-x-auto rounded-xl border bg-card p-1 md:rounded-lg md:bg-background">
+            <TypeTabs>
               {([{ value: 'all' as const, label: 'All' }, ...categoryTypes]).map((filter) => (
                 <Link
                   key={filter.value}
@@ -450,8 +456,12 @@ export default async function CategoriesPage({
                     categoryType: filter.value,
                     q: searchQuery,
                   })}
+                  aria-current={categoryTypeFilter === filter.value ? 'page' : undefined}
                   className={cn(
-                    'min-w-0 flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-center text-xs font-semibold transition-colors md:flex-none md:rounded-md md:py-1.5',
+                    // No `min-w-0`: a tab keeps its full label and the row
+                    // scrolls, instead of every tab shrinking until
+                    // "Adjustment" is clipped mid-word (MQ-016).
+                    'flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-center text-xs font-semibold transition-colors md:flex-none md:rounded-md md:py-1.5',
                     categoryTypeFilter === filter.value
                       ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -460,7 +470,7 @@ export default async function CategoriesPage({
                   {ui(filter.label)}
                 </Link>
               ))}
-            </div>
+            </TypeTabs>
 
             <form action="/dashboard/categories" className="hidden min-w-0 flex-1 items-center gap-2 md:flex sm:max-w-xs">
               {showArchived ? <input type="hidden" name="showArchived" value="true" /> : null}
