@@ -34,6 +34,7 @@ import { translate } from '@/lib/i18n/translate'
 import { formatCurrency, formatMonthLabel, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { PickerGroup, PickerOption } from '@/components/searchable-picker'
+import { formActionsCls } from '@/lib/form-styles'
 import { BudgetCategoryPicker } from './budget-category-picker'
 
 type BudgetsPageProps = {
@@ -730,9 +731,11 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                     </div>
                   </div>
 
-                  <SubmitButton type="submit" pendingText="Adding...">
-                    Add line
-                  </SubmitButton>
+                  <div className={formActionsCls}>
+                    <SubmitButton type="submit" pendingText="Adding...">
+                      Add line
+                    </SubmitButton>
+                  </div>
                 </form>
               )}
             </FormDialog>
