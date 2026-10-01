@@ -11,9 +11,13 @@ export const nativeSelectCls =
 export const selectFieldCls =
   'h-11 w-full appearance-none truncate rounded-xl border border-input bg-transparent pl-10 pr-9 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30'
 
-/** Form action row: stacked full-width buttons on mobile, inline on desktop. */
+/**
+ * Form action row: stacked full-width buttons on mobile, inline on desktop.
+ * `form-actions` is a marker, not a utility: inside a phone form sheet it
+ * makes the row sticky at the sheet's bottom edge (MQ-010, globals.css).
+ */
 export const formActionsCls =
-  'flex flex-col gap-2 pt-1 sm:flex-row sm:flex-wrap sm:items-center'
+  'form-actions flex flex-col gap-2 pt-1 sm:flex-row sm:flex-wrap sm:items-center'
 
 /** Buttons inside a form action row: comfy touch height on mobile. */
 export const formBtnCls = 'h-11 rounded-xl text-sm sm:h-8 sm:rounded-lg'

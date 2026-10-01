@@ -8,9 +8,12 @@ import { AmountInput } from '@/components/amount-input'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/date-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SubmitButton } from '@/components/submit-button'
+import { SearchablePicker, accountPickerGroups } from '@/components/searchable-picker'
+import { useLanguage } from '@/components/language-provider'
 import { describeFxNote, fetchFxRate } from '@/lib/fx'
 import { formatCurrency } from '@/lib/format'
 import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
@@ -26,15 +29,24 @@ export function DebtCreateForm({
   currencyOptions,
   defaultCurrency,
   linkableLiabilityAccounts,
+  defaultExistingAccountId,
 }: {
   baseCurrency: string
   currencyOptions: CurrencyOption[]
   defaultCurrency: string
   linkableLiabilityAccounts: LiabilityAccount[]
+  /** MQ-011: "Track this debt" opens the form with its account already chosen. */
+  defaultExistingAccountId?: string
 }) {
+  const { t } = useLanguage()
   const today = new Date().toISOString().slice(0, 10)
 
-  const [existingAccountId, setExistingAccountId] = useState('')
+  const [existingAccountId, setExistingAccountId] = useState(
+    defaultExistingAccountId &&
+      linkableLiabilityAccounts.some((account) => account.id === defaultExistingAccountId)
+      ? defaultExistingAccountId
+      : ''
+  )
   const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency)
   const [openingBalanceInput, setOpeningBalanceInput] = useState('0')
   const [openingBalanceDate, setOpeningBalanceDate] = useState(today)
@@ -97,26 +109,23 @@ export function DebtCreateForm({
 
         <div className="space-y-2">
           <Label htmlFor="existing_account_id">Existing liability account</Label>
-          <select
+          {/* MQ-008: searchable and grouped by account type on a phone. */}
+          <SearchablePicker
             id="existing_account_id"
             name="existing_account_id"
-            className={selectCls}
             value={existingAccountId}
-            onChange={(e) => {
-              setExistingAccountId(e.target.value)
+            onChange={(value) => {
+              setExistingAccountId(value)
               setUserRate('')
               setFxNote('')
               setFxError('')
             }}
-          >
-            <option value="">Create new account</option>
-            {linkableLiabilityAccounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name} · {account.account_type.replace('_', ' ')} ·{' '}
-                {account.currency_code}
-              </option>
-            ))}
-          </select>
+            groups={accountPickerGroups(linkableLiabilityAccounts)}
+            noneLabel="Create new account"
+            placeholder="Create new account"
+            title="Existing liability account"
+            searchPlaceholder={t('common.searchAccounts')}
+          />
         </div>
 
         {isNewAccount ? (
@@ -172,13 +181,12 @@ export function DebtCreateForm({
 
             <div className="space-y-2">
               <Label htmlFor="opening_balance_date">Balance date</Label>
-              <Input
+              <DateInput
                 id="opening_balance_date"
                 name="opening_balance_date"
-                type="date"
                 value={openingBalanceDate}
-                onChange={(e) => {
-                  setOpeningBalanceDate(e.target.value)
+                onValueChange={(next) => {
+                  setOpeningBalanceDate(next)
                   if (isMultiCurrency) {
                     setUserRate('')
                     setFxNote('')

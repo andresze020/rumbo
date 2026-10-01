@@ -1,6 +1,14 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  useTransition,
+  type ReactNode,
+} from 'react'
 import { Bot } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import {
@@ -29,9 +37,9 @@ type AssistantContext = {
 /**
  * True while the page is being scrolled down.
  *
- * The assistant FAB is `fixed` over the content and, on a phone, hangs at the
- * same right edge every amount in a list is aligned to — so a row scrolls
- * underneath it and loses its figure. The standard answer, and the cheapest
+ * The assistant FAB (desktop only since MQ-004) is `fixed` over the content
+ * and hangs at the same right edge every amount in a list is aligned to — so a
+ * row scrolls underneath it and loses its figure. The standard answer, and the cheapest
  * one here: get out of the way while the page moves down, come back the moment
  * it moves up or stops.
  *
@@ -83,18 +91,41 @@ function useScrollingDown() {
   return scrollingDown
 }
 
-export function AssistantDrawer() {
+/**
+ * Opens the assistant sheet from anywhere inside `AssistantProvider` — the
+ * mobile top bar's button, today. A no-op outside one.
+ */
+const OpenAssistantContext = createContext<() => void>(() => {})
+
+export function useOpenAssistant() {
+  return useContext(OpenAssistantContext)
+}
+
+/**
+ * The assistant sheet, plus how it is reached.
+ *
+ * On a phone (< lg) it opens from a button in the top bar (`MobileNav`), not a
+ * floating one (MQ-004). The FAB hung at the right edge every amount in a list
+ * is aligned to, two thumbs' width above the bottom nav: it covered row
+ * figures, row action buttons, "Copy previous" in Budgets and, with the shell
+ * displaced, the More tab — and fading it while scrolling only helped until the
+ * list stopped under it. The bottom nav's "+" is the one floating action left.
+ *
+ * On desktop (lg+) the floating button stays as it was: there the content has
+ * room beside it and the add-transaction FAB it stacks above.
+ */
+export function AssistantProvider({ children }: { children: ReactNode }) {
   const ui = useUiTranslation()
   const [open, setOpen] = useState(false)
   const [context, setContext] = useState<AssistantContext | null>(null)
   const [, startTransition] = useTransition()
   const pathname = usePathname()
   const scrollingDown = useScrollingDown()
-  // One floating action per screen. On Transactions that is the bottom nav's
-  // "+": a second FAB hanging at the same right edge every amount is aligned
-  // to covered the figures and competed for the same thumb. The assistant is
-  // reachable there from More → AI Assistant, and from the sidebar on desktop.
+  // Desktop only now (the FAB is `hidden lg:flex`). Transactions keeps its
+  // right edge clear for its amounts there too; the assistant is a sidebar
+  // item away on desktop, and in the top bar on a phone.
   const hideFab = pathname?.startsWith('/dashboard/transactions') ?? false
+  const openAssistant = useCallback(() => setOpen(true), [])
 
   useEffect(() => {
     if (open && !context) {
@@ -107,7 +138,9 @@ export function AssistantDrawer() {
   }, [open, context])
 
   return (
-    <>
+    <OpenAssistantContext.Provider value={openAssistant}>
+      {children}
+
       {hideFab ? null : (
         <button
           type="button"
@@ -117,7 +150,7 @@ export function AssistantDrawer() {
           // Fades rather than moves: `vv-pin-corner` already owns this button's
           // transform, and a second one would fight it while the page is zoomed.
           data-away={scrollingDown && !open ? 'true' : undefined}
-          className="vv-pin-corner [--vv-pin-inset-x:1.5rem] [--vv-pin-inset-y:6rem] fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-6 z-50 flex size-12 items-center justify-center rounded-full bg-secondary text-secondary-foreground shadow-lg transition-opacity duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[away=true]:pointer-events-none data-[away=true]:opacity-0"
+          className="vv-pin-corner [--vv-pin-inset-x:1.5rem] [--vv-pin-inset-y:6rem] fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-6 z-50 hidden size-12 lg:flex items-center justify-center rounded-full bg-secondary text-secondary-foreground shadow-lg transition-opacity duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[away=true]:pointer-events-none data-[away=true]:opacity-0"
         >
           <Bot className="size-5" aria-hidden="true" />
         </button>
@@ -149,6 +182,6 @@ export function AssistantDrawer() {
           </div>
         </SheetContent>
       </Sheet>
-    </>
+    </OpenAssistantContext.Provider>
   )
 }
