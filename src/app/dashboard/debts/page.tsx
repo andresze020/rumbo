@@ -159,7 +159,7 @@ function DebtSummaryStat({
         </span>
         <span className="whitespace-nowrap text-[11px] text-muted-foreground">{label}</span>
       </div>
-      <p className="mt-1.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums">{value}</p>
+      <p className="mt-1.5 whitespace-nowrap text-base font-semibold tabular-nums">{value}</p>
     </div>
   )
 }
@@ -409,7 +409,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
           </p>
           <p
             className={cn(
-              'mt-1.5 font-mono text-3xl font-bold tabular-nums',
+              'mt-1.5 text-3xl font-bold tabular-nums',
               totalDebtBase > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'
             )}
           >
