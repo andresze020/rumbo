@@ -23,7 +23,8 @@ import { AccountsViewToggle } from '@/components/accounts-view-toggle'
 import { getAccountsView } from '@/lib/accounts-view/server'
 import { createClient } from '@/lib/supabase/server'
 import { getDisplayedLiabilityBalance } from '@/lib/net-worth/valuation'
-import { formatCurrency, formatIsoDate, formatLabel } from '@/lib/format'
+import { formatCurrency, formatIsoDate, formatLabel, formatMonthLabelShort } from '@/lib/format'
+import { offsetDate } from '@/lib/periods/transaction-period'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -42,6 +43,7 @@ import { translate } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
+import { getRequestToday } from '@/lib/periods/server'
 
 type AccountsPageProps = {
   searchParams: Promise<{
@@ -275,10 +277,6 @@ function deriveBalance(
     Number(balance.pending_balance_base_currency)
 
   return balance
-}
-
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10)
 }
 
 function CreateAccountForm({
@@ -658,6 +656,9 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const params = await searchParams
   const errorMessage = typeof params.error === 'string' ? params.error : null
   const infoMessage = typeof params.info === 'string' ? params.info : null
+  // MQ-001: the user's day — the month in the header, the previous month-end
+  // comparison and the card cycles all hang off it.
+  const today = await getRequestToday()
   const created = params.created === '1'
   const updated = params.updated === '1'
   const openingBalanceSet = params.openingBalanceSet === '1'
@@ -701,11 +702,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     redirect('/onboarding')
   }
 
-  const prevMonthEnd = (() => {
-    const d = new Date()
-    d.setDate(0)
-    return d.toISOString().slice(0, 10)
-  })()
+  const prevMonthEnd = offsetDate(`${today.slice(0, 7)}-01`, -1)
   // Six independent reads, one round trip. They were sequential awaits, so the
   // page paid the network latency six times over before it could render a
   // single row; none of them depends on another's result.
@@ -755,6 +752,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       .order('created_at', { ascending: true }),
     supabase.rpc('get_card_cycle_summaries', {
       p_household_id: household.id,
+      p_as_of: today,
     }),
     supabase
       .from('transaction_entries')
@@ -976,7 +974,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     prevMonthBalance !== null && prevMonthBalance !== 0
       ? ((totalBalance - prevMonthBalance) / Math.abs(prevMonthBalance)) * 100
       : null
-  const monthLabel = new Date().toLocaleDateString(locale, { month: 'short', year: 'numeric' })
+  const monthLabel = formatMonthLabelShort(today.slice(0, 7), locale)
   const selectedEditRow = displayRows.find(
     (row) => row.metadata.id === editAccountId
   )
@@ -1154,7 +1152,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
             accountId={selectedOpeningBalanceRow.metadata.id}
             accountClass={selectedOpeningBalanceRow.metadata.account_class}
             accountCurrency={selectedOpeningBalanceRow.metadata.currency_code}
-            defaultDate={selectedOpeningBalanceRow.metadata.opening_balance_date ?? todayIsoDate()}
+            defaultDate={selectedOpeningBalanceRow.metadata.opening_balance_date ?? today}
             showArchived={showArchived}
             baseCurrency={household.base_currency}
           />
@@ -1176,7 +1174,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
                 ? getDisplayedLiabilityBalance(selectedAdjustBalanceRow.balance.posted_balance_account_currency)
                 : Number(selectedAdjustBalanceRow.balance.posted_balance_account_currency)
             }
-            defaultDate={todayIsoDate()}
+            defaultDate={today}
             showArchived={showArchived}
             baseCurrency={household.base_currency}
           />

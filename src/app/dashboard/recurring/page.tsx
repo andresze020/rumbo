@@ -20,9 +20,9 @@ import {
   addDaysIso,
   frequencyLabel,
   projectOccurrences,
-  todayIsoDate,
   type Frequency,
 } from '@/lib/recurring/shared'
+import { getRequestToday } from '@/lib/periods/server'
 import { toggleRecurringActiveAction } from './actions'
 
 type RecurringPageProps = {
@@ -165,7 +165,8 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
   const categoriesById = new Map(allCategories.map((c) => [c.id, c]))
   const payeesById = new Map(allPayees.map((p) => [p.id, p]))
 
-  const today = todayIsoDate()
+  // MQ-001: Due vs Upcoming is decided on the user's calendar, not UTC's.
+  const today = await getRequestToday()
 
   function toVM(row: RecurringTransaction): RecurringRowVM {
     const category = row.category_id ? categoriesById.get(row.category_id) : undefined
@@ -378,7 +379,13 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
           cancelHref="/dashboard/recurring"
           wide
         >
-          <RecurringForm mode="create" accounts={formAccounts} categories={formCategories} payees={allPayees} />
+          <RecurringForm
+            mode="create"
+            accounts={formAccounts}
+            categories={formCategories}
+            payees={allPayees}
+            today={today}
+          />
         </FormDialog>
       ) : null}
 
@@ -400,6 +407,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
             accounts={formAccounts}
             categories={formCategories}
             payees={allPayees}
+            today={today}
           />
         </FormDialog>
       ) : null}

@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { refreshExchangeRatesAction } from './exchange-rate-actions'
+import { todayIsoDateLocal } from '@/lib/format'
 
 const STORAGE_KEY = 'af_fx_refreshed_on'
 
@@ -22,7 +23,7 @@ export function ExchangeRateAutoRefresh() {
   const router = useRouter()
 
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayIsoDateLocal()
 
     try {
       if (window.sessionStorage.getItem(STORAGE_KEY) === today) return

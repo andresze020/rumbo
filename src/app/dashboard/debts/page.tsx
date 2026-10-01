@@ -23,6 +23,7 @@ import { formatCurrency } from '@/lib/format'
 import { createClient } from '@/lib/supabase/server'
 import { nativeSelectCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
+import { getRequestToday } from '@/lib/periods/server'
 
 type DebtsPageProps = {
   searchParams: Promise<{
@@ -98,10 +99,6 @@ function debtsPath({
   return `/dashboard/debts${qs ? `?${qs}` : ''}`
 }
 
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function formatDueDay(value: number | string | null) {
   return value ? `Day ${value}` : 'N/A'
 }
@@ -168,6 +165,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
   const isCreating = params.mode === 'create'
   const editDebtId = typeof params.edit === 'string' ? params.edit : null
   const payDebtId = typeof params.pay === 'string' ? params.pay : null
+  const today = await getRequestToday()
 
   const supabase = await createClient()
   const {
@@ -219,7 +217,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
     'get_account_balances',
     {
       p_household_id: household.id,
-      p_as_of_date: todayIsoDate(),
+      p_as_of_date: today,
     }
   )
 
@@ -409,6 +407,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
             currencyOptions={currencyOptions}
             defaultCurrency={defaultCurrency}
             linkableLiabilityAccounts={linkableLiabilityAccounts}
+            today={today}
           />
         </FormDialog>
       ) : null}
@@ -511,7 +510,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
                     id="pay_payment_date"
                     name="payment_date"
                     type="date"
-                    defaultValue={todayIsoDate()}
+                    defaultValue={today}
                     required
                   />
                 </div>

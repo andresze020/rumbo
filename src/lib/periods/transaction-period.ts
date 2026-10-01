@@ -48,17 +48,37 @@ export type TransactionPeriod = {
   bounded: boolean
 }
 
+// ── Today ───────────────────────────────────────────────────────────────────
+
+/**
+ * Today's calendar date (`YYYY-MM-DD`) on the wall clock of `timeZone` (IANA).
+ *
+ * MQ-001: this used to be `new Date().toISOString().slice(0, 10)` — UTC — so a
+ * user west of UTC lived in tomorrow every evening and in next month on the
+ * last night of each one. Server code gets the zone from
+ * `getRequestToday()` in `periods/server.ts` (the `rumbo-tz` cookie); never
+ * re-derive "today" anywhere else.
+ */
+export function todayIsoDate(timeZone: string, now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now)
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+/** The current `YYYY-MM` on the wall clock of `timeZone`. */
+export function currentMonth(timeZone: string, now: Date = new Date()): string {
+  return todayIsoDate(timeZone, now).slice(0, 7)
+}
+
 // ── Date arithmetic ─────────────────────────────────────────────────────────
-// UTC throughout: these are calendar dates, not instants, and a behind-UTC
-// server would otherwise resolve "today" to yesterday.
-
-export function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-export function currentMonth(): string {
-  return todayIsoDate().slice(0, 7)
-}
+// UTC throughout: these are calendar dates, not instants, so the arithmetic
+// must not drift with the runtime's own zone.
 
 export function monthFirstDay(month: string): string {
   return `${month}-01`
@@ -103,9 +123,8 @@ export function monthPeriod(month: string): TransactionPeriod {
   }
 }
 
-/** A preset, resolved against today. */
-export function presetPeriod(preset: PeriodPreset): TransactionPeriod {
-  const today = todayIsoDate()
+/** A preset, resolved against `today` (the user's, from `todayIsoDate`). */
+export function presetPeriod(preset: PeriodPreset, today: string): TransactionPeriod {
   const thisMonth = today.slice(0, 7)
 
   switch (preset) {
@@ -153,9 +172,9 @@ export function presetPeriod(preset: PeriodPreset): TransactionPeriod {
 }
 
 /** A range the user typed. Collapses to a month when it spans exactly one. */
-export function customPeriod(dateFrom: string, dateTo: string): TransactionPeriod {
+export function customPeriod(dateFrom: string, dateTo: string, today: string): TransactionPeriod {
   if (dateFrom === ALL_TIME_FROM && dateTo === ALL_TIME_TO) {
-    return presetPeriod('all-time')
+    return presetPeriod('all-time', today)
   }
   const month = dateFrom.slice(0, 7)
   // "This month" and a hand-typed Sep 1 – Sep 30 are the same view, so the
@@ -198,25 +217,28 @@ export function hasPeriodParam(params: RawParams): boolean {
  * `unboundedFallback` is for a payee- or tag-only URL: those views are
  * all-time by design, and labelling them with the current month had the
  * control claim a period the results did not have.
+ *
+ * `today` is the user's (`getRequestToday()`): presets and the no-param
+ * default both resolve against it.
  */
 export function parseTransactionPeriod(
   params: RawParams,
-  { unboundedFallback = false }: { unboundedFallback?: boolean } = {}
+  { today, unboundedFallback = false }: { today: string; unboundedFallback?: boolean }
 ): TransactionPeriod {
   const preset = first(params.period)
-  if (preset && isPreset(preset)) return presetPeriod(preset)
+  if (preset && isPreset(preset)) return presetPeriod(preset, today)
 
   const dateFrom = first(params.date_from)
   const dateTo = first(params.date_to)
   if (dateFrom && dateTo && ISO_DATE.test(dateFrom) && ISO_DATE.test(dateTo)) {
-    return customPeriod(dateFrom, dateTo)
+    return customPeriod(dateFrom, dateTo, today)
   }
 
   const month = first(params.month)
   if (month && ISO_MONTH.test(month)) return monthPeriod(month)
 
-  if (unboundedFallback) return presetPeriod('all-time')
-  return monthPeriod(currentMonth())
+  if (unboundedFallback) return presetPeriod('all-time', today)
+  return monthPeriod(today.slice(0, 7))
 }
 
 /** How this period travels in a URL — one shape per kind, never two at once. */
@@ -256,11 +278,14 @@ export function resolvesTheSame(a: TransactionPeriod, b: TransactionPeriod): boo
 
 // ── Labels ──────────────────────────────────────────────────────────────────
 
-/** "Sep 1" / "Sep 1, 2025" — the year only when it is not the current one. */
-export function formatPeriodDate(iso: string, locale: Locale = 'en'): string {
+/**
+ * "Sep 1" / "Sep 1, 2025" — the year only when it is not the current one
+ * (`today`'s, the user's).
+ */
+export function formatPeriodDate(iso: string, locale: Locale, today: string): string {
   if (!ISO_DATE.test(iso)) return iso
   const [year, month, day] = iso.split('-').map(Number)
-  const showYear = String(year) !== todayIsoDate().slice(0, 4)
+  const showYear = String(year) !== today.slice(0, 4)
   return new Intl.DateTimeFormat(localeToBcp47(locale), {
     month: 'short',
     day: 'numeric',
@@ -279,7 +304,8 @@ export function formatPeriodDate(iso: string, locale: Locale = 'en'): string {
 export function formatPeriodLabel(
   period: TransactionPeriod,
   locale: Locale,
-  ui: (source: string) => string
+  ui: (source: string) => string,
+  today: string
 ): string {
   if (period.preset === 'all-time') return ui('All time')
   if (period.preset === 'ytd') return `${ui('YTD')} ${period.dateFrom.slice(0, 4)}`
@@ -289,8 +315,8 @@ export function formatPeriodLabel(
   if (period.kind === 'month' || period.preset) {
     return formatMonthLabelShort(period.month, locale)
   }
-  const from = formatPeriodDate(period.dateFrom, locale)
-  const to = formatPeriodDate(period.dateTo, locale)
+  const from = formatPeriodDate(period.dateFrom, locale, today)
+  const to = formatPeriodDate(period.dateTo, locale, today)
   if (period.dateFrom === period.dateTo) return from
   // Same month: "Sep 1–15" rather than repeating the month name.
   if (period.dateFrom.slice(0, 7) === period.dateTo.slice(0, 7)) {

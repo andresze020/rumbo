@@ -27,6 +27,7 @@ import {
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { translate } from '@/lib/i18n/translate'
+import { getRequestToday } from '@/lib/periods/server'
 
 
 type Props = {
@@ -91,7 +92,7 @@ export default async function SettingsPage({ searchParams }: Props) {
     )
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = await getRequestToday()
   const { data: rateRows } = await supabase
     .from('exchange_rates')
     .select('from_currency_code, rate, rate_date, source')

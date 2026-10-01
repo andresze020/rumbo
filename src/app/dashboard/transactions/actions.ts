@@ -8,8 +8,8 @@ import {
   advanceUntilFuture,
   computeNextRunDate,
   isFrequency,
-  todayIsoDate,
 } from '@/lib/recurring/shared'
+import { getRequestToday } from '@/lib/periods/server'
 
 const RECURRING_NAME_MAX_LENGTH = 120
 
@@ -287,7 +287,7 @@ export async function createManualTransactionAction(formData: FormData) {
 
     // First occurrence = the transaction date we just posted; schedule the next
     // occurrence after it, skipping any that would already be in the past.
-    const today = todayIsoDate()
+    const today = await getRequestToday()
     const firstNext = computeNextRunDate(transactionDate, frequency)
     const nextRunDate =
       firstNext > today ? firstNext : advanceUntilFuture(firstNext, frequency, today)

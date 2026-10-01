@@ -38,14 +38,13 @@ import {
   ALL_TIME_FROM,
   ALL_TIME_TO,
   appendPeriodParams,
-  currentMonth,
   formatPeriodLabel,
   hasPeriodParam,
   offsetDate,
   parseTransactionPeriod,
-  todayIsoDate,
   type TransactionPeriod,
 } from '@/lib/periods/transaction-period'
+import { getRequestToday } from '@/lib/periods/server'
 import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import { createUiTranslator } from '@/lib/i18n/ui'
@@ -276,9 +275,9 @@ function formatGroupDateLabel(date: string, locale: Locale) {
 function groupRowsByDate(
   rows: TransactionRow[],
   locale: Locale,
-  t: (key: 'transactionsList.today' | 'transactionsList.yesterday') => string
+  t: (key: 'transactionsList.today' | 'transactionsList.yesterday') => string,
+  todayStr: string
 ): TransactionGroup[] {
-  const todayStr = todayIsoDate()
   const yesterdayStr = offsetDate(todayStr, -1)
   const groups: TransactionGroup[] = []
 
@@ -446,7 +445,8 @@ function paramsFromHref(href: string): Awaited<TransactionsPageProps['searchPara
  */
 function preferredScopeHref(
   preferences: UiPreferences,
-  currentParams: Record<string, string | string[] | undefined>
+  currentParams: Record<string, string | string[] | undefined>,
+  today: string
 ) {
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(currentParams)) {
@@ -458,14 +458,13 @@ function preferredScopeHref(
   const { defaultPeriod, defaultAccountIds } = preferences.transactions
 
   if (defaultPeriod === 'last_30_days') {
-    const today = todayIsoDate()
     params.set('date_from', offsetDate(today, -29))
     params.set('date_to', today)
   } else if (defaultPeriod === 'all_time') {
     params.set('date_from', ALL_TIME_FROM)
     params.set('date_to', ALL_TIME_TO)
   } else {
-    params.set('month', currentMonth())
+    params.set('month', today.slice(0, 7))
   }
 
   for (const id of defaultAccountIds) params.append('account_id', id)
@@ -482,6 +481,8 @@ export default async function TransactionsPage({
   const t = (key: TranslationKey, vars?: Record<string, string | number>) =>
     translate(locale, key, vars)
   const errorMessage = typeof params.error === 'string' ? params.error : null
+  // MQ-001: the user's day, not UTC's — presets, defaults and "Today" headers.
+  const today = await getRequestToday()
 
   // ── BR-038: display preferences ───────────────────────────────────────────
   // The landing scope/period only apply to a *bare* URL — the moment any filter
@@ -510,7 +511,7 @@ export default async function TransactionsPage({
   }
 
   if (!canonicalHref && !hasAnyFilterParam && !hasDefaultTransactionScope(preferences)) {
-    canonicalHref = preferredScopeHref(preferences, params)
+    canonicalHref = preferredScopeHref(preferences, params, today)
   }
 
   if (canonicalHref) params = paramsFromHref(canonicalHref)
@@ -540,6 +541,7 @@ export default async function TransactionsPage({
   // all of history by design — so that is what it resolves to, rather than
   // being labelled with a month the results do not have.
   const period = parseTransactionPeriod(params, {
+    today,
     unboundedFallback:
       (selectedPayeeIds.length > 0 || selectedTagIds.length > 0) &&
       !hasPeriodParam(params),
@@ -1084,7 +1086,7 @@ export default async function TransactionsPage({
     }
     return list
   })()
-  const transactionGroups = groupRowsByDate(transactionRows, locale, t)
+  const transactionGroups = groupRowsByDate(transactionRows, locale, t, today)
   // Header/summary counts reflect the whole filtered set (from the RPC), not
   // just the current page.
   const visibleCount = totalCount
@@ -1140,7 +1142,7 @@ export default async function TransactionsPage({
     periodBaseParams.delete(key)
   }
   const periodBaseQuery = periodBaseParams.toString()
-  const periodLabel = formatPeriodLabel(period, locale, ui)
+  const periodLabel = formatPeriodLabel(period, locale, ui, today)
 
   // The mirror image, for the filter bar: the period params on their own. It
   // rebuilds the query from its own staged filters and this, so applying a
@@ -1355,6 +1357,7 @@ export default async function TransactionsPage({
         period={period}
         periodLabel={periodLabel}
         periodBaseQuery={periodBaseQuery}
+        today={today}
       />
 
       {canonicalHref ? <SyncScopeUrl href={canonicalHref} /> : null}

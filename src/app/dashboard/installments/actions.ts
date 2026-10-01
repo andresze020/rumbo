@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { cleanSupabaseActionError as cleanRpcError } from '@/lib/supabase/errors'
+import { getRequestToday } from '@/lib/periods/server'
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 const MAX_DESCRIPTION = 200
@@ -156,6 +157,8 @@ export async function cancelInstallmentPlanAction(formData: FormData) {
 
   const { data: voidedCount, error } = await supabase.rpc('cancel_installment_plan', {
     p_plan_id: planId,
+    // MQ-001: "not yet due" on the user's calendar, not the database's UTC one.
+    p_as_of: await getRequestToday(),
   })
 
   if (error) {

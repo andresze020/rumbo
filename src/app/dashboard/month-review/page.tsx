@@ -38,6 +38,7 @@ import {
   shiftMonth,
   SERIES_PALETTE,
 } from '@/lib/analysis/server'
+import { getRequestToday } from '@/lib/periods/server'
 
 type MonthReviewPageProps = {
   searchParams: Promise<{
@@ -109,7 +110,7 @@ function RateDelta({ diff }: { diff: number | null }) {
 export default async function MonthReviewPage({ searchParams }: MonthReviewPageProps) {
   const params = await searchParams
   const locale = await getLocale()
-  const month = parseMonthParam(params.month)
+  const month = parseMonthParam(params.month, await getRequestToday())
   const prevMonth = shiftMonth(month, -1)
   const ctx = await getHousehold()
   const currency = ctx.household.base_currency

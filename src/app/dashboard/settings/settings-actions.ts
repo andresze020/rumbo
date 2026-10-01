@@ -12,6 +12,7 @@ import {
   TRANSACTION_FORM_FIELDS,
   type UiPreferences,
 } from '@/lib/preferences/shared'
+import { getRequestToday } from '@/lib/periods/server'
 
 async function getAuthContext() {
   const supabase = await createClient()
@@ -184,7 +185,7 @@ export async function saveExchangeRateAction(formData: FormData) {
     redirectWithError('The base currency does not need a rate against itself.')
   }
 
-  const rateDate = rateDateRaw || new Date().toISOString().slice(0, 10)
+  const rateDate = rateDateRaw || (await getRequestToday())
 
   const { error } = await supabase.from('exchange_rates').upsert(
     {

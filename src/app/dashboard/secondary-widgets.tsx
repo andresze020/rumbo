@@ -17,6 +17,7 @@ import {
   type DashboardInsight,
 } from '@/lib/insights/dashboard'
 import type { AccountBalance, BudgetDetailRow } from './page'
+import { getRequestToday } from '@/lib/periods/server'
 
 // 2026-09-26 redesign: money coming in is the only amount in color; money
 // going out reads in normal ink with a minus sign, so a list of bills is not
@@ -139,7 +140,7 @@ export async function DashboardSecondaryWidgets({
 }: DashboardSecondaryWidgetsProps) {
   const supabase = await createClient()
   const selectedMonthDate = `${selectedMonth}-01`
-  const today = new Date().toISOString().slice(0, 10)
+  const today = await getRequestToday()
 
   const [
     { data: expenseCategoryRows, error: expenseCategoriesError },

@@ -25,8 +25,9 @@ function parseNonnegativeAmount(value: FormDataEntryValue | null) {
   return amount
 }
 
-function budgetPath(month: string, params: Record<string, string>) {
-  const searchParams = new URLSearchParams({ month })
+function budgetPath(month: string | null, params: Record<string, string>) {
+  // No month → the page's own default, the user's current month (MQ-001).
+  const searchParams = new URLSearchParams(month ? { month } : {})
 
   for (const [key, value] of Object.entries(params)) {
     searchParams.set(key, value)
@@ -36,9 +37,7 @@ function budgetPath(month: string, params: Record<string, string>) {
 }
 
 function redirectWithError(message: string, month: string | null): never {
-  const safeMonth = month ?? new Date().toISOString().slice(0, 7)
-
-  redirect(budgetPath(safeMonth, { error: message }))
+  redirect(budgetPath(month, { error: message }))
 }
 
 async function getAuthenticatedHousehold() {

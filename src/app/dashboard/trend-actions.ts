@@ -11,6 +11,7 @@ import {
   type TrendPoint as BalanceTrendPoint,
 } from '@/lib/net-worth/trend'
 import type { Locale } from '@/lib/i18n/dictionaries'
+import { getRequestToday } from '@/lib/periods/server'
 
 export type TrendMetric =
   | 'monthly-income'
@@ -97,7 +98,7 @@ export async function getDashboardTrend(
   // RUM-003: monthDates' last entry is always currentMonth (getLastNMonthDates'
   // i=0 case) — snapshotDateForMonth resolves that one point to today instead
   // of an unrealized month-end, same fix as Dashboard/Net worth.
-  const todayIso = new Date().toISOString().slice(0, 10)
+  const todayIso = await getRequestToday()
   const dates = balanceTrendDates(currentMonth, numMonths, todayIso)
   const { data: multiDateBalances } = await supabase.rpc('get_account_balances_as_of_many', {
     p_household_id: householdId,

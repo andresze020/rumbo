@@ -27,6 +27,9 @@ export async function fetchFxRate(
   accountCurrency: string,
   transactionDate: string
 ): Promise<FxResult> {
+  // UTC on purpose (MQ-001 left it): this asks whether the *provider* has
+  // published a file for the date yet, and its files are dated in UTC — not
+  // what day it is for the user.
   const today = new Date().toISOString().slice(0, 10)
   const isFuture = transactionDate > today
   const fetchDate = isFuture ? 'latest' : transactionDate

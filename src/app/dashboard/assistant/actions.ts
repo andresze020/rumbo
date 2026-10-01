@@ -7,6 +7,7 @@ import { getAnthropicClient, ASSISTANT_MODEL } from '@/lib/ai/client'
 import { ASSISTANT_TOOLS, executeAssistantTool } from '@/lib/ai/tools'
 import { buildAnalysisSystemPrompt, buildTransactionDraftSystemPrompt } from '@/lib/ai/prompts'
 import type { TransactionFormAccount, TransactionFormCategory } from '@/app/dashboard/transactions/transaction-form'
+import { getRequestToday } from '@/lib/periods/server'
 
 const MAX_TOOL_ROUNDS = 6
 const MAX_HISTORY_MESSAGES = 20
@@ -79,10 +80,6 @@ async function resolveHouseholdContext(): Promise<
       categories: categories ?? [],
     },
   }
-}
-
-function today() {
-  return new Date().toISOString().slice(0, 10)
 }
 
 function friendlyAssistantError(error: unknown) {
@@ -170,7 +167,7 @@ export async function sendAssistantMessageAction(
 
   try {
     const anthropic = getAnthropicClient()
-    const system = buildAnalysisSystemPrompt({ baseCurrency: context.baseCurrency, today: today() })
+    const system = buildAnalysisSystemPrompt({ baseCurrency: context.baseCurrency, today: await getRequestToday() })
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
       const response = await anthropic.messages.create({
@@ -289,7 +286,7 @@ async function extractTransactionDraft(
 
   const system = buildTransactionDraftSystemPrompt({
     baseCurrency: context.baseCurrency,
-    today: today(),
+    today: await getRequestToday(),
     categories: context.categories,
   })
 

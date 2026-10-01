@@ -34,6 +34,8 @@ import { translate } from '@/lib/i18n/translate'
 import { formatCurrency, formatMonthLabel, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { nativeSelectCls } from '@/lib/form-styles'
+import { getRequestToday } from '@/lib/periods/server'
+import { parseMonthParam } from '@/lib/analysis/server'
 
 type BudgetsPageProps = {
   searchParams: Promise<{
@@ -92,20 +94,6 @@ const fallbackLineColors = [
   '#e05fa0',
   '#8b5cf6',
 ]
-
-function currentMonthParam() {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = String(today.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}`
-}
-
-function parseBudgetMonth(month: string | undefined) {
-  if (!month || !/^\d{4}-\d{2}$/.test(month)) return currentMonthParam()
-  const parsedDate = new Date(`${month}-01T00:00:00.000Z`)
-  if (Number.isNaN(parsedDate.getTime())) return currentMonthParam()
-  return month
-}
 
 function previousMonthParam(month: string) {
   const [year, monthNumber] = month.split('-').map(Number)
@@ -225,7 +213,7 @@ function BudgetKpiCard({
 export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   const params = await searchParams
   const locale = await getLocale()
-  const selectedMonth = parseBudgetMonth(params.month)
+  const selectedMonth = parseMonthParam(params.month, await getRequestToday())
   const selectedMonthDate = `${selectedMonth}-01`
   const previousMonth = previousMonthParam(selectedMonth)
   const previousMonthDate = `${previousMonth}-01`

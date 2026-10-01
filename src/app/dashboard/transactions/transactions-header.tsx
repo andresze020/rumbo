@@ -9,6 +9,8 @@ type TransactionsHeaderProps = {
   periodLabel: string
   /** Every applied filter except the period, as a query string. */
   periodBaseQuery: string
+  /** The user's today (`getRequestToday()`), so presets resolve as the server's do. */
+  today: string
 }
 
 /**
@@ -22,6 +24,7 @@ export function TransactionsHeader({
   period,
   periodLabel,
   periodBaseQuery,
+  today,
 }: TransactionsHeaderProps) {
   const { t } = useLanguage()
 
@@ -37,6 +40,7 @@ export function TransactionsHeader({
         period={period}
         label={periodLabel}
         baseQuery={periodBaseQuery}
+        today={today}
       />
     </header>
   )

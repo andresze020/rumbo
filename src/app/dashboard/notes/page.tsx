@@ -13,11 +13,12 @@ import { FormDialog } from '@/components/form-dialog'
 import { MonthNav } from '@/components/month-nav'
 import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { Callout } from '@/components/callout'
-import { formatIsoDate, formatMonthLabel, todayIsoDateLocal } from '@/lib/format'
+import { formatIsoDate, formatMonthLabel } from '@/lib/format'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { cn } from '@/lib/utils'
+import { getRequestToday } from '@/lib/periods/server'
 
 type NotesPageProps = {
   searchParams: Promise<{
@@ -45,11 +46,6 @@ type NoteRowData = {
 }
 
 const ISO_MONTH = /^\d{4}-\d{2}$/
-
-function currentMonthParam() {
-  const today = new Date()
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
-}
 
 function monthBounds(month: string) {
   const [year, monthNumber] = month.split('-').map(Number)
@@ -94,7 +90,8 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
   // A search is about finding a note, not about a month — so searching, and the
   // explicit "All months" toggle, both widen the range.
   const searchQuery = typeof params.q === 'string' ? params.q.trim() : ''
-  const month = ISO_MONTH.test(params.month ?? '') ? (params.month as string) : currentMonthParam()
+  const today = await getRequestToday()
+  const month = ISO_MONTH.test(params.month ?? '') ? (params.month as string) : today.slice(0, 7)
   const allMonths = params.all === 'true' || searchQuery !== ''
   const isCreating = params.mode === 'create'
   const editNoteId = typeof params.edit === 'string' && !isCreating ? params.edit : null
@@ -187,7 +184,6 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
   })
   // A new note defaults to today when today falls in the viewed month, and to the
   // first of that month otherwise — never to a day the user is not looking at.
-  const today = todayIsoDateLocal()
   const defaultDate =
     allMonths || today.slice(0, 7) === month ? today : `${month}-01`
 

@@ -145,7 +145,10 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
   (PR #66 — the Transactions screen's own period parser: one `TransactionPeriod`
   from the URL feeds the RPC bounds, totals, date headers and the period
   control's label; a separate concern from `periods/month.ts`, not a
-  duplicate), `households/server.ts` (`getHouseholdContext`, PR #66 — read
+  duplicate), `periods/server.ts` (MQ-001 — `getRequestToday()` is **the**
+  server-side "today": the user's zone from the `rumbo-tz` cookie, UTC
+  fallback; never `new Date().toISOString().slice(0, 10)`; client components
+  use `todayIsoDateLocal()`), `households/server.ts` (`getHouseholdContext`, PR #66 — read
   once in the dashboard layout to feed the app-bar household selector on every
   screen), `perf/` (RUM-001 — query instrumentation, **off unless
   `RUMBO_PERF=1`**; `collector.ts` wraps the Supabase client's `fetch`, so no

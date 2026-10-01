@@ -26,13 +26,15 @@ export function DebtCreateForm({
   currencyOptions,
   defaultCurrency,
   linkableLiabilityAccounts,
+  today,
 }: {
   baseCurrency: string
   currencyOptions: CurrencyOption[]
   defaultCurrency: string
   linkableLiabilityAccounts: LiabilityAccount[]
+  /** The user's today (`getRequestToday()`), the default balance date. */
+  today: string
 }) {
-  const today = new Date().toISOString().slice(0, 10)
 
   const [existingAccountId, setExistingAccountId] = useState('')
   const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency)

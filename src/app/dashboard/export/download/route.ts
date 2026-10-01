@@ -1,7 +1,8 @@
 import { type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { buildCsv, todayDateStamp } from '@/lib/exports/csv'
+import { buildCsv } from '@/lib/exports/csv'
 import { buildXlsx, type XlsxColumn } from '@/lib/exports/xlsx'
+import { getRequestToday } from '@/lib/periods/server'
 
 const EXPORT_TYPES = ['transactions', 'accounts', 'categories'] as const
 const EXPORT_FORMATS = ['csv', 'xlsx'] as const
@@ -462,7 +463,7 @@ async function buildAccountsTable({
     'get_account_balances',
     {
       p_household_id: household.id,
-      p_as_of_date: todayDateStamp(),
+      p_as_of_date: await getRequestToday(),
     }
   )
 
@@ -615,7 +616,7 @@ export async function GET(request: NextRequest) {
           ? await buildAccountsTable({ household, supabase })
           : await buildCategoriesTable({ household, supabase })
 
-    const filename = `rumbo-${exportType}-${todayDateStamp()}.${format}`
+    const filename = `rumbo-${exportType}-${await getRequestToday()}.${format}`
 
     return format === 'xlsx'
       ? xlsxResponse(buildXlsx(table), filename)

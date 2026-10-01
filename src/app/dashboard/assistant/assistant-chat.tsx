@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Callout } from '@/components/callout'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, todayIsoDateLocal } from '@/lib/format'
 import {
   TransactionForm,
   type TransactionFormAccount,
@@ -40,10 +40,6 @@ type AssistantChatProps = {
   categories: TransactionFormCategory[]
   payees: PayeeOption[]
   returnTo?: string
-}
-
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10)
 }
 
 function newId() {
@@ -241,7 +237,7 @@ export function AssistantChat({ baseCurrency, accounts, categories, payees, retu
                 baseCurrency={baseCurrency}
                 categories={categories}
                 payees={payees}
-                defaultDate={reviewDraft.transaction_date || todayIsoDate()}
+                defaultDate={reviewDraft.transaction_date || todayIsoDateLocal()}
                 defaultType={reviewDraft.transaction_type}
                 defaultAmount={String(reviewDraft.amount)}
                 defaultCategoryId={reviewDraft.suggested_category_id ?? undefined}

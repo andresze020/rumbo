@@ -73,6 +73,9 @@ export async function refreshExchangeRatesAction(): Promise<RefreshRatesResult> 
 
   if (!currencies.length) return { status: 'fresh', ...empty }
 
+  // UTC on purpose (MQ-001 left it, like `fetchFxRate`): "fresh" means the
+  // provider's file for its current day, and those files are dated in UTC. The
+  // user's local date would never match a stored rate_date east of UTC.
   const today = new Date().toISOString().slice(0, 10)
 
   const { data: todaysRates } = await supabase

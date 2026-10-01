@@ -32,6 +32,8 @@ type PeriodSelectorProps = {
   label: string
   /** Every applied filter *except* the period, as a query string. */
   baseQuery: string
+  /** The server's resolved today (the user's zone), so presets match its own. */
+  today: string
 }
 
 const PRESET_LABELS: { preset: PeriodPreset; label: string }[] = [
@@ -48,7 +50,7 @@ const optionCls =
 const optionActiveCls = 'border-primary bg-primary text-primary-foreground shadow-sm'
 const optionIdleCls = 'bg-background hover:bg-muted'
 
-export function PeriodSelector({ period, label, baseQuery }: PeriodSelectorProps) {
+export function PeriodSelector({ period, label, baseQuery, today }: PeriodSelectorProps) {
   const ui = useUiTranslation()
   const { locale } = useLanguage()
   const router = useRouter()
@@ -100,7 +102,7 @@ export function PeriodSelector({ period, label, baseQuery }: PeriodSelectorProps
   // grid stands down — exactly one control is lit, never two and never none.
   const matchedPreset =
     PRESET_LABELS.find((option) =>
-      resolvesTheSame(period, presetPeriod(option.preset))
+      resolvesTheSame(period, presetPeriod(option.preset, today))
     )?.preset ?? null
 
   return (
@@ -143,7 +145,7 @@ export function PeriodSelector({ period, label, baseQuery }: PeriodSelectorProps
                   <button
                     key={option.preset}
                     type="button"
-                    onClick={() => go(presetPeriod(option.preset))}
+                    onClick={() => go(presetPeriod(option.preset, today))}
                     aria-pressed={isCurrent}
                     className={cn(
                       optionCls,
@@ -186,17 +188,19 @@ export function PeriodSelector({ period, label, baseQuery }: PeriodSelectorProps
                   value={customFrom}
                   onChange={setCustomFrom}
                   locale={locale}
+                  today={today}
                 />
                 <DateField
                   label={ui('To')}
                   value={customTo}
                   onChange={setCustomTo}
                   locale={locale}
+                  today={today}
                 />
                 <button
                   type="button"
                   disabled={!customIsValid}
-                  onClick={() => go(customPeriod(customFrom, customTo))}
+                  onClick={() => go(customPeriod(customFrom, customTo, today))}
                   className={cn(
                     optionCls,
                     'w-full border-primary bg-primary text-primary-foreground shadow-sm hover:opacity-90 disabled:pointer-events-none disabled:opacity-50'
@@ -282,17 +286,19 @@ function DateField({
   value,
   onChange,
   locale,
+  today,
 }: {
   label: string
   value: string
   onChange: (next: string) => void
   locale: Parameters<typeof formatPeriodDate>[1]
+  today: string
 }) {
   return (
     <div className="relative flex h-13 items-center justify-between gap-3 rounded-xl border bg-background px-3 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/40">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       <span className="truncate text-sm font-medium text-foreground">
-        {value ? formatPeriodDate(value, locale) : '—'}
+        {value ? formatPeriodDate(value, locale, today) : '—'}
       </span>
       <input
         type="date"
