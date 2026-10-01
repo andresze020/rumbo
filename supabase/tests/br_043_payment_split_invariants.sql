@@ -34,11 +34,16 @@ select
     ) > 0.005
   ) as passed;
 
--- 2. `other` holds only spend from transactions with no entry at all on a cash
---    account or a card. Stated over ALL of a transaction's entries rather than
---    the one the function picks, so it does not re-implement the attribution.
---    A refund credited to a card or checking account must net that bucket, not
---    land in `other` as a negative amount (the 2026-09-30 finding).
+-- 2. `other` holds only spend whose SOURCE is neither a cash account nor a card.
+--    A transaction's source entries are its negative ones (where the money
+--    left); a refund has none, so its source is the entries it credited. Stated
+--    over the set of source entries rather than the single one the function
+--    picks, so it does not re-implement the attribution. A refund credited to a
+--    card or checking account must net that bucket, not land in `other` as a
+--    negative amount (the 2026-09-30 finding); a transfer cost paid from an
+--    investment account into checking is correctly `other`, because only its
+--    source counts. Out of scope: one transaction paid from both a cash/card
+--    account and another kind at once — the function then picks the larger.
 with params as (
   select '__HOUSEHOLD_ID__'::uuid as household_id
 ),
@@ -87,6 +92,15 @@ expected_other as (
       on acc.id = te.account_id
     where te.transaction_id = a.transaction_id
       and acc.account_type in ('cash', 'checking', 'savings', 'credit_card', 'debt')
+      and (
+        te.amount_account_currency < 0
+        or not exists (
+          select 1
+          from public.transaction_entries src
+          where src.transaction_id = a.transaction_id
+            and src.amount_account_currency < 0
+        )
+      )
   )
   group by a.budget_month
 )
