@@ -42,7 +42,7 @@
 | [MQ-014](#mq-014--dashboard-de-mes-nuevo-cinco-empty-states-seguidos) | P2 | ✅ Hecho (`fix/mq-014-quiet-empty-months`) | UX | Dashboard / Budgets / Goals | Mes sin actividad = cinco tarjetas vacías seguidas; KPIs en cero empujan el empty state fuera de la vista. |
 | [MQ-015](#mq-015--payees-cuatro-acciones-por-fila) | P2 | ✅ Hecho (`fix/mq-015-payee-row-menu`) | UI | Payees | Cuatro acciones por fila truncan el nombre y parten el meta en tres líneas. |
 | [MQ-016](#mq-016--categories-kpi-filtros-y-acciones-ambiguas) | P2 | ✅ Hecho (`fix/mq-016-categories-clarity`) | UX | Categories | KPI "Active" no sigue el filtro, tabs truncadas, icono `←\|` sin explicación, chevron con doble función. |
-| [MQ-017](#mq-017--accounts-delta-neutro-en-verde-e-indicador-de-swipe-sobre-el-saldo) | P2 | Abierto | UI | Accounts | "↑ 0,0 %" en verde; el indicador de swipe "‹" se dibuja encima del saldo. |
+| [MQ-017](#mq-017--accounts-delta-neutro-en-verde-e-indicador-de-swipe-sobre-el-saldo) | P2 | ✅ Hecho (`fix/mq-017-accounts-long-names`) | UI | Accounts | "↑ 0,0 %" en verde; el indicador de swipe "‹" se dibuja encima del saldo. |
 | [MQ-018](#mq-018--more-lista-plana-de-20-ítems) | P3 | Abierto | UX | More | Lista plana de 20+ ítems que repite las tabs de la bottom nav. |
 | [MQ-019](#mq-019--budgets-fila-de-línea-y-detalle-poco-legibles) | P3 | Abierto | UX | Budgets | Fila colapsada sin el planificado, detalle en 5 tiles apilados, copy "0 over budget", banner persistente. |
 | [MQ-020](#mq-020--recurring-semántica-de-auto-y-secciones-duplicadas) | P3 | Abierto | UX | Recurring | Plantillas "Auto" vencidas sin postear, chips que envuelven, "Upcoming" y "Upcoming occurrences" duplicadas. |
@@ -1115,6 +1115,15 @@ No cambies jerarquía ni tipos de categorías. Textos nuevos vía i18n-scribe.
 ---
 
 ### MQ-017 — Accounts: delta neutro en verde e indicador de swipe sobre el saldo
+
+> ✅ Hecho el 2026-10-01 — (1) El delta 0 gris y sin flecha ya lo resolvió
+> MQ-005. (2) La app no tiene swipe en ninguna fila (Accounts, Payees ni
+> otra; solo long-press en Transactions): el "‹" en un círculo del video es el
+> indicador del gesto "atrás" de Android al arrastrar desde el borde, fuera
+> del control de la app. Sin cambio. (3) Bajo `sm` la fila de una cuenta pone
+> el nombre en la primera línea a todo el ancho (hasta dos líneas) y el saldo
+> en la segunda, alineado a la derecha junto al subtítulo; a 360 px el nombre
+> pasa de 84 px a 226 px y ya no se corta. Desde `sm` la fila queda como antes.
 
 **Evidencia:** 0:51 (badge), 1:04 y 1:10 (indicador "‹" sobre el saldo de la
 primera cuenta). **Categoría:** UI. **BD:** ninguno.

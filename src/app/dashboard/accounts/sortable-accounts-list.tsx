@@ -98,6 +98,7 @@ function AccountRow({
   ]
     .filter(Boolean)
     .join(' · ')
+  const hasSecondLine = Boolean(subtitle || row.treatTransfersAsExpense)
 
   return (
     // An open row tints, so its detail panel reads as part of that account and
@@ -122,17 +123,23 @@ function AccountRow({
             className={cn('size-9', row.isArchived && 'opacity-60 grayscale')}
           />
 
-          <span className="min-w-0 flex-1">
+          {/* MQ-017 — on a phone a COP balance beside the name left it ~85 px
+              at 360 px, so real names ("Cuenta de ahorros Bancol…") were cut
+              to the bank. Below `sm` the name takes the full first line (two
+              lines before an ellipsis) and the balance moves to the second,
+              still right-aligned so the amounts keep their column. From `sm`
+              up the balance sits beside the name as before. */}
+          <span className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-3">
             <span
               className={cn(
-                'block truncate text-sm font-medium',
+                'col-span-2 line-clamp-2 text-sm font-medium leading-snug [overflow-wrap:anywhere] sm:col-span-1 sm:self-center',
                 row.isArchived && 'text-muted-foreground'
               )}
             >
               {row.name}
             </span>
-            {subtitle || row.treatTransfersAsExpense ? (
-              <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
+            {hasSecondLine ? (
+              <span className="col-start-1 row-start-2 mt-0.5 flex min-w-0 items-center gap-1.5 self-start">
                 {subtitle ? (
                   <span className="truncate text-xs text-muted-foreground">
                     {subtitle}
@@ -147,38 +154,44 @@ function AccountRow({
                 ) : null}
               </span>
             ) : null}
-          </span>
 
-          <span className="flex shrink-0 flex-col items-end leading-tight">
-            <BalanceAmount
-              label={row.balanceLabel}
-              amount={row.balanceAmount}
-              className="text-sm sm:text-[15px]"
-            />
-            {row.baseCurrencyLabel ? (
-              <span className="text-[11px] text-muted-foreground">
-                ≈ {row.baseCurrencyLabel}
-              </span>
-            ) : null}
-            {/* BR-030: on a card with a cycle, the running balance alone cannot
-                answer "what do I owe next" — so the payable figure and its due
-                date stay on the row even though the plain balance caption went. */}
-            {cycle ? (
-              <span
-                className={cn(
-                  'text-[11px]',
-                  cycle.isOverdue
-                    ? 'font-semibold text-rose-600 dark:text-rose-400'
-                    : 'text-muted-foreground'
-                )}
-              >
-                <span className="font-medium text-foreground">
-                  {cycle.payableLabel}
-                </span>{' '}
-                {t('accounts.cyclePayableDueShort')} {cycle.closedDueLabel}
-                {cycle.isOverdue ? ` · ${t('accounts.cycleOverdue')}` : ''}
-              </span>
-            ) : null}
+            <span
+              className={cn(
+                'col-start-2 row-start-2 mt-0.5 flex flex-col items-end self-start leading-tight sm:row-start-1 sm:mt-0 sm:self-center',
+                // Beside the name and its subtitle, centred on both.
+                hasSecondLine && 'sm:row-span-2'
+              )}
+            >
+              <BalanceAmount
+                label={row.balanceLabel}
+                amount={row.balanceAmount}
+                className="text-sm sm:text-[15px]"
+              />
+              {row.baseCurrencyLabel ? (
+                <span className="text-[11px] text-muted-foreground">
+                  ≈ {row.baseCurrencyLabel}
+                </span>
+              ) : null}
+              {/* BR-030: on a card with a cycle, the running balance alone cannot
+                  answer "what do I owe next" — so the payable figure and its due
+                  date stay on the row even though the plain balance caption went. */}
+              {cycle ? (
+                <span
+                  className={cn(
+                    'text-[11px]',
+                    cycle.isOverdue
+                      ? 'font-semibold text-rose-600 dark:text-rose-400'
+                      : 'text-muted-foreground'
+                  )}
+                >
+                  <span className="font-medium text-foreground">
+                    {cycle.payableLabel}
+                  </span>{' '}
+                  {t('accounts.cyclePayableDueShort')} {cycle.closedDueLabel}
+                  {cycle.isOverdue ? ` · ${t('accounts.cycleOverdue')}` : ''}
+                </span>
+              ) : null}
+            </span>
           </span>
 
           <ChevronDown
