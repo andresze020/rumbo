@@ -418,12 +418,6 @@ export const en = {
     trackThisDebt: 'Track this debt',
     balance: 'Balance {amount}',
   },
-  debts: {
-    untrackedTitle: 'Liability accounts not in the planner',
-    untrackedDescription: 'Track one as a debt to plan its payoff. Nothing is created or moved: the debt links to the account you already have.',
-    trackThisDebt: 'Track this debt',
-    balance: 'Balance {amount}',
-  },
   goals: {
     totalDescription: 'Of {target} target, in {currency}.',
     totalConverted: '{currencies} goals converted at the latest rate.',
@@ -1041,12 +1035,6 @@ export const es: DeepStringify<typeof en> = {
     trackThisDebt: 'Seguir esta deuda',
     balance: 'Saldo {amount}',
   },
-  debts: {
-    untrackedTitle: 'Cuentas de pasivo fuera del planificador',
-    untrackedDescription: 'Regístrala como deuda para planificar cómo pagarla. No se crea ni se mueve nada: la deuda se vincula a la cuenta que ya tienes.',
-    trackThisDebt: 'Seguir esta deuda',
-    balance: 'Saldo {amount}',
-  },
   goals: {
     totalDescription: 'De una meta de {target}, en {currency}.',
     totalConverted: 'Metas en {currencies} convertidas a la última tasa.',
@@ -1657,12 +1645,6 @@ export const fr: DeepStringify<typeof en> = {
     emptyPeriodTitle: 'Aucune transaction pour {period}',
     emptyPeriodDescription: 'Rien n’a été enregistré sur cette période. Ajoutez-en une ou parcourez tout votre historique.',
     showAllTime: 'Voir tout l’historique',
-  },
-  debts: {
-    untrackedTitle: 'Comptes de passif hors du planificateur',
-    untrackedDescription: 'Suivez-en un comme dette pour planifier son remboursement. Rien n’est créé ni déplacé : la dette est liée au compte existant.',
-    trackThisDebt: 'Suivre cette dette',
-    balance: 'Solde {amount}',
   },
   debts: {
     untrackedTitle: 'Comptes de passif hors du planificateur',
