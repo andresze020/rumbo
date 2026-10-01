@@ -134,6 +134,24 @@
     /* No grey flash box around tapped controls, and no 300ms wait before a tap
        is delivered — both read as "web page" on a phone. */
     -webkit-tap-highlight-color: transparent;
+    /* The same rule as `body` above, where Chromium reads it: the browser only
+       takes `overscroll-behavior` for the viewport from the root element, so
+       on `body` alone pull-to-refresh still fired (MQ-002). */
+    overscroll-behavior-y: none;
+  }
+  /*
+   * The dashboard's document never scrolls: the shell is one viewport tall
+   * and `#app-scroll` is the only scroller (docs/features/mobile-app-shell.md).
+   * Anything that still makes the document taller than the screen — a popup
+   * portalled into `body`, an `absolute` box with nowhere to anchor — would
+   * otherwise let a drag on the top bar or the nav move the whole shell,
+   * leaving the bars half off-screen over an empty band (MQ-002). Only the
+   * layout viewport is locked: pinch zoom and its panning are the visual
+   * viewport, which this does not touch. `:has()` keeps `/login` and the
+   * other document-style pages scrolling normally.
+   */
+  html:has(#app-scroll) {
+    overflow: hidden;
   }
   /*
    * In-app text size. Percentages, not pixels, so a reader who has already
