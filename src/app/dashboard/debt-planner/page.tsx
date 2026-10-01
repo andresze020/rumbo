@@ -495,12 +495,12 @@ export default async function DebtPlannerPage({ searchParams }: DebtPlannerPageP
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums text-rose-600 dark:text-rose-400">
+                    <td className="px-4 py-3 text-right tabular-nums text-rose-600 dark:text-rose-400">
                       {formatCurrency(d.balance, currency)}
                     </td>
                     <td
                       className={cn(
-                        'px-4 py-3 text-right font-mono tabular-nums',
+                        'px-4 py-3 text-right tabular-nums',
                         rateColorClass(annualRate)
                       )}
                     >
@@ -508,7 +508,7 @@ export default async function DebtPlannerPage({ searchParams }: DebtPlannerPageP
                         ? `${new Intl.NumberFormat('en-CA', { maximumFractionDigits: 1 }).format(annualRate)}%`
                         : '—'}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
+                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                       {formatCurrency(d.minPayment, currency)}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums sm:px-5">

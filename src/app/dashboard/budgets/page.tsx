@@ -203,7 +203,7 @@ function BudgetKpiCard({
       </div>
       <p
         className={cn(
-          'mt-3 break-words font-mono text-base font-bold tabular-nums md:text-xl',
+          'mt-3 break-words text-base font-bold tabular-nums md:text-xl',
           valueClassName
         )}
       >
@@ -667,7 +667,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                   return (
                     <div key={row.key} className="rounded-lg border bg-background p-2.5">
                       <p className="text-[11px] font-medium text-muted-foreground">{row.label}</p>
-                      <p className="mt-1 font-mono text-sm font-bold tabular-nums">
+                      <p className="mt-1 text-sm font-bold tabular-nums">
                         {formatCurrency(row.value, budgetCurrency)}
                       </p>
                       {/* Share and hint are separate text nodes on purpose: the

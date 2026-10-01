@@ -57,7 +57,7 @@ function HeroStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 lg:border-l lg:border-white/20 lg:pl-7 lg:text-right">
       <p className="text-[10.5px] text-white/75">{label}</p>
-      <p className="mt-1 break-words font-mono text-sm font-semibold tabular-nums sm:text-base lg:whitespace-nowrap">
+      <p className="mt-1 break-words text-sm font-semibold tabular-nums sm:text-base lg:whitespace-nowrap">
         {value}
       </p>
     </div>
@@ -89,7 +89,7 @@ export function NetWorthHero({
           <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">
             {labels.netWorth} · {monthLabel}
           </p>
-          <p className="mt-1.5 break-words font-mono text-3xl font-bold tracking-tight tabular-nums sm:text-4xl">
+          <p className="mt-1.5 break-words text-3xl font-bold tracking-tight tabular-nums sm:text-4xl">
             {formatCurrency(netWorth, currency)}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2.5">

@@ -37,7 +37,7 @@
 | [MQ-009](#mq-009--skeletons-en-cada-navegación-incluida-una-página-estática) | P2 | Abierto | Performance | Navegación | Skeleton de 0,5–2 s en cada módulo, incluso en More (estático); "Loading form…" en blanco; skeleton de Budgets no coincide con el resultado. |
 | [MQ-010](#mq-010--sheets-con-teclado-autofocus-que-tapa-el-formulario) | P2 | ✅ Hecho (`fix/mq-010-no-keyboard-on-open`) | UX | Debts / Goals / Budgets | El autofocus abre el teclado al instante y tapa casi todo el formulario. |
 | [MQ-011](#mq-011--debts-no-reconoce-las-cuentas-de-pasivo-existentes) | P2 | ✅ Hecho (`fix/mq-011-track-existing-liabilities`) | UX | Debts | Debts muestra 0 deudas en rojo mientras existe una cuenta tipo Debt con saldo; no ofrece vincularla. |
-| [MQ-012](#mq-012--tipografía-monoespaciada-en-montos) | P2 | Abierto | UI | Debts / Budgets / Goals | Montos en `font-mono` con caracteres espaciados, distinto al resto de la app. |
+| [MQ-012](#mq-012--tipografía-monoespaciada-en-montos) | P2 | ✅ Hecho (`fix/mq-012-proportional-amounts`) | UI | Debts / Budgets / Goals | Montos en `font-mono` con caracteres espaciados, distinto al resto de la app. |
 | [MQ-013](#mq-013--símbolo--para-montos-en-cop-y-fecha-ddmmyyyy-con-ui-en-inglés) | P2 | Abierto | UX | Formularios multi-moneda | Montos en COP con prefijo "$"; inputs de fecha nativos en `dd/mm/yyyy` con la UI en inglés. |
 | [MQ-014](#mq-014--dashboard-de-mes-nuevo-cinco-empty-states-seguidos) | P2 | Abierto | UX | Dashboard / Budgets / Goals | Mes sin actividad = cinco tarjetas vacías seguidas; KPIs en cero empujan el empty state fuera de la vista. |
 | [MQ-015](#mq-015--payees-cuatro-acciones-por-fila) | P2 | Abierto | UI | Payees | Cuatro acciones por fila truncan el nombre y parten el meta en tres líneas. |
@@ -819,6 +819,11 @@ i18n-scribe.
 ---
 
 ### MQ-012 — Tipografía monoespaciada en montos
+
+> ✅ Hecho el 2026-10-01 — `font-mono` fuera de Debts (página y tarjeta),
+> Budgets (KPIs, filas, detalle), Goals, Categories, Debt planner y el hero de
+> Net worth; todos conservan `tabular-nums` sobre la sans base. Solo el display
+> de la calculadora de `amount-input.tsx` sigue en mono.
 
 **Evidencia:** 1:12 (Debts), 2:17–2:45 (Budgets), 3:26 (Goals).
 **Categoría:** UI. **BD:** ninguno.
