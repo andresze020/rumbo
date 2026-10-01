@@ -77,7 +77,7 @@ export function GoalCard({
         </div>
       </div>
 
-      <p className="mt-3.5 font-mono text-2xl font-bold tabular-nums">
+      <p className="mt-3.5 text-2xl font-bold tabular-nums">
         {formatCurrency(currentAmount, goal.currency_code, locale)}
       </p>
 

@@ -356,13 +356,13 @@ export default async function CategoriesPage({
       <div className="grid grid-cols-2 gap-2 md:hidden">
         <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
           <p className="mb-1 text-[10px] text-muted-foreground">{ui('Active')}</p>
-          <p className="font-mono text-sm font-bold leading-snug tabular-nums">
+          <p className="text-sm font-bold leading-snug tabular-nums">
             {activeCategories.length}
           </p>
         </div>
         <div className="rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03]">
           <p className="mb-1 text-[10px] text-muted-foreground">{ui('Subcategories')}</p>
-          <p className="font-mono text-sm font-bold leading-snug tabular-nums">
+          <p className="text-sm font-bold leading-snug tabular-nums">
             {subcategoryCount}
           </p>
         </div>
@@ -552,7 +552,7 @@ export default async function CategoriesPage({
               {typeCounts.map((type) => (
                 <div key={type.value} className="flex items-center justify-between gap-3 px-4 py-3">
                   <span className="text-xs font-medium text-muted-foreground">{ui(type.label)}</span>
-                  <span className="font-mono text-sm font-bold tabular-nums">{type.count}</span>
+                  <span className="text-sm font-bold tabular-nums">{type.count}</span>
                 </div>
               ))}
             </div>
