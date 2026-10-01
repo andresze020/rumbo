@@ -976,6 +976,9 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     prevMonthBalance !== null && prevMonthBalance !== 0
       ? ((totalBalance - prevMonthBalance) / Math.abs(prevMonthBalance)) * 100
       : null
+  // MQ-005: a change that shows as 0.0% is no change — grey and no arrow, not
+  // a green "↑ 0.0%".
+  const prevMonthDeltaFlat = prevMonthDelta !== null && Math.abs(prevMonthDelta) < 0.05
   const monthLabel = new Date().toLocaleDateString(locale, { month: 'short', year: 'numeric' })
   const selectedEditRow = displayRows.find(
     (row) => row.metadata.id === editAccountId
@@ -1091,12 +1094,14 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
           {!showArchived && prevMonthDelta !== null ? (
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                prevMonthDelta >= 0
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
-                  : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+                prevMonthDeltaFlat
+                  ? 'bg-muted text-muted-foreground'
+                  : prevMonthDelta > 0
+                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+                    : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400'
               }`}
             >
-              {prevMonthDelta >= 0 ? '↑' : '↓'}{' '}
+              {prevMonthDeltaFlat ? '' : prevMonthDelta > 0 ? '↑ ' : '↓ '}
               {Math.abs(prevMonthDelta).toFixed(1)}% {translate(locale, 'accounts.vsPrevMonth')}
             </span>
           ) : null}

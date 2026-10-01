@@ -8,6 +8,7 @@ import { balanceTrendDates, balanceTrendFromRows, type BalanceTrendRow } from '@
 import { computeValuation, selectNetWorthAccounts } from '@/lib/net-worth/valuation'
 import { monthEndDate, snapshotDateForMonth } from '@/lib/periods/month'
 import { buttonVariants } from '@/components/ui/button'
+import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import {
   Card,
   CardContent,
@@ -28,10 +29,11 @@ import { getLocale } from '@/lib/i18n/server'
 import { translate, type TranslationKey } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { formatCurrency, formatMonthLabel, formatPercent, localeToBcp47 } from '@/lib/format'
-import { healthBreakdown } from '@/lib/health/score'
+import { monthHealth } from '@/lib/health/score'
 import { MonthHealthSummary } from '@/components/month-health-breakdown'
 import { SpendingPaceCard } from '@/components/dashboard/spending-pace-card'
-import { getDailyExpenses } from '@/lib/dashboard/daily-expenses'
+import { getDailyCashFlow } from '@/lib/dashboard/daily-cash-flow'
+import { cashFlowComparison, type CashFlowTotals } from '@/lib/dashboard/month-comparison'
 import { buildSpendingPace } from '@/lib/dashboard/spending-pace'
 import { getHomeChecklist } from '@/lib/home-checklist/server'
 import { MAX_MONTHLY_TIMEFRAME_MONTHS, MONTHLY_TIMEFRAME_OPTIONS } from '@/lib/charts/timeframe-options'
@@ -179,7 +181,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { data: budgetRows, error: budgetError },
     { count: nonOpeningTransactionCount },
     { count: needsReviewCount },
-    dailyExpenses,
+    dailyCashFlow,
   ] = await Promise.all([
     // RUM-006: get_account_balances has no lower date bound, so one call per
     // date re-aggregated the whole ledger each time; get_account_balances_as_of_many
@@ -218,9 +220,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .is('deleted_at', null)
       .gte('transaction_date', selectedMonthDate)
       .lte('transaction_date', monthEndDate(selectedMonth)),
-    // Spending pace (2026-09-26): expense per day for last month and this
-    // one, the same allocations get_monthly_dashboard_summary adds up.
-    getDailyExpenses(supabase, household.id, prevMonthDate, monthEndDate(selectedMonth)),
+    // Spending pace (2026-09-26) and the same-day Cash flow deltas (MQ-005):
+    // income and expense per day for last month and this one, the same
+    // allocations get_monthly_dashboard_summary adds up.
+    getDailyCashFlow(supabase, household.id, prevMonthDate, monthEndDate(selectedMonth)),
   ])
   const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as MultiDateAccountBalance[])
   const accountBalances = balancesByDate.get(selectedSnapshotDate) ?? []
@@ -257,12 +260,28 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const monthlyIncome = Number(monthlySummary?.monthly_income ?? 0)
   const monthlyExpenses = Number(monthlySummary?.monthly_expenses ?? 0)
   const monthlySavings = Number(monthlySummary?.monthly_savings ?? 0)
-  const prevIncome = prevSummary ? Number(prevSummary.monthly_income) : null
-  const prevExpenses = prevSummary ? Number(prevSummary.monthly_expenses) : null
-  const prevSavings = prevSummary ? Number(prevSummary.monthly_savings) : null
   const hasMonthlyActivity =
     Number(monthlySummary?.income_transaction_count ?? 0) > 0 ||
     Number(monthlySummary?.expense_transaction_count ?? 0) > 0
+
+  // ── What the Cash flow deltas compare against (MQ-005). A closed month: the
+  // whole previous month. The open month: the previous month up to the same
+  // day — a day of October against all of September read "↓ 100%" on every
+  // line. A month with nothing posted gets no delta at all.
+  const comparison = cashFlowComparison(selectedMonth, todayIso, dailyCashFlow)
+  let comparePrevious: CashFlowTotals | null = null
+  if (hasMonthlyActivity && comparison.kind === 'same-day' && !dailyCashFlow.error) {
+    comparePrevious = comparison.previous
+  } else if (hasMonthlyActivity && comparison.kind === 'full-month' && prevSummary) {
+    comparePrevious = {
+      income: Number(prevSummary.monthly_income),
+      expenses: Number(prevSummary.monthly_expenses),
+      savings: Number(prevSummary.monthly_savings),
+    }
+  }
+  const prevIncome = comparePrevious?.income ?? null
+  const prevExpenses = comparePrevious?.expenses ?? null
+  const prevSavings = comparePrevious?.savings ?? null
 
   const valuation = computeValuation(selectNetWorthAccounts(balances))
   const { totalAssets, totalLiabilities, netWorth, projectedNetWorth } = valuation
@@ -273,10 +292,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const netWorthDeltaPct = prevNetWorth !== 0 ? (netWorth - prevNetWorth) / Math.abs(prevNetWorth) : null
 
   // ── Health score (BR-021): shared real formula (see lib/health/score). ─────
-  const health = healthBreakdown({
+  // MQ-005: null — "Not enough data yet" — for a month with nothing posted.
+  const health = monthHealth({
     savingsRate: monthlySummary?.savings_rate != null ? Number(monthlySummary.savings_rate) : null,
     hasBudget,
     budgetPercent: totalBudgetPercent,
+    hasActivity: hasMonthlyActivity,
   })
 
   const bcp47 = localeToBcp47(locale)
@@ -309,13 +330,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     ? { amount: netWorth - prevNetWorth, pct: netWorthDeltaPct }
     : null
 
-  // "vs Aug": the comparison month, short, in the reader's language.
+  // "vs Aug": the comparison month, short, in the reader's language. The
+  // net-worth pill always compares month-ends; Cash flow says "same day" when
+  // that is what it compared (MQ-005).
   const vsLabel = t('dashboard.vsMonth', { month: monthName(prevMonthDate, 'short') })
+  const cashFlowVsLabel =
+    comparison.kind === 'same-day'
+      ? t('dashboard.vsSameDayInMonth', { month: monthName(prevMonthDate, 'short') })
+      : vsLabel
 
   // ── Spending pace (2026-09-26). Shown only when its running total lands on
   // exactly the "Spent" figure from get_monthly_dashboard_summary: two
   // different numbers for the same thing on one screen is worse than no chart.
-  const pace = dailyExpenses.error ? null : buildSpendingPace(selectedMonth, todayIso, dailyExpenses.amounts)
+  const pace = dailyCashFlow.error ? null : buildSpendingPace(selectedMonth, todayIso, dailyCashFlow.expenses)
   const paceSpent = pace ? pace.current[pace.current.length - 1] ?? 0 : 0
   const paceAgrees = pace !== null && Math.abs(paceSpent - monthlyExpenses) < 0.01
   if (pace && !paceAgrees) {
@@ -405,6 +432,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               with Month health (BR-021 / RUM-009) as its footer — the full
               breakdown stays one click away under "Details". Without a pace
               chart the cash-flow card takes the whole row. */}
+          {/* MQ-014: a month with nothing posted gets one "New month" card
+              (below) instead of a flat pace chart and a cash flow of zeros. */}
+          {hasMonthlyActivity ? (
           <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] [&>*]:min-w-0">
             {pace && paceAgrees ? (
               <SpendingPaceCard
@@ -430,17 +460,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               income={{
                 label: t('dashboard.cashFlowIncome'),
                 amount: monthlyIncome,
-                delta: renderPctDelta(monthlyIncome, prevIncome, locale, vsLabel),
+                delta: renderPctDelta(monthlyIncome, prevIncome, locale, cashFlowVsLabel),
               }}
               spent={{
                 label: t('dashboard.cashFlowSpent'),
                 amount: monthlyExpenses,
-                delta: renderPctDelta(monthlyExpenses, prevExpenses, locale, vsLabel, true),
+                delta: renderPctDelta(monthlyExpenses, prevExpenses, locale, cashFlowVsLabel, true),
               }}
               saved={{
                 label: t('dashboard.cashFlowSaved'),
                 amount: monthlySavings,
-                delta: renderPctDelta(monthlySavings, prevSavings, locale, vsLabel),
+                delta: renderPctDelta(monthlySavings, prevSavings, locale, cashFlowVsLabel),
                 tone: monthlySavings < 0 ? 'negative' : 'default',
               }}
               spentShare={spentShare}
@@ -464,12 +494,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               }
             />
           </div>
-
-          {!hasMonthlyActivity ? (
-            <Callout variant="info" className="border-dashed text-muted-foreground">
-              {t('dashboard.noActivity', { month: formatMonthLabel(selectedMonth, locale) })}
-            </Callout>
-          ) : null}
+          ) : (
+            <section className="rounded-2xl border border-dashed bg-card/50 p-5 shadow-sm shadow-black/[0.03]">
+              <h2 className="text-base font-semibold">
+                {t('dashboard.newMonthTitle', { month: formatMonthLabel(selectedMonth, locale) })}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t('dashboard.noActivity', { month: formatMonthLabel(selectedMonth, locale) })}{' '}
+                {t('dashboard.newMonthBody')}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {/* Opens the quick-add dialog in place. A link to
+                    Transactions with `mode=create` only landed on the list:
+                    nothing reads that param. */}
+                <GlobalAddTransactionButton className={buttonVariants({ size: 'sm' })}>
+                  {t('dashboard.newMonthAdd')}
+                </GlobalAddTransactionButton>
+                <Link href="/dashboard/recurring" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                  {t('dashboard.newMonthRecurring')}
+                </Link>
+                {!hasBudget ? (
+                  <Link
+                    href={`/dashboard/budgets?month=${selectedMonth}`}
+                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  >
+                    {t('dashboard.newMonthBudget')}
+                  </Link>
+                ) : null}
+              </div>
+            </section>
+          )}
 
           {/* Budget, category breakdown, upcoming bills, insights, debts,
               goals, recent activity — RUM-005: streams in behind its own

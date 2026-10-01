@@ -170,6 +170,9 @@ export function MultiSelectChip({
             />
             <input
               type="search"
+              // A filter over this list's own options, not a form field the
+              // browser should remember (MQ-007).
+              autoComplete="off"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={ui('Search options')}
