@@ -9,6 +9,7 @@ import { SubmitButton } from '@/components/submit-button'
 import { StatusBadge } from '@/components/status-badge'
 import { formatCurrency, formatIsoDate } from '@/lib/format'
 import type { Locale } from '@/lib/i18n/dictionaries'
+import { useLanguage } from '@/components/language-provider'
 import { toggleRecurringActiveAction, deleteRecurringAction } from './actions'
 
 export type RecurringRowVM = {
@@ -37,72 +38,33 @@ export type RecurringRowVM = {
 export function RecurringRow({ vm, locale }: { vm: RecurringRowVM; locale: Locale }) {
   const [open, setOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const { t } = useLanguage()
+  // An active auto-post template that is due and has not failed: the daily
+  // run (`run_recurring_autopost`, 06:00 UTC) will post it on its next pass.
+  const awaitingAutoPost = vm.is_active && vm.isDue && vm.autoPost && !vm.lastError
 
   return (
     <div className={vm.is_active ? '' : 'bg-muted/20'}>
+      {/* MQ-020 — the name gets its own line and the chips a fixed row of
+          their own under it, so a long name no longer decides whether "Auto"
+          sits beside it or drops to the next line. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-expanded={open}
       >
-        <div className="min-w-0 space-y-0.5">
-          <div className="flex flex-wrap items-center gap-2">
-            {vm.categoryIcon ? (
-              <span className="shrink-0 text-sm leading-none" aria-hidden="true">
-                {vm.categoryIcon}
-              </span>
-            ) : null}
-            <span
-              className={`text-sm font-medium ${vm.is_active ? '' : 'text-muted-foreground'}`}
-            >
-              {vm.name}
+        <div className="flex min-w-0 items-start gap-2">
+          {vm.categoryIcon ? (
+            <span className="shrink-0 text-sm leading-5" aria-hidden="true">
+              {vm.categoryIcon}
             </span>
-            <Badge
-              variant="outline"
-              className={
-                vm.transaction_type === 'income'
-                  ? 'text-xs text-emerald-600 dark:text-emerald-400'
-                  : vm.transaction_type === 'transfer'
-                  ? 'text-xs text-sky-600 dark:text-sky-400'
-                  : 'text-xs text-muted-foreground'
-              }
-            >
-              {vm.transaction_type === 'income'
-                ? 'Income'
-                : vm.transaction_type === 'transfer'
-                ? 'Transfer'
-                : 'Expense'}
-            </Badge>
-            {vm.is_active && vm.isDue ? (
-              <Badge
-                variant="outline"
-                className="text-xs text-amber-600 dark:text-amber-400"
-              >
-                Due
-              </Badge>
-            ) : null}
-            {vm.autoPost ? (
-              <Badge
-                variant="outline"
-                className="text-xs text-sky-600 dark:text-sky-400"
-              >
-                Auto
-              </Badge>
-            ) : null}
-            {vm.lastError ? (
-              <Badge
-                variant="outline"
-                className="text-xs text-red-600 dark:text-red-400"
-              >
-                Auto-post failed
-              </Badge>
-            ) : null}
-            {!vm.is_active ? <StatusBadge status="inactive" /> : null}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {vm.frequencyLabel} · next {formatIsoDate(vm.next_run_date, locale)}
-          </p>
+          ) : null}
+          <span
+            className={`line-clamp-2 text-sm font-medium [overflow-wrap:anywhere] ${vm.is_active ? '' : 'text-muted-foreground'}`}
+          >
+            {vm.name}
+          </span>
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
@@ -114,6 +76,63 @@ export function RecurringRow({ vm, locale }: { vm: RecurringRowVM; locale: Local
             aria-hidden="true"
           />
         </div>
+
+        <div className="col-span-2 flex flex-nowrap items-center gap-1.5 overflow-hidden">
+          <Badge
+            variant="outline"
+            className={
+              vm.transaction_type === 'income'
+                ? 'text-xs text-emerald-600 dark:text-emerald-400'
+                : vm.transaction_type === 'transfer'
+                ? 'text-xs text-sky-600 dark:text-sky-400'
+                : 'text-xs text-muted-foreground'
+            }
+          >
+            {vm.transaction_type === 'income'
+              ? 'Income'
+              : vm.transaction_type === 'transfer'
+              ? 'Transfer'
+              : 'Expense'}
+          </Badge>
+          {vm.is_active && vm.isDue ? (
+            <Badge
+              variant="outline"
+              className="text-xs text-amber-600 dark:text-amber-400"
+            >
+              Due
+            </Badge>
+          ) : null}
+          {/* A failed auto-post is still an auto-post: one chip, not two. */}
+          {vm.lastError ? (
+            <Badge
+              variant="outline"
+              className="text-xs text-red-600 dark:text-red-400"
+            >
+              Auto-post failed
+            </Badge>
+          ) : vm.autoPost ? (
+            <Badge
+              variant="outline"
+              className="text-xs text-sky-600 dark:text-sky-400"
+              title={t('recurringUi.autoExplainer')}
+            >
+              Auto
+            </Badge>
+          ) : null}
+          {!vm.is_active ? <StatusBadge status="inactive" /> : null}
+        </div>
+
+        <p className="col-span-2 text-xs text-muted-foreground">
+          {vm.frequencyLabel} · next {formatIsoDate(vm.next_run_date, locale)}
+        </p>
+
+        {/* "Auto" yet sitting in Due with a Post button read as a contradiction.
+            It is not one: the daily run has not reached it yet. Say so. */}
+        {awaitingAutoPost ? (
+          <p className="col-span-2 text-[11px] text-sky-700 dark:text-sky-400">
+            {t('recurringUi.autoPendingRun')}
+          </p>
+        ) : null}
       </button>
 
       <div
@@ -149,6 +168,10 @@ export function RecurringRow({ vm, locale }: { vm: RecurringRowVM; locale: Local
                 </span>
               </span>
             </div>
+
+            {vm.autoPost ? (
+              <p className="text-xs text-muted-foreground">{t('recurringUi.autoExplainer')}</p>
+            ) : null}
 
             {vm.lastError ? (
               <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">

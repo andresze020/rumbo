@@ -413,6 +413,12 @@ export const en = {
       custom: 'Custom',
     },
   },
+  recurringUi: {
+    autoExplainer:
+      'Auto-post: Rumbo records it by itself on its due date, in a daily run at 06:00 UTC. You can still post it now.',
+    autoPendingRun:
+      'The next daily auto-post run (06:00 UTC) will record it. Post now to record it sooner.',
+  },
   categoriesUi: {
     subcategoryOne: '{count} subcategory',
     subcategoryOther: '{count} subcategories',
@@ -1000,6 +1006,12 @@ export const es: DeepStringify<typeof en> = {
       custom: 'Personalizada',
     },
   },
+  recurringUi: {
+    autoExplainer:
+      'Auto: Rumbo la registra sola en su fecha, en una corrida diaria a las 06:00 UTC. Igual puedes registrarla ahora.',
+    autoPendingRun:
+      'La próxima corrida automática diaria (06:00 UTC) la registrará. Regístrala ahora si la quieres antes.',
+  },
   categoriesUi: {
     subcategoryOne: '{count} subcategoría',
     subcategoryOther: '{count} subcategorías',
@@ -1586,6 +1598,12 @@ export const fr: DeepStringify<typeof en> = {
       retirement: 'Retraite',
       custom: 'Personnalisé',
     },
+  },
+  recurringUi: {
+    autoExplainer:
+      'Auto : Rumbo l’enregistre seul à sa date d’échéance, lors d’un passage quotidien à 06:00 UTC. Vous pouvez quand même l’enregistrer maintenant.',
+    autoPendingRun:
+      'Le prochain passage automatique quotidien (06:00 UTC) l’enregistrera. Enregistrez-le maintenant pour l’avoir plus tôt.',
   },
   categoriesUi: {
     subcategoryOne: '{count} sous-catégorie',

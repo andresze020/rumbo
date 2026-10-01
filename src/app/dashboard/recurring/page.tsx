@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { CalendarClock, Plus, Repeat } from 'lucide-react'
+import { CalendarClock, ChevronDown, Plus, Repeat } from 'lucide-react'
 import { RecurringForm } from './recurring-form'
 import { RecurringRow, type RecurringRowVM } from './recurring-row'
 import { PostForm } from './post-form'
@@ -345,8 +345,18 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
         </Callout>
       ) : null}
 
-      {/* Summary */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* Summary. On a phone three full-width cards filled the first screen
+          (MQ-020), so it gets a compact grid; the cards return from md. */}
+      <div className="grid grid-cols-2 gap-2 md:hidden">
+        <CompactStat label="Active templates" value={String(activeCount)} />
+        <CompactStat label="Due now" value={String(dueCount)} />
+        <CompactStat
+          label="Est. monthly expense"
+          value={formatMoney(monthlyExpenseEstimate)}
+          className="col-span-2"
+        />
+      </div>
+      <div className="hidden gap-4 md:grid md:grid-cols-3">
         <MetricCard
           label="Active templates"
           value={String(activeCount)}
@@ -469,12 +479,20 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
             </section>
           ) : null}
 
+          {/* MQ-020 — right under "Upcoming", this day-by-day projection read
+              as the same list twice. It stays one tap away, folded. */}
           {forecastItems.length ? (
-            <section className="space-y-3">
-              <SectionHeading
-                title="Upcoming occurrences"
-                description={`Projected for the next ${FORECAST_DAYS} days — not posted until due.`}
-              />
+            <details className="group space-y-3">
+              <summary className="flex cursor-pointer list-none items-end justify-between gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                <SectionHeading
+                  title="Upcoming occurrences"
+                  description={`Projected for the next ${FORECAST_DAYS} days — not posted until due.`}
+                />
+                <ChevronDown
+                  className="mb-1 size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+                  aria-hidden="true"
+                />
+              </summary>
               <div className="overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
                 {forecastGroups.map((group) => (
                   <div key={group.date} className="border-b last:border-b-0">
@@ -527,7 +545,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
                   </div>
                 ) : null}
               </div>
-            </section>
+            </details>
           ) : null}
 
           {inactiveRows.length ? (
@@ -567,4 +585,21 @@ function estimateMonthly(amount: number, frequency: string): number {
     default:
       return amount
   }
+}
+
+function CompactStat({
+  label,
+  value,
+  className,
+}: {
+  label: string
+  value: string
+  className?: string
+}) {
+  return (
+    <div className={`rounded-xl border bg-card p-3 shadow-sm shadow-black/[0.03] ${className ?? ''}`}>
+      <p className="mb-1 text-[10px] text-muted-foreground">{label}</p>
+      <p className="truncate text-sm font-bold leading-snug tabular-nums">{value}</p>
+    </div>
+  )
 }
