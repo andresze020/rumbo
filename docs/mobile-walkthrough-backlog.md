@@ -32,7 +32,7 @@
 | [MQ-004](#mq-004--el-botón-del-asistente-tapa-contenido-y-la-tab-more) | P1 | Abierto | UI | Global | El botón flotante del asistente tapa montos, botones de fila y la tab "More". |
 | [MQ-005](#mq-005--comparativas-de-mes-en-curso-contra-mes-completo) | P1 | Abierto | Funcionamiento | Dashboard / Budgets / Accounts | Deltas "−100 % vs Sep", "0,0 %" en verde y un Month health "C+" calculados sin datos del mes. |
 | [MQ-006](#mq-006--goals-resumen-que-ignora-metas-en-otra-moneda-y-cuentas-vinculables-incorrectas) | P1 | Abierto | Funcionamiento | Goals | El resumen ignora metas en moneda no base; se puede vincular una meta de ahorro a una cuenta de deuda. |
-| [MQ-007](#mq-007--sugerencias-de-autofill-del-navegador-en-campos-de-la-app) | P2 | Abierto | UX | Formularios | Brave ofrece nombres de contactos, montos viejos y tarjetas en campos de nombre y monto. |
+| [MQ-007](#mq-007--sugerencias-de-autofill-del-navegador-en-campos-de-la-app) | P2 | ✅ Hecho (`fix/mq-007-no-autofill`) | UX | Formularios | Brave ofrece nombres de contactos, montos viejos y tarjetas en campos de nombre y monto. |
 | [MQ-008](#mq-008--selects-nativos-con-listas-largas) | P2 | Abierto | UX | Budgets / Goals / Debts | `<select>` nativos con 20–60 opciones planas, sin búsqueda ni jerarquía. |
 | [MQ-009](#mq-009--skeletons-en-cada-navegación-incluida-una-página-estática) | P2 | Abierto | Performance | Navegación | Skeleton de 0,5–2 s en cada módulo, incluso en More (estático); "Loading form…" en blanco; skeleton de Budgets no coincide con el resultado. |
 | [MQ-010](#mq-010--sheets-con-teclado-autofocus-que-tapa-el-formulario) | P2 | Abierto | UX | Debts / Goals / Budgets | El autofocus abre el teclado al instante y tapa casi todo el formulario. |
@@ -564,6 +564,13 @@ Actualiza docs/features/goals.md si cambia lo que muestra el resumen.
 ## 5. P2 — Fricción de UX
 
 ### MQ-007 — Sugerencias de autofill del navegador en campos de la app
+
+> ✅ Hecho el 2026-10-01 — `autoComplete` es `"off"` por defecto en los
+> primitivos `Input` y `Textarea` (todo campo de texto de la app pasa por
+> ellos, incluido `AmountInput`); un token explícito gana, así que login y el
+> email/contraseña de Settings conservan el autofill. Los cuatro buscadores de
+> lista sueltos (Categories, Payees, Tags, Notes) pasan a `type="search"` con
+> `autoComplete="off"`.
 
 **Evidencia:** 1:16–1:19 (Debt name), 2:34 (Planned amount), 2:56–3:04 (Goal
 name), 3:14 (Target amount). **Categoría:** UX. **BD:** ninguno.
