@@ -244,12 +244,22 @@ con scroll propio; o un portal/elemento `fixed` (toasts, `vv-pin-*`) agranda el
 `scrollHeight`; `overscroll-behavior-y: none` en `body`
 (`src/app/globals.css:129`) no aplica si el que hace scroll es `html`.
 
+**Antes de nada, lee
+[features/mobile-app-shell.md](./features/mobile-app-shell.md).** El síntoma
+del video (top bar desaparecida, nav flotando a media pantalla) es el mismo que
+dejó PR #59, y ese doc explica por qué el header y la nav **no** son
+`position: fixed`: tres regresiones seguidas (PR #48–#59) vinieron de anclar la
+chrome al layout viewport. **No vuelvas a `fixed`** (ni el shell entero con
+`fixed inset-0`): eso reabre el mismo problema por otro lado.
+
 **Qué hacer.** Instrumentar antes de adivinar (`/arreglar`): en el teléfono,
 loguear `document.scrollingElement.scrollHeight` vs `innerHeight` y
-`visualViewport.height` al llegar al final. Arreglo probable: shell
-`fixed inset-0` en vez de `h-dvh`, `overflow: hidden` + `overscroll-behavior: none`
-también en `html` para las rutas de dashboard, y localizar el elemento que
-desborda.
+`visualViewport.height` al llegar al final. El arreglo debe conservar el shell
+de un viewport con flex y `app-scroll` como único scroller: encontrar qué
+elemento hace desbordar el *documento* y quitar ese desborde en su origen
+(y, si hace falta, `overflow: hidden` + `overscroll-behavior: none` también en
+`html` para las rutas de dashboard). Si resulta ser una regresión de un PR
+posterior a #61, nombrarlo.
 
 **Criterio de aceptación.** En Brave y Chrome Android, con la barra del
 navegador visible y oculta, header y bottom nav no se mueven nunca; no hay
@@ -265,6 +275,10 @@ docs/mobile-walkthrough-backlog.md y lee la sección completa del ticket MQ-002.
 Objetivo: que el header y la bottom nav del dashboard no se muevan nunca en
 móvil (Brave/Chrome Android), ni al final del scroll ni con pull-to-refresh.
 
+0. Lee docs/features/mobile-app-shell.md antes de tocar nada. Prohibido hacer
+   fixed el header, la bottom nav o el shell (fixed inset-0): esa ruta ya
+   produjo tres regresiones (PR #48-#59) y el síntoma de este ticket es el de
+   PR #59.
 1. Usa /arreglar: instrumenta antes de cambiar nada. Añade un log temporal en
    el cliente que reporte document.scrollingElement.scrollHeight,
    window.innerHeight, visualViewport.height y el elemento que hace scroll
@@ -273,10 +287,12 @@ móvil (Brave/Chrome Android), ni al final del scroll ni con pull-to-refresh.
    deja el log listo y pide al usuario la lectura desde su teléfono.
 2. Encuentra qué hace que el documento sea más alto que el viewport (portal,
    toast, elemento vv-pin-*, h-dvh vs barra dinámica).
-3. Arreglo esperado: shell anclado (fixed inset-0 o equivalente) en
-   src/app/dashboard/layout.tsx, overflow hidden + overscroll-behavior none
-   también en html para las rutas de dashboard, sin romper el zoom pinch ni
-   los estilos vv-pin-* de src/app/globals.css.
+3. Arreglo esperado: quitar el desborde del documento en su origen,
+   conservando el shell de un viewport con flex y app-scroll como único
+   scroller (src/app/dashboard/layout.tsx); si hace falta, overflow hidden +
+   overscroll-behavior none también en html para las rutas de dashboard, sin
+   romper el zoom pinch ni los estilos vv-pin-* de src/app/globals.css. Si es
+   una regresión de un PR posterior a #61, identifícalo en la entrega.
 4. Quita la instrumentación antes de entregar.
 
 Verifica con qa-smoke que ninguna ruta del dashboard queda con scroll del
@@ -502,13 +518,17 @@ Corre ledger-guard antes de entregar.
 `src/app/dashboard/goals/goal-form.tsx` (select en línea 32).
 
 **Qué hacer.** Convertir a moneda base con la misma fuente de FX que net worth
-(o mostrar un subtotal por moneda); filtrar cuentas vinculables a cuentas de
-activo no archivadas; bajo el selector, una línea que diga si el progreso
+(o mostrar un subtotal por moneda); hacer que las cuentas vinculables
+dependan del tipo de meta: las metas de ahorro (emergency fund, down payment,
+travel, retirement, custom) solo cuentas de activo, y `debt_payoff`
+(`src/lib/goals/shared.ts:4-10`) solo cuentas de pasivo, que es justo lo que
+esa meta busca saldar; bajo el selector, una línea que diga si el progreso
 sigue el saldo de la cuenta o los aportes ("Add funds").
 
 **Criterio de aceptación.** Una meta en COP aparece en el resumen (convertida
-o por moneda); no se puede vincular una meta a un pasivo; el usuario entiende
-de dónde sale el progreso.
+o por moneda); una meta de ahorro no se puede vincular a un pasivo, y una
+meta `debt_payoff` sí puede vincularse a su pasivo; el usuario entiende de
+dónde sale el progreso.
 
 #### Prompt
 
@@ -524,9 +544,12 @@ vinculables coherentes.
    worth. Si no hay tasa disponible para una moneda, muestra un subtotal por
    esa moneda en lugar de excluirla en silencio. Ajusta el texto "Of X target,
    CAD goals".
-2. Selector "Linked account" (src/app/dashboard/goals/goal-form.tsx): solo
-   cuentas de activo no archivadas. Valida lo mismo en el server action (no
-   solo en la UI).
+2. Selector "Linked account" (src/app/dashboard/goals/goal-form.tsx): las
+   opciones dependen del tipo de meta. Metas de ahorro: solo cuentas de
+   activo no archivadas. debt_payoff (src/lib/goals/shared.ts): solo cuentas
+   de pasivo no archivadas. Al cambiar el tipo, si la cuenta elegida deja de
+   ser válida, se limpia. Valida la misma regla en el server action (no solo
+   en la UI).
 3. Lee docs/features/goals.md para confirmar si el progreso sigue el saldo de
    la cuenta vinculada o los aportes ("Add funds"), y agrega una línea de
    ayuda bajo el selector que lo explique. Si el doc no lo define, no cambies
