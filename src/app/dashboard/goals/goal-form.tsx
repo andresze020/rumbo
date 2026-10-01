@@ -8,7 +8,8 @@ import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
-import { GOAL_TYPES } from '@/lib/goals/shared'
+import { GOAL_TYPES, canLinkAccountToGoal } from '@/lib/goals/shared'
+import { useLanguage } from '@/components/language-provider'
 import { nativeSelectCls, formActionsCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +18,8 @@ export type GoalFormAccount = {
   name: string
   currency_code: string
   institution_name: string | null
+  /** 'asset' | 'liability' — decides which goal types may link it (MQ-006). */
+  account_class: string
 }
 
 export type GoalTemplate = {
@@ -48,13 +51,31 @@ export function GoalForm({
   accounts: GoalFormAccount[]
   baseCurrency: string
 }) {
-  const [linkedAccountId, setLinkedAccountId] = useState(template?.linked_account_id ?? '')
+  const { t } = useLanguage()
+  const [goalType, setGoalType] = useState<string>(template?.goal_type ?? 'custom')
+  // MQ-006: a savings goal links to an asset account, `debt_payoff` to the
+  // liability it pays off. A stale link from before that rule is dropped here,
+  // so the select shows what will be saved.
+  const [linkedAccountId, setLinkedAccountId] = useState(() => {
+    const initial = accounts.find((a) => a.id === template?.linked_account_id)
+    return initial && canLinkAccountToGoal(template?.goal_type ?? 'custom', initial.account_class)
+      ? initial.id
+      : ''
+  })
   const linkedAccount = accounts.find((a) => a.id === linkedAccountId)
+  const linkableAccounts = accounts.filter((a) => canLinkAccountToGoal(goalType, a.account_class))
   const [currencyCode, setCurrencyCode] = useState(
     template?.currency_code ?? linkedAccount?.currency_code ?? baseCurrency
   )
 
   const formAction = mode === 'create' ? createGoalAction : updateGoalAction
+
+  function handleTypeChange(value: string) {
+    setGoalType(value)
+    if (linkedAccount && !canLinkAccountToGoal(value, linkedAccount.account_class)) {
+      setLinkedAccountId('')
+    }
+  }
 
   function handleAccountChange(value: string) {
     setLinkedAccountId(value)
@@ -85,7 +106,8 @@ export function GoalForm({
           <select
             id={`type_${mode}`}
             name="goal_type"
-            defaultValue={template?.goal_type ?? 'custom'}
+            value={goalType}
+            onChange={(e) => handleTypeChange(e.target.value)}
             className={selectClassName}
           >
             {GOAL_TYPES.map((t) => (
@@ -105,13 +127,14 @@ export function GoalForm({
             className={selectClassName}
           >
             <option value="">No linked account</option>
-            {accounts.map((account) => (
+            {linkableAccounts.map((account) => (
               <option key={account.id} value={account.id}>
                 {accountLabel(account)}
               </option>
             ))}
           </select>
           <input type="hidden" name="linked_account_id" value={linkedAccountId} />
+          <p className="text-xs text-muted-foreground">{t('goals.progressSourceHint')}</p>
         </div>
 
         <div className="space-y-2">

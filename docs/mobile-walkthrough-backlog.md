@@ -31,7 +31,7 @@
 | [MQ-003](#mq-003--el-empty-state-de-transactions-parpadea-y-miente) | P1 | Abierto | Funcionamiento | Transactions | El empty state alterna solo entre dos variantes cada 1,5–3 s y dice "No transactions yet" con miles de transacciones. |
 | [MQ-004](#mq-004--el-botón-del-asistente-tapa-contenido-y-la-tab-more) | P1 | Abierto | UI | Global | El botón flotante del asistente tapa montos, botones de fila y la tab "More". |
 | [MQ-005](#mq-005--comparativas-de-mes-en-curso-contra-mes-completo) | P1 | Abierto | Funcionamiento | Dashboard / Budgets / Accounts | Deltas "−100 % vs Sep", "0,0 %" en verde y un Month health "C+" calculados sin datos del mes. |
-| [MQ-006](#mq-006--goals-resumen-que-ignora-metas-en-otra-moneda-y-cuentas-vinculables-incorrectas) | P1 | Abierto | Funcionamiento | Goals | El resumen ignora metas en moneda no base; se puede vincular una meta de ahorro a una cuenta de deuda. |
+| [MQ-006](#mq-006--goals-resumen-que-ignora-metas-en-otra-moneda-y-cuentas-vinculables-incorrectas) | P1 | ✅ Hecho (`fix/mq-006-goals-summary-accounts`) | Funcionamiento | Goals | El resumen ignora metas en moneda no base; se puede vincular una meta de ahorro a una cuenta de deuda. |
 | [MQ-007](#mq-007--sugerencias-de-autofill-del-navegador-en-campos-de-la-app) | P2 | Abierto | UX | Formularios | Brave ofrece nombres de contactos, montos viejos y tarjetas en campos de nombre y monto. |
 | [MQ-008](#mq-008--selects-nativos-con-listas-largas) | P2 | Abierto | UX | Budgets / Goals / Debts | `<select>` nativos con 20–60 opciones planas, sin búsqueda ni jerarquía. |
 | [MQ-009](#mq-009--skeletons-en-cada-navegación-incluida-una-página-estática) | P2 | Abierto | Performance | Navegación | Skeleton de 0,5–2 s en cada módulo, incluso en More (estático); "Loading form…" en blanco; skeleton de Budgets no coincide con el resultado. |
@@ -495,6 +495,15 @@ Corre ledger-guard antes de entregar.
 ---
 
 ### MQ-006 — Goals: resumen que ignora metas en otra moneda y cuentas vinculables incorrectas
+
+> ✅ Hecho el 2026-10-01 — "Total saved" (Goals y Plan) suma metas en cualquier
+> moneda, convertidas a la última tasa del household con `get_exchange_rate`
+> (la búsqueda de net worth); una moneda sin tasa se nombra aparte
+> (`src/lib/goals/summary.ts`, con test). "Linked account" depende del tipo:
+> ahorro → solo activos, `debt_payoff` → solo pasivos; se limpia al cambiar de
+> tipo y el server action valida lo mismo (`canLinkAccountToGoal`). Bajo el
+> selector, una línea explica que el progreso sale de "Add funds", no del
+> saldo de la cuenta (decisión abierta 1 de `features/goals.md`).
 
 | Campo | Valor |
 |---|---|
