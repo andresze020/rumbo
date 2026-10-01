@@ -10,93 +10,73 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { SubmitButton } from '@/components/submit-button'
 import { signOutAction } from '@/app/dashboard/session-actions'
 import { useLanguage } from '@/components/language-provider'
-import { navGroups, PHASE_LABEL_KEY, type NavItem } from '@/lib/nav/config'
+import { PHASE_LABEL_KEY, type NavItem } from '@/lib/nav/config'
+import { moreSections, SETTINGS_GROUP_KEY } from '@/lib/nav/more-sections'
 import { cn } from '@/lib/utils'
-
-const SETTINGS_GROUP_KEY = 'nav.groupSettings'
 
 export default function MorePage() {
   const { t } = useLanguage()
 
-  const moduleGroups = navGroups.filter((g) => g.titleKey !== SETTINGS_GROUP_KEY)
-  const settingsGroup = navGroups.find((g) => g.titleKey === SETTINGS_GROUP_KEY)
-
-  const available = moduleGroups.flatMap((g) => g.items).filter((i) => i.phase === 'alpha')
-  const comingLater = moduleGroups.flatMap((g) => g.items).filter((i) => i.phase !== 'alpha')
+  // MQ-018 — headed sections (Planning, Analysis, Organize, Automation,
+  // Settings) instead of one 20-row list, and none of the bottom nav's tabs.
+  const sections = moreSections()
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 sm:p-6">
       <PageHeader title={t('nav.more')} description={t('mobile.moreSubtitle')} />
 
-      {/* Available modules */}
-      <section className="space-y-3">
-        <SectionHeading title={t('mobile.available')} />
-        <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
-          {available.map((item) => (
-            <ModuleRow key={item.href} item={item} label={t(item.labelKey)} />
-          ))}
-        </div>
-      </section>
+      {sections.map((section) => (
+        <section key={section.titleKey} className="space-y-3">
+          <SectionHeading title={t(section.titleKey)} />
+          <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
+            {section.items.map((item) => (
+              <ModuleRow
+                key={item.href}
+                item={item}
+                label={t(item.labelKey)}
+                badge={
+                  item.phase === 'alpha' ? undefined : (
+                    <PhaseBadge phase={item.phase} label={t(PHASE_LABEL_KEY[item.phase])} />
+                  )
+                }
+              />
+            ))}
 
-      {/* Coming later */}
-      <section className="space-y-3">
-        <SectionHeading title={t('mobile.comingLater')} />
-        <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
-          {comingLater.map((item) => (
-            <ModuleRow
-              key={item.href}
-              item={item}
-              label={t(item.labelKey)}
-              badge={
-                item.phase === 'alpha' ? undefined : (
-                  <PhaseBadge phase={item.phase} label={t(PHASE_LABEL_KEY[item.phase])} />
-                )
-              }
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* Preferences */}
-      <section className="space-y-3">
-        <SectionHeading title={t('mobile.preferences')} />
-        <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
-          {settingsGroup?.items.map((item) => (
-            <ModuleRow
-              key={item.href}
-              item={item}
-              label={t(item.labelKey)}
-              badge={
-                item.phase === 'alpha' ? undefined : (
-                  <PhaseBadge phase={item.phase} label={t(PHASE_LABEL_KEY[item.phase])} />
-                )
-              }
-            />
-          ))}
-
-          {/* Theme toggle */}
-          <div className="flex items-center gap-3 px-4 py-3">
-            <span className="text-sm font-medium">{t('nav.theme')}</span>
-            <div className="ml-auto">
-              <ThemeToggle />
-            </div>
+            {/* Settings also holds the two preferences that are not pages. */}
+            {section.titleKey === SETTINGS_GROUP_KEY ? <PreferenceRows /> : null}
           </div>
-
-          {/* Sign out */}
-          <form action={signOutAction}>
-            <SubmitButton
-              type="submit"
-              variant="ghost"
-              pendingText="…"
-              className="w-full justify-start gap-3 rounded-none px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground"
-            >
-              <LogOut className="size-4 shrink-0" aria-hidden="true" />
-              {t('nav.signOut')}
-            </SubmitButton>
-          </form>
-        </div>
-      </section>
+        </section>
+      ))}
     </main>
+  )
+}
+
+function PreferenceRows() {
+  const { t } = useLanguage()
+  return (
+    <>
+
+      {/* Theme toggle */}
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className="text-sm font-medium">{t('nav.theme')}</span>
+        <div className="ml-auto">
+          <ThemeToggle />
+        </div>
+      </div>
+
+      {/* Sign out */}
+      <form action={signOutAction}>
+        <SubmitButton
+          type="submit"
+          variant="ghost"
+          pendingText="…"
+          className="w-full justify-start gap-3 rounded-none px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          <LogOut className="size-4 shrink-0" aria-hidden="true" />
+          {t('nav.signOut')}
+        </SubmitButton>
+      </form>
+    </>
   )
 }
 

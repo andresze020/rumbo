@@ -43,7 +43,7 @@
 | [MQ-015](#mq-015--payees-cuatro-acciones-por-fila) | P2 | ✅ Hecho (`fix/mq-015-payee-row-menu`) | UI | Payees | Cuatro acciones por fila truncan el nombre y parten el meta en tres líneas. |
 | [MQ-016](#mq-016--categories-kpi-filtros-y-acciones-ambiguas) | P2 | ✅ Hecho (`fix/mq-016-categories-clarity`) | UX | Categories | KPI "Active" no sigue el filtro, tabs truncadas, icono `←\|` sin explicación, chevron con doble función. |
 | [MQ-017](#mq-017--accounts-delta-neutro-en-verde-e-indicador-de-swipe-sobre-el-saldo) | P2 | ✅ Hecho (`fix/mq-017-accounts-long-names`) | UI | Accounts | "↑ 0,0 %" en verde; el indicador de swipe "‹" se dibuja encima del saldo. |
-| [MQ-018](#mq-018--more-lista-plana-de-20-ítems) | P3 | Abierto | UX | More | Lista plana de 20+ ítems que repite las tabs de la bottom nav. |
+| [MQ-018](#mq-018--more-lista-plana-de-20-ítems) | P3 | ✅ Hecho (`fix/mq-018-more-sections`) | UX | More | Lista plana de 20+ ítems que repite las tabs de la bottom nav. |
 | [MQ-019](#mq-019--budgets-fila-de-línea-y-detalle-poco-legibles) | P3 | Abierto | UX | Budgets | Fila colapsada sin el planificado, detalle en 5 tiles apilados, copy "0 over budget", banner persistente. |
 | [MQ-020](#mq-020--recurring-semántica-de-auto-y-secciones-duplicadas) | P3 | Abierto | UX | Recurring | Plantillas "Auto" vencidas sin postear, chips que envuelven, "Upcoming" y "Upcoming occurrences" duplicadas. |
 
@@ -1164,6 +1164,14 @@ Cambio solo visual. Verifica con qa-smoke.
 ## 6. P3 — Mejoras
 
 ### MQ-018 — More: lista plana de 20+ ítems
+
+> ✅ Hecho el 2026-10-01 — More muestra secciones con encabezado: Planning,
+> Analysis, Organize (nuevo `nav.groupOrganize`), Automation y Settings (con
+> tema y cerrar sesión), y ya no repite Dashboard, Transactions ni Accounts.
+> La agrupación vive en `src/lib/nav/more-sections.ts` y referencia los ítems
+> de `navGroups` por href, así que el sidebar de escritorio no cambia; un test
+> falla si un destino nuevo no queda ni en More ni en la bottom nav. Desaparece
+> también la sección "Coming later", que salía vacía.
 
 **Evidencia:** 1:28, 2:11–2:12, 3:31–3:34. **Categoría:** UX.
 
