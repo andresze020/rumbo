@@ -8,25 +8,37 @@ import { cn } from '@/lib/utils'
  * the screen, and a row cut off at "Adjustmen…" gave no hint that it scrolls.
  *
  * - A fade on whichever edge has more tabs behind it says "there is more".
- * - The active tab is scrolled into view on arrival, so picking "Adjustment"
- *   does not land on a page whose highlighted tab is off-screen.
+ * - The active tab is centred whenever it changes — on arrival, on a tap, and
+ *   on back/forward, which keep this component mounted — so the highlighted
+ *   tab is never left off-screen or half under a fade.
  *
  * The fades sit outside the scroller so they stay put while the tabs move.
  */
-export function TypeTabs({ children }: { children: ReactNode }) {
+export function TypeTabs({
+  activeKey,
+  children,
+}: {
+  /** The selected tab's value; re-centres the row when it changes. */
+  activeKey: string
+  children: ReactNode
+}) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [edges, setEdges] = useState({ start: false, end: false })
 
   useEffect(() => {
     const scroller = scrollerRef.current
     if (!scroller) return
-
     // Horizontal only: `scrollIntoView` would also move the page scroller.
     const active = scroller.querySelector<HTMLElement>('[aria-current="page"]')
     if (active) {
       scroller.scrollLeft =
         active.offsetLeft - (scroller.clientWidth - active.offsetWidth) / 2
     }
+  }, [activeKey])
+
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
 
     const update = () => {
       const max = scroller.scrollWidth - scroller.clientWidth

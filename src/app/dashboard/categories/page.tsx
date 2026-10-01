@@ -447,7 +447,7 @@ export default async function CategoriesPage({
         <section className="min-w-0 space-y-4">
           {/* ── Toolbar ─────────────────────────────────────────────────── */}
           <div className="flex flex-col gap-3 md:rounded-xl md:border md:bg-card md:p-3 md:shadow-sm md:shadow-black/[0.03] sm:flex-row sm:items-center">
-            <TypeTabs>
+            <TypeTabs activeKey={categoryTypeFilter}>
               {([{ value: 'all' as const, label: 'All' }, ...categoryTypes]).map((filter) => (
                 <Link
                   key={filter.value}
