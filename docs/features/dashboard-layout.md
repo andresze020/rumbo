@@ -93,9 +93,10 @@ than by this day in August". For a past month it compares whole months.
 It answers "am I spending faster than last month?" while the month is still
 open, which the monthly totals cannot.
 
-- **Data.** `getDailyExpenses` (`src/lib/dashboard/daily-expenses.ts`)
-  reads expense allocations for last month and this one in one query
-  (paged by 1 000 rows). It applies the same filters as
+- **Data.** `getDailyCashFlow` (`src/lib/dashboard/daily-cash-flow.ts`,
+  `getDailyExpenses` until MQ-005) reads income and expense allocations for
+  last month and this one in one query (paged by 1 000 rows); the card uses
+  the expenses. It applies the same filters as
   `get_monthly_dashboard_summary`: posted, not deleted, category not deleted
   and not excluded from reports, and not under an excluded live parent.
   `buildSpendingPace` (`src/lib/dashboard/spending-pace.ts`, unit-tested)
@@ -110,9 +111,31 @@ open, which the monthly totals cannot.
   a posted expense, so it always ends on "Spent". The axis is the month on
   screen; last month's days past its length drop off (Aug 31 against
   September).
-- **If the filters in the RPC change**, change `getDailyExpenses` with them.
+- **If the filters in the RPC change**, change `getDailyCashFlow` with them.
   A drift shows up as the card disappearing plus the server warning, not as
   a wrong number.
+
+### Cash flow deltas compare like with like (MQ-005, 2026-10-01)
+
+On the 1st of a month every Cash flow line read "↓ 100% vs Sep" — a day of
+October against all of September, with income and savings in red and
+spending in green. Now (`cashFlowComparison`,
+`src/lib/dashboard/month-comparison.ts`, unit-tested):
+
+- **Open month:** compared with the previous month *up to the same day*
+  (through today, or a later day that already holds a posted entry; a
+  shorter previous month is read whole — 31 March against all of February),
+  from the same daily income and expenses as the pace card. Labelled
+  "vs same day in Sep".
+- **Closed month:** the whole previous month, from the RPC, as before.
+- **Nothing posted this month:** no delta at all, and Month health shows
+  "Not enough data yet" instead of a grade (`monthHealth` in
+  `src/lib/health/score.ts`; the formula is unchanged for any month with
+  activity). Month review follows the same rules, and its close-month
+  snapshot stores no score for such a month.
+- A change that rounds to 0 is grey with no arrow (Accounts' total-balance
+  pill, Budgets' per-line "Last month"). Budgets hides that per-line
+  percentage while the month is open.
 
 ### The chart component
 
@@ -251,3 +274,24 @@ same as with no remembered scope.
 5. Record an expense for today: after the save, the Spending card's figure,
    the end of its line and "Spent" in Cash flow all move by the same amount.
 6. Open next month: there is no Spending card and Cash flow spans the row.
+
+---
+
+## A month with nothing posted (MQ-014, 2026-10-01)
+
+A new month used to stack five empty cards: a flat Spending chart with one
+point, Cash flow in zeros, the "No posted income or expense activity" note,
+"By category — No expenses…" and "Insights — Add transactions…". With no
+posted income or expense in the month on screen (`hasMonthlyActivity`), the
+Dashboard now shows one **"{month} is just starting"** card in place of the
+Spending pace / Cash flow row, with what to do next: add a transaction, post
+due recurring items, and — when the month has no budget — set it up. By
+category is hidden and Insights too unless an insight exists; Scheduled
+activity spans the row. Nothing is recalculated: every figure that does show
+comes from the same queries as before.
+
+Budgets and Goals follow the same rule: Budgets with no lines hides its four
+KPIs and "How this month was paid" so the lines card and its empty state come
+first; Goals with no goals hides its three summary cards, and with goals lays
+them out two counts side by side and the total across the row on a phone.
+

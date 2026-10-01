@@ -3,8 +3,8 @@
  * month on screen and the month before it, and how far ahead or behind the
  * previous month's pace the current month is at the same day.
  *
- * Pure: the daily amounts come from `getDailyExpenses` (lib/dashboard/
- * daily-expenses), which reads the same expense allocations, with the same
+ * Pure: the daily amounts come from `getDailyCashFlow` (lib/dashboard/
+ * daily-cash-flow), which reads the same expense allocations, with the same
  * filters, as `get_monthly_dashboard_summary`, so the last point of the
  * current series is the Dashboard's "Spent" figure.
  */
