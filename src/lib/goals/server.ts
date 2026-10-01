@@ -27,6 +27,10 @@ export async function getGoalRatesToBase(
   currencies: Iterable<string>
 ): Promise<GoalRatesToBase> {
   const foreign = [...new Set(currencies)].filter((code) => code && code !== baseCurrency)
+  // UTC on purpose (MQ-001), like the other FX reads: rates are dated by the
+  // provider's UTC files and balances are valued at the database's
+  // `current_date`. The user's local day could ask for a rate that does not
+  // exist yet east of UTC.
   const today = new Date().toISOString().slice(0, 10)
   const results = await Promise.all(
     foreign.map((code) =>
