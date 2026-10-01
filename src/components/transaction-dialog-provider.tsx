@@ -213,7 +213,14 @@ function readAddNextDefaults(searchParams: URLSearchParams): AddNextDefaults | n
   }
 }
 
-export function TransactionDialogProvider({ children }: { children: ReactNode }) {
+export function TransactionDialogProvider({
+  children,
+  householdId,
+}: {
+  children: ReactNode
+  /** The active household; cached form data from any other one is ignored. */
+  householdId: string | null
+}) {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -227,6 +234,12 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   // remounts this layout) opens pre-filled instead of starting empty.
   const [open, setOpen] = useState(() => readAddNextDefaults(searchParams) !== null)
   const [formData, setFormData] = useState<QuickAddFormData | null>(null)
+  // Mirrors `formData` for `refreshFormData`, which must see the latest value
+  // from inside an async call started by an earlier render.
+  const formDataRef = useRef<QuickAddFormData | null>(null)
+  const formFetchInFlight = useRef(false)
+  // A background refresh is running (the form may already be on screen).
+  const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(() => readAddNextDefaults(searchParams) !== null)
   const [loadError, setLoadError] = useState(false)
   const [formKey, setFormKey] = useState(0)
@@ -281,6 +294,12 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   // The type the form will actually open on, needed before render to decide
   // whether a filtered category is compatible with it. `'expense'` mirrors
   // TransactionForm's own fallback.
+  // The MQ-009 cache, scoped to the active household: another household's
+  // accounts and categories are never shown, not even for the moment before
+  // the refetch lands.
+  const usableFormData =
+    formData && formData.householdId === householdId ? formData : null
+
   const seededType: OpenDialogType =
     copyDefaults?.type ??
     addNextDefaults?.type ??
@@ -291,7 +310,7 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   const seededCategoryId =
     copyDefaults?.categoryId ??
     addNextDefaults?.categoryId ??
-    formData?.categories.find(
+    usableFormData?.categories.find(
       (category) =>
         category.id === filterDefaults?.categoryId &&
         category.category_type === seededType
@@ -301,7 +320,26 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   const seededPayeeName =
     copyDefaults?.payeeName ??
     addNextDefaults?.payeeName ??
-    formData?.payees.find((payee) => payee.id === filterDefaults?.payeeId)?.name
+    usableFormData?.payees.find((payee) => payee.id === filterDefaults?.payeeId)?.name
+
+  // An account the form is seeded with (Copy, "Save and add next", a card's
+  // Add, a filter) has to be in the lists the form renders: an id the form
+  // cannot resolve reads as a base-currency account and would post at an
+  // exchange rate of 1. While a refresh may still bring it (cached lists from
+  // before it existed), wait for it; once fresh lists lack it, drop the seed.
+  const knownAccountIds = new Set(usableFormData?.accounts.map((a) => a.id) ?? [])
+  const requestedAccountId =
+    copyDefaults?.accountId ??
+    addNextDefaults?.accountId ??
+    triggerAccountId ??
+    filterDefaults?.accountId
+  const awaitingSeededAccount =
+    refreshing &&
+    [requestedAccountId, copyDefaults?.fromAccountId, copyDefaults?.toAccountId].some(
+      (id) => id !== undefined && !knownAccountIds.has(id)
+    )
+  const seededAccount = (id: string | undefined) =>
+    id !== undefined && knownAccountIds.has(id) ? id : undefined
 
   const nextDate = searchParams.get('next_date')
   const nextType = searchParams.get('next_type')
@@ -360,9 +398,10 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
         .then((data) => {
           if (settled) return
           if (data) {
+            formDataRef.current = data
             setFormData(data)
             setLoadError(false)
-          } else {
+          } else if (!formDataRef.current) {
             setLoadError(true)
           }
         })
@@ -423,6 +462,16 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // The household switcher re-renders this provider in place. If the dialog
+  // is open with the previous household's lists, fetch the new household's.
+  useEffect(() => {
+    if (!open || !formDataRef.current) return
+    if (formDataRef.current.householdId === householdId) return
+    void refreshFormData()
+    // Only a household change should trigger this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [householdId])
+
   async function openDialog(options?: OpenDialogOptions) {
     setTriggerAccountId(options?.accountId)
     setTriggerType(options?.type)
@@ -432,21 +481,49 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
     // was already mounted from a previous open.
     setFormKey((key) => key + 1)
     setOpen(true)
-    if (!loading) {
+    await refreshFormData()
+  }
+
+  /**
+   * Stale-while-revalidate for the form's reference data (MQ-009).
+   *
+   * Every open used to block on `getQuickAddFormData()` behind "Loading form…"
+   * — about a second on a phone, every time, for accounts and categories that
+   * almost never change between two entries. Now only the first open in a
+   * session waits. Later opens show the form at once with the last data and
+   * refetch underneath; the fresh lists replace the old ones in place (same
+   * `formKey`, so nothing typed is lost).
+   *
+   * BF-011 still holds: the refetch runs on *every* open, so a category created
+   * a moment ago on the Categories screen is in the picker as soon as it
+   * lands. A failed background refresh keeps the data already on screen.
+   */
+  async function refreshFormData() {
+    if (formFetchInFlight.current) return
+    formFetchInFlight.current = true
+    // Another household's lists are not a cache for this one: switching
+    // households waits for fresh data like a first open.
+    const hasCachedData = formDataRef.current?.householdId === householdId
+    if (!hasCachedData) {
       setLoading(true)
       setLoadError(false)
-      try {
-        const data = await getQuickAddFormData()
-        if (data) {
-          setFormData(data)
-        } else {
-          setLoadError(true)
-        }
-      } catch {
+    }
+    setRefreshing(true)
+    try {
+      const data = await getQuickAddFormData()
+      if (data) {
+        formDataRef.current = data
+        setFormData(data)
+        setLoadError(false)
+      } else if (!hasCachedData) {
         setLoadError(true)
-      } finally {
-        setLoading(false)
       }
+    } catch {
+      if (!hasCachedData) setLoadError(true)
+    } finally {
+      formFetchInFlight.current = false
+      setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -541,35 +618,32 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
             </DialogDescription>
           </DialogHeader>
 
-          {loading ? (
+          {/* Only the very first open waits: later ones render the last data
+              while it revalidates (MQ-009, `refreshFormData`). */}
+          {(loading && !usableFormData) || awaitingSeededAccount ? (
             <p className="py-4 text-sm text-muted-foreground">Loading form…</p>
-          ) : loadError ? (
+          ) : loadError && !usableFormData ? (
             <p className="py-4 text-sm text-destructive">
               Could not load form data. Please refresh and try again.
             </p>
-          ) : formData ? (
-            formData.accounts.length === 0 ? (
+          ) : usableFormData ? (
+            usableFormData.accounts.length === 0 ? (
               <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                 Create an account first before adding transactions.
               </p>
             ) : (
               <TransactionForm
                 key={formKey}
-                accounts={formData.accounts}
-                baseCurrency={formData.baseCurrency}
-                categories={formData.categories}
-                payees={formData.payees}
-                tags={formData.tags}
-                currencies={formData.currencies}
+                accounts={usableFormData.accounts}
+                baseCurrency={usableFormData.baseCurrency}
+                categories={usableFormData.categories}
+                payees={usableFormData.payees}
+                tags={usableFormData.tags}
+                currencies={usableFormData.currencies}
                 // A copy is always dated today (BR-034) — everything else about
                 // it comes from the source transaction.
                 defaultDate={addNextDefaults?.date ?? todayIsoDate()}
-                defaultAccountId={
-                  copyDefaults?.accountId ??
-                  addNextDefaults?.accountId ??
-                  triggerAccountId ??
-                  filterDefaults?.accountId
-                }
+                defaultAccountId={seededAccount(requestedAccountId)}
                 defaultType={seededType}
                 defaultStatus={addNextDefaults?.status}
                 defaultDescription={copyDefaults?.description ?? sharedDescription}
@@ -579,11 +653,11 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
                 defaultMerchantName={seededPayeeName}
                 defaultNotes={copyDefaults?.notes}
                 defaultTagIds={copyDefaults?.tagIds ?? addNextDefaults?.tagIds}
-                defaultFromAccountId={copyDefaults?.fromAccountId}
-                defaultToAccountId={copyDefaults?.toAccountId}
-                visibleFields={formData.formFields}
-                quickEntry={formData.quickEntry}
-                categoryMemory={formData.categoryMemory}
+                defaultFromAccountId={seededAccount(copyDefaults?.fromAccountId)}
+                defaultToAccountId={seededAccount(copyDefaults?.toAccountId)}
+                visibleFields={usableFormData.formFields}
+                quickEntry={usableFormData.quickEntry}
+                categoryMemory={usableFormData.categoryMemory}
                 // The full view, filters included — not just the pathname, or
                 // the redirect after "Create transaction" lands on an
                 // unfiltered list.

@@ -135,6 +135,8 @@ export type MonthlyPoint = {
   expenses: number
   savings: number
   savingsRate: number | null
+  /** Posted income and expense records in the month; 0 means no activity at all. */
+  transactionCount: number
 }
 
 type MonthlyDashboardSummaryRow = {
@@ -174,6 +176,8 @@ export async function getMonthlySeries(
       expenses: Number(row?.monthly_expenses ?? 0),
       savings: Number(row?.monthly_savings ?? 0),
       savingsRate: row?.savings_rate == null ? null : Number(row.savings_rate),
+      transactionCount:
+        Number(row?.income_transaction_count ?? 0) + Number(row?.expense_transaction_count ?? 0),
     }
   })
 }

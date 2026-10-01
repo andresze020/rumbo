@@ -147,12 +147,37 @@ export function MonthHealthSummary({
   locale,
   tooltip,
 }: {
-  breakdown: HealthBreakdown
+  /** null: the month has nothing posted yet, so there is nothing to grade (MQ-005). */
+  breakdown: HealthBreakdown | null
   month: string
   locale: Locale
   tooltip?: ReactNode
 }) {
   const t = (key: TranslationKey, vars?: Record<string, string | number>) => translate(locale, key, vars)
+
+  if (!breakdown) {
+    return (
+      <div className="flex items-start gap-3 text-xs">
+        <span className="relative flex size-12 shrink-0 items-center justify-center" aria-hidden="true">
+          <svg viewBox="0 0 48 48" className="absolute inset-0 size-12">
+            <circle cx="24" cy="24" r="19" fill="none" stroke="var(--muted)" strokeWidth="4" />
+          </svg>
+          <span className="text-sm font-semibold text-muted-foreground">—</span>
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold">{t('dashboard.monthHealth')}</span>
+            {tooltip}
+          </p>
+          <p className="mt-0.5 leading-relaxed text-muted-foreground">
+            <span className="font-medium text-foreground">{t('dashboard.healthNotEnoughData')}</span>{' '}
+            {t('dashboard.healthNotEnoughDataHint')}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   const copy = ACTION_COPY[breakdown.action]
   const href = healthActionHref(breakdown.action, month)
 

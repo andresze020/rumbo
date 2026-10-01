@@ -7,6 +7,7 @@ import {
   computeHealthScore,
   healthBreakdown,
   healthGrade,
+  monthHealth,
   savingsComponent,
 } from './score'
 
@@ -188,5 +189,19 @@ describe('healthBreakdown (RUM-009)', () => {
   it('suggests a budget once savings is maxed without one, else keep going', () => {
     expect(healthBreakdown({ savingsRate: 0.3, hasBudget: false, budgetPercent: 0 }).action).toBe('set_budget')
     expect(healthBreakdown({ savingsRate: 0.3, hasBudget: true, budgetPercent: 0.8 }).action).toBe('keep_going')
+  })
+})
+
+describe('monthHealth (MQ-005)', () => {
+  it('grades nothing for a month with no posted income or expense, budget or not', () => {
+    expect(monthHealth({ savingsRate: null, hasBudget: false, budgetPercent: 0, hasActivity: false })).toBeNull()
+    expect(monthHealth({ savingsRate: null, hasBudget: true, budgetPercent: 0, hasActivity: false })).toBeNull()
+  })
+
+  it('leaves the formula untouched once the month has activity', () => {
+    const b = monthHealth({ savingsRate: null, hasBudget: true, budgetPercent: 0.4, hasActivity: true })
+    expect(b?.score).toBe(68)
+    expect(b?.grade).toBe('B')
+    expect(b?.action).toBe('record_income')
   })
 })

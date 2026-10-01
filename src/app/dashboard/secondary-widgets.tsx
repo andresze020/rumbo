@@ -431,8 +431,9 @@ export async function DashboardSecondaryWidgets({
           ) : null}
 
           <div className="grid gap-4 sm:grid-cols-2 [&>*]:min-w-0">
-            {/* Where the money went */}
-            {!expenseCategoriesError ? (
+            {/* Where the money went. MQ-014: not for a month with nothing
+                posted — it could only say so, under the "New month" card. */}
+            {!expenseCategoriesError && hasMonthlyActivity ? (
               <section className={cn(cardClass, 'p-5')}>
                 <WidgetHeader
                   title={t('dashboard.byCategory')}
@@ -489,7 +490,7 @@ export async function DashboardSecondaryWidgets({
             {/* Scheduled activity: RUM-009, income and expenses both appear
                 here, so it is "Scheduled activity", not "Upcoming payments".
                 The list is the next few runs by date, not a month total. */}
-            <section className={cn(cardClass, 'p-5')}>
+            <section className={cn(cardClass, 'p-5', !hasMonthlyActivity && 'sm:col-span-2')}>
               <WidgetHeader title={t('dashboard.scheduledTitle')} action={{ href: '/dashboard/recurring', label: t('common.viewAll') }} />
               {upcoming.length === 0 ? (
                 <p className="mt-4 text-sm text-muted-foreground">{t('dashboard.scheduledEmpty')}</p>
@@ -536,7 +537,8 @@ export async function DashboardSecondaryWidgets({
 
         {/* Right rail */}
         <aside className="flex flex-col gap-4">
-          {/* Insights */}
+          {/* Insights — MQ-014: hidden while there is none and nothing posted. */}
+          {visibleInsights.length || hasMonthlyActivity ? (
           <section className={cn(cardClass, 'p-5')}>
             <WidgetHeader title={t('dashboard.insightsTitle')} />
             {visibleInsights.length ? (
@@ -561,6 +563,7 @@ export async function DashboardSecondaryWidgets({
               <p className="mt-3 text-sm text-muted-foreground">{t('dashboard.insightsEmpty')}</p>
             )}
           </section>
+          ) : null}
 
           {/* Debts mini */}
           <section className={cn(cardClass, 'p-5')}>
@@ -569,7 +572,11 @@ export async function DashboardSecondaryWidgets({
               <p className="mt-3 text-sm text-muted-foreground">{t('dashboard.debtsMiniEmpty')}</p>
             ) : debtsSummary.state === 'untracked-liabilities' ? (
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                {t('dashboard.debtsMiniUntracked', { amount: formatCurrency(debtsSummary.accountLiabilities, baseCurrency) })}
+                {t('dashboard.debtsMiniUntracked', { amount: formatCurrency(debtsSummary.accountLiabilities, baseCurrency) })}{' '}
+                {/* MQ-011: Debts now lists these accounts with "Track this debt". */}
+                <Link href="/dashboard/debts" className="whitespace-nowrap font-semibold text-primary hover:underline">
+                  {t('dashboard.debtsMiniTrack')} →
+                </Link>
               </p>
             ) : (
               <div className="mt-3">

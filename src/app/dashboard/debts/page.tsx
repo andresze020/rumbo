@@ -9,6 +9,7 @@ import { DebtCard } from './debt-card'
 import { AmountInput } from '@/components/amount-input'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/date-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/empty-state'
@@ -20,6 +21,10 @@ import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { SubmitButton } from '@/components/submit-button'
 import { formatCurrency } from '@/lib/format'
+import { getAccountVisual } from '@/lib/account-display'
+import { getLocale } from '@/lib/i18n/server'
+import { translate } from '@/lib/i18n/translate'
+import { createUiTranslator } from '@/lib/i18n/ui'
 import { createClient } from '@/lib/supabase/server'
 import { nativeSelectCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
@@ -34,6 +39,7 @@ type DebtsPageProps = {
     mode?: string
     edit?: string
     pay?: string
+    account?: string
   }>
 }
 
@@ -86,13 +92,17 @@ function debtsPath({
   mode,
   edit,
   pay,
+  account,
 }: {
   mode?: 'create'
   edit?: string
   pay?: string
+  /** With `mode: 'create'`: the liability account to preselect (MQ-011). */
+  account?: string
 } = {}) {
   const params = new URLSearchParams()
   if (mode) params.set('mode', mode)
+  if (account) params.set('account', account)
   if (edit) params.set('edit', edit)
   if (pay) params.set('pay', pay)
   const qs = params.toString()
@@ -147,7 +157,7 @@ function DebtSummaryStat({
         </span>
         <span className="whitespace-nowrap text-[11px] text-muted-foreground">{label}</span>
       </div>
-      <p className="mt-1.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums">{value}</p>
+      <p className="mt-1.5 whitespace-nowrap text-base font-semibold tabular-nums">{value}</p>
     </div>
   )
 }
@@ -158,6 +168,8 @@ function DebtSummaryDivider() {
 
 export default async function DebtsPage({ searchParams }: DebtsPageProps) {
   const params = await searchParams
+  const locale = await getLocale()
+  const ui = createUiTranslator(locale)
   const created = params.created === '1'
   const updated = params.updated === '1'
   const paid = params.paid === '1'
@@ -296,6 +308,53 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
 
   const hasLoadError = currenciesError || debtsError || accountsError || balancesError
 
+  // MQ-011: liability accounts with no `debts` row — a credit card, a loan
+  // already on the books — offered for tracking. "Track this debt" opens Create
+  // debt with the account preselected, so the debt extends that account: no
+  // new account, no opening-balance movement (the "liability + debts" rule).
+  const untrackedLiabilities =
+    linkableLiabilityAccounts.length > 0 ? (
+      <section className="space-y-3">
+        <SectionHeading
+          title={translate(locale, 'debts.untrackedTitle')}
+          description={translate(locale, 'debts.untrackedDescription')}
+        />
+        <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm shadow-black/[0.03]">
+          {linkableLiabilityAccounts.map((account) => {
+            const owed = Math.max(
+              0,
+              -Number(balancesByAccountId.get(account.id)?.posted_balance_account_currency ?? 0)
+            )
+            return (
+              <div key={account.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{account.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {ui(getAccountVisual(account.account_type).label)}
+                  </p>
+                  {/* No balances (the RPC failed — the error callout says so):
+                      say nothing rather than a false "Balance 0". */}
+                  {balancesError ? null : (
+                    <p className="text-xs font-medium tabular-nums">
+                      {translate(locale, 'debts.balance', {
+                        amount: formatCurrency(owed, account.currency_code),
+                      })}
+                    </p>
+                  )}
+                </div>
+                <Link
+                  href={debtsPath({ mode: 'create', account: account.id })}
+                  className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'shrink-0')}
+                >
+                  {translate(locale, 'debts.trackThisDebt')}
+                </Link>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+    ) : null
+
   return (
     <LocalizedClientBoundary>
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
@@ -339,12 +398,20 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
       ) : null}
 
       {/* ── Summary ────────────────────────────────────────────────────── */}
+      {/* MQ-011: only with something to sum. With no active debt it read
+          "Total debt · 0 active" with the zero in red over three "N/A"s. */}
+      {activeDebts.length > 0 ? (
       <div className="rounded-2xl border bg-card p-5 shadow-sm shadow-black/[0.03] sm:p-6">
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             Total debt · {String(activeDebts.length)} active
           </p>
-          <p className="mt-1.5 font-mono text-3xl font-bold tabular-nums text-rose-600 dark:text-rose-400">
+          <p
+            className={cn(
+              'mt-1.5 text-3xl font-bold tabular-nums',
+              totalDebtBase > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'
+            )}
+          >
             {formatCurrency(totalDebtBase, household.base_currency)}
           </p>
           {overallPaidPercent !== null ? (
@@ -393,6 +460,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
           />
         </div>
       </div>
+      ) : null}
 
       {/* ── Dialogs ────────────────────────────────────────────────────── */}
       {isCreating ? (
@@ -408,6 +476,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
             defaultCurrency={defaultCurrency}
             linkableLiabilityAccounts={linkableLiabilityAccounts}
             today={today}
+            defaultExistingAccountId={typeof params.account === 'string' ? params.account : undefined}
           />
         </FormDialog>
       ) : null}
@@ -506,10 +575,9 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="pay_payment_date">Payment date</Label>
-                  <Input
+                  <DateInput
                     id="pay_payment_date"
                     name="payment_date"
-                    type="date"
                     defaultValue={today}
                     required
                   />
@@ -555,12 +623,15 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
       {debtsError ? (
         <Callout variant="error">Could not load debts. Try refreshing.</Callout>
       ) : debtRows.length === 0 ? (
-        <EmptyState
-          title="No debts yet"
-          description="Add a debt to start tracking liabilities and payments."
-          actionHref={debtsPath({ mode: 'create' })}
-          actionLabel="Create debt"
-        />
+        <div className="space-y-6">
+          <EmptyState
+            title="No debts yet"
+            description="Add a debt to start tracking liabilities and payments."
+            actionHref={debtsPath({ mode: 'create' })}
+            actionLabel="Create debt"
+          />
+          {untrackedLiabilities}
+        </div>
       ) : (
         <div className="space-y-6">
           {activeDebts.length > 0 ? (
@@ -622,6 +693,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
               </div>
             </section>
           ) : null}
+          {untrackedLiabilities}
         </div>
       )}
     </main>

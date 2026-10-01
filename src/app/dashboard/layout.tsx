@@ -6,7 +6,7 @@ import { MobileNav } from '@/components/mobile-nav'
 import { MobileBottomNav } from '@/components/mobile-bottom-nav'
 import { GlobalAddTransactionButton } from '@/components/global-add-transaction-button'
 import { TransactionDialogProvider } from '@/components/transaction-dialog-provider'
-import { AssistantDrawer } from '@/components/assistant-drawer'
+import { AssistantProvider } from '@/components/assistant-drawer'
 import { InstallAppHint } from '@/components/install-app-hint'
 import { ExchangeRateAutoRefresh } from './exchange-rate-auto-refresh'
 import { LanguageProvider } from '@/components/language-provider'
@@ -48,7 +48,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <LanguageProvider locale={locale}>
-      <TransactionDialogProvider>
+      <TransactionDialogProvider householdId={householdContext.currentId}>
         <LocalizedClientBoundary>
           <TextSizeSync value={textSize} />
           {/* MQ-001: the browser's time zone, for every server-side "today". */}
@@ -79,6 +79,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             `fixed`, and still want re-boxing onto the screen under pinch zoom.
             It is the two bars that stop needing it.
           */}
+          {/* Owns the assistant sheet, so the mobile top bar can open it. */}
+          <AssistantProvider>
           <div className="flex h-dvh overflow-hidden">
           {/* Desktop sidebar */}
           <AppSidebar
@@ -104,10 +106,17 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
             {/* The only scrolling box in the dashboard — see `lib/app-scroll`.
                 `overscroll-contain` keeps a bounce at either end from handing
-                the gesture to the document behind it. */}
+                the gesture to the document behind it.
+
+                `relative` makes it the containing block of every `absolute`
+                element a screen renders. Without it, one with no positioned
+                ancestor of its own resolves against the root instead: this
+                box neither clips nor scrolls it, and it lands at its in-flow
+                offset in *document* coordinates — making the document taller
+                than the screen, so the whole shell scrolls away (MQ-002). */}
             <main
               id={APP_SCROLL_ID}
-              className="flex-1 overflow-y-auto overscroll-contain pb-6"
+              className="relative flex-1 overflow-y-auto overscroll-contain pb-6"
             >
               {/* Above `ScreenTransition` so it does not replay the arrival
                   animation on every route change. */}
@@ -121,8 +130,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             <MobileBottomNav className="lg:hidden" />
           </div>
 
-          {/* FABs — assistant + add transaction (desktop only for add) */}
-          <AssistantDrawer />
+          {/* Add-transaction FAB, desktop only. The assistant's FAB (also
+              desktop only) renders from `AssistantProvider`. */}
           <GlobalAddTransactionButton
             aria-label={ui('Add transaction')}
             title={ui('Add transaction')}
@@ -131,6 +140,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             <Plus className="size-6" aria-hidden="true" />
           </GlobalAddTransactionButton>
           </div>
+          </AssistantProvider>
         </LocalizedClientBoundary>
       </TransactionDialogProvider>
     </LanguageProvider>

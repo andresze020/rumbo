@@ -298,12 +298,18 @@ export function TransactionForm({
   // prop lists so they show up and can be selected without a page reload.
   const [createdCategories, setCreatedCategories] = useState<TransactionFormCategory[]>([])
   const [createdAccounts, setCreatedAccounts] = useState<TransactionFormAccount[]>([])
+  // Deduplicated by id: the dialog refreshes its lists in the background while
+  // open (MQ-009), so one created here can come back in `accounts`/`categories`
+  // too, and must not show twice.
   const availableAccounts = useMemo(
-    () => [...accounts, ...createdAccounts],
+    () => [...accounts, ...createdAccounts.filter((a) => !accounts.some((b) => b.id === a.id))],
     [accounts, createdAccounts]
   )
   const availableCategories = useMemo(
-    () => [...categories, ...createdCategories],
+    () => [
+      ...categories,
+      ...createdCategories.filter((c) => !categories.some((d) => d.id === c.id)),
+    ],
     [categories, createdCategories]
   )
   // Which selector the mobile full-screen sheet is showing (null = closed).

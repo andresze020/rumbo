@@ -27,25 +27,25 @@
 | ID | Prioridad | Estado | Categoría | Área | Hallazgo en una línea |
 |---|---|---|---|---|---|
 | [MQ-001](#mq-001--today-y-el-mes-actual-se-calculan-en-utc) | P0 | ✅ Hecho (rama) — auto-post por cron sigue en UTC, ver ticket | Funcionamiento | Fechas (global) | "Hoy" y "mes actual" se calculan en UTC: a las 23:31 locales del 30-sep la app ya vive en octubre. |
-| [MQ-002](#mq-002--el-shell-se-desplaza-header-y-bottom-nav-se-van-de-la-pantalla) | P1 | Abierto | UI | Shell / navegación | Al llegar al final del scroll el header y la bottom nav se desplazan y dejan media pantalla vacía. |
-| [MQ-003](#mq-003--el-empty-state-de-transactions-parpadea-y-miente) | P1 | Abierto | Funcionamiento | Transactions | El empty state alterna solo entre dos variantes cada 1,5–3 s y dice "No transactions yet" con miles de transacciones. |
-| [MQ-004](#mq-004--el-botón-del-asistente-tapa-contenido-y-la-tab-more) | P1 | Abierto | UI | Global | El botón flotante del asistente tapa montos, botones de fila y la tab "More". |
-| [MQ-005](#mq-005--comparativas-de-mes-en-curso-contra-mes-completo) | P1 | Abierto | Funcionamiento | Dashboard / Budgets / Accounts | Deltas "−100 % vs Sep", "0,0 %" en verde y un Month health "C+" calculados sin datos del mes. |
-| [MQ-006](#mq-006--goals-resumen-que-ignora-metas-en-otra-moneda-y-cuentas-vinculables-incorrectas) | P1 | Abierto | Funcionamiento | Goals | El resumen ignora metas en moneda no base; se puede vincular una meta de ahorro a una cuenta de deuda. |
-| [MQ-007](#mq-007--sugerencias-de-autofill-del-navegador-en-campos-de-la-app) | P2 | Abierto | UX | Formularios | Brave ofrece nombres de contactos, montos viejos y tarjetas en campos de nombre y monto. |
-| [MQ-008](#mq-008--selects-nativos-con-listas-largas) | P2 | Abierto | UX | Budgets / Goals / Debts | `<select>` nativos con 20–60 opciones planas, sin búsqueda ni jerarquía. |
-| [MQ-009](#mq-009--skeletons-en-cada-navegación-incluida-una-página-estática) | P2 | Abierto | Performance | Navegación | Skeleton de 0,5–2 s en cada módulo, incluso en More (estático); "Loading form…" en blanco; skeleton de Budgets no coincide con el resultado. |
-| [MQ-010](#mq-010--sheets-con-teclado-autofocus-que-tapa-el-formulario) | P2 | Abierto | UX | Debts / Goals / Budgets | El autofocus abre el teclado al instante y tapa casi todo el formulario. |
-| [MQ-011](#mq-011--debts-no-reconoce-las-cuentas-de-pasivo-existentes) | P2 | Abierto | UX | Debts | Debts muestra 0 deudas en rojo mientras existe una cuenta tipo Debt con saldo; no ofrece vincularla. |
-| [MQ-012](#mq-012--tipografía-monoespaciada-en-montos) | P2 | Abierto | UI | Debts / Budgets / Goals | Montos en `font-mono` con caracteres espaciados, distinto al resto de la app. |
-| [MQ-013](#mq-013--símbolo--para-montos-en-cop-y-fecha-ddmmyyyy-con-ui-en-inglés) | P2 | Abierto | UX | Formularios multi-moneda | Montos en COP con prefijo "$"; inputs de fecha nativos en `dd/mm/yyyy` con la UI en inglés. |
-| [MQ-014](#mq-014--dashboard-de-mes-nuevo-cinco-empty-states-seguidos) | P2 | Abierto | UX | Dashboard / Budgets / Goals | Mes sin actividad = cinco tarjetas vacías seguidas; KPIs en cero empujan el empty state fuera de la vista. |
-| [MQ-015](#mq-015--payees-cuatro-acciones-por-fila) | P2 | Abierto | UI | Payees | Cuatro acciones por fila truncan el nombre y parten el meta en tres líneas. |
-| [MQ-016](#mq-016--categories-kpi-filtros-y-acciones-ambiguas) | P2 | Abierto | UX | Categories | KPI "Active" no sigue el filtro, tabs truncadas, icono `←\|` sin explicación, chevron con doble función. |
-| [MQ-017](#mq-017--accounts-delta-neutro-en-verde-e-indicador-de-swipe-sobre-el-saldo) | P2 | Abierto | UI | Accounts | "↑ 0,0 %" en verde; el indicador de swipe "‹" se dibuja encima del saldo. |
-| [MQ-018](#mq-018--more-lista-plana-de-20-ítems) | P3 | Abierto | UX | More | Lista plana de 20+ ítems que repite las tabs de la bottom nav. |
-| [MQ-019](#mq-019--budgets-fila-de-línea-y-detalle-poco-legibles) | P3 | Abierto | UX | Budgets | Fila colapsada sin el planificado, detalle en 5 tiles apilados, copy "0 over budget", banner persistente. |
-| [MQ-020](#mq-020--recurring-semántica-de-auto-y-secciones-duplicadas) | P3 | Abierto | UX | Recurring | Plantillas "Auto" vencidas sin postear, chips que envuelven, "Upcoming" y "Upcoming occurrences" duplicadas. |
+| [MQ-002](#mq-002--el-shell-se-desplaza-header-y-bottom-nav-se-van-de-la-pantalla) | P1 | ✅ Hecho (`fix/mq-002-shell-document-scroll`) | UI | Shell / navegación | Al llegar al final del scroll el header y la bottom nav se desplazan y dejan media pantalla vacía. |
+| [MQ-003](#mq-003--el-empty-state-de-transactions-parpadea-y-miente) | P1 | ✅ Hecho (`fix/mq-003-transactions-empty-state`) | Funcionamiento | Transactions | El empty state alterna solo entre dos variantes cada 1,5–3 s y dice "No transactions yet" con miles de transacciones. |
+| [MQ-004](#mq-004--el-botón-del-asistente-tapa-contenido-y-la-tab-more) | P1 | ✅ Hecho (`fix/mq-004-assistant-in-header`) | UI | Global | El botón flotante del asistente tapa montos, botones de fila y la tab "More". |
+| [MQ-005](#mq-005--comparativas-de-mes-en-curso-contra-mes-completo) | P1 | ✅ Hecho (`fix/mq-005-month-to-date-deltas`) | Funcionamiento | Dashboard / Budgets / Accounts | Deltas "−100 % vs Sep", "0,0 %" en verde y un Month health "C+" calculados sin datos del mes. |
+| [MQ-006](#mq-006--goals-resumen-que-ignora-metas-en-otra-moneda-y-cuentas-vinculables-incorrectas) | P1 | ✅ Hecho (`fix/mq-006-goals-summary-accounts`) | Funcionamiento | Goals | El resumen ignora metas en moneda no base; se puede vincular una meta de ahorro a una cuenta de deuda. |
+| [MQ-007](#mq-007--sugerencias-de-autofill-del-navegador-en-campos-de-la-app) | P2 | ✅ Hecho (`fix/mq-007-no-autofill`) | UX | Formularios | Brave ofrece nombres de contactos, montos viejos y tarjetas en campos de nombre y monto. |
+| [MQ-008](#mq-008--selects-nativos-con-listas-largas) | P2 | ✅ Hecho (`fix/mq-008-searchable-pickers`) | UX | Budgets / Goals / Debts | `<select>` nativos con 20–60 opciones planas, sin búsqueda ni jerarquía. |
+| [MQ-009](#mq-009--skeletons-en-cada-navegación-incluida-una-página-estática) | P2 | ✅ Hecho (`fix/mq-009-fewer-skeletons`) | Performance | Navegación | Skeleton de 0,5–2 s en cada módulo, incluso en More (estático); "Loading form…" en blanco; skeleton de Budgets no coincide con el resultado. |
+| [MQ-010](#mq-010--sheets-con-teclado-autofocus-que-tapa-el-formulario) | P2 | ✅ Hecho (`fix/mq-010-no-keyboard-on-open`) | UX | Debts / Goals / Budgets | El autofocus abre el teclado al instante y tapa casi todo el formulario. |
+| [MQ-011](#mq-011--debts-no-reconoce-las-cuentas-de-pasivo-existentes) | P2 | ✅ Hecho (`fix/mq-011-track-existing-liabilities`) | UX | Debts | Debts muestra 0 deudas en rojo mientras existe una cuenta tipo Debt con saldo; no ofrece vincularla. |
+| [MQ-012](#mq-012--tipografía-monoespaciada-en-montos) | P2 | ✅ Hecho (`fix/mq-012-proportional-amounts`) | UI | Debts / Budgets / Goals | Montos en `font-mono` con caracteres espaciados, distinto al resto de la app. |
+| [MQ-013](#mq-013--símbolo--para-montos-en-cop-y-fecha-ddmmyyyy-con-ui-en-inglés) | P2 | ✅ Hecho (`fix/mq-013-currency-prefix-dates`) | UX | Formularios multi-moneda | Montos en COP con prefijo "$"; inputs de fecha nativos en `dd/mm/yyyy` con la UI en inglés. |
+| [MQ-014](#mq-014--dashboard-de-mes-nuevo-cinco-empty-states-seguidos) | P2 | ✅ Hecho (`fix/mq-014-quiet-empty-months`) | UX | Dashboard / Budgets / Goals | Mes sin actividad = cinco tarjetas vacías seguidas; KPIs en cero empujan el empty state fuera de la vista. |
+| [MQ-015](#mq-015--payees-cuatro-acciones-por-fila) | P2 | ✅ Hecho (`fix/mq-015-payee-row-menu`) | UI | Payees | Cuatro acciones por fila truncan el nombre y parten el meta en tres líneas. |
+| [MQ-016](#mq-016--categories-kpi-filtros-y-acciones-ambiguas) | P2 | ✅ Hecho (`fix/mq-016-categories-clarity`) | UX | Categories | KPI "Active" no sigue el filtro, tabs truncadas, icono `←\|` sin explicación, chevron con doble función. |
+| [MQ-017](#mq-017--accounts-delta-neutro-en-verde-e-indicador-de-swipe-sobre-el-saldo) | P2 | ✅ Hecho (`fix/mq-017-accounts-long-names`) | UI | Accounts | "↑ 0,0 %" en verde; el indicador de swipe "‹" se dibuja encima del saldo. |
+| [MQ-018](#mq-018--more-lista-plana-de-20-ítems) | P3 | ✅ Hecho (`fix/mq-018-more-sections`) | UX | More | Lista plana de 20+ ítems que repite las tabs de la bottom nav. |
+| [MQ-019](#mq-019--budgets-fila-de-línea-y-detalle-poco-legibles) | P3 | ✅ Hecho (`fix/mq-019-budget-line-legibility`) | UX | Budgets | Fila colapsada sin el planificado, detalle en 5 tiles apilados, copy "0 over budget", banner persistente. |
+| [MQ-020](#mq-020--recurring-semántica-de-auto-y-secciones-duplicadas) | P3 | ✅ Hecho (`fix/mq-020-recurring-auto-clarity`) | UX | Recurring | Plantillas "Auto" vencidas sin postear, chips que envuelven, "Upcoming" y "Upcoming occurrences" duplicadas. |
 
 **Orden sugerido:** MQ-001 primero y solo (toca 30+ sitios y probablemente
 una migración). Luego MQ-002 + MQ-004 juntos (ambos son el shell móvil), luego
@@ -280,6 +280,12 @@ Corre ledger-guard antes de entregar: el ticket toca vencimientos y períodos.
 
 ### MQ-002 — El shell se desplaza: header y bottom nav se van de la pantalla
 
+> ✅ Hecho el 2026-10-01 — `main#app-scroll` pasa a `relative` (un `absolute` sin
+> ancestro posicionado ya no agranda el documento), `html:has(#app-scroll)` queda
+> en `overflow: hidden` y `overscroll-behavior-y: none` pasa también a `html`
+> (Chromium no lo lee de `body`). Detalle en
+> [features/mobile-app-shell.md](./features/mobile-app-shell.md).
+
 | Campo | Valor |
 |---|---|
 | Prioridad | **P1** |
@@ -363,6 +369,23 @@ documento, y deja en la entrega los pasos exactos para probarlo en el teléfono.
 
 ### MQ-003 — El empty state de Transactions parpadea y miente
 
+> ✅ Hecho el 2026-10-01 — el copy ya no depende de la forma de la URL sino de
+> los datos (`src/lib/transactions/empty-state.ts`, con test): "No transactions
+> yet" solo para un household sin transacciones; con historia, "No transactions
+> in {período}" + "Add transaction" / "Show all time". La tab Transactions
+> (bottom nav y sidebar) navega a la URL del alcance recordado, leído al tocar
+> (`src/lib/filters/transaction-scope-link.ts`).
+>
+> **Causa confirmada** (build de producción contra un Supabase simulado): el
+> mismo octubre vacío decía *yet* en `/dashboard/transactions` y *found* en
+> `?month=2026-10`, así que cualquier re-render que solo cambiara la forma de
+> la URL volteaba la tarjeta y su botón. El punto 4 era el Router Cache: la tab
+> hace prefetch completo de la URL pelada, cuyo render depende de la cookie
+> `af_tx_scope`; un re-tap reproducía el render viejo (el mes anterior) y su
+> `RememberTransactionScope` reescribía la cookie con ese mes. El disparador
+> exacto del parpadeo periódico del video no se reprodujo en headless; con el
+> copy derivado de los datos ambas formas de URL pintan la misma tarjeta.
+
 | Campo | Valor |
 |---|---|
 | Prioridad | **P1** |
@@ -434,6 +457,12 @@ igual.
 
 ### MQ-004 — El botón del asistente tapa contenido y la tab More
 
+> ✅ Hecho el 2026-10-01 — en móvil (< lg) el asistente se abre desde un botón
+> en el header, junto al toggle de tema (`MobileNav` → `useOpenAssistant()`), y
+> el botón flotante es solo de escritorio. El sheet vive en `AssistantProvider`
+> (`src/components/assistant-drawer.tsx`), que envuelve el shell. En 360 px
+> cabe sin quitar nada del header.
+
 | Campo | Valor |
 |---|---|
 | Prioridad | **P1** |
@@ -490,6 +519,18 @@ no tienen nada encima de montos ni botones.
 ---
 
 ### MQ-005 — Comparativas de mes en curso contra mes completo
+
+> ✅ Hecho el 2026-10-01 — Cash flow (Dashboard y Month review) compara el mes
+> abierto contra el mes anterior **hasta el mismo día** ("vs same day in Sep",
+> `src/lib/dashboard/month-comparison.ts`, con tests de 31-mar vs febrero y
+> bisiesto) leyendo ingresos y gastos diarios de `transaction_allocations` con
+> los filtros del RPC (`daily-cash-flow.ts`, antes `daily-expenses.ts`); sin
+> movimientos posteados no hay delta. Month health sin actividad muestra "Not
+> enough data yet" (`monthHealth`, con test) y el snapshot de cierre no guarda
+> nota. Budgets oculta el % por línea mientras el mes está abierto. Delta 0 →
+> gris y sin flecha (Accounts y Budgets); esto cubre también la mitad "0,0 %
+> en verde" de MQ-017. `ledger-guard`: sin hallazgos críticos; sus 4 menores
+> quedaron resueltos en la misma rama.
 
 | Campo | Valor |
 |---|---|
@@ -555,6 +596,15 @@ Corre ledger-guard antes de entregar.
 ---
 
 ### MQ-006 — Goals: resumen que ignora metas en otra moneda y cuentas vinculables incorrectas
+
+> ✅ Hecho el 2026-10-01 — "Total saved" (Goals y Plan) suma metas en cualquier
+> moneda, convertidas a la última tasa del household con `get_exchange_rate`
+> (la búsqueda de net worth); una moneda sin tasa se nombra aparte
+> (`src/lib/goals/summary.ts`, con test). "Linked account" depende del tipo:
+> ahorro → solo activos, `debt_payoff` → solo pasivos; se limpia al cambiar de
+> tipo y el server action valida lo mismo (`canLinkAccountToGoal`). Bajo el
+> selector, una línea explica que el progreso sale de "Add funds", no del
+> saldo de la cuenta (decisión abierta 1 de `features/goals.md`).
 
 | Campo | Valor |
 |---|---|
@@ -625,6 +675,13 @@ Actualiza docs/features/goals.md si cambia lo que muestra el resumen.
 
 ### MQ-007 — Sugerencias de autofill del navegador en campos de la app
 
+> ✅ Hecho el 2026-10-01 — `autoComplete` es `"off"` por defecto en los
+> primitivos `Input` y `Textarea` (todo campo de texto de la app pasa por
+> ellos, incluido `AmountInput`); un token explícito gana, así que login y el
+> email/contraseña de Settings conservan el autofill. Los cuatro buscadores de
+> lista sueltos (Categories, Payees, Tags, Notes) pasan a `type="search"` con
+> `autoComplete="off"`.
+
 **Evidencia:** 1:16–1:19 (Debt name), 2:34 (Planned amount), 2:56–3:04 (Goal
 name), 3:14 (Target amount). **Categoría:** UX. **BD:** ninguno.
 
@@ -663,6 +720,18 @@ New goal: no deben aparecer chips sobre el teclado).
 ---
 
 ### MQ-008 — Selects nativos con listas largas
+
+> ✅ Hecho el 2026-10-01 — `SearchablePicker` (`src/components/searchable-picker.tsx`)
+> reusa el `SelectorSheet` del formulario de transacciones: en móvil, hoja a
+> pantalla completa con búsqueda (sin acentos ni mayúsculas) y opciones
+> agrupadas o indentadas; desde `sm`, `<select>` nativo con `<optgroup>`. Lo
+> usan "Add budget line" (padres y subcategorías indentadas), "Linked account"
+> de Goals y "Existing liability account" de Debts (cuentas agrupadas por
+> tipo). **Corrección del ticket:** `category-picker.tsx` no tiene búsqueda
+> (son dos selects padre/hijo); el patrón con búsqueda es `SelectorSheet`.
+> `FormDialog` pasa a `translate-none` en móvil: con `translate-x-0
+> translate-y-0` seguía siendo containing block de sus `fixed` y la hoja del
+> picker quedaba del alto del diálogo.
 
 **Evidencia:** 2:24–2:30 (categoría de línea de presupuesto, ~60 opciones),
 3:07–3:11 (cuenta vinculada, 22 opciones), 1:16 (Create debt). **Categoría:**
@@ -712,6 +781,18 @@ action.
 ---
 
 ### MQ-009 — Skeletons en cada navegación, incluida una página estática
+
+> ✅ Hecho el 2026-10-01 — More: su `loading.tsx` renderiza la propia página
+> (no tiene datos; borrarlo habría mostrado el skeleton del Dashboard, que es
+> el límite padre) y la tab More hace prefetch completo. Budgets: skeleton con
+> el marco real de la página y un bloque neutro, sin "Loading" ni 4 KPIs. FAB
+> "+": stale-while-revalidate de `getQuickAddFormData` (solo la primera
+> apertura espera; BF-011 se mantiene porque cada apertura revalida). Medido
+> en build de producción contra Supabase simulado con 150 ms por petición:
+> More 394 ms con skeleton → 110 ms sin skeleton; 2.ª apertura del formulario
+> 1011 ms → ~105 ms. Las pantallas con datos (Goals, Recurring, Budgets) siguen
+> mostrando skeleton mientras cargan, como corresponde. Los enlaces de More ya
+> usaban el prefetch por defecto de `<Link>`.
 
 **Evidencia:** 1:28, 1:52, 2:00, 2:02, 2:48, 2:51, 3:35 (skeletons de More,
 Categories, Payees, Tags, Goals, Recurring); 2:13 (Budgets); 0:54 ("Loading
@@ -766,6 +847,14 @@ saldos (eso fue RUM-*).
 
 ### MQ-010 — Sheets con teclado autofocus que tapa el formulario
 
+> ✅ Hecho el 2026-10-01 — `FormDialog` en móvil enfoca la hoja (no el primer
+> campo) cuando el formulario tiene más de dos campos visibles; con dos o menos
+> mantiene el comportamiento por defecto. La fila de acciones (`formActionsCls`
+> → marcador `form-actions`) queda sticky al borde inferior de la hoja, y con
+> el teclado abierto `ViewportPin` publica `data-vv-keyboard` para que la hoja
+> se apoye encima del teclado. Detalle en
+> [features/mobile-app-shell.md](./features/mobile-app-shell.md).
+
 **Evidencia:** 1:16–1:21 (Create debt), 2:56 (New goal), 2:34 (Add budget
 line). **Categoría:** UX. **BD:** ninguno.
 
@@ -802,6 +891,13 @@ el botón primario están visibles.
 ---
 
 ### MQ-011 — Debts no reconoce las cuentas de pasivo existentes
+
+> ✅ Hecho el 2026-10-01 — Debts lista las cuentas de pasivo activas sin fila
+> en `debts` ("Liability accounts not in the planner"), con su saldo y "Track
+> this debt", que abre Create debt con esa cuenta preseleccionada
+> (`?mode=create&account=…`; el server action ya vinculaba sin crear cuenta ni
+> movimiento). La tarjeta resumen se oculta sin deudas activas y un total 0 no
+> va en rojo. La tarjeta Debts del Dashboard enlaza a esta lista.
 
 **Evidencia:** 0:07 (tarjeta Debts del Dashboard), 1:12–1:14 (página Debts),
 1:26 (existe una cuenta tipo Debt con saldo). **Categoría:** UX. **BD:**
@@ -844,6 +940,11 @@ i18n-scribe.
 
 ### MQ-012 — Tipografía monoespaciada en montos
 
+> ✅ Hecho el 2026-10-01 — `font-mono` fuera de Debts (página y tarjeta),
+> Budgets (KPIs, filas, detalle), Goals, Categories, Debt planner y el hero de
+> Net worth; todos conservan `tabular-nums` sobre la sans base. Solo el display
+> de la calculadora de `amount-input.tsx` sigue en mono.
+
 **Evidencia:** 1:12 (Debts), 2:17–2:45 (Budgets), 3:26 (Goals).
 **Categoría:** UI. **BD:** ninguno.
 
@@ -883,6 +984,14 @@ Cambio solo visual. Verifica con qa-smoke que las páginas tocadas cargan.
 
 ### MQ-013 — Símbolo "$" para montos en COP y fecha dd/mm/yyyy con UI en inglés
 
+> ✅ Hecho el 2026-10-01 — `AmountInput` usa `getCurrencyPrefix` (símbolo CLDR en
+> inglés salvo el "$" de USD, que pasa a "US$": COP, CA$, US$, €; con test) y
+> mide el ancho real del prefijo para el padding. `DateInput`
+> (`src/components/date-input.tsx`) muestra bajo el input nativo la fecha en el
+> idioma de la UI ("Thu, Oct 1, 2026"); lo usan Create debt, Register payment
+> y New/Edit goal. El formulario de transacciones no tiene un date picker propio
+> reutilizable (usa input nativo + chips de fecha relativa).
+
 **Evidencia:** 3:12–3:27 (Target amount "$ …" con "In COP." debajo),
 1:20 y 3:04–3:23 (inputs de fecha). **Categoría:** UX. **BD:** ninguno.
 
@@ -920,6 +1029,13 @@ Sin cambios de esquema ni de cómo se guardan montos o fechas.
 ---
 
 ### MQ-014 — Dashboard de mes nuevo: cinco empty states seguidos
+
+> ✅ Hecho el 2026-10-01 — Dashboard sin movimientos: una tarjeta "{mes} is just
+> starting" (Add transaction / Post due recurring / Set up the budget) en lugar
+> de Spending + Cash flow; By category oculto e Insights oculto si no hay
+> ninguno. Budgets sin líneas oculta KPIs y "How this month was paid"; Goals sin
+> metas oculta sus KPIs y con metas los compacta. Sin cambios de cálculo.
+> Detalle en [features/dashboard-layout.md](./features/dashboard-layout.md).
 
 **Evidencia:** 0:00–0:11 (Dashboard), 2:17 (Budgets recién creado),
 2:52–2:54 (Goals). **Categoría:** UX. **BD:** ninguno.
@@ -961,6 +1077,13 @@ No cambies ningún cálculo. Verifica con qa-smoke.
 
 ### MQ-015 — Payees: cuatro acciones por fila
 
+> ✅ Hecho el 2026-10-01 — En móvil la fila de un payee (icono + nombre + meta)
+> es un solo enlace a sus transacciones y un único botón "⋯" despliega Edit /
+> Merge / Archive (o Restore) bajo la fila, con la confirmación de Archive
+> intacta; en sm+ quedan los iconos de siempre. El nombre y "N transactions ·
+> last used …" usan todo el ancho. Tags usa el mismo patrón (Edit / Archive).
+> Sin textos nuevos: reutiliza "Actions", "Edit" y "Merge".
+
 **Evidencia:** 1:55–1:58. **Categoría:** UI. **BD:** ninguno.
 
 **Síntoma.** Cada fila tiene 4 controles (transacciones, editar, merge,
@@ -994,6 +1117,17 @@ la entrega. Textos nuevos vía i18n-scribe.
 ---
 
 ### MQ-016 — Categories: KPI, filtros y acciones ambiguas
+
+> ✅ Hecho el 2026-10-01 — Los dos KPI móviles cuentan la lista filtrada (tipo,
+> búsqueda y archivadas; "Archived" cuando se ven archivadas). Las tabs de tipo
+> ya no se encogen: la fila se desliza, un fade marca el borde con más tabs y
+> la activa se centra al llegar (`categories/type-tabs.tsx`). En móvil el
+> chevron de un padre solo pliega/despliega sus subcategorías; tocar la fila o
+> "⋯" abre detalles y acciones, y "←|" pasa a ese panel como "Move to main
+> level" con texto visible (en desktop sigue en la fila, con aria-label). El
+> panel se monta solo al abrirse: sin cierre a medias ni botones invisibles en
+> el orden de tabulación. "Income" dentro de Income es un dato del household,
+> no de la UI: no se tocó (el ticket prohíbe cambiar jerarquía).
 
 **Evidencia:** 1:33–1:48. **Categoría:** UX. **BD:** ninguno.
 
@@ -1042,6 +1176,15 @@ No cambies jerarquía ni tipos de categorías. Textos nuevos vía i18n-scribe.
 
 ### MQ-017 — Accounts: delta neutro en verde e indicador de swipe sobre el saldo
 
+> ✅ Hecho el 2026-10-01 — (1) El delta 0 gris y sin flecha ya lo resolvió
+> MQ-005. (2) La app no tiene swipe en ninguna fila (Accounts, Payees ni
+> otra; solo long-press en Transactions): el "‹" en un círculo del video es el
+> indicador del gesto "atrás" de Android al arrastrar desde el borde, fuera
+> del control de la app. Sin cambio. (3) Bajo `sm` la fila de una cuenta pone
+> el nombre en la primera línea a todo el ancho (hasta dos líneas) y el saldo
+> en la segunda, alineado a la derecha junto al subtítulo; a 360 px el nombre
+> pasa de 84 px a 226 px y ya no se corta. Desde `sm` la fila queda como antes.
+
 **Evidencia:** 0:51 (badge), 1:04 y 1:10 (indicador "‹" sobre el saldo de la
 primera cuenta). **Categoría:** UI. **BD:** ninguno.
 
@@ -1082,6 +1225,14 @@ Cambio solo visual. Verifica con qa-smoke.
 
 ### MQ-018 — More: lista plana de 20+ ítems
 
+> ✅ Hecho el 2026-10-01 — More muestra secciones con encabezado: Planning,
+> Analysis, Organize (nuevo `nav.groupOrganize`), Automation y Settings (con
+> tema y cerrar sesión), y ya no repite Dashboard, Transactions ni Accounts.
+> La agrupación vive en `src/lib/nav/more-sections.ts` y referencia los ítems
+> de `navGroups` por href, así que el sidebar de escritorio no cambia; un test
+> falla si un destino nuevo no queda ni en More ni en la bottom nav. Desaparece
+> también la sección "Coming later", que salía vacía.
+
 **Evidencia:** 1:28, 2:11–2:12, 3:31–3:34. **Categoría:** UX.
 
 **Síntoma.** More es una lista única de 20+ enlaces (Dashboard, Net Worth,
@@ -1120,6 +1271,16 @@ Encabezados nuevos vía i18n-scribe.
 
 ### MQ-019 — Budgets: fila de línea y detalle poco legibles
 
+> ✅ Hecho el 2026-10-01 — La fila móvil muestra "gastado" y "of
+> planificado" (el disponible, si hay rollover), con el % junto a la barra y
+> las barras alineadas entre filas. El detalle es una grilla de 2 columnas en
+> móvil, con Last month a todo el ancho debajo. El subtítulo dice "No lines /
+> 1 line / N lines over budget" (claves `budgets.*` en en/es/fr). "Budget
+> created.", "Budget line saved.", "removed" y "Rollover updated." son ahora
+> un toast que se descarta solo (`FlashToast`, nuevo componente compartido) y
+> la marca sale de la URL; los errores siguen como Callout. Sin cambios de
+> cálculo.
+
 **Evidencia:** 2:17–2:45. **Categoría:** UX.
 
 **Síntoma.** La fila colapsada muestra solo "gastado" y "%", sin el
@@ -1154,6 +1315,18 @@ Sin cambios de cálculo. Textos vía i18n-scribe.
 ---
 
 ### MQ-020 — Recurring: semántica de "Auto" y secciones duplicadas
+
+> ✅ Hecho el 2026-10-01 — "Auto" se explica según
+> `docs/features/recurring-transactions.md` (UC-4): una corrida diaria a las
+> 06:00 UTC postea toda plantilla auto activa con `next_run_date ≤ hoy`. El
+> chip lleva esa definición como tooltip, el panel de la fila la muestra, y
+> una plantilla Auto vencida y sin error dice en la propia fila que la próxima
+> corrida la registrará (o "Post now" para antes). "Auto-post failed"
+> reemplaza al chip "Auto" en vez de sumarse. Los chips van en su propia fila
+> bajo el nombre, sin envolver. "Upcoming occurrences" queda plegada por
+> defecto (`<details>`) y los KPI son una grilla compacta en móvil. Sin cambio
+> de lógica. "Due" a la medianoche local depende de MQ-001 (#89), que este PR
+> no toca.
 
 **Evidencia:** 3:36–3:57. **Categoría:** UX.
 

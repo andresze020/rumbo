@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowLeftFromLine, ChevronDown, Pencil, Tag } from 'lucide-react'
+import { ArrowLeftFromLine, ChevronDown, MoreHorizontal, Pencil, Tag } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
 import { ConfirmActionButton } from '@/components/confirm-action-button'
@@ -39,6 +39,12 @@ type CategoryRowProps = {
   level?: number
   /** Ends the tree rail at this row, so a branch visibly stops. */
   isLastChild?: boolean
+  /** Phone only: this parent's subcategories are folded away (MQ-016). */
+  childrenCollapsed?: boolean
+  /** Phone only: folds or unfolds this parent's subcategories. */
+  onToggleChildren?: () => void
+  /** Phone only: hides the row because its parent is folded. */
+  mobileHidden?: boolean
 }
 
 function categoryFlags(category: Category) {
@@ -90,6 +96,9 @@ export function CategoryRow({
   dragHandle,
   level = 0,
   isLastChild = false,
+  childrenCollapsed = false,
+  onToggleChildren,
+  mobileHidden = false,
 }: CategoryRowProps) {
   const { locale, t } = useLanguage()
   const displayName = localizeSystemCategoryName(
@@ -132,32 +141,64 @@ export function CategoryRow({
   )
 
   /**
-   * BR-047 + BR-048 — the one-click way out of a parent, on every subcategory
-   * row rather than hidden inside its details panel. Dragging left does the
+   * BR-047 + BR-048 — the one-click way out of a parent. On desktop it sits on
+   * every subcategory row, icon-only with a tooltip; dragging left does the
    * same thing, but only once you know dragging works at all.
+   *
+   * A phone has no tooltip, so an unlabelled "←|" on the row read as nothing
+   * (MQ-016). There it lives in the row's actions panel, next to Edit and
+   * Archive, with its name spelled out.
    */
-  const outdentButton = isChild ? (
-    <ConfirmActionButton
-      action={promoteCategoryAction}
-      triggerVariant="outline"
-      triggerSize="icon-sm"
-      triggerTitle={t('categoriesUi.promoteAction')}
-      hiddenFields={{
-        category_id: category.id,
-        show_archived: showArchived ? 'true' : 'false',
-      }}
-      triggerLabel={<ArrowLeftFromLine className="size-3.5" aria-hidden="true" />}
-      pendingLabel={t('categoriesUi.promotePending')}
-      title={t('categoriesUi.promoteTitle')}
-      description={t('categoriesUi.promoteDescription', { name: displayName })}
-      cancelLabel={t('common.cancel')}
-      confirmLabel={t('categoriesUi.promoteConfirm')}
-    />
-  ) : null
+  const outdentButton = (compact: boolean) =>
+    isChild ? (
+      <ConfirmActionButton
+        action={promoteCategoryAction}
+        triggerVariant="outline"
+        triggerSize={compact ? 'icon-sm' : 'sm'}
+        triggerTitle={compact ? t('categoriesUi.promoteAction') : undefined}
+        hiddenFields={{
+          category_id: category.id,
+          show_archived: showArchived ? 'true' : 'false',
+        }}
+        triggerLabel={
+          compact ? (
+            <ArrowLeftFromLine className="size-3.5" aria-hidden="true" />
+          ) : (
+            <>
+              <ArrowLeftFromLine className="size-3.5" aria-hidden="true" />
+              {t('categoriesUi.promoteAction')}
+            </>
+          )
+        }
+        pendingLabel={t('categoriesUi.promotePending')}
+        title={t('categoriesUi.promoteTitle')}
+        description={t('categoriesUi.promoteDescription', { name: displayName })}
+        cancelLabel={t('common.cancel')}
+        confirmLabel={t('categoriesUi.promoteConfirm')}
+      />
+    ) : null
+
+  const detailsLabel = t(open ? 'categoriesUi.hideDetails' : 'categoriesUi.showDetails', {
+    name: displayName,
+  })
+
+  /** "⋯" — details and actions. The chevron only ever folds children. */
+  const detailsButton = (
+    <button
+      type="button"
+      onClick={() => setOpen((v) => !v)}
+      className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+      aria-expanded={open}
+      aria-label={detailsLabel}
+    >
+      <MoreHorizontal className="size-4 text-muted-foreground" aria-hidden="true" />
+    </button>
+  )
 
   return (
     <div
       className={cn(
+        mobileHidden && 'max-md:hidden',
         category.is_archived && 'bg-muted/20',
         // Subcategories sit on a recessed band with a left accent, so a glance
         // separates "a category" from "inside a category".
@@ -181,60 +222,62 @@ export function CategoryRow({
               {displayName}
             </span>
           </button>
-          {outdentButton}
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-            aria-expanded={open}
-            aria-label={t(
-              open ? 'categoriesUi.hideDetails' : 'categoriesUi.showDetails',
-              { name: displayName }
-            )}
-          >
-            <ChevronDown
-              className={cn(
-                'size-3.5 text-muted-foreground transition-transform duration-200',
-                open && 'rotate-180'
-              )}
-              aria-hidden="true"
-            />
-          </button>
+          {detailsButton}
         </div>
       ) : (
-        <div className="p-3 md:hidden">
+        <div className="flex items-center gap-1 py-1.5 pl-3 pr-2 md:hidden">
+          {/* Tapping the row opens details and actions, like "⋯" does. */}
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-expanded={open}
           >
-            <div className="flex items-center gap-2.5">
-              <CategoryIcon category={category} />
-              <span className="min-w-0 flex-1">
-                <span className={cn('block truncate text-sm font-semibold', muted)}>
-                  {displayName}
-                </span>
-                {childCount > 0 ? (
-                  <span className="mt-0.5 block text-[10.5px] text-muted-foreground">
-                    {t(
-                      childCount === 1
-                        ? 'categoriesUi.subcategoryOne'
-                        : 'categoriesUi.subcategoryOther',
-                      { count: childCount }
-                    )}
-                  </span>
-                ) : null}
+            <CategoryIcon category={category} />
+            <span className="min-w-0 flex-1">
+              <span className={cn('block truncate text-sm font-semibold', muted)}>
+                {displayName}
               </span>
+              {childCount > 0 ? (
+                <span className="mt-0.5 block text-[10.5px] text-muted-foreground">
+                  {t(
+                    childCount === 1
+                      ? 'categoriesUi.subcategoryOne'
+                      : 'categoriesUi.subcategoryOther',
+                    { count: childCount }
+                  )}
+                </span>
+              ) : null}
+            </span>
+          </button>
+          {detailsButton}
+          {childCount > 0 && onToggleChildren ? (
+            <button
+              type="button"
+              onClick={onToggleChildren}
+              // Unfolded is this button's resting state, so it does not take
+              // the ghost variant's "open" fill.
+              className={cn(
+                buttonVariants({ variant: 'ghost', size: 'icon-sm' }),
+                'aria-expanded:bg-transparent'
+              )}
+              aria-expanded={!childrenCollapsed}
+              aria-label={t(
+                childrenCollapsed
+                  ? 'categoriesUi.showSubcategories'
+                  : 'categoriesUi.hideSubcategories',
+                { name: displayName }
+              )}
+            >
               <ChevronDown
                 className={cn(
-                  'size-4 shrink-0 text-muted-foreground transition-transform duration-200',
-                  open && 'rotate-180'
+                  'size-4 text-muted-foreground transition-transform duration-200',
+                  childrenCollapsed && '-rotate-90'
                 )}
                 aria-hidden="true"
               />
-            </div>
-          </button>
+            </button>
+          ) : null}
         </div>
       )}
 
@@ -285,7 +328,7 @@ export function CategoryRow({
         </div>
 
         <div className="flex items-center justify-end gap-1">
-          {outdentButton}
+          {outdentButton(true)}
           <Link
             href={editHref}
             className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}
@@ -293,121 +336,102 @@ export function CategoryRow({
           >
             <Pencil className="size-3.5" aria-hidden="true" />
           </Link>
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-            aria-expanded={open}
-            aria-label={t(
-              open ? 'categoriesUi.hideDetails' : 'categoriesUi.showDetails',
-              { name: displayName }
-            )}
-          >
-            <ChevronDown
-              className={cn(
-                'size-4 text-muted-foreground transition-transform duration-200',
-                open && 'rotate-180'
-              )}
-              aria-hidden="true"
-            />
-          </button>
+          {detailsButton}
         </div>
       </div>
 
-      <div
-        className={`grid transition-all duration-200 ease-in-out ${
-          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-        }`}
-      >
-        <div className="overflow-hidden">
-          <div className="mx-3 mb-3 space-y-3 rounded-lg bg-muted/40 p-3">
-            <div className="flex flex-wrap gap-1.5">
-              {configurationBadges.length ? (
-                configurationBadges.map((flag) => (
-                  <span
-                    key={flag}
-                    className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
-                  >
-                    {flag}
-                  </span>
-                ))
-              ) : (
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  Active
+      {/* Mounted only while open (MQ-016). The collapsed-grid version kept
+          its Edit and Archive buttons in the tab order while invisible, and a
+          tap mid-collapse could leave the row half-closed. */}
+      {open ? (
+        <div className="mx-3 mb-3 space-y-3 rounded-lg bg-muted/40 p-3 animate-in fade-in-0 slide-in-from-top-1 duration-150">
+          <div className="flex flex-wrap gap-1.5">
+            {configurationBadges.length ? (
+              configurationBadges.map((flag) => (
+                <span
+                  key={flag}
+                  className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                >
+                  {flag}
                 </span>
-              )}
-            </div>
+              ))
+            ) : (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                Active
+              </span>
+            )}
+          </div>
 
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              {parentName ? (
-                <span>
-                  Parent: <span className="text-foreground">{parentName}</span>
-                </span>
-              ) : null}
-              {parentUnavailable ? (
-                <span className="text-amber-600 dark:text-amber-400">
-                  Parent category unavailable
-                </span>
-              ) : null}
-              {childCount > 0 ? (
-                <span>
-                  {t(
-                    childCount === 1
-                      ? 'categoriesUi.subcategoryOne'
-                      : 'categoriesUi.subcategoryOther',
-                    { count: childCount }
-                  )}
-                </span>
-              ) : null}
-              {category.sort_order != null ? (
-                <span>Sort order: {category.sort_order}</span>
-              ) : null}
-              <span>Type: {formatLabel(category.category_type)}</span>
-              <span>Reports as: {formatLabel(category.reporting_type)}</span>
-            </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {parentName ? (
+              <span>
+                Parent: <span className="text-foreground">{parentName}</span>
+              </span>
+            ) : null}
+            {parentUnavailable ? (
+              <span className="text-amber-600 dark:text-amber-400">
+                Parent category unavailable
+              </span>
+            ) : null}
+            {childCount > 0 ? (
+              <span>
+                {t(
+                  childCount === 1
+                    ? 'categoriesUi.subcategoryOne'
+                    : 'categoriesUi.subcategoryOther',
+                  { count: childCount }
+                )}
+              </span>
+            ) : null}
+            {category.sort_order != null ? (
+              <span>Sort order: {category.sort_order}</span>
+            ) : null}
+            <span>Type: {formatLabel(category.category_type)}</span>
+            <span>Reports as: {formatLabel(category.reporting_type)}</span>
+          </div>
 
-            <div className="flex flex-wrap gap-1.5">
-              <Link
-                href={editHref}
-                className={buttonVariants({ variant: 'outline', size: 'sm' })}
-              >
-                Edit
-              </Link>
-              {/* BR-047's promote action is not repeated here — it now sits on
-                  the row itself, where it's visible without expanding. */}
-              {category.is_archived ? (
-                <form action={archiveCategoryAction}>
-                  <input type="hidden" name="category_id" value={category.id} />
-                  <input type="hidden" name="is_archived" value="false" />
-                  <input
-                    type="hidden"
-                    name="show_archived"
-                    value={showArchived ? 'true' : 'false'}
-                  />
-                  <SubmitButton type="submit" size="sm" variant="outline" pendingText="Restoring…">
-                    Restore
-                  </SubmitButton>
-                </form>
-              ) : (
-                <ConfirmActionButton
-                  action={archiveCategoryAction}
-                  hiddenFields={{
-                    category_id: category.id,
-                    is_archived: 'true',
-                    show_archived: showArchived ? 'true' : 'false',
-                  }}
-                  triggerLabel="Archive"
-                  pendingLabel="Archiving…"
-                  title="Archive this category?"
-                  description="Archived categories are hidden from category lists and pickers, but history stays intact. You can restore it anytime."
-                  cancelLabel="Cancel"
-                  confirmLabel="Archive"
+          <div className="flex flex-wrap gap-1.5">
+            <Link
+              href={editHref}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Edit
+            </Link>
+            {/* BR-047's promote action: on desktop it sits on the row itself;
+                on a phone this panel is its home, labelled. */}
+            {isChild ? <span className="md:hidden">{outdentButton(false)}</span> : null}
+            {category.is_archived ? (
+              <form action={archiveCategoryAction}>
+                <input type="hidden" name="category_id" value={category.id} />
+                <input type="hidden" name="is_archived" value="false" />
+                <input
+                  type="hidden"
+                  name="show_archived"
+                  value={showArchived ? 'true' : 'false'}
                 />
-              )}
-            </div>
+                <SubmitButton type="submit" size="sm" variant="outline" pendingText="Restoring…">
+                  Restore
+                </SubmitButton>
+              </form>
+            ) : (
+              <ConfirmActionButton
+                action={archiveCategoryAction}
+                hiddenFields={{
+                  category_id: category.id,
+                  is_archived: 'true',
+                  show_archived: showArchived ? 'true' : 'false',
+                }}
+                triggerLabel="Archive"
+                pendingLabel="Archiving…"
+                title="Archive this category?"
+                description="Archived categories are hidden from category lists and pickers, but history stays intact. You can restore it anytime."
+                cancelLabel="Cancel"
+                confirmLabel="Archive"
+              />
+            )}
           </div>
         </div>
-      </div>
+      ) : null}
     </div>
   )
 }

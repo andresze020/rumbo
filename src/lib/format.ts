@@ -75,18 +75,25 @@ export function formatCurrencyCompact(value: number | string, currencyCode: stri
 }
 
 /**
- * Returns the narrow currency symbol for a code (e.g. "$" for USD/CAD, "€"
- * for EUR), falling back to the code itself for unknown currencies. Used to
- * prefix amount inputs so users see which currency they're entering.
+ * MQ-013 — the prefix an amount field shows: a symbol only when it names a
+ * single currency. The narrow "$" is shared by USD, CAD, COP, MXN…, so a COP
+ * target read "$ 1,000,000" with "In COP." in small print underneath.
+ *
+ * English CLDR symbols already disambiguate everything but its own dollar:
+ * CAD → "CA$", MXN → "MX$", COP → "COP", EUR → "€", GBP → "£". The plain "$"
+ * it gives USD becomes "US$". Unknown codes fall back to the code itself.
  */
-export function getCurrencySymbol(currencyCode: string, locale: Locale = 'en') {
+export function getCurrencyPrefix(currencyCode: string) {
   try {
-    const parts = new Intl.NumberFormat(localeToBcp47(locale), {
-      style: 'currency',
-      currency: currencyCode,
-      currencyDisplay: 'narrowSymbol',
-    }).formatToParts(0)
-    return parts.find((part) => part.type === 'currency')?.value ?? currencyCode
+    const symbol =
+      new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currencyCode,
+        currencyDisplay: 'symbol',
+      })
+        .formatToParts(0)
+        .find((part) => part.type === 'currency')?.value ?? currencyCode
+    return symbol === '$' ? 'US$' : symbol
   } catch {
     return currencyCode
   }

@@ -16,7 +16,11 @@ function monthPath(month: string, params: Record<string, string>) {
 }
 
 function parseFiniteNumber(value: FormDataEntryValue | null) {
-  const n = Number(String(value ?? '').trim())
+  // Empty is "no value", not 0: a month with no income has no savings rate,
+  // and an empty month has no score (MQ-005). `Number('')` would say 0.
+  const text = String(value ?? '').trim()
+  if (!text) return null
+  const n = Number(text)
   return Number.isFinite(n) ? n : null
 }
 

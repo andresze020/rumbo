@@ -20,10 +20,12 @@ import { MonthNav } from '@/components/month-nav'
 import { Callout } from '@/components/callout'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { SubmitButton } from '@/components/submit-button'
-import { formatCurrency, formatIsoDate, formatPercent } from '@/lib/format'
+import { formatCurrency, formatIsoDate, formatPercent, localeToBcp47 } from '@/lib/format'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
-import { healthBreakdown } from '@/lib/health/score'
+import { monthHealth } from '@/lib/health/score'
+import { getDailyCashFlow } from '@/lib/dashboard/daily-cash-flow'
+import { cashFlowComparison, type CashFlowTotals } from '@/lib/dashboard/month-comparison'
 import { monthEndDate } from '@/lib/periods/month'
 import { MonthHealthBreakdown } from '@/components/month-health-breakdown'
 import { cn } from '@/lib/utils'
@@ -57,10 +59,13 @@ function PctDelta({
   current,
   previous,
   higherIsBad = false,
+  vsLabel,
 }: {
   current: number
   previous: number | null
   higherIsBad?: boolean
+  /** Pre-translated comparison label; "vs prev. month" when omitted. */
+  vsLabel?: string
 }) {
   if (previous === null || previous === 0) return null
   const diff = (current - previous) / Math.abs(previous)
@@ -80,12 +85,13 @@ function PctDelta({
         isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
       )}
     >
-      {isUp ? '↑' : '↓'} {formatted}% vs prev. month
+      {isUp ? '↑' : '↓'} {formatted}
+      {vsLabel ? <>% {vsLabel}</> : <>% vs prev. month</>}
     </span>
   )
 }
 
-function RateDelta({ diff }: { diff: number | null }) {
+function RateDelta({ diff, vsLabel }: { diff: number | null; vsLabel?: string }) {
   if (diff === null) return null
   if (Math.abs(diff) < 0.0001) {
     return <span className="text-[11.5px] font-medium text-muted-foreground">No change vs prev. month</span>
@@ -102,7 +108,7 @@ function RateDelta({ diff }: { diff: number | null }) {
         isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
       )}
     >
-      {isUp ? '↑' : '↓'} {formatted} pp vs prev. month
+      {isUp ? '↑' : '↓'} {formatted} {vsLabel ? <>pp {vsLabel}</> : <>pp vs prev. month</>}
     </span>
   )
 }
@@ -128,9 +134,49 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
   const prev = series[0] ?? { income: 0, expenses: 0, savings: 0, savingsRate: null }
   const curr = series[1] ?? { income: 0, expenses: 0, savings: 0, savingsRate: null }
 
-  const hasActivity = curr.income !== 0 || curr.expenses !== 0
+  // Counts, not amounts: a purchase and its refund net to 0 but are still
+  // activity — and this is the rule the Dashboard uses (MQ-005).
+  const hasActivity = (series[1]?.transactionCount ?? 0) > 0
+
+  // MQ-005: the same comparison as the Dashboard's Cash flow. An open month is
+  // measured against the previous month up to the same day, not all of it; a
+  // month with nothing posted is not compared at all (it read "↓ 100%" on
+  // every line).
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const isOpenMonth = month === todayIso.slice(0, 7)
+  // A month that has not started (reachable through MonthNav) may already hold
+  // a future-dated posting; that partial month against all of the one before
+  // it is not a comparison either.
+  const isFutureMonth = month > todayIso.slice(0, 7)
+  const dailyCashFlow = isOpenMonth
+    ? await getDailyCashFlow(ctx.supabase, ctx.household.id, `${prevMonth}-01`, monthEndDate(month))
+    : null
+  const comparison = dailyCashFlow ? cashFlowComparison(month, todayIso, dailyCashFlow) : null
+  let comparePrevious: CashFlowTotals | null = null
+  if (hasActivity && comparison?.kind === 'same-day') {
+    comparePrevious = dailyCashFlow?.error ? null : comparison.previous
+  } else if (hasActivity && !isFutureMonth) {
+    comparePrevious = { income: prev.income, expenses: prev.expenses, savings: prev.savings }
+  }
+  const vsLabel =
+    comparison?.kind === 'same-day'
+      ? translate(locale, 'dashboard.vsSameDayInMonth', {
+          month: new Intl.DateTimeFormat(localeToBcp47(locale), { month: 'short', timeZone: 'UTC' }).format(
+            new Date(`${prevMonth}-01T00:00:00Z`)
+          ),
+        })
+      : undefined
+  // Same window as the three amounts above it: the previous rate comes from
+  // `comparePrevious` (same day last month when this month is open), with the
+  // RPC's own formula — savings ÷ income, undefined without income.
+  const previousSavingsRate =
+    comparePrevious && comparePrevious.income > 0
+      ? comparePrevious.savings / comparePrevious.income
+      : null
   const savingsRateDelta =
-    curr.savingsRate != null && prev.savingsRate != null ? curr.savingsRate - prev.savingsRate : null
+    curr.savingsRate != null && previousSavingsRate != null
+      ? curr.savingsRate - previousSavingsRate
+      : null
 
   // ── Budget performance. ────────────────────────────────────────────────────
   const budgetLines = budget.lines.filter((l) => l.planned > 0)
@@ -212,13 +258,16 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
   //    Weighted savings rate (65%) + budget adherence (35%). ─────────────────
   //    RUM-009: the same healthBreakdown() the dashboard renders, so the grade,
   //    its inputs and the suggested action match on both surfaces.
-  const health = healthBreakdown({
+  //    MQ-005: null for a month with nothing posted — no score, no grade, and
+  //    none saved in the close-month snapshot either.
+  const health = monthHealth({
     savingsRate: curr.savingsRate,
     hasBudget,
     budgetPercent: totalBudgetPercent,
+    hasActivity,
   })
-  const score = health.score
-  const scoreGrade = health.grade
+  const score = health?.score ?? null
+  const scoreGrade = health?.grade ?? null
 
   // ── BR-021: light "close month" state (marker + snapshot, no ledger lock). ──
   const monthClosed = params.closed === '1'
@@ -305,7 +354,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       label: 'Income',
       value: formatCurrency(curr.income, currency, locale),
       valueClass: 'text-emerald-600 dark:text-emerald-400',
-      delta: <PctDelta current={curr.income} previous={prev.income} />,
+      delta: <PctDelta current={curr.income} previous={comparePrevious?.income ?? null} vsLabel={vsLabel} />,
       icon: <ArrowUpRight />,
       accent: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
     },
@@ -313,7 +362,9 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       label: 'Expenses',
       value: formatCurrency(curr.expenses, currency, locale),
       valueClass: 'text-red-600 dark:text-red-400',
-      delta: <PctDelta current={curr.expenses} previous={prev.expenses} higherIsBad />,
+      delta: (
+        <PctDelta current={curr.expenses} previous={comparePrevious?.expenses ?? null} vsLabel={vsLabel} higherIsBad />
+      ),
       icon: <ArrowDownRight />,
       accent: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
     },
@@ -321,7 +372,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       label: 'Savings',
       value: `${curr.savings >= 0 ? '+' : '−'}${formatCurrency(Math.abs(curr.savings), currency, locale)}`,
       valueClass: curr.savings >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
-      delta: <PctDelta current={curr.savings} previous={prev.savings} />,
+      delta: <PctDelta current={curr.savings} previous={comparePrevious?.savings ?? null} vsLabel={vsLabel} />,
       icon: <PiggyBank />,
       accent: 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400',
     },
@@ -329,7 +380,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       label: 'Savings rate',
       value: formatPercent(curr.savingsRate, locale),
       valueClass: undefined as string | undefined,
-      delta: <RateDelta diff={savingsRateDelta} />,
+      delta: <RateDelta diff={savingsRateDelta} vsLabel={vsLabel} />,
       icon: <Percent />,
       accent: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
     },
@@ -365,8 +416,17 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
       <div id="close-month" className={cn(CARD, 'scroll-mt-20 space-y-4 p-4 sm:p-5')}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex size-16 shrink-0 items-center justify-center rounded-full border-[3px] border-primary bg-primary/10">
-              <span className="text-xl font-bold text-primary">{scoreGrade}</span>
+            {/* MQ-005: an empty month gets no grade — its inputs would all be
+                defaults, and the formula would still hand it a "C+". */}
+            <div
+              className={cn(
+                'flex size-16 shrink-0 items-center justify-center rounded-full border-[3px]',
+                health ? 'border-primary bg-primary/10' : 'border-muted bg-muted/40'
+              )}
+            >
+              <span className={cn('text-xl font-bold', health ? 'text-primary' : 'text-muted-foreground')}>
+                {scoreGrade ?? '—'}
+              </span>
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-sm font-bold">
@@ -376,7 +436,9 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
                   label="Month health"
                 />
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">{score}/100</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {score !== null ? `${score}/100` : translate(locale, 'dashboard.healthNotEnoughData')}
+              </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {longMonthLabel(month, locale)} · {hasActivity ? 'Activity recorded' : 'No activity yet'}
               </p>
@@ -404,8 +466,8 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
                 <input type="hidden" name="expenses" value={curr.expenses} />
                 <input type="hidden" name="savings" value={curr.savings} />
                 <input type="hidden" name="savings_rate" value={curr.savingsRate ?? ''} />
-                <input type="hidden" name="score" value={score} />
-                <input type="hidden" name="grade" value={scoreGrade} />
+                <input type="hidden" name="score" value={score ?? ''} />
+                <input type="hidden" name="grade" value={scoreGrade ?? ''} />
                 <input type="hidden" name="currency" value={currency} />
                 <SubmitButton type="submit" size="sm" className="gap-2" pendingText="Closing…">
                   <Lock aria-hidden="true" />
@@ -415,7 +477,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
             )}
           </div>
         </div>
-        <MonthHealthBreakdown breakdown={health} month={month} locale={locale} />
+        {health ? <MonthHealthBreakdown breakdown={health} month={month} locale={locale} /> : null}
       </div>
 
       {/* KPIs */}

@@ -43,3 +43,20 @@ export function goalProgress(currentAmount: number, targetAmount: number): numbe
 export function isGoalReached(currentAmount: number, targetAmount: number): boolean {
   return targetAmount > 0 && currentAmount >= targetAmount
 }
+
+/**
+ * MQ-006 — which side of the balance sheet a goal can be linked to.
+ *
+ * A savings goal (emergency fund, down payment, travel, retirement, custom)
+ * fills an asset account; a `debt_payoff` goal empties a liability — the very
+ * account it is meant to pay off. Listing every account let a savings goal be
+ * linked to a credit card or a loan. Enforced in the form and the server action.
+ */
+export function goalAccountClass(goalType: string): 'asset' | 'liability' {
+  return goalType === 'debt_payoff' ? 'liability' : 'asset'
+}
+
+export function canLinkAccountToGoal(goalType: string, accountClass: string): boolean {
+  return accountClass === goalAccountClass(goalType)
+}
+
