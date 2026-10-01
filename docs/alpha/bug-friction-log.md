@@ -134,5 +134,6 @@ All three critical bugs fixed:
 ## Related documents
 
 - [alpha-finding-triage-rules.md](./alpha-finding-triage-rules.md)
+- [../mobile-walkthrough-backlog.md](../mobile-walkthrough-backlog.md) — MQ-001…MQ-020, findings from the 2026-09-30 mobile screen recording (kept separate because each ticket carries code pointers and acceptance criteria)
 - [alpha-daily-usage-log.md](./alpha-daily-usage-log.md)
 - [reconciliation-checklist.md](./reconciliation-checklist.md)
