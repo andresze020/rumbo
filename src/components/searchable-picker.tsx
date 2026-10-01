@@ -8,6 +8,7 @@ import { getAccountVisual } from '@/lib/account-display'
 import { nativeSelectCls } from '@/lib/form-styles'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/lib/use-is-mobile'
 
 export type PickerOption = {
   value: string
@@ -79,6 +80,10 @@ export function SearchablePicker({
 }) {
   const ui = useUiTranslation()
   const [open, setOpen] = useState(false)
+  // The field's `id` goes on whichever control is on screen, so a
+  // `<Label htmlFor={id}>` taps the phone's picker button instead of the
+  // `display: none` select behind it (and the select again from `sm`).
+  const isMobile = useIsMobile()
   const [query, setQuery] = useState('')
 
   const selected = useMemo(() => {
@@ -123,7 +128,7 @@ export function SearchablePicker({
 
       {/* sm and up: the platform select, grouped. */}
       <select
-        id={id}
+        id={isMobile ? undefined : id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
@@ -159,6 +164,7 @@ export function SearchablePicker({
 
       {/* Phone: a row that opens the full-screen sheet. */}
       <button
+        id={isMobile ? id : undefined}
         type="button"
         onClick={() => setOpen(true)}
         disabled={disabled}
