@@ -117,7 +117,7 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
 
   // MQ-006: every non-archived goal counts, converted to base currency at the
   // household's latest rate; a currency with no rate is named, not dropped.
-  const goalRates = await getGoalRatesToBase(
+  const { rates: goalRates, failed: goalRatesFailed } = await getGoalRatesToBase(
     supabase,
     household.id,
     baseCurrency,
@@ -130,10 +130,18 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
     goalTotals.converted.length
       ? translate(locale, 'goals.totalConverted', { currencies: goalTotals.converted.join(', ') })
       : null,
+    // Saved *and* target per currency: the base total above omits both, so
+    // naming only the saved part hid the size of the goal (an unfunded goal
+    // read "COP 0"). A failed lookup is not "no rate on file".
     goalTotals.unconverted.length
-      ? translate(locale, 'goals.totalUnconverted', {
+      ? translate(locale, goalRatesFailed ? 'goals.totalUnconvertedFailed' : 'goals.totalUnconverted', {
           amounts: goalTotals.unconverted
-            .map((u) => formatCurrency(u.saved, u.currency, locale))
+            .map((u) =>
+              translate(locale, 'goals.unconvertedAmount', {
+                saved: formatCurrency(u.saved, u.currency, locale),
+                target: formatCurrency(u.target, u.currency, locale),
+              })
+            )
             .join(', '),
         })
       : null,
