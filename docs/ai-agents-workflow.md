@@ -186,15 +186,17 @@ vez que añade una nueva.
 ### Subagentes como aislamiento de contexto
 
 El valor de un subagente no es que "sepa más": es que su exploración ocurre en
-**su** ventana y solo vuelve el resumen. Por eso los cuatro nuevos son
+**su** ventana y solo vuelve el resumen. Por eso los subagentes de la tabla son
 precisamente los trabajos que más contexto queman:
 
 | Subagente | Qué aísla | Devuelve |
 |---|---|---|
 | `scout` | recorrer `src/` para saber dónde está algo | mapa `archivo:línea` |
 | `i18n-scribe` | `src/lib/i18n/` (~4.100 líneas) | claves tocadas + estado del check |
-| `migration-drafter` | `supabase/migrations/` (58 archivos, 626 KB) | el `.sql` + comandos manuales |
+| `migration-drafter` | `supabase/migrations/` (64 archivos al 2026-09-30) | el `.sql` + comandos manuales |
 | `sprint-closer` | diff completo + 3 docs de estado | qué se actualizó |
+| `verify-runner` | salida de lint/tsc/build (haiku) | pass/fail + errores reales |
+| `qa-smoke` | barrido Playwright de solo lectura del dashboard (sonnet) | hallazgos; nunca envía formularios |
 
 `migration-drafter` hereda la prohibición absoluta de tocar la base: escribe el
 archivo y devuelve los comandos para que los corras a mano.

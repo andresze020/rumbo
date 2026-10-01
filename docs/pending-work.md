@@ -66,6 +66,10 @@
 > in `get_account_balances` — and fixed it (`filter (where t.id is not null)`).
 > Subtractive only; not a re-audit.
 >
+> The same day, §4.4 was updated for the BR-030 / BR-043 desk audit (#84–#86):
+> two refund bugs were reproduced in production (rolled-back transactions) and
+> fixed by migrations applied 2026-09-30. See `docs/SPRINT-LOG.md`.
+>
 > Everything shipped is recorded in `AGENTS.md` → Current status and
 > [SPRINT-LOG.md](./SPRINT-LOG.md); this file only lists what is **not** done.
 
@@ -183,9 +187,18 @@ tests that already existed, BR-035 and UC-9 on two added that day — and BR-044
 financial half is structural (`public.notes` has no amount column and no foreign
 key into the ledger), so it needs no pass at all.
 
-What is left genuinely needs a human in an authenticated session: **BR-030** and
-**BR-043** first, since both aggregate across a window and neither is cheap to
-express in SQL without reimplementing the report query; then **BR-037**,
+**A second desk audit on 2026-09-30 covered BR-030 and BR-043.** It found and
+fixed one bug in each, both about refunds: `get_budget_payment_split` sent
+refunds to "other" as a negative amount (BR-043), and
+`get_card_cycle_summaries` let a refund of a post-close purchase shrink
+`payable` (BR-030). Both migrations are applied (2026-09-30) and each now has an
+invariant test under `npm run db:test`
+(`br_043_payment_split_invariants.sql`, `br_030_card_cycle_invariants.sql`),
+plus seeded card-cycle fixtures. Only the on-screen look remains for both.
+
+What is left genuinely needs a human in an authenticated session: the on-screen
+look at **BR-030** and **BR-043** first (audit and fix are done, see above);
+then **BR-037**,
 **BR-036**, **BR-045** and **BR-031**; then the on-screen halves of the
 automated rows. BR-044's RLS half needs a second household member and is better
 folded into a general RLS pass.

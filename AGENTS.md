@@ -23,6 +23,9 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **BR-030 / BR-043 audited, two refund bugs fixed** (2026-09-30, #84-#86).
+  Both migrations applied; new subagents `verify-runner` and `qa-smoke`. Full
+  detail in `docs/SPRINT-LOG.md`.
 - **RUM-010b: the release gate exists** (2026-09-24, PR #79). See
   `docs/release-checklist.md`; full detail in `docs/SPRINT-LOG.md`.
 - **B-7 fixed, B-8 decided** (2026-09-25). Dashboard month-nav `<Suspense>`
@@ -107,6 +110,12 @@ while the SQL was only validated loose, outside a real PL/pgSQL function. Every
 reference to any OUT column is now qualified with its CTE's alias; see the
 migration's own comment at the `running` CTE. `npm run db:test -- --file=rum_006`
 passes all 5 checks against production.
+64/64 applied on 2026-09-30 (checked in `supabase_migrations.schema_migrations`).
+Applied since RUM-006: RUM-004 RLS (2026-09-24), B-8 (2026-09-25) and
+`20260930120000_br_043_refund_payment_split.sql` +
+`20260930130000_br_030_refund_card_cycle.sql` (2026-09-30), both verified in
+`supabase_migrations.schema_migrations`. Run `npm run db:status` for the
+current count.
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 

@@ -15,6 +15,43 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## BR-030 / BR-043 desk audit: two refund bugs fixed, QA subagents added (2026-09-30)
+- Goal: desk audit of BR-030 (card statement cycle) and BR-043 (budget
+  payment split), the two Tier-3/4 rows that most needed a human pass (see
+  [`docs/alpha/tier-3-4-authenticated-qa.md`](alpha/tier-3-4-authenticated-qa.md)).
+  Both findings were reproduced in production inside transactions that were
+  rolled back; nothing persisted.
+- Shipped:
+  - **BR-043 (#84):** `get_budget_payment_split` sent refunds to "other" with a
+    negative amount. A refund is now attributed to the account it credited.
+    Test: `supabase/tests/br_043_payment_split_invariants.sql`.
+  - **BR-043 test fix (#86, Codex review):** check 2 of that test gave a false
+    positive on transfers between currencies with a cost; it now judges the
+    "other" bucket by a transaction's source entries.
+  - **BR-030 (#85):** `get_card_cycle_summaries` let a refund of a purchase made
+    after the statement close shrink `payable`. Refunds after the close now
+    offset the open cycle first. Test:
+    `supabase/tests/br_030_card_cycle_invariants.sql`; three cards with a cycle
+    seeded in `supabase/local/fixtures.sql` with a literal expectation in
+    `fixture-expectations.sql`; behaviour documented in
+    [`docs/features/card-statement-cycle.md`](features/card-statement-cycle.md).
+    Codex suggested merging the subqueries into one pass; measured in
+    production it was slower (180.9 ms vs 165.8 ms, against 163.4 ms for the
+    existing form), so it was kept and the reason recorded in the migration.
+  - **Tooling (d0f976c):** new subagents `verify-runner` (haiku) and `qa-smoke`
+    (sonnet, read-only Playwright sweep); `scout` moved to haiku; SessionStart
+    hook trimmed.
+  - **Docs (61e0180):** AGENTS.md "Current status" cut to 1-2 lines per entry
+    (detail lives here); stale BR-006 row removed from pending-work §7.
+- Migrations added: `20260930120000_br_043_refund_payment_split.sql` and
+  `20260930130000_br_030_refund_card_cycle.sql` — both applied to the live
+  project 2026-09-30 (verified in `supabase_migrations.schema_migrations`, and
+  both new test files pass against the real household).
+- Tables changed: none (two RPCs replaced).
+- Follow-ups / known gaps: BR-030 and BR-043 still need the on-screen look in
+  an authenticated session (pending-work §4.4); the rest of the Tier-3/4 rows
+  are unchanged.
+
 ## Dashboard redesign + Transactions first load, then a premium pass (2026-09-25 → 2026-09-26)
 - Goal: Dashboard redesign + Transactions first load (see
   [`docs/features/dashboard-layout.md`](docs/features/dashboard-layout.md)).
