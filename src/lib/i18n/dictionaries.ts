@@ -222,6 +222,7 @@ export const en = {
       'No debts in the Debt Planner yet. Your accounts owe {amount} (e.g. credit cards), which the planner doesn’t track.',
     debtsMiniOtherLiabilities: '+{amount} owed on accounts not in the Debt Planner',
     debtsMiniPlannerTotal: 'Tracked in the Debt Planner',
+    debtsMiniTrack: 'Track them in Debts',
     viewDebts: 'View debts',
     goalsMiniTitle: 'Goals',
     needsReviewShort: '{count} to review',
@@ -399,6 +400,12 @@ export const en = {
     toastVoided: 'Transaction voided.',
     toastRestored: 'Transaction restored.',
     toastRefunded: 'Refund recorded.',
+  },
+  debts: {
+    untrackedTitle: 'Liability accounts not in the planner',
+    untrackedDescription: 'Track one as a debt to plan its payoff. Nothing is created or moved: the debt links to the account you already have.',
+    trackThisDebt: 'Track this debt',
+    balance: 'Balance {amount}',
   },
   goals: {
     totalDescription: 'Of {target} target, in {currency}.',
@@ -814,6 +821,7 @@ export const es: DeepStringify<typeof en> = {
       'Aún no hay deudas en el Planificador de deuda. Tus cuentas adeudan {amount} (por ejemplo, tarjetas de crédito), que el planificador no rastrea.',
     debtsMiniOtherLiabilities: '+{amount} adeudado en cuentas fuera del Planificador de deuda',
     debtsMiniPlannerTotal: 'Registrado en el Planificador de deuda',
+    debtsMiniTrack: 'Seguirlas en Deudas',
     viewDebts: 'Ver deudas',
     goalsMiniTitle: 'Metas',
     needsReviewShort: '{count} por revisar',
@@ -992,6 +1000,12 @@ export const es: DeepStringify<typeof en> = {
     toastVoided: 'Transacción anulada.',
     toastRestored: 'Transacción restaurada.',
     toastRefunded: 'Reembolso registrado.',
+  },
+  debts: {
+    untrackedTitle: 'Cuentas de pasivo fuera del planificador',
+    untrackedDescription: 'Regístrala como deuda para planificar cómo pagarla. No se crea ni se mueve nada: la deuda se vincula a la cuenta que ya tienes.',
+    trackThisDebt: 'Seguir esta deuda',
+    balance: 'Saldo {amount}',
   },
   goals: {
     totalDescription: 'De una meta de {target}, en {currency}.',
@@ -1407,6 +1421,7 @@ export const fr: DeepStringify<typeof en> = {
       'Aucune dette dans le Planificateur de dette pour l’instant. Vos comptes doivent {amount} (par exemple des cartes de crédit), que le planificateur ne suit pas.',
     debtsMiniOtherLiabilities: '+{amount} dû sur des comptes hors du Planificateur de dette',
     debtsMiniPlannerTotal: 'Suivi dans le Planificateur de dette',
+    debtsMiniTrack: 'Les suivre dans Dettes',
     viewDebts: 'Voir les dettes',
     goalsMiniTitle: 'Objectifs',
     needsReviewShort: '{count} à vérifier',
@@ -1585,6 +1600,12 @@ export const fr: DeepStringify<typeof en> = {
     toastVoided: 'Transaction annulée.',
     toastRestored: 'Transaction rétablie.',
     toastRefunded: 'Remboursement enregistré.',
+  },
+  debts: {
+    untrackedTitle: 'Comptes de passif hors du planificateur',
+    untrackedDescription: 'Suivez-en un comme dette pour planifier son remboursement. Rien n’est créé ni déplacé : la dette est liée au compte existant.',
+    trackThisDebt: 'Suivre cette dette',
+    balance: 'Solde {amount}',
   },
   goals: {
     totalDescription: 'Sur un objectif de {target}, en {currency}.',

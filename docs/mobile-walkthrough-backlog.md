@@ -36,7 +36,7 @@
 | [MQ-008](#mq-008--selects-nativos-con-listas-largas) | P2 | ✅ Hecho (`fix/mq-008-searchable-pickers`) | UX | Budgets / Goals / Debts | `<select>` nativos con 20–60 opciones planas, sin búsqueda ni jerarquía. |
 | [MQ-009](#mq-009--skeletons-en-cada-navegación-incluida-una-página-estática) | P2 | Abierto | Performance | Navegación | Skeleton de 0,5–2 s en cada módulo, incluso en More (estático); "Loading form…" en blanco; skeleton de Budgets no coincide con el resultado. |
 | [MQ-010](#mq-010--sheets-con-teclado-autofocus-que-tapa-el-formulario) | P2 | ✅ Hecho (`fix/mq-010-no-keyboard-on-open`) | UX | Debts / Goals / Budgets | El autofocus abre el teclado al instante y tapa casi todo el formulario. |
-| [MQ-011](#mq-011--debts-no-reconoce-las-cuentas-de-pasivo-existentes) | P2 | Abierto | UX | Debts | Debts muestra 0 deudas en rojo mientras existe una cuenta tipo Debt con saldo; no ofrece vincularla. |
+| [MQ-011](#mq-011--debts-no-reconoce-las-cuentas-de-pasivo-existentes) | P2 | ✅ Hecho (`fix/mq-011-track-existing-liabilities`) | UX | Debts | Debts muestra 0 deudas en rojo mientras existe una cuenta tipo Debt con saldo; no ofrece vincularla. |
 | [MQ-012](#mq-012--tipografía-monoespaciada-en-montos) | P2 | Abierto | UI | Debts / Budgets / Goals | Montos en `font-mono` con caracteres espaciados, distinto al resto de la app. |
 | [MQ-013](#mq-013--símbolo--para-montos-en-cop-y-fecha-ddmmyyyy-con-ui-en-inglés) | P2 | Abierto | UX | Formularios multi-moneda | Montos en COP con prefijo "$"; inputs de fecha nativos en `dd/mm/yyyy` con la UI en inglés. |
 | [MQ-014](#mq-014--dashboard-de-mes-nuevo-cinco-empty-states-seguidos) | P2 | Abierto | UX | Dashboard / Budgets / Goals | Mes sin actividad = cinco tarjetas vacías seguidas; KPIs en cero empujan el empty state fuera de la vista. |
@@ -771,6 +771,13 @@ el botón primario están visibles.
 ---
 
 ### MQ-011 — Debts no reconoce las cuentas de pasivo existentes
+
+> ✅ Hecho el 2026-10-01 — Debts lista las cuentas de pasivo activas sin fila
+> en `debts` ("Liability accounts not in the planner"), con su saldo y "Track
+> this debt", que abre Create debt con esa cuenta preseleccionada
+> (`?mode=create&account=…`; el server action ya vinculaba sin crear cuenta ni
+> movimiento). La tarjeta resumen se oculta sin deudas activas y un total 0 no
+> va en rojo. La tarjeta Debts del Dashboard enlaza a esta lista.
 
 **Evidencia:** 0:07 (tarjeta Debts del Dashboard), 1:12–1:14 (página Debts),
 1:26 (existe una cuenta tipo Debt con saldo). **Categoría:** UX. **BD:**
