@@ -568,7 +568,11 @@ export async function DashboardSecondaryWidgets({
               <p className="mt-3 text-sm text-muted-foreground">{t('dashboard.debtsMiniEmpty')}</p>
             ) : debtsSummary.state === 'untracked-liabilities' ? (
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                {t('dashboard.debtsMiniUntracked', { amount: formatCurrency(debtsSummary.accountLiabilities, baseCurrency) })}
+                {t('dashboard.debtsMiniUntracked', { amount: formatCurrency(debtsSummary.accountLiabilities, baseCurrency) })}{' '}
+                {/* MQ-011: Debts now lists these accounts with "Track this debt". */}
+                <Link href="/dashboard/debts" className="whitespace-nowrap font-semibold text-primary hover:underline">
+                  {t('dashboard.debtsMiniTrack')} →
+                </Link>
               </p>
             ) : (
               <div className="mt-3">

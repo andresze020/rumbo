@@ -28,16 +28,24 @@ export function DebtCreateForm({
   currencyOptions,
   defaultCurrency,
   linkableLiabilityAccounts,
+  defaultExistingAccountId,
 }: {
   baseCurrency: string
   currencyOptions: CurrencyOption[]
   defaultCurrency: string
   linkableLiabilityAccounts: LiabilityAccount[]
+  /** MQ-011: "Track this debt" opens the form with its account already chosen. */
+  defaultExistingAccountId?: string
 }) {
   const { t } = useLanguage()
   const today = new Date().toISOString().slice(0, 10)
 
-  const [existingAccountId, setExistingAccountId] = useState('')
+  const [existingAccountId, setExistingAccountId] = useState(
+    defaultExistingAccountId &&
+      linkableLiabilityAccounts.some((account) => account.id === defaultExistingAccountId)
+      ? defaultExistingAccountId
+      : ''
+  )
   const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency)
   const [openingBalanceInput, setOpeningBalanceInput] = useState('0')
   const [openingBalanceDate, setOpeningBalanceDate] = useState(today)
