@@ -27,7 +27,7 @@
 | ID | Prioridad | Estado | Categoría | Área | Hallazgo en una línea |
 |---|---|---|---|---|---|
 | [MQ-001](#mq-001--today-y-el-mes-actual-se-calculan-en-utc) | P0 | Abierto | Funcionamiento | Fechas (global) | "Hoy" y "mes actual" se calculan en UTC: a las 23:31 locales del 30-sep la app ya vive en octubre. |
-| [MQ-002](#mq-002--el-shell-se-desplaza-header-y-bottom-nav-se-van-de-la-pantalla) | P1 | Abierto | UI | Shell / navegación | Al llegar al final del scroll el header y la bottom nav se desplazan y dejan media pantalla vacía. |
+| [MQ-002](#mq-002--el-shell-se-desplaza-header-y-bottom-nav-se-van-de-la-pantalla) | P1 | ✅ Hecho (`fix/mq-002-shell-document-scroll`) | UI | Shell / navegación | Al llegar al final del scroll el header y la bottom nav se desplazan y dejan media pantalla vacía. |
 | [MQ-003](#mq-003--el-empty-state-de-transactions-parpadea-y-miente) | P1 | Abierto | Funcionamiento | Transactions | El empty state alterna solo entre dos variantes cada 1,5–3 s y dice "No transactions yet" con miles de transacciones. |
 | [MQ-004](#mq-004--el-botón-del-asistente-tapa-contenido-y-la-tab-more) | P1 | Abierto | UI | Global | El botón flotante del asistente tapa montos, botones de fila y la tab "More". |
 | [MQ-005](#mq-005--comparativas-de-mes-en-curso-contra-mes-completo) | P1 | Abierto | Funcionamiento | Dashboard / Budgets / Accounts | Deltas "−100 % vs Sep", "0,0 %" en verde y un Month health "C+" calculados sin datos del mes. |
@@ -219,6 +219,12 @@ Corre ledger-guard antes de entregar: el ticket toca vencimientos y períodos.
 ## 4. P1 — Importantes
 
 ### MQ-002 — El shell se desplaza: header y bottom nav se van de la pantalla
+
+> ✅ Hecho el 2026-10-01 — `main#app-scroll` pasa a `relative` (un `absolute` sin
+> ancestro posicionado ya no agranda el documento), `html:has(#app-scroll)` queda
+> en `overflow: hidden` y `overscroll-behavior-y: none` pasa también a `html`
+> (Chromium no lo lee de `body`). Detalle en
+> [features/mobile-app-shell.md](./features/mobile-app-shell.md).
 
 | Campo | Valor |
 |---|---|
