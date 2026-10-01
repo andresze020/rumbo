@@ -118,6 +118,18 @@ pinch zoom:
 | `.vv-pin-corner` | The assistant and add-transaction FABs | Yes — furniture keeps its on-screen size |
 | `.vv-pin-bottom` | The toast stack | Yes |
 
+**The keyboard (MQ-010, 2026-10-01).** `ViewportPin` also raises
+`data-vv-keyboard` with `--vv-keyboard-inset` / `--vv-keyboard-height` while
+the soft keyboard is what shrank the visual viewport. The bars and FABs still
+ignore it (a nav parked on the keyboard would cover the field being typed
+into); only the phone form sheet (`FormDialog`, `.form-sheet`) uses it, to sit
+on top of the keyboard with its sticky save row (`.form-actions`) visible.
+Chrome on Android leaves the layout viewport alone when the keyboard opens,
+so a `bottom: 0` sheet would otherwise stay under it. The same ticket stopped
+`FormDialog` from focusing the first field of a form with more than two fields
+on a phone: the sheet itself takes focus, so the keyboard appears only when a
+field is tapped.
+
 `.vv-pin-top` was removed in the same cleanup as this doc: after PR #61 it had
 no consumers left, since the top bar is the one element it existed for.
 

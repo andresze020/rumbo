@@ -193,6 +193,37 @@
 
 @layer utilities {
   /*
+   * Phone form sheets (`FormDialog`, MQ-010).
+   *
+   * The save row sticks to the sheet's bottom edge, so a long form never hides
+   * its primary button below the fold. The negative bottom offset and margins
+   * reach through the sheet's own padding, so the row's background meets the
+   * sheet's edges instead of leaving a strip of form showing under it.
+   *
+   * With the soft keyboard up (`data-vv-keyboard`, published by `ViewportPin`)
+   * the sheet sits on top of the keyboard instead of behind it: Chrome on
+   * Android leaves the layout viewport alone when the keyboard opens, so a
+   * `bottom: 0` sheet stays under it — fields and save button included.
+   */
+  @media (max-width: 639.98px) {
+    .form-sheet .form-actions {
+      position: sticky;
+      bottom: calc(-1 * max(1rem, env(safe-area-inset-bottom)));
+      z-index: 1;
+      margin-inline: -1rem;
+      margin-bottom: calc(-1 * max(1rem, env(safe-area-inset-bottom)));
+      padding: 0.75rem 1rem max(0.75rem, env(safe-area-inset-bottom));
+      border-top: 1px solid var(--border);
+      background: var(--popover);
+    }
+
+    html[data-vv-keyboard] .form-sheet {
+      bottom: var(--vv-keyboard-inset, 0px);
+      max-height: calc(var(--vv-keyboard-height, 100dvh) - 0.5rem);
+    }
+  }
+
+  /*
    * Route change transition. A native app never swaps a screen instantly and
    * without motion — the new screen arrives. The easing is the iOS/Android
    * "decelerate" curve: fast out of the gate, settling at the end.

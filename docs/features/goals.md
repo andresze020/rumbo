@@ -58,8 +58,14 @@ message via `cleanSupabaseActionError`.
 ### Pages and actions
 
 - `src/app/dashboard/goals/page.tsx` — server page: summary `MetricCard`s
-  (active count, completed count, total saved vs. target for base-currency
-  goals), and goals grouped into Active/Completed/Paused/Archived sections.
+  (active count, completed count, total saved vs. target), and goals grouped
+  into Active/Completed/Paused/Archived sections. Since MQ-006 the total
+  counts goals in every currency: a foreign one is converted to base at the
+  household's latest rate (`get_exchange_rate`, the lookup net worth values
+  foreign accounts with — `src/lib/goals/server.ts`), and the card names the
+  converted currencies. A currency with no rate on file is listed as "not
+  included" in its own currency instead of vanishing (`summarizeGoals`,
+  `src/lib/goals/summary.ts`, unit-tested).
 - `src/app/dashboard/goals/actions.ts` — server actions: `createGoalAction`,
   `updateGoalAction`, `contributeGoalAction`, `withdrawGoalAction`,
   `setGoalStatusAction`. Contribute/withdraw call `apply_goal_adjustment`
@@ -77,7 +83,14 @@ message via `cleanSupabaseActionError`.
   (amber), `completed` (emerald), and `archived` (muted) so the four goal
   statuses are visually distinct.
 - `src/lib/goals/shared.ts` — `GOAL_TYPES`, `GOAL_STATUSES`, type guards,
-  `goalTypeLabel`, `goalProgress`, `isGoalReached`.
+  `goalTypeLabel`, `goalProgress`, `isGoalReached`, and (MQ-006)
+  `canLinkAccountToGoal`: a savings goal links only to an asset account, a
+  `debt_payoff` goal only to a liability — the debt it pays off. The form
+  lists only those (clearing a link the new type no longer allows) and
+  `parseAndValidateGoal` enforces the same rule server-side.
+- Under the "Linked account" select, one line says where progress comes from:
+  the funds added with "Add funds", not the account's balance (see Open
+  Decision 1).
 
 ### Status lifecycle
 
@@ -94,10 +107,10 @@ message via `cleanSupabaseActionError`.
   since two goals can share a name.
 - `src/app/dashboard/plan/page.tsx` — Goals card now shows real active-goal
   count and total saved instead of a locked placeholder. "Total saved"
-  includes `active`/`paused`/`completed` goals in the household's base
-  currency (only `archived` is excluded), matching the same total on
-  `/dashboard/goals` — it does not filter to `active` only, which would make
-  the figure drop the moment a goal is reached.
+  includes `active`/`paused`/`completed` goals (only `archived` is excluded),
+  in base currency with foreign goals converted (MQ-006), matching the same
+  total on `/dashboard/goals` — it does not filter to `active` only, which
+  would make the figure drop the moment a goal is reached.
 
 ---
 
