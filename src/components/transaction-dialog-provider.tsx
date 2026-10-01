@@ -227,6 +227,10 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
   // remounts this layout) opens pre-filled instead of starting empty.
   const [open, setOpen] = useState(() => readAddNextDefaults(searchParams) !== null)
   const [formData, setFormData] = useState<QuickAddFormData | null>(null)
+  // Mirrors `formData` for `refreshFormData`, which must see the latest value
+  // from inside an async call started by an earlier render.
+  const formDataRef = useRef<QuickAddFormData | null>(null)
+  const formFetchInFlight = useRef(false)
   const [loading, setLoading] = useState(() => readAddNextDefaults(searchParams) !== null)
   const [loadError, setLoadError] = useState(false)
   const [formKey, setFormKey] = useState(0)
@@ -360,9 +364,10 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
         .then((data) => {
           if (settled) return
           if (data) {
+            formDataRef.current = data
             setFormData(data)
             setLoadError(false)
-          } else {
+          } else if (!formDataRef.current) {
             setLoadError(true)
           }
         })
@@ -432,21 +437,45 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
     // was already mounted from a previous open.
     setFormKey((key) => key + 1)
     setOpen(true)
-    if (!loading) {
+    await refreshFormData()
+  }
+
+  /**
+   * Stale-while-revalidate for the form's reference data (MQ-009).
+   *
+   * Every open used to block on `getQuickAddFormData()` behind "Loading form…"
+   * — about a second on a phone, every time, for accounts and categories that
+   * almost never change between two entries. Now only the first open in a
+   * session waits. Later opens show the form at once with the last data and
+   * refetch underneath; the fresh lists replace the old ones in place (same
+   * `formKey`, so nothing typed is lost).
+   *
+   * BF-011 still holds: the refetch runs on *every* open, so a category created
+   * a moment ago on the Categories screen is in the picker as soon as it
+   * lands. A failed background refresh keeps the data already on screen.
+   */
+  async function refreshFormData() {
+    if (formFetchInFlight.current) return
+    formFetchInFlight.current = true
+    const hasCachedData = formDataRef.current !== null
+    if (!hasCachedData) {
       setLoading(true)
       setLoadError(false)
-      try {
-        const data = await getQuickAddFormData()
-        if (data) {
-          setFormData(data)
-        } else {
-          setLoadError(true)
-        }
-      } catch {
+    }
+    try {
+      const data = await getQuickAddFormData()
+      if (data) {
+        formDataRef.current = data
+        setFormData(data)
+        setLoadError(false)
+      } else if (!hasCachedData) {
         setLoadError(true)
-      } finally {
-        setLoading(false)
       }
+    } catch {
+      if (!hasCachedData) setLoadError(true)
+    } finally {
+      formFetchInFlight.current = false
+      setLoading(false)
     }
   }
 
@@ -541,9 +570,11 @@ export function TransactionDialogProvider({ children }: { children: ReactNode })
             </DialogDescription>
           </DialogHeader>
 
-          {loading ? (
+          {/* Only the very first open waits: later ones render the last data
+              while it revalidates (MQ-009, `refreshFormData`). */}
+          {loading && !formData ? (
             <p className="py-4 text-sm text-muted-foreground">Loading form…</p>
-          ) : loadError ? (
+          ) : loadError && !formData ? (
             <p className="py-4 text-sm text-destructive">
               Could not load form data. Please refresh and try again.
             </p>

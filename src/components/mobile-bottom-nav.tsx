@@ -35,7 +35,8 @@ type Tab = {
   // `loading.tsx` boundary for a dynamic page, not its data. The three tabs
   // people actually bounce between (RUM-007, baseline §3.1) opt into full
   // prefetch so the Router Cache already holds their RSC payload by the time
-  // the tap lands — More stays on the default, it is a low-traffic hub.
+  // the tap lands. More too since MQ-009: it has no data, so its full payload
+  // costs the server next to nothing and the tab opens with no wait at all.
   prefetch?: boolean
 }
 
@@ -54,7 +55,7 @@ const rightTabs: Tab[] = [
   // Accounts is opened far more often than Plan, so it earns the primary slot.
   // Plan stays reachable from the budgets page and via its own route.
   { href: '/dashboard/accounts', labelKey: 'nav.accounts', icon: Wallet, prefetch: true },
-  { href: '/dashboard/more', labelKey: 'nav.more', icon: MoreHorizontal },
+  { href: '/dashboard/more', labelKey: 'nav.more', icon: MoreHorizontal, prefetch: true },
 ]
 
 export function MobileBottomNav({ className }: { className?: string }) {
