@@ -1,7 +1,8 @@
 # Mobile App Shell — Chrome That Does Not Move
 
 ## Status
-**Implemented — 2026-08-29 (PR #61).** UI only, no database changes.
+**Implemented — 2026-08-29 (PR #61); hardened 2026-10-01 (MQ-002).** UI only,
+no database changes.
 
 This doc exists because the decision it records is easy to undo by accident.
 The dashboard's top bar and bottom nav are **deliberately not `position: fixed`**.
@@ -52,7 +53,7 @@ correction. PR #61 stopped chasing.
   <div className="flex min-w-0 flex-1 flex-col">
     <MobileNav />                                   ← flex row, not fixed
     <main id={APP_SCROLL_ID}                        ← the ONLY scroller
-          className="flex-1 overflow-y-auto overscroll-contain">
+          className="relative flex-1 overflow-y-auto overscroll-contain">
       …
     </main>
     <MobileBottomNav />                             ← flex row, not fixed
@@ -66,6 +67,23 @@ correction. PR #61 stopped chasing.
   handed to the document behind it.
 - **Content ends above the nav, not behind it.** The nav takes real space in
   flow now, so screens no longer need bottom padding to clear it.
+- **`relative` on the scroller** (MQ-002, 2026-10-01) — `main` is the
+  containing block of every `absolute` element a screen renders. Without it,
+  an `absolute` box with no positioned ancestor of its own resolves against
+  the root: `main` neither clips nor scrolls it, and it lands at its in-flow
+  offset in *document* coordinates, so the document grows past the screen.
+  Measured in Chromium at 360×780: one such box at the end of an 1800px screen
+  made the document 1880px tall, and a drag on the top bar moved the whole
+  shell 1100px up — the top bar gone, the nav off-screen, an empty band below
+  (the PR #59 symptom, reproduced without any `fixed` chrome).
+- **The document is locked** (MQ-002) — `html:has(#app-scroll)` is
+  `overflow: hidden`, so whatever else makes the document taller than the
+  screen (a popup portalled into `body`) cannot be dragged either. Only the
+  layout viewport is locked: under pinch zoom the visual viewport still pans
+  (checked: scale 2, a drag pans it 100px). `overscroll-behavior-y: none` sits
+  on `html` as well as `body`, because Chromium takes the viewport's
+  overscroll behaviour from the root element only — on `body` alone the
+  browser's pull-to-refresh still fired.
 
 ---
 
@@ -88,6 +106,19 @@ it started at y=0 and rendered under the top bar. Page content belongs
 
 ---
 
+## One floating action on a phone
+
+Since MQ-004 (2026-10-01) the assistant is opened from a button in the top bar
+(`MobileNav`, beside the theme toggle) below `lg`, and its floating button is
+desktop-only. On a phone the FAB hung at the right edge every amount is
+aligned to: it covered row figures, row actions, "Copy previous" in Budgets
+and, with the shell displaced, the More tab. The bottom nav's "+" is the only
+floating action left on a phone. The sheet itself lives in
+`AssistantProvider` (`assistant-drawer.tsx`), which wraps the shell so the
+top bar can open it via `useOpenAssistant()`.
+
+---
+
 ## What `ViewportPin` still does
 
 `ViewportPin` was not deleted — it was narrowed. It stays for the boxes that
@@ -99,6 +130,18 @@ pinch zoom:
 | `.vv-pin-screen`, `.vv-pin-screen-center`, `.vv-pin-screen-edge` | Dialogs, alert dialogs, sheets, drawers | **No** — an overlay is content, a zoom should magnify it |
 | `.vv-pin-corner` | The assistant and add-transaction FABs | Yes — furniture keeps its on-screen size |
 | `.vv-pin-bottom` | The toast stack | Yes |
+
+**The keyboard (MQ-010, 2026-10-01).** `ViewportPin` also raises
+`data-vv-keyboard` with `--vv-keyboard-inset` / `--vv-keyboard-height` while
+the soft keyboard is what shrank the visual viewport. The bars and FABs still
+ignore it (a nav parked on the keyboard would cover the field being typed
+into); only the phone form sheet (`FormDialog`, `.form-sheet`) uses it, to sit
+on top of the keyboard with its sticky save row (`.form-actions`) visible.
+Chrome on Android leaves the layout viewport alone when the keyboard opens,
+so a `bottom: 0` sheet would otherwise stay under it. The same ticket stopped
+`FormDialog` from focusing the first field of a form with more than two fields
+on a phone: the sheet itself takes focus, so the keyboard appears only when a
+field is tapped.
 
 `.vv-pin-top` was removed in the same cleanup as this doc: after PR #61 it had
 no consumers left, since the top bar is the one element it existed for.

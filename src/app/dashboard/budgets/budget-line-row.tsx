@@ -6,6 +6,7 @@ import { ChevronDown, Pencil, Repeat, Tag } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
+import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
 import { formatCurrency, formatPercent } from '@/lib/format'
 import { deleteBudgetLineAction, setBudgetLineRolloverAction } from './actions'
@@ -40,6 +41,12 @@ type BudgetLineRowProps = {
    * from `null`, so the two are kept apart.
    */
   previousActual: number | null
+  /**
+   * MQ-005: the month on screen is still open (or has not started). Its spend
+   * so far against all of last month read "−100%" in green on the 1st, so the
+   * percentage waits for the month to close; last month's amount still shows.
+   */
+  monthIsOpen: boolean
 }
 
 const NEAR_LIMIT_THRESHOLD = 0.8
@@ -96,8 +103,10 @@ export function BudgetLineRow({
   rolloverEnabled,
   carryover,
   previousActual,
+  monthIsOpen,
 }: BudgetLineRowProps) {
   const [open, setOpen] = useState(false)
+  const { t } = useLanguage()
 
   const plannedAmount = Number(line.planned_amount ?? 0)
   const actualAmount = Number(line.actual_amount ?? 0)
@@ -121,9 +130,11 @@ export function BudgetLineRow({
   // month gives a meaningful percentage; "spent 40 after spending nothing" is a
   // fact, not a +∞ % increase, so it shows the amounts instead.
   const previousDelta =
-    previousActual !== null && previousActual > 0
+    !monthIsOpen && previousActual !== null && previousActual > 0
       ? actualAmount / previousActual - 1
       : null
+  // A move that rounds to 0% is no move: grey, and no sign (MQ-005).
+  const previousDeltaFlat = previousDelta !== null && Math.abs(previousDelta) < 0.005
 
   return (
     <div className={cn(overBudget && 'bg-destructive/5')}>
@@ -149,12 +160,15 @@ export function BudgetLineRow({
                     {txCount} transaction{txCount === 1 ? '' : 's'}
                   </p>
                 </div>
+                {/* MQ-019 — spent *of* what: "$0.00 / 0%" alone read like a
+                    broken line, not an untouched one. The share moves next
+                    to the bar it describes. */}
                 <div className="shrink-0 text-right">
-                  <p className={cn('font-mono text-xs font-semibold tabular-nums', overBudget && 'text-destructive')}>
+                  <p className={cn('text-xs font-semibold tabular-nums', overBudget && 'text-destructive')}>
                     {formatCurrency(actualAmount, budgetCurrency)}
                   </p>
-                  <p className={cn('mt-0.5 text-[10.5px] font-bold tabular-nums', status.textClassName)}>
-                    {formatPercent(linePercent, 'en', { minimumFractionDigits: 0 })}
+                  <p className="mt-0.5 text-[10.5px] text-muted-foreground tabular-nums">
+                    {t('budgets.ofPlanned', { amount: formatCurrency(availableAmount, budgetCurrency) })}
                   </p>
                 </div>
                 <ChevronDown
@@ -165,15 +179,21 @@ export function BudgetLineRow({
                   aria-hidden="true"
                 />
               </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={cn('h-full rounded-full transition-all', status.barClassName)}
-                  style={
-                    !overBudget && status.label === 'On track' && categoryColor
-                      ? { width: `${barWidth}%`, backgroundColor: categoryColor }
-                      : { width: `${barWidth}%` }
-                  }
-                />
+              <div className="mt-2 flex items-center gap-2">
+                <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn('h-full rounded-full transition-all', status.barClassName)}
+                    style={
+                      !overBudget && status.label === 'On track' && categoryColor
+                        ? { width: `${barWidth}%`, backgroundColor: categoryColor }
+                        : { width: `${barWidth}%` }
+                    }
+                  />
+                </div>
+                {/* Fixed width so every row's bar ends at the same x. */}
+                <span className={cn('w-9 shrink-0 text-right text-[10.5px] font-bold tabular-nums', status.textClassName)}>
+                  {formatPercent(linePercent, 'en', { minimumFractionDigits: 0 })}
+                </span>
               </div>
             </div>
           </div>
@@ -196,13 +216,13 @@ export function BudgetLineRow({
           </div>
         </div>
 
-        <div className="min-w-0 text-right font-mono text-xs text-muted-foreground tabular-nums">
+        <div className="min-w-0 text-right text-xs text-muted-foreground tabular-nums">
           {formatCurrency(plannedAmount, budgetCurrency)}
         </div>
-        <div className={cn('min-w-0 text-right font-mono text-xs font-semibold tabular-nums', overBudget && 'text-destructive')}>
+        <div className={cn('min-w-0 text-right text-xs font-semibold tabular-nums', overBudget && 'text-destructive')}>
           {formatCurrency(actualAmount, budgetCurrency)}
         </div>
-        <div className={cn('min-w-0 text-right font-mono text-xs font-semibold tabular-nums', remainingClassName)}>
+        <div className={cn('min-w-0 text-right text-xs font-semibold tabular-nums', remainingClassName)}>
           {formatCurrency(lineRemaining, budgetCurrency)}
         </div>
         <div className="min-w-0">
@@ -281,10 +301,12 @@ export function BudgetLineRow({
               ) : null}
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-4">
+            {/* Two columns on a phone (MQ-019): five full-width tiles made a
+                tall stack out of four numbers and a comparison. */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div className="rounded-md border bg-background p-2.5">
                 <p className="text-xs text-muted-foreground">Planned</p>
-                <p className="mt-0.5 font-mono text-sm font-medium tabular-nums">
+                <p className="mt-0.5 text-sm font-medium tabular-nums">
                   {formatCurrency(plannedAmount, budgetCurrency)}
                 </p>
               </div>
@@ -294,7 +316,7 @@ export function BudgetLineRow({
                     <p className="text-xs text-muted-foreground">Carryover</p>
                     <p
                       className={cn(
-                        'mt-0.5 font-mono text-sm font-medium tabular-nums',
+                        'mt-0.5 text-sm font-medium tabular-nums',
                         appliedCarryover < 0
                           ? 'text-destructive'
                           : appliedCarryover > 0
@@ -308,7 +330,7 @@ export function BudgetLineRow({
                   </div>
                   <div className="rounded-md border bg-background p-2.5">
                     <p className="text-xs text-muted-foreground">Available</p>
-                    <p className="mt-0.5 font-mono text-sm font-medium tabular-nums">
+                    <p className="mt-0.5 text-sm font-medium tabular-nums">
                       {formatCurrency(availableAmount, budgetCurrency)}
                     </p>
                   </div>
@@ -316,13 +338,13 @@ export function BudgetLineRow({
               ) : null}
               <div className="rounded-md border bg-background p-2.5">
                 <p className="text-xs text-muted-foreground">Spent</p>
-                <p className="mt-0.5 font-mono text-sm font-medium tabular-nums">
+                <p className="mt-0.5 text-sm font-medium tabular-nums">
                   {formatCurrency(actualAmount, budgetCurrency)}
                 </p>
               </div>
               <div className="rounded-md border bg-background p-2.5">
                 <p className="text-xs text-muted-foreground">Remaining</p>
-                <p className={cn('mt-0.5 font-mono text-sm font-medium tabular-nums', remainingClassName)}>
+                <p className={cn('mt-0.5 text-sm font-medium tabular-nums', remainingClassName)}>
                   {formatCurrency(lineRemaining, budgetCurrency)}
                 </p>
               </div>
@@ -331,23 +353,23 @@ export function BudgetLineRow({
                 <p className="mt-0.5 text-sm font-medium tabular-nums">{formatPercent(linePercent, 'en', { minimumFractionDigits: 0 })}</p>
               </div>
               {previousActual !== null ? (
-                <div className="rounded-md border bg-background p-2.5">
+                <div className="col-span-2 rounded-md border bg-background p-2.5 sm:col-span-1">
                   <p className="text-xs text-muted-foreground">Last month</p>
-                  <p className="mt-0.5 font-mono text-sm font-medium tabular-nums">
+                  <p className="mt-0.5 text-sm font-medium tabular-nums">
                     {formatCurrency(previousActual, budgetCurrency)}
                   </p>
                   {previousDelta !== null ? (
                     <p
                       className={cn(
                         'mt-0.5 text-[11px] font-semibold tabular-nums',
-                        previousDelta > 0
-                          ? 'text-destructive'
-                          : previousDelta < 0
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-muted-foreground'
+                        previousDeltaFlat
+                          ? 'text-muted-foreground'
+                          : previousDelta > 0
+                            ? 'text-destructive'
+                            : 'text-emerald-600 dark:text-emerald-400'
                       )}
                     >
-                      {previousDelta >= 0 ? '+' : '−'}
+                      {previousDeltaFlat ? '' : previousDelta > 0 ? '+' : '−'}
                       {formatPercent(Math.abs(previousDelta), 'en', { minimumFractionDigits: 0 })}
                     </p>
                   ) : null}

@@ -171,6 +171,12 @@ function DragHandle({ name, ...handleProps }: { name: string } & Record<string, 
   )
 }
 
+type FoldProps = {
+  childrenCollapsed?: boolean
+  onToggleChildren?: () => void
+  mobileHidden?: boolean
+}
+
 function SortableCategoryRow({
   category,
   parentName,
@@ -178,6 +184,9 @@ function SortableCategoryRow({
   showArchived,
   level = 0,
   isLastChild = false,
+  childrenCollapsed,
+  onToggleChildren,
+  mobileHidden = false,
 }: {
   category: CategoryVM
   parentName: string | null
@@ -185,7 +194,7 @@ function SortableCategoryRow({
   showArchived: boolean
   level?: number
   isLastChild?: boolean
-}) {
+} & FoldProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: category.id })
 
@@ -193,7 +202,11 @@ function SortableCategoryRow({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn('bg-card', isDragging && 'relative z-10 opacity-80 shadow-lg')}
+      className={cn(
+        'bg-card',
+        mobileHidden && 'max-md:hidden',
+        isDragging && 'relative z-10 opacity-80 shadow-lg'
+      )}
     >
       <CategoryRow
         category={category}
@@ -203,6 +216,8 @@ function SortableCategoryRow({
         showArchived={showArchived}
         level={level}
         isLastChild={isLastChild}
+        childrenCollapsed={childrenCollapsed}
+        onToggleChildren={onToggleChildren}
         dragHandle={<DragHandle name={category.name} {...attributes} {...listeners} />}
       />
     </div>
@@ -219,6 +234,19 @@ export function SortableCategoryList({
   // Live drag position, so the row previews the depth it would land at.
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOffsetLeft, setDragOffsetLeft] = useState(0)
+  /**
+   * MQ-016 — parents whose subcategories are folded away. Phone only: there
+   * the chevron folds a branch, and the rows are hidden with CSS rather than
+   * left out, so the desktop drag context still sees every row.
+   */
+  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(() => new Set())
+  const toggleChildren = (id: string) =>
+    setCollapsedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   // Adopt a fresh server list when it changes, without an effect (avoids the
   // set-state-in-effect lint and never clobbers optimistic drags).
@@ -368,6 +396,18 @@ export function SortableCategoryList({
                           ? projectDrop(items, draggingId, draggingId, dragOffsetLeft)
                           : null
                       const level = projected?.depth ?? depth
+                      const fold: FoldProps =
+                        depth === 0
+                          ? {
+                              childrenCollapsed: collapsedIds.has(category.id),
+                              onToggleChildren: () => toggleChildren(category.id),
+                            }
+                          : {
+                              mobileHidden: Boolean(
+                                category.parent_category_id &&
+                                  collapsedIds.has(category.parent_category_id)
+                              ),
+                            }
 
                       return sortable ? (
                         <SortableCategoryRow
@@ -378,6 +418,7 @@ export function SortableCategoryList({
                           showArchived={showArchived}
                           level={level}
                           isLastChild={isLastChild}
+                          {...fold}
                         />
                       ) : (
                         <CategoryRow
@@ -389,6 +430,7 @@ export function SortableCategoryList({
                           showArchived={showArchived}
                           level={level}
                           isLastChild={isLastChild}
+                          {...fold}
                         />
                       )
                     })}

@@ -159,8 +159,11 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
   confirm-state pattern.
 - `src/components/` — shared design system (PageHeader, SectionHeading, Callout,
   Money, BalanceAmount, AccountAvatar, AccountGroup, AccountsViewToggle,
-  CategoryStylePicker, FormDialog, AmountInput, etc.). Reuse these; do not
-  re-roll primitives.
+  CategoryStylePicker, FormDialog, AmountInput, SearchablePicker (MQ-008: long
+  lists — search sheet on a phone, `<optgroup>` select on desktop), FlashToast
+  (MQ-019: a redirect's `?flag=1` success confirmation as a self-dismissing
+  toast instead of a pinned success Callout), etc.).
+  Reuse these; do not re-roll primitives.
 
 ## Technical rules
 
