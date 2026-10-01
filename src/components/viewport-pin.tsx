@@ -166,6 +166,20 @@ export function ViewportPin() {
       // acting on geometry that no longer existed.
       root.style.setProperty('--vv-doc-width', `${root.clientWidth}px`)
 
+      // MQ-010: the keyboard's own flag, for the one thing that *should* sit on
+      // top of it — a form sheet, whose fields and save button the keyboard
+      // would otherwise cover (`.form-sheet` in globals.css). The chrome still
+      // ignores it, as above. `--vv-keyboard-inset` is how far the visible
+      // bottom edge sits above the layout viewport's; `--vv-keyboard-height`
+      // is the height left on screen.
+      if (keyboard && !zoomed) {
+        root.style.setProperty('--vv-keyboard-inset', `${-bottomDelta}px`)
+        root.style.setProperty('--vv-keyboard-height', `${vv.height}px`)
+        root.setAttribute('data-vv-keyboard', 'true')
+      } else {
+        root.removeAttribute('data-vv-keyboard')
+      }
+
       if (zoomedOut || (!zoomed && !offset)) {
         root.style.setProperty('--vv-left', '0px')
         root.style.setProperty('--vv-top', '0px')
@@ -236,6 +250,7 @@ export function ViewportPin() {
       window.removeEventListener('orientationchange', schedule)
       root.removeAttribute('data-vv-zoomed')
       root.removeAttribute('data-vv-offset')
+      root.removeAttribute('data-vv-keyboard')
     }
   }, [])
 

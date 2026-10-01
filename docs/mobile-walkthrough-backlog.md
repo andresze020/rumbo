@@ -35,7 +35,7 @@
 | [MQ-007](#mq-007--sugerencias-de-autofill-del-navegador-en-campos-de-la-app) | P2 | Abierto | UX | Formularios | Brave ofrece nombres de contactos, montos viejos y tarjetas en campos de nombre y monto. |
 | [MQ-008](#mq-008--selects-nativos-con-listas-largas) | P2 | ✅ Hecho (`fix/mq-008-searchable-pickers`) | UX | Budgets / Goals / Debts | `<select>` nativos con 20–60 opciones planas, sin búsqueda ni jerarquía. |
 | [MQ-009](#mq-009--skeletons-en-cada-navegación-incluida-una-página-estática) | P2 | Abierto | Performance | Navegación | Skeleton de 0,5–2 s en cada módulo, incluso en More (estático); "Loading form…" en blanco; skeleton de Budgets no coincide con el resultado. |
-| [MQ-010](#mq-010--sheets-con-teclado-autofocus-que-tapa-el-formulario) | P2 | Abierto | UX | Debts / Goals / Budgets | El autofocus abre el teclado al instante y tapa casi todo el formulario. |
+| [MQ-010](#mq-010--sheets-con-teclado-autofocus-que-tapa-el-formulario) | P2 | ✅ Hecho (`fix/mq-010-no-keyboard-on-open`) | UX | Debts / Goals / Budgets | El autofocus abre el teclado al instante y tapa casi todo el formulario. |
 | [MQ-011](#mq-011--debts-no-reconoce-las-cuentas-de-pasivo-existentes) | P2 | Abierto | UX | Debts | Debts muestra 0 deudas en rojo mientras existe una cuenta tipo Debt con saldo; no ofrece vincularla. |
 | [MQ-012](#mq-012--tipografía-monoespaciada-en-montos) | P2 | Abierto | UI | Debts / Budgets / Goals | Montos en `font-mono` con caracteres espaciados, distinto al resto de la app. |
 | [MQ-013](#mq-013--símbolo--para-montos-en-cop-y-fecha-ddmmyyyy-con-ui-en-inglés) | P2 | Abierto | UX | Formularios multi-moneda | Montos en COP con prefijo "$"; inputs de fecha nativos en `dd/mm/yyyy` con la UI en inglés. |
@@ -726,6 +726,14 @@ saldos (eso fue RUM-*).
 ---
 
 ### MQ-010 — Sheets con teclado autofocus que tapa el formulario
+
+> ✅ Hecho el 2026-10-01 — `FormDialog` en móvil enfoca la hoja (no el primer
+> campo) cuando el formulario tiene más de dos campos visibles; con dos o menos
+> mantiene el comportamiento por defecto. La fila de acciones (`formActionsCls`
+> → marcador `form-actions`) queda sticky al borde inferior de la hoja, y con
+> el teclado abierto `ViewportPin` publica `data-vv-keyboard` para que la hoja
+> se apoye encima del teclado. Detalle en
+> [features/mobile-app-shell.md](./features/mobile-app-shell.md).
 
 **Evidencia:** 1:16–1:21 (Create debt), 2:56 (New goal), 2:34 (Add budget
 line). **Categoría:** UX. **BD:** ninguno.
