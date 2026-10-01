@@ -40,7 +40,7 @@
 | [MQ-012](#mq-012--tipografía-monoespaciada-en-montos) | P2 | ✅ Hecho (`fix/mq-012-proportional-amounts`) | UI | Debts / Budgets / Goals | Montos en `font-mono` con caracteres espaciados, distinto al resto de la app. |
 | [MQ-013](#mq-013--símbolo--para-montos-en-cop-y-fecha-ddmmyyyy-con-ui-en-inglés) | P2 | ✅ Hecho (`fix/mq-013-currency-prefix-dates`) | UX | Formularios multi-moneda | Montos en COP con prefijo "$"; inputs de fecha nativos en `dd/mm/yyyy` con la UI en inglés. |
 | [MQ-014](#mq-014--dashboard-de-mes-nuevo-cinco-empty-states-seguidos) | P2 | ✅ Hecho (`fix/mq-014-quiet-empty-months`) | UX | Dashboard / Budgets / Goals | Mes sin actividad = cinco tarjetas vacías seguidas; KPIs en cero empujan el empty state fuera de la vista. |
-| [MQ-015](#mq-015--payees-cuatro-acciones-por-fila) | P2 | Abierto | UI | Payees | Cuatro acciones por fila truncan el nombre y parten el meta en tres líneas. |
+| [MQ-015](#mq-015--payees-cuatro-acciones-por-fila) | P2 | ✅ Hecho (`fix/mq-015-payee-row-menu`) | UI | Payees | Cuatro acciones por fila truncan el nombre y parten el meta en tres líneas. |
 | [MQ-016](#mq-016--categories-kpi-filtros-y-acciones-ambiguas) | P2 | ✅ Hecho (`fix/mq-016-categories-clarity`) | UX | Categories | KPI "Active" no sigue el filtro, tabs truncadas, icono `←\|` sin explicación, chevron con doble función. |
 | [MQ-017](#mq-017--accounts-delta-neutro-en-verde-e-indicador-de-swipe-sobre-el-saldo) | P2 | Abierto | UI | Accounts | "↑ 0,0 %" en verde; el indicador de swipe "‹" se dibuja encima del saldo. |
 | [MQ-018](#mq-018--more-lista-plana-de-20-ítems) | P3 | Abierto | UX | More | Lista plana de 20+ ítems que repite las tabs de la bottom nav. |
@@ -1016,6 +1016,13 @@ No cambies ningún cálculo. Verifica con qa-smoke.
 ---
 
 ### MQ-015 — Payees: cuatro acciones por fila
+
+> ✅ Hecho el 2026-10-01 — En móvil la fila de un payee (icono + nombre + meta)
+> es un solo enlace a sus transacciones y un único botón "⋯" despliega Edit /
+> Merge / Archive (o Restore) bajo la fila, con la confirmación de Archive
+> intacta; en sm+ quedan los iconos de siempre. El nombre y "N transactions ·
+> last used …" usan todo el ancho. Tags usa el mismo patrón (Edit / Archive).
+> Sin textos nuevos: reutiliza "Actions", "Edit" y "Merge".
 
 **Evidencia:** 1:55–1:58. **Categoría:** UI. **BD:** ninguno.
 

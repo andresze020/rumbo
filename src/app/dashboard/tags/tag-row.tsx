@@ -1,7 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeftRight, Pencil } from 'lucide-react'
+import { ArrowLeftRight, MoreHorizontal, Pencil } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { SubmitButton } from '@/components/submit-button'
 import { ConfirmActionButton } from '@/components/confirm-action-button'
@@ -30,6 +31,52 @@ export function TagRow({
 }) {
   const ui = useUiTranslation()
   const muted = tag.isArchived ? 'text-muted-foreground' : ''
+  const [actionsOpen, setActionsOpen] = useState(false)
+
+  const summary = (
+    <div className="min-w-0 flex-1">
+      <span className="flex items-center gap-2">
+        <TagChip name={tag.name} color={tag.color} className={muted} />
+        {tag.isArchived ? (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+            {ui('Archived')}
+          </span>
+        ) : null}
+      </span>
+      <span className="mt-1 block text-[11px] text-muted-foreground">
+        {tag.txnCount} {ui(tag.txnCount === 1 ? 'transaction' : 'transactions')}
+        {tag.lastUsedLabel
+          ? ` ${ui(`· last used ${tag.lastUsedLabel}`)}`
+          : ` ${ui('· never used')}`}
+      </span>
+    </div>
+  )
+
+  const archiveControl = tag.isArchived ? (
+    <form action={archiveTagAction}>
+      <input type="hidden" name="tag_id" value={tag.id} />
+      <input type="hidden" name="is_archived" value="false" />
+      <input type="hidden" name="show_archived" value={showArchived ? 'true' : 'false'} />
+      <SubmitButton type="submit" size="sm" variant="outline" pendingText="Restoring…">
+        Restore
+      </SubmitButton>
+    </form>
+  ) : (
+    <ConfirmActionButton
+      action={archiveTagAction}
+      hiddenFields={{
+        tag_id: tag.id,
+        is_archived: 'true',
+        show_archived: showArchived ? 'true' : 'false',
+      }}
+      triggerLabel="Archive"
+      pendingLabel="Archiving…"
+      title="Archive this tag?"
+      description="Archived tags are hidden from the tag picker, but existing transactions keep the tag. You can restore it anytime."
+      cancelLabel="Cancel"
+      confirmLabel="Archive"
+    />
+  )
 
   return (
     <div
@@ -38,24 +85,21 @@ export function TagRow({
         tag.isArchived && 'bg-muted/20'
       )}
     >
-      <div className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          <TagChip name={tag.name} color={tag.color} className={muted} />
-          {tag.isArchived ? (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-              {ui('Archived')}
-            </span>
-          ) : null}
-        </span>
-        <span className="mt-1 block text-[11px] text-muted-foreground">
-          {tag.txnCount} {ui(tag.txnCount === 1 ? 'transaction' : 'transactions')}
-          {tag.lastUsedLabel
-            ? ` ${ui(`· last used ${tag.lastUsedLabel}`)}`
-            : ` ${ui('· never used')}`}
-        </span>
-      </div>
+      {/* MQ-015 (same pattern as Payees): the row opens the tag's
+          transactions; the other actions sit behind "⋯" on a phone. */}
+      {tag.txnCount > 0 ? (
+        <Link
+          href={tag.transactionsHref}
+          className="flex min-w-0 flex-1 items-center"
+          aria-label={ui(`View transactions tagged ${tag.name}`)}
+        >
+          {summary}
+        </Link>
+      ) : (
+        summary
+      )}
 
-      <div className="flex items-center gap-1">
+      <div className="hidden items-center gap-1 sm:flex">
         {tag.txnCount > 0 ? (
           <Link
             href={tag.transactionsHref}
@@ -73,37 +117,27 @@ export function TagRow({
         >
           <Pencil className="size-3.5" aria-hidden="true" />
         </Link>
-
-        {tag.isArchived ? (
-          <form action={archiveTagAction}>
-            <input type="hidden" name="tag_id" value={tag.id} />
-            <input type="hidden" name="is_archived" value="false" />
-            <input
-              type="hidden"
-              name="show_archived"
-              value={showArchived ? 'true' : 'false'}
-            />
-            <SubmitButton type="submit" size="sm" variant="outline" pendingText="Restoring…">
-              Restore
-            </SubmitButton>
-          </form>
-        ) : (
-          <ConfirmActionButton
-            action={archiveTagAction}
-            hiddenFields={{
-              tag_id: tag.id,
-              is_archived: 'true',
-              show_archived: showArchived ? 'true' : 'false',
-            }}
-            triggerLabel="Archive"
-            pendingLabel="Archiving…"
-            title="Archive this tag?"
-            description="Archived tags are hidden from the tag picker, but existing transactions keep the tag. You can restore it anytime."
-            cancelLabel="Cancel"
-            confirmLabel="Archive"
-          />
-        )}
+        {archiveControl}
       </div>
+
+      <button
+        type="button"
+        onClick={() => setActionsOpen((open) => !open)}
+        aria-expanded={actionsOpen}
+        aria-label={ui('Actions')}
+        className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'shrink-0 sm:hidden')}
+      >
+        <MoreHorizontal className="size-4" aria-hidden="true" />
+      </button>
+      {actionsOpen ? (
+        <div className="flex w-full flex-wrap items-center gap-2 sm:hidden">
+          <Link href={tag.editHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+            <Pencil className="size-3.5" aria-hidden="true" />
+            {ui('Edit')}
+          </Link>
+          {archiveControl}
+        </div>
+      ) : null}
     </div>
   )
 }
