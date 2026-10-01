@@ -778,6 +778,12 @@ export default async function TransactionsPage({
   }))
   const totalCount = rpcData.length ? Number(rpcData[0].total_count) : 0
 
+  // A page past the end comes back empty even when earlier pages are not — the
+  // last rows of the last page were voided, or a filter changed under a stale
+  // `page=` link. Its empty rows say nothing about the period, so instead of
+  // classifying them (and claiming "No transactions in …"), go back to page 1.
+  if (totalCount === 0 && currentPage > 1) redirect(transactionsPath(filters))
+
   // MQ-003: "No transactions yet" is a claim about the household, so it is
   // checked against the household — one row, and only when this view came back
   // empty. A failed read counts as "has history": better to say "nothing in
