@@ -103,10 +103,17 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
             {/* The only scrolling box in the dashboard — see `lib/app-scroll`.
                 `overscroll-contain` keeps a bounce at either end from handing
-                the gesture to the document behind it. */}
+                the gesture to the document behind it.
+
+                `relative` makes it the containing block of every `absolute`
+                element a screen renders. Without it, one with no positioned
+                ancestor of its own resolves against the root instead: this
+                box neither clips nor scrolls it, and it lands at its in-flow
+                offset in *document* coordinates — making the document taller
+                than the screen, so the whole shell scrolls away (MQ-002). */}
             <main
               id={APP_SCROLL_ID}
-              className="flex-1 overflow-y-auto overscroll-contain pb-6"
+              className="relative flex-1 overflow-y-auto overscroll-contain pb-6"
             >
               {/* Above `ScreenTransition` so it does not replay the arrival
                   animation on every route change. */}
