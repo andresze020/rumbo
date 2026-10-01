@@ -40,10 +40,10 @@
 | [MQ-012](#mq-012--tipografía-monoespaciada-en-montos) | P2 | ✅ Hecho (`fix/mq-012-proportional-amounts`) | UI | Debts / Budgets / Goals | Montos en `font-mono` con caracteres espaciados, distinto al resto de la app. |
 | [MQ-013](#mq-013--símbolo--para-montos-en-cop-y-fecha-ddmmyyyy-con-ui-en-inglés) | P2 | ✅ Hecho (`fix/mq-013-currency-prefix-dates`) | UX | Formularios multi-moneda | Montos en COP con prefijo "$"; inputs de fecha nativos en `dd/mm/yyyy` con la UI en inglés. |
 | [MQ-014](#mq-014--dashboard-de-mes-nuevo-cinco-empty-states-seguidos) | P2 | ✅ Hecho (`fix/mq-014-quiet-empty-months`) | UX | Dashboard / Budgets / Goals | Mes sin actividad = cinco tarjetas vacías seguidas; KPIs en cero empujan el empty state fuera de la vista. |
-| [MQ-015](#mq-015--payees-cuatro-acciones-por-fila) | P2 | Abierto | UI | Payees | Cuatro acciones por fila truncan el nombre y parten el meta en tres líneas. |
-| [MQ-016](#mq-016--categories-kpi-filtros-y-acciones-ambiguas) | P2 | Abierto | UX | Categories | KPI "Active" no sigue el filtro, tabs truncadas, icono `←\|` sin explicación, chevron con doble función. |
-| [MQ-017](#mq-017--accounts-delta-neutro-en-verde-e-indicador-de-swipe-sobre-el-saldo) | P2 | Abierto | UI | Accounts | "↑ 0,0 %" en verde; el indicador de swipe "‹" se dibuja encima del saldo. |
-| [MQ-018](#mq-018--more-lista-plana-de-20-ítems) | P3 | Abierto | UX | More | Lista plana de 20+ ítems que repite las tabs de la bottom nav. |
+| [MQ-015](#mq-015--payees-cuatro-acciones-por-fila) | P2 | ✅ Hecho (`fix/mq-015-payee-row-menu`) | UI | Payees | Cuatro acciones por fila truncan el nombre y parten el meta en tres líneas. |
+| [MQ-016](#mq-016--categories-kpi-filtros-y-acciones-ambiguas) | P2 | ✅ Hecho (`fix/mq-016-categories-clarity`) | UX | Categories | KPI "Active" no sigue el filtro, tabs truncadas, icono `←\|` sin explicación, chevron con doble función. |
+| [MQ-017](#mq-017--accounts-delta-neutro-en-verde-e-indicador-de-swipe-sobre-el-saldo) | P2 | ✅ Hecho (`fix/mq-017-accounts-long-names`) | UI | Accounts | "↑ 0,0 %" en verde; el indicador de swipe "‹" se dibuja encima del saldo. |
+| [MQ-018](#mq-018--more-lista-plana-de-20-ítems) | P3 | ✅ Hecho (`fix/mq-018-more-sections`) | UX | More | Lista plana de 20+ ítems que repite las tabs de la bottom nav. |
 | [MQ-019](#mq-019--budgets-fila-de-línea-y-detalle-poco-legibles) | P3 | ✅ Hecho (`fix/mq-019-budget-line-legibility`) | UX | Budgets | Fila colapsada sin el planificado, detalle en 5 tiles apilados, copy "0 over budget", banner persistente. |
 | [MQ-020](#mq-020--recurring-semántica-de-auto-y-secciones-duplicadas) | P3 | Abierto | UX | Recurring | Plantillas "Auto" vencidas sin postear, chips que envuelven, "Upcoming" y "Upcoming occurrences" duplicadas. |
 
@@ -1017,6 +1017,13 @@ No cambies ningún cálculo. Verifica con qa-smoke.
 
 ### MQ-015 — Payees: cuatro acciones por fila
 
+> ✅ Hecho el 2026-10-01 — En móvil la fila de un payee (icono + nombre + meta)
+> es un solo enlace a sus transacciones y un único botón "⋯" despliega Edit /
+> Merge / Archive (o Restore) bajo la fila, con la confirmación de Archive
+> intacta; en sm+ quedan los iconos de siempre. El nombre y "N transactions ·
+> last used …" usan todo el ancho. Tags usa el mismo patrón (Edit / Archive).
+> Sin textos nuevos: reutiliza "Actions", "Edit" y "Merge".
+
 **Evidencia:** 1:55–1:58. **Categoría:** UI. **BD:** ninguno.
 
 **Síntoma.** Cada fila tiene 4 controles (transacciones, editar, merge,
@@ -1050,6 +1057,17 @@ la entrega. Textos nuevos vía i18n-scribe.
 ---
 
 ### MQ-016 — Categories: KPI, filtros y acciones ambiguas
+
+> ✅ Hecho el 2026-10-01 — Los dos KPI móviles cuentan la lista filtrada (tipo,
+> búsqueda y archivadas; "Archived" cuando se ven archivadas). Las tabs de tipo
+> ya no se encogen: la fila se desliza, un fade marca el borde con más tabs y
+> la activa se centra al llegar (`categories/type-tabs.tsx`). En móvil el
+> chevron de un padre solo pliega/despliega sus subcategorías; tocar la fila o
+> "⋯" abre detalles y acciones, y "←|" pasa a ese panel como "Move to main
+> level" con texto visible (en desktop sigue en la fila, con aria-label). El
+> panel se monta solo al abrirse: sin cierre a medias ni botones invisibles en
+> el orden de tabulación. "Income" dentro de Income es un dato del household,
+> no de la UI: no se tocó (el ticket prohíbe cambiar jerarquía).
 
 **Evidencia:** 1:33–1:48. **Categoría:** UX. **BD:** ninguno.
 
@@ -1098,6 +1116,15 @@ No cambies jerarquía ni tipos de categorías. Textos nuevos vía i18n-scribe.
 
 ### MQ-017 — Accounts: delta neutro en verde e indicador de swipe sobre el saldo
 
+> ✅ Hecho el 2026-10-01 — (1) El delta 0 gris y sin flecha ya lo resolvió
+> MQ-005. (2) La app no tiene swipe en ninguna fila (Accounts, Payees ni
+> otra; solo long-press en Transactions): el "‹" en un círculo del video es el
+> indicador del gesto "atrás" de Android al arrastrar desde el borde, fuera
+> del control de la app. Sin cambio. (3) Bajo `sm` la fila de una cuenta pone
+> el nombre en la primera línea a todo el ancho (hasta dos líneas) y el saldo
+> en la segunda, alineado a la derecha junto al subtítulo; a 360 px el nombre
+> pasa de 84 px a 226 px y ya no se corta. Desde `sm` la fila queda como antes.
+
 **Evidencia:** 0:51 (badge), 1:04 y 1:10 (indicador "‹" sobre el saldo de la
 primera cuenta). **Categoría:** UI. **BD:** ninguno.
 
@@ -1137,6 +1164,14 @@ Cambio solo visual. Verifica con qa-smoke.
 ## 6. P3 — Mejoras
 
 ### MQ-018 — More: lista plana de 20+ ítems
+
+> ✅ Hecho el 2026-10-01 — More muestra secciones con encabezado: Planning,
+> Analysis, Organize (nuevo `nav.groupOrganize`), Automation y Settings (con
+> tema y cerrar sesión), y ya no repite Dashboard, Transactions ni Accounts.
+> La agrupación vive en `src/lib/nav/more-sections.ts` y referencia los ítems
+> de `navGroups` por href, así que el sidebar de escritorio no cambia; un test
+> falla si un destino nuevo no queda ni en More ni en la bottom nav. Desaparece
+> también la sección "Coming later", que salía vacía.
 
 **Evidencia:** 1:28, 2:11–2:12, 3:31–3:34. **Categoría:** UX.
 
