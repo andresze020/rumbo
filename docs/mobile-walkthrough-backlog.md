@@ -26,7 +26,7 @@
 
 | ID | Prioridad | Estado | Categoría | Área | Hallazgo en una línea |
 |---|---|---|---|---|---|
-| [MQ-001](#mq-001--today-y-el-mes-actual-se-calculan-en-utc) | P0 | Abierto | Funcionamiento | Fechas (global) | "Hoy" y "mes actual" se calculan en UTC: a las 23:31 locales del 30-sep la app ya vive en octubre. |
+| [MQ-001](#mq-001--today-y-el-mes-actual-se-calculan-en-utc) | P0 | ✅ Hecho (rama) — auto-post por cron sigue en UTC, ver ticket | Funcionamiento | Fechas (global) | "Hoy" y "mes actual" se calculan en UTC: a las 23:31 locales del 30-sep la app ya vive en octubre. |
 | [MQ-002](#mq-002--el-shell-se-desplaza-header-y-bottom-nav-se-van-de-la-pantalla) | P1 | Abierto | UI | Shell / navegación | Al llegar al final del scroll el header y la bottom nav se desplazan y dejan media pantalla vacía. |
 | [MQ-003](#mq-003--el-empty-state-de-transactions-parpadea-y-miente) | P1 | Abierto | Funcionamiento | Transactions | El empty state alterna solo entre dos variantes cada 1,5–3 s y dice "No transactions yet" con miles de transacciones. |
 | [MQ-004](#mq-004--el-botón-del-asistente-tapa-contenido-y-la-tab-more) | P1 | Abierto | UI | Global | El botón flotante del asistente tapa montos, botones de fila y la tab "More". |
@@ -123,6 +123,11 @@ sobre el diff antes de entregar.
 
 ### MQ-001 — "Today" y el mes actual se calculan en UTC
 
+> ✅ Hecho el 2026-10-01 — "hoy" y el mes actual salen de la zona del navegador
+> (cookie `rumbo-tz`, `getRequestToday()` en `src/lib/periods/server.ts`) en
+> todo el servidor; el auto-post por pg_cron queda en UTC hasta aplicar
+> `households.timezone` (migración redactada, sin aplicar). Ver "Resultado".
+
 | Campo | Valor |
 |---|---|
 | Prioridad | **P0** (Alpha blocker: períodos, vencimientos y reportes equivocados) |
@@ -154,7 +159,9 @@ el día siguiente, y la última noche de cada mes, en el mes siguiente. Hay
 `src/app/dashboard/plan/page.tsx:57-64`,
 `src/app/dashboard/debts/debt-create-form.tsx:35` y
 `src/app/dashboard/assistant/assistant-chat.tsx:45-46`. No existe columna de
-zona horaria en `households` ni en `user_settings`.
+zona horaria en `households` ni en `user_settings`. *(Corrección 2026-10-01:
+`profiles.timezone` sí existe — por usuario, default `America/Montreal`, sin
+validar — pero nada la lee; no se usó.)*
 
 **Qué hacer.**
 
@@ -177,6 +184,59 @@ zona horaria en `households` ni en `user_settings`.
 **Criterio de aceptación.** A las 23:30 del último día del mes en
 `America/Toronto`, todas las pantallas muestran ese mes, "Due today" refleja la
 fecha local y el formulario de transacción y el servidor coinciden en "hoy".
+
+#### Resultado (2026-10-01, rama `fix/mq-001-local-timezone`)
+
+- **Fuente de la zona:** `TimeZoneCookieSync` (montado en
+  `src/app/dashboard/layout.tsx`) escribe `Intl…resolvedOptions().timeZone` en
+  el cookie `rumbo-tz` y hace un único `router.refresh()` cuando el cookie
+  faltaba o cambió (y solo si la escritura quedó). `getRequestTimeZone()` /
+  `getRequestToday()` (`src/lib/periods/server.ts`) lo leen y validan; sin
+  cookie o con un valor inválido, UTC.
+- **Helpers:** `todayIsoDate(tz, now?)` / `currentMonth(tz, now?)` en
+  `transaction-period.ts`; `presetPeriod`, `customPeriod`,
+  `parseTransactionPeriod`, `formatPeriodDate` y `formatPeriodLabel` reciben
+  `today` explícito (el `PeriodSelector` lo recibe del servidor para que
+  cliente y servidor resuelvan igual los presets). `parseMonthParam(month,
+  today)` de `analysis/server.ts` es ahora el único parser de `?month=`:
+  reemplaza las copias de Dashboard, Budgets y Net worth.
+- **Copias borradas:** `recurring/shared.ts`, `exports/csv.ts`
+  (`todayDateStamp`), `home-checklist/server.ts`, y las locales de accounts,
+  assistant, budgets, debts, debt-planner, net-worth, notes, plan, reports.
+- **Cubierto:** Due/Upcoming y `next_run_date` de Recurring (página y
+  acciones), checklist mensual, defaults de período de Dashboard,
+  Transactions, Budgets, Accounts (etiqueta del mes, fin de mes anterior),
+  Net worth, Notes, Reports, Calendar, Cash flow, Month review, Trends, Plan;
+  `Balance date` de Create debt y fecha de pago; cuotas pagadas/próximas;
+  fechas `as-of` de saldos (debts, debt-planner, export).
+  RPCs que caían en `current_date` de la BD ahora reciben la fecha del
+  usuario: `get_card_cycle_summaries(p_as_of)` y
+  `cancel_installment_plan(p_as_of)`.
+- **Cliente:** `debt-create-form` y `recurring-form` reciben `today` del
+  servidor; `assistant-chat` y `exchange-rate-auto-refresh` usan
+  `todayIsoDateLocal()`.
+- **A propósito sin cambio:** `fetchFxRate` en `src/lib/fx.ts` y el chequeo
+  de frescura de `refreshExchangeRatesAction` siguen en UTC — preguntan si el
+  *proveedor* ya publicó el archivo del día, y esos archivos van fechados en
+  UTC (con la fecha local, un usuario al este de UTC re-pediría tasas en cada
+  sesión). La sobrecarga sin fecha de `get_account_balances` (revaluación FX
+  a `current_date`, usada por el saldo actual de Accounts y por la herramienta
+  del asistente) tampoco cambia: solo afecta la fecha de la tasa, y pasarle
+  `today` como `p_as_of_date` excluiría los movimientos con fecha futura.
+  Candidato a ticket aparte si importa la diferencia de un día.
+- **Parada obligatoria (cron):** `run_recurring_autopost` corre por pg_cron a
+  las 06:00 UTC con `current_date`, sin request. Redactada (sin aplicar)
+  `supabase/migrations/20261001120000_mq_001_household_timezone.sql`:
+  `households.timezone text not null default 'UTC'` + trigger que la valida
+  contra `pg_timezone_names`; nada la lee todavía. Seguimiento: que el job
+  postee por household con `(now() at time zone h.timezone)::date` (cron
+  probablemente horario) y que la app escriba la columna. Para Toronto/
+  Montréal (UTC-4/-5) las 06:00 UTC ya caen en el mismo día local, así que hoy
+  no adelanta posteos; sí lo haría para zonas UTC-7 o más al oeste.
+- **Tests:** `src/lib/periods/transaction-period.test.ts` (23:59 local /
+  03:59 UTC en America/Toronto, último día de mes y de año, DST en ambos
+  sentidos, zona al este de UTC) y `src/lib/periods/server.test.ts` (cookie,
+  fallback, valor inválido). Ambos fallan con la implementación UTC anterior.
 
 #### Prompt
 
