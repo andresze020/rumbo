@@ -118,7 +118,11 @@ export function RecurringRow({ vm, locale }: { vm: RecurringRowVM; locale: Local
             >
               Auto
             </Badge>
-          ) : null}
+          ) : (
+            <Badge variant="outline" className="text-xs text-muted-foreground">
+              Manual
+            </Badge>
+          )}
           {!vm.is_active ? <StatusBadge status="inactive" /> : null}
         </div>
 

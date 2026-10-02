@@ -13,6 +13,24 @@ import { getRequestToday } from '@/lib/periods/server'
 
 const RECURRING_NAME_MAX_LENGTH = 120
 
+// recurring_transactions is writable by household owners/admins only (RLS),
+// while posting a transaction is open to every editor. Ask before posting
+// anything, so a member who picks a frequency is told up front instead of
+// getting a posted transaction whose schedule silently failed to save.
+async function requireRecurringAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  householdId: string
+) {
+  const { data: isAdmin } = await supabase.rpc('is_household_admin', {
+    p_household_id: householdId,
+  })
+  if (isAdmin !== true) {
+    redirectWithError(
+      'Only household owners and admins can set up a recurring schedule. Choose "Does not repeat" to record this once.'
+    )
+  }
+}
+
 const TRANSACTION_TYPES = ['income', 'expense'] as const
 const STATUSES = ['posted', 'pending'] as const
 const REVIEW_STATUSES = ['unreviewed', 'reviewed', 'flagged'] as const
@@ -187,6 +205,10 @@ export async function createManualTransactionAction(formData: FormData) {
     redirect('/onboarding')
   }
 
+  if (isFrequency(frequency)) {
+    await requireRecurringAccess(supabase, profile.default_household_id)
+  }
+
   const { data: category, error: categoryError } = await supabase
     .from('categories')
     .select('id, category_type')
@@ -268,8 +290,7 @@ export async function createManualTransactionAction(formData: FormData) {
 
   // UC-10: if a frequency was chosen, also create a recurring template. The
   // first occurrence was just posted above; the template schedules the rest.
-  // Posting subsequent occurrences is manual (via /dashboard/recurring) until
-  // the auto-post scheduler ships.
+  // The daily auto-post job posts the later occurrences (see run_recurring_autopost).
   if (isFrequency(frequency)) {
     const { data: account } = await supabase
       .from('accounts')
@@ -320,7 +341,9 @@ export async function createManualTransactionAction(formData: FormData) {
       start_date: transactionDate,
       end_date: null,
       next_run_date: nextRunDate,
-      auto_post: false,
+      // Recurring entries post themselves by default; the user can switch a
+      // template to manual from Recurring.
+      auto_post: true,
       is_active: true,
       created_by: user.id,
     })
@@ -483,6 +506,8 @@ export async function createTransferTransactionAction(formData: FormData) {
   // Unified transfer cost (FX spread + fee) in base currency + its category.
   const costBase = parseNonNegativeNumber(formData.get('cost_base'))
   const costCategoryId = String(formData.get('cost_category_id') ?? '').trim() || null
+  // Optional recurrence (same field as income/expense). Empty = "Does not repeat".
+  const frequency = String(formData.get('frequency') ?? '').trim()
 
   if (!fromAccountId) {
     redirectWithError('Select the source account.')
@@ -531,6 +556,10 @@ export async function createTransferTransactionAction(formData: FormData) {
 
   if (!profile?.default_household_id) {
     redirect('/onboarding')
+  }
+
+  if (isFrequency(frequency)) {
+    await requireRecurringAccess(supabase, profile.default_household_id)
   }
 
   const { error: transactionError } = await supabase.rpc(
@@ -585,6 +614,60 @@ export async function createTransferTransactionAction(formData: FormData) {
         'Transfer created, but its fee could not be recorded. Add it as an expense.'
       )
     }
+  }
+
+  // UC-9: a frequency turns this transfer into a recurring template too. The
+  // first occurrence was just posted above; the template schedules the rest.
+  // A transfer template has no category and no payee (DB shape constraint), and
+  // posts itself by default, except across two currencies: the amount that
+  // arrives is a value only the user knows, so that one stays manual.
+  if (isFrequency(frequency)) {
+    const { data: routeAccounts } = await supabase
+      .from('accounts')
+      .select('id, currency_code')
+      .in('id', [fromAccountId, toAccountId])
+      .eq('household_id', profile.default_household_id)
+      .is('deleted_at', null)
+    const fromAccount = routeAccounts?.find((a) => a.id === fromAccountId)
+    const toAccount = routeAccounts?.find((a) => a.id === toAccountId)
+
+    if (!fromAccount || !toAccount) {
+      redirectWithError(
+        'Transfer created, but the recurring schedule could not be saved (account not found). You can add it under Recurring.'
+      )
+    }
+
+    const today = await getRequestToday()
+    const firstNext = computeNextRunDate(transactionDate, frequency)
+    const nextRunDate =
+      firstNext > today ? firstNext : advanceUntilFuture(firstNext, frequency, today)
+
+    const { error: recurringError } = await supabase.from('recurring_transactions').insert({
+      household_id: profile.default_household_id,
+      name: (description || 'Recurring transfer').slice(0, RECURRING_NAME_MAX_LENGTH),
+      transaction_type: 'transfer',
+      account_id: fromAccountId,
+      to_account_id: toAccountId,
+      category_id: null,
+      payee_id: null,
+      amount,
+      currency_code: fromAccount.currency_code,
+      frequency,
+      start_date: transactionDate,
+      end_date: null,
+      next_run_date: nextRunDate,
+      auto_post: fromAccount.currency_code === toAccount.currency_code,
+      is_active: true,
+      created_by: user.id,
+    })
+
+    if (recurringError) {
+      redirectWithError(
+        'Transfer created, but the recurring schedule could not be saved. You can add it under Recurring.'
+      )
+    }
+
+    revalidatePath('/dashboard/recurring')
   }
 
   revalidatePath('/dashboard/transactions')

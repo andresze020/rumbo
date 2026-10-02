@@ -86,7 +86,7 @@ export function RecurringForm({
   const [accountId, setAccountId] = useState(template?.account_id ?? '')
   const [toAccountId, setToAccountId] = useState(template?.to_account_id ?? '')
   const [categoryId, setCategoryId] = useState(template?.category_id ?? '')
-  const [autoPost, setAutoPost] = useState(template?.auto_post ?? false)
+  const [autoPost, setAutoPost] = useState(template?.auto_post ?? true)
 
   const isTransfer = transactionType === 'transfer'
 
