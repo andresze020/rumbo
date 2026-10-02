@@ -64,6 +64,8 @@ export type HomeChecklistInput = {
   householdCreatedAt: string | null
   /** Month currently shown by the Control center, `YYYY-MM`. */
   month: string
+  /** The user's today, `YYYY-MM-DD` (`getRequestToday()`, MQ-001). */
+  today: string
   hasAccounts: boolean
   hasTransactions: boolean
   hasBudget: boolean
@@ -72,16 +74,6 @@ export type HomeChecklistInput = {
 }
 
 // ── Month helpers (local: this module must not drag in the analysis layer) ───
-
-function currentMonth(): string {
-  const today = new Date()
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
-}
-
-function todayIso(): string {
-  const today = new Date()
-  return `${currentMonth()}-${String(today.getDate()).padStart(2, '0')}`
-}
 
 export function shiftMonth(month: string, delta: number): string {
   const [year, monthNumber] = month.split('-').map(Number)
@@ -110,13 +102,17 @@ function resolvePhase({
   householdCreatedAt,
   hasAccounts,
   hasTransactions,
-}: Pick<HomeChecklistInput, 'householdCreatedAt' | 'hasAccounts' | 'hasTransactions'>): ChecklistPhase {
+  today,
+}: Pick<
+  HomeChecklistInput,
+  'householdCreatedAt' | 'hasAccounts' | 'hasTransactions' | 'today'
+>): ChecklistPhase {
   // A household that never got off the ground stays in onboarding however old
   // the row is: a monthly routine is meaningless without an account or a single
   // movement to run it against.
   if (!hasAccounts || !hasTransactions) return 'onboarding'
   if (!householdCreatedAt) return 'routine'
-  const tenure = monthsBetween(householdCreatedAt.slice(0, 7), currentMonth())
+  const tenure = monthsBetween(householdCreatedAt.slice(0, 7), today.slice(0, 7))
   return tenure >= ROUTINE_TENURE_MONTHS ? 'routine' : 'onboarding'
 }
 
@@ -151,14 +147,14 @@ async function routineTasks({
   supabase,
   householdId,
   month,
+  today,
   hasBudget,
   previousMonthHasActivity,
 }: Omit<HomeChecklistInput, 'householdCreatedAt' | 'hasAccounts' | 'hasTransactions'>): Promise<ChecklistTask[]> {
-  const thisMonth = currentMonth()
+  const thisMonth = today.slice(0, 7)
   const previousMonth = shiftMonth(month, -1)
   const isCurrentMonth = month === thisMonth
   const isFinishedMonth = month < thisMonth
-  const today = todayIso()
 
   const [
     { data: closureRows },

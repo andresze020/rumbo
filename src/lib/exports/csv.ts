@@ -24,7 +24,3 @@ export function buildCsv<T>(columns: CsvColumn<T>[], rows: T[]) {
 
   return [headerRow, ...dataRows].map((cells) => cells.join(',')).join('\r\n')
 }
-
-export function todayDateStamp() {
-  return new Date().toISOString().slice(0, 10)
-}

@@ -22,12 +22,38 @@ export type FxResult =
   | { rate: number; date: string; requestedDate: string; source: 'fallback' }
   | { rate: null; error: string }
 
+/**
+ * The day every FX read runs on: UTC, never the user's own day (MQ-001).
+ *
+ * The provider dates its rate files in UTC, `refreshExchangeRatesAction` calls a
+ * rate fresh when it carries this day, and balances are valued at the
+ * database's `current_date`, which is UTC too. The user's local day breaks each
+ * of those at the edges: east of UTC it saves a manual rate dated a day the
+ * valuation does not reach until UTC midnight, and a once-a-day refresh gate
+ * keyed on it can sleep through the provider's new day for hours.
+ */
+export function fxToday(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10)
+}
+
+/**
+ * Whether the browser should ask the server to top up rates, given the FX day
+ * it last did so in this session (`null` when it has not). Keyed on
+ * `fxToday()` — the day the action's freshness check uses — so the two never
+ * disagree about when a new day starts.
+ */
+export function fxRefreshDue(lastRefreshedOn: string | null, now: Date = new Date()): boolean {
+  return lastRefreshedOn !== fxToday(now)
+}
+
 export async function fetchFxRate(
   baseCurrency: string,
   accountCurrency: string,
   transactionDate: string
 ): Promise<FxResult> {
-  const today = new Date().toISOString().slice(0, 10)
+  // Whether the provider has published a file for the date yet — its day,
+  // not the user's (see `fxToday`).
+  const today = fxToday()
   const isFuture = transactionDate > today
   const fetchDate = isFuture ? 'latest' : transactionDate
   const base = baseCurrency.toLowerCase()
@@ -113,13 +139,13 @@ export async function fetchDirectRate(
   onDate?: string
 ): Promise<{ rate: number; date: string } | null> {
   if (fromCurrency.toUpperCase() === toCurrency.toUpperCase()) {
-    return { rate: 1, date: onDate ?? new Date().toISOString().slice(0, 10) }
+    return { rate: 1, date: onDate ?? fxToday() }
   }
 
   // Pass a real date, never the literal 'latest': fetchFxRate compares the
   // argument against today to decide whether it is a future date, and it
   // already falls back to 'latest' when the day's file is not published yet.
-  const today = new Date().toISOString().slice(0, 10)
+  const today = fxToday()
   const direct = await fetchFxRate(fromCurrency, toCurrency, onDate ?? today)
 
   if (direct.rate !== null) {

@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { refreshExchangeRatesAction } from './exchange-rate-actions'
+import { fxRefreshDue, fxToday } from '@/lib/fx'
 
 const STORAGE_KEY = 'af_fx_refreshed_on'
 
@@ -14,7 +15,11 @@ const STORAGE_KEY = 'af_fx_refreshed_on'
  * idempotent and cheap when everything is already fresh.
  *
  * Once per session per day, not once per navigation: `sessionStorage` records
- * the day it ran, so moving between screens does not re-hit the provider. The
+ * the day it ran, so moving between screens does not re-hit the provider. That
+ * day is `fxToday()` — UTC, the day the action's freshness check uses — not the
+ * user's: keyed on the local day, a session east of UTC that ran just after
+ * local midnight skipped the provider's new day until the next local one
+ * (MQ-001). The
  * accessor is guarded because a private window can throw on it outright, and a
  * failure there must never stop the dashboard rendering.
  */
@@ -22,10 +27,10 @@ export function ExchangeRateAutoRefresh() {
   const router = useRouter()
 
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = fxToday()
 
     try {
-      if (window.sessionStorage.getItem(STORAGE_KEY) === today) return
+      if (!fxRefreshDue(window.sessionStorage.getItem(STORAGE_KEY))) return
     } catch {
       // No session storage (private window, blocked site data). Fall through:
       // refreshing more often than needed is better than never refreshing.

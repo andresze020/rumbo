@@ -37,6 +37,8 @@ import { cn } from '@/lib/utils'
 import type { PickerGroup, PickerOption } from '@/components/searchable-picker'
 import { formActionsCls } from '@/lib/form-styles'
 import { BudgetCategoryPicker } from './budget-category-picker'
+import { getRequestToday } from '@/lib/periods/server'
+import { parseMonthParam } from '@/lib/analysis/server'
 
 type BudgetsPageProps = {
   searchParams: Promise<{
@@ -93,20 +95,6 @@ const fallbackLineColors = [
   '#e05fa0',
   '#8b5cf6',
 ]
-
-function currentMonthParam() {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = String(today.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}`
-}
-
-function parseBudgetMonth(month: string | undefined) {
-  if (!month || !/^\d{4}-\d{2}$/.test(month)) return currentMonthParam()
-  const parsedDate = new Date(`${month}-01T00:00:00.000Z`)
-  if (Number.isNaN(parsedDate.getTime())) return currentMonthParam()
-  return month
-}
 
 function previousMonthParam(month: string) {
   const [year, monthNumber] = month.split('-').map(Number)
@@ -238,7 +226,8 @@ const BUDGET_FLASH_FLAGS: FlashFlag[] = [
 export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
   const params = await searchParams
   const locale = await getLocale()
-  const selectedMonth = parseBudgetMonth(params.month)
+  const today = await getRequestToday()
+  const selectedMonth = parseMonthParam(params.month, today)
   const selectedMonthDate = `${selectedMonth}-01`
   const previousMonth = previousMonthParam(selectedMonth)
   const previousMonthDate = `${previousMonth}-01`
@@ -868,7 +857,7 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
                               ? previousActualByCategoryId.get(line.category_id) ?? null
                               : null
                           }
-                          monthIsOpen={selectedMonth >= currentMonthParam()}
+                          monthIsOpen={selectedMonth >= today.slice(0, 7)}
                         />
                       )
                     })}

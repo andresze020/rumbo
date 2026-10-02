@@ -69,14 +69,16 @@ export function RecurringForm({
   accounts,
   categories,
   payees,
+  today,
 }: {
   mode: 'create' | 'edit'
   template?: RecurringTemplate
   accounts: RecurringFormAccount[]
   categories: RecurringFormCategory[]
   payees: PayeeOption[]
+  /** The user's today (`getRequestToday()`), the default start date. */
+  today: string
 }) {
-  const today = new Date().toISOString().slice(0, 10)
 
   const [transactionType, setTransactionType] = useState<RecurringType>(
     (template?.transaction_type as RecurringType) ?? 'expense'

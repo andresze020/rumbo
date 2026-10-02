@@ -34,6 +34,7 @@ import {
   getTransferExpenseAccounts,
   type CalendarDay,
 } from '@/lib/analysis/report-query'
+import { getRequestToday } from '@/lib/periods/server'
 
 type CalendarPageProps = {
   searchParams: Promise<{ month?: string }>
@@ -131,14 +132,14 @@ function DayCell({
 export default async function CalendarPage({ searchParams }: CalendarPageProps) {
   const params = await searchParams
   const locale = await getLocale()
-  const month = parseMonthParam(params.month)
+  const todayIso = await getRequestToday()
+  const month = parseMonthParam(params.month, todayIso)
 
   const ctx = await getHousehold()
   const currency = ctx.household.base_currency
   const transferExpenseAccounts = await getTransferExpenseAccounts(ctx)
   const calendar = await getCalendarMonth(ctx, month, transferExpenseAccounts)
 
-  const todayIso = new Date().toISOString().slice(0, 10)
   const blanks = leadingBlanks(month)
   const weekdays = weekdayLabels(locale)
   const rangeHref = `/dashboard/transactions?date_from=${monthStartDate(month)}&date_to=${monthEndDate(month)}`

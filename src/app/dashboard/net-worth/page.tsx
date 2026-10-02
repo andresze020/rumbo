@@ -26,6 +26,8 @@ import { snapshotDateForMonth } from '@/lib/periods/month'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import { formatCurrency, formatLabel as formatValue, formatMonthLabel } from '@/lib/format'
+import { getRequestToday } from '@/lib/periods/server'
+import { parseMonthParam } from '@/lib/analysis/server'
 
 type NetWorthPageProps = {
   searchParams: Promise<{
@@ -56,20 +58,6 @@ type EvolutionPoint = ValuationSummary & {
   month: string
   snapshotDate: string
   hasError: boolean
-}
-
-function currentMonthParam() {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = String(today.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}`
-}
-
-function parseMonth(month: string | undefined) {
-  if (!month || !/^\d{4}-\d{2}$/.test(month)) return currentMonthParam()
-  const parsedDate = new Date(`${month}-01T00:00:00.000Z`)
-  if (Number.isNaN(parsedDate.getTime())) return currentMonthParam()
-  return month
 }
 
 function getPreviousMonths(selectedMonth: string, count: number) {
@@ -222,8 +210,8 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
   const params = await searchParams
   const locale = await getLocale()
   const accountsView = await getAccountsView()
-  const selectedMonth = parseMonth(params.month)
-  const todayIso = new Date().toISOString().slice(0, 10)
+  const todayIso = await getRequestToday()
+  const selectedMonth = parseMonthParam(params.month, todayIso)
   // RUM-003: the current, still-open month snapshots at today, not at its
   // (unrealized) month end — see snapshotDateForMonth's own doc comment.
   const selectedSnapshotDate = snapshotDateForMonth(selectedMonth, todayIso)

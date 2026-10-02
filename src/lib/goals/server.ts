@@ -1,5 +1,6 @@
 import 'server-only'
 import type { createClient } from '@/lib/supabase/server'
+import { fxToday } from '@/lib/fx'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 
@@ -27,7 +28,8 @@ export async function getGoalRatesToBase(
   currencies: Iterable<string>
 ): Promise<GoalRatesToBase> {
   const foreign = [...new Set(currencies)].filter((code) => code && code !== baseCurrency)
-  const today = new Date().toISOString().slice(0, 10)
+  // The FX day (UTC), like every rate read — see `fxToday`.
+  const today = fxToday()
   const results = await Promise.all(
     foreign.map((code) =>
       supabase.rpc('get_exchange_rate', {

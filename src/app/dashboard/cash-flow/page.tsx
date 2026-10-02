@@ -23,6 +23,7 @@ import {
   ACCENT_COLOR,
   SERIES_PALETTE,
 } from '@/lib/analysis/server'
+import { getRequestToday } from '@/lib/periods/server'
 
 type CashFlowPageProps = {
   searchParams: Promise<{ month?: string; range?: string }>
@@ -45,7 +46,7 @@ function signedCurrency(value: number, currency: string, locale: Locale): string
 export default async function CashFlowPage({ searchParams }: CashFlowPageProps) {
   const params = await searchParams
   const locale = await getLocale()
-  const month = parseMonthParam(params.month)
+  const month = parseMonthParam(params.month, await getRequestToday())
   const range = params.range === '12' ? 12 : 6
   const rangeKey = String(range)
 

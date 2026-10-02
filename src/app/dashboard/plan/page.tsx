@@ -19,6 +19,7 @@ import { formatCurrency, localeToBcp47 } from '@/lib/format'
 import { getGoalRatesToBase } from '@/lib/goals/server'
 import { summarizeGoals } from '@/lib/goals/summary'
 import { cn } from '@/lib/utils'
+import { getRequestToday } from '@/lib/periods/server'
 
 type BudgetDetailRow = {
   budget_id: string | null
@@ -56,16 +57,6 @@ type Goal = {
   status: string
 }
 
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function currentMonthDate() {
-  const today = new Date()
-  const month = String(today.getMonth() + 1).padStart(2, '0')
-  return `${today.getFullYear()}-${month}-01`
-}
-
 export default async function PlanPage() {
   const locale = await getLocale()
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key)
@@ -95,7 +86,7 @@ export default async function PlanPage() {
   if (householdError || !household) redirect('/onboarding')
 
   const baseCurrency = household.base_currency as string
-  const today = todayIsoDate()
+  const today = await getRequestToday()
 
   const [
     { data: budgetRows, error: budgetError },
@@ -106,7 +97,7 @@ export default async function PlanPage() {
   ] = await Promise.all([
     supabase.rpc('get_monthly_budget_details', {
       p_household_id: household.id,
-      p_budget_month: currentMonthDate(),
+      p_budget_month: `${today.slice(0, 7)}-01`,
     }),
     supabase
       .from('debts')

@@ -17,6 +17,7 @@ import { AmountInput } from '@/components/amount-input'
 import { formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { getHousehold } from '@/lib/analysis/server'
+import { getRequestToday } from '@/lib/periods/server'
 
 const CARD = 'rounded-2xl border bg-card shadow-sm shadow-black/[0.03]'
 
@@ -60,10 +61,6 @@ const STRATEGY_DESCRIPTION: Record<Strategy, string> = {
 }
 
 const MONTH_CAP = 1200
-
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10)
-}
 
 function parseStrategy(value: string | undefined): Strategy {
   return value === 'snowball' ? 'snowball' : 'avalanche'
@@ -222,7 +219,7 @@ export default async function DebtPlannerPage({ searchParams }: DebtPlannerPageP
       .is('deleted_at', null),
     ctx.supabase.rpc('get_account_balances', {
       p_household_id: ctx.household.id,
-      p_as_of_date: todayIsoDate(),
+      p_as_of_date: await getRequestToday(),
     }),
   ])
 

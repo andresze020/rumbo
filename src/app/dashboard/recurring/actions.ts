@@ -9,9 +9,9 @@ import {
   computeNextRunDate,
   isFrequency,
   isRecurringType,
-  todayIsoDate,
   type Frequency,
 } from '@/lib/recurring/shared'
+import { getRequestToday } from '@/lib/periods/server'
 
 const MAX_NAME_LENGTH = 120
 
@@ -262,7 +262,7 @@ export async function createRecurringAction(formData: FormData) {
 
   // First occurrence is the start date itself; if it is in the past, advance to
   // the next future occurrence so the template doesn't show a backlog.
-  const today = todayIsoDate()
+  const today = await getRequestToday()
   const nextRunDate =
     t.startDate > today ? t.startDate : advanceUntilFuture(t.startDate, t.frequency, today)
 
@@ -320,7 +320,7 @@ export async function updateRecurringAction(formData: FormData) {
   // changed; otherwise preserve the current cursor.
   const scheduleChanged =
     existing.start_date !== t.startDate || existing.frequency !== t.frequency
-  const today = todayIsoDate()
+  const today = await getRequestToday()
   const nextRunDate = scheduleChanged
     ? t.startDate > today
       ? t.startDate
@@ -382,7 +382,7 @@ export async function toggleRecurringActiveAction(formData: FormData) {
   // backlog of missed entries — Open Decision #6).
   const updatePayload: Record<string, unknown> = { is_active: activate }
   if (activate) {
-    const today = todayIsoDate()
+    const today = await getRequestToday()
     if (existing.end_date && existing.end_date < today) {
       redirectWithError('This template has already passed its end date.')
     }

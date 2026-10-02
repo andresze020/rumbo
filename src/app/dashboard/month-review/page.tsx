@@ -40,6 +40,7 @@ import {
   shiftMonth,
   SERIES_PALETTE,
 } from '@/lib/analysis/server'
+import { getRequestToday } from '@/lib/periods/server'
 
 type MonthReviewPageProps = {
   searchParams: Promise<{
@@ -115,7 +116,8 @@ function RateDelta({ diff, vsLabel }: { diff: number | null; vsLabel?: string })
 export default async function MonthReviewPage({ searchParams }: MonthReviewPageProps) {
   const params = await searchParams
   const locale = await getLocale()
-  const month = parseMonthParam(params.month)
+  const todayIso = await getRequestToday()
+  const month = parseMonthParam(params.month, todayIso)
   const prevMonth = shiftMonth(month, -1)
   const ctx = await getHousehold()
   const currency = ctx.household.base_currency
@@ -141,7 +143,6 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
   // measured against the previous month up to the same day, not all of it; a
   // month with nothing posted is not compared at all (it read "↓ 100%" on
   // every line).
-  const todayIso = new Date().toISOString().slice(0, 10)
   const isOpenMonth = month === todayIso.slice(0, 7)
   // A month that has not started (reachable through MonthNav) may already hold
   // a future-dated posting; that partial month against all of the one before

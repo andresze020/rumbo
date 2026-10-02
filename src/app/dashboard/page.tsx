@@ -37,6 +37,8 @@ import { cashFlowComparison, type CashFlowTotals } from '@/lib/dashboard/month-c
 import { buildSpendingPace } from '@/lib/dashboard/spending-pace'
 import { getHomeChecklist } from '@/lib/home-checklist/server'
 import { MAX_MONTHLY_TIMEFRAME_MONTHS, MONTHLY_TIMEFRAME_OPTIONS } from '@/lib/charts/timeframe-options'
+import { getRequestToday } from '@/lib/periods/server'
+import { parseMonthParam } from '@/lib/analysis/server'
 
 export type AccountBalance = {
   account_id: string
@@ -115,23 +117,13 @@ function renderPctDelta(
   )
 }
 
-function currentMonthParam() {
-  const today = new Date()
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
-}
-
-function parseDashboardMonth(month: string | undefined) {
-  if (!month || !/^\d{4}-\d{2}$/.test(month)) return currentMonthParam()
-  const parsedDate = new Date(`${month}-01T00:00:00.000Z`)
-  if (Number.isNaN(parsedDate.getTime())) return currentMonthParam()
-  return month
-}
-
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams
-  const selectedMonth = parseDashboardMonth(params.month)
+  // MQ-001: the user's day, not UTC's — the default month, the open-month
+  // checks and the spending pace all read it.
+  const todayIso = await getRequestToday()
+  const selectedMonth = parseMonthParam(params.month, todayIso)
   const selectedMonthDate = `${selectedMonth}-01`
-  const todayIso = new Date().toISOString().slice(0, 10)
   // RUM-003: the current, still-open month snapshots at today, not at its
   // (unrealized) month end — see snapshotDateForMonth's own doc comment.
   const selectedSnapshotDate = snapshotDateForMonth(selectedMonth, todayIso)
@@ -248,6 +240,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     householdId: household.id,
     householdCreatedAt: (household.created_at as string | null) ?? null,
     month: selectedMonth,
+    today: todayIso,
     hasAccounts: balances.length > 0,
     hasTransactions: (nonOpeningTransactionCount ?? 0) > 0,
     hasBudget,

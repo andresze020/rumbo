@@ -7,6 +7,7 @@ import { getDashboardTrend } from '@/app/dashboard/trend-actions'
 import { MAX_MONTHLY_TIMEFRAME_MONTHS, MONTHLY_TIMEFRAME_OPTIONS } from '@/lib/charts/timeframe-options'
 import { getHousehold, getMonthlySeries, lastNMonths, parseMonthParam } from '@/lib/analysis/server'
 import { TrendsExplorer } from './trends-explorer'
+import { getRequestToday } from '@/lib/periods/server'
 
 type TrendsPageProps = {
   searchParams: Promise<{ month?: string; range?: string }>
@@ -15,7 +16,7 @@ type TrendsPageProps = {
 export default async function TrendsPage({ searchParams }: TrendsPageProps) {
   const params = await searchParams
   const locale = await getLocale()
-  const month = parseMonthParam(params.month)
+  const month = parseMonthParam(params.month, await getRequestToday())
   // A bookmarked `?range=12` link from before the timeframe pills still picks
   // a sensible starting point; the pills themselves no longer write to the URL.
   const defaultMonths = params.range === '12' ? 12 : 6

@@ -21,7 +21,6 @@ import {
 import {
   getHousehold,
   getCategoryLookup,
-  currentMonthParam,
   longMonthLabel,
   POSITIVE_COLOR,
   NEGATIVE_COLOR,
@@ -32,6 +31,7 @@ import {
   getTransferExpenseAccounts,
   type ReportFilters as ReportFilterValues,
 } from '@/lib/analysis/report-query'
+import { getRequestToday } from '@/lib/periods/server'
 
 type ReportsPageProps = {
   searchParams: Promise<{
@@ -58,10 +58,6 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 function toArray(value: string | string[] | undefined): string[] {
   return (Array.isArray(value) ? value : value ? [value] : []).map((v) => v.trim()).filter(Boolean)
-}
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10)
 }
 
 /** UTC-formatted range label (calendar dates render the same in any timezone). */
@@ -126,6 +122,8 @@ function RankedList({
 export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const params = await searchParams
   const locale = await getLocale()
+  // MQ-001: the user's day — the default month and every preset resolve on it.
+  const today = await getRequestToday()
   const view = params.view === 'merchant' ? 'merchant' : 'category'
   const selectedType =
     params.type === 'income' || params.type === 'expense' ? params.type : 'all'
@@ -149,7 +147,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const rawTo = typeof params.date_to === 'string' ? params.date_to : ''
   const hasCustomRange = ISO_DATE.test(rawFrom) && ISO_DATE.test(rawTo)
   const fallbackMonth =
-    params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : currentMonthParam()
+    params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : today.slice(0, 7)
   const fallbackPeriod = resolvePeriod(fallbackMonth, monthStartDay)
   const dateFrom = hasCustomRange ? rawFrom : fallbackPeriod.dateFrom
   const dateTo = hasCustomRange ? rawTo : fallbackPeriod.dateTo
@@ -235,7 +233,6 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     return `/dashboard/reports?${qs.toString()}`
   }
 
-  const today = todayIso()
   // BR-036: "this month" means "the period containing today", which with a
   // non-1st start day is not the calendar month today falls in. Deriving the
   // label from the date is what keeps the presets and the default view agreeing.

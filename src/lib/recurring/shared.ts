@@ -106,11 +106,6 @@ export function computeNextRunDate(fromIso: string, frequency: Frequency): strin
   return toIsoDate(date)
 }
 
-/** Today's date as a YYYY-MM-DD string (UTC), matching the rest of the app. */
-export function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 /** A YYYY-MM-DD string `days` after `fromIso` (UTC-safe). */
 export function addDaysIso(fromIso: string, days: number): string {
   const [y, m, d] = fromIso.split('-').map(Number)
@@ -141,11 +136,12 @@ export function projectOccurrences(
 }
 
 /** Advance a run date forward by `frequency` until it is strictly after
- * `today`, so reactivating or posting never schedules a date in the past. */
+ * `today` (the user's — `getRequestToday()`), so reactivating or posting never
+ * schedules a date in the past. */
 export function advanceUntilFuture(
   fromIso: string,
   frequency: Frequency,
-  today: string = todayIsoDate()
+  today: string
 ): string {
   let next = fromIso
   // Guard against pathological inputs; 1000 iterations covers daily over ~3 years.

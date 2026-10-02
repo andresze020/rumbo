@@ -13,6 +13,7 @@ import { LanguageProvider } from '@/components/language-provider'
 import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { ScreenTransition } from '@/components/screen-transition'
 import { TextSizeSync } from '@/components/text-size-sync'
+import { TimeZoneCookieSync } from '@/components/time-zone-cookie-sync'
 import { APP_SCROLL_ID } from '@/lib/app-scroll'
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
@@ -50,6 +51,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       <TransactionDialogProvider householdId={householdContext.currentId}>
         <LocalizedClientBoundary>
           <TextSizeSync value={textSize} />
+          {/* MQ-001: the browser's time zone, for every server-side "today". */}
+          <TimeZoneCookieSync />
           {/*
             The app shell: a box exactly the height of the viewport that does
             not scroll. The chrome is *in* it, and only the middle row moves.

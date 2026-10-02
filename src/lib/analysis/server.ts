@@ -75,17 +75,16 @@ export async function getHousehold(): Promise<HouseholdContext> {
 
 // ── Month utilities ─────────────────────────────────────────────────────────
 
-/** Current month as `YYYY-MM`. */
-export function currentMonthParam(): string {
-  const today = new Date()
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
-}
-
-/** Validates a `?month=YYYY-MM` param, falling back to the current month. */
-export function parseMonthParam(month: string | undefined): string {
-  if (!month || !/^\d{4}-\d{2}$/.test(month)) return currentMonthParam()
+/**
+ * Validates a `?month=YYYY-MM` param, falling back to the month `today` (the
+ * user's — `getRequestToday()`, MQ-001) falls in. The one month-param parser:
+ * Dashboard, Budgets, Net worth and the analysis screens all use it.
+ */
+export function parseMonthParam(month: string | undefined, today: string): string {
+  const fallback = today.slice(0, 7)
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) return fallback
   const parsed = new Date(`${month}-01T00:00:00.000Z`)
-  if (Number.isNaN(parsed.getTime())) return currentMonthParam()
+  if (Number.isNaN(parsed.getTime())) return fallback
   return month
 }
 

@@ -13,6 +13,7 @@ import { formatCurrency, formatIsoDate } from '@/lib/format'
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import type { PayeeOption } from '../transactions/payee-picker'
+import { getRequestToday } from '@/lib/periods/server'
 
 type InstallmentsPageProps = {
   searchParams: Promise<{
@@ -157,7 +158,8 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
     allCategories.map((category) => [category.id, category.name])
   )
 
-  const today = new Date().toISOString().slice(0, 10)
+  // MQ-001: paid vs next due on the user's calendar.
+  const today = await getRequestToday()
 
   const planVMs: InstallmentPlanVM[] = plans.map((plan) => {
     const rows = installments.filter((row) => row.installment_plan_id === plan.id)
