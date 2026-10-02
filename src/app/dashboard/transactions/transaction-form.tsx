@@ -1887,6 +1887,36 @@ export function TransactionForm({
     onOpen: syncCategoryDrillToSelection,
   })
 
+  // Shared by the expense/income rows and the transfer rows below.
+  const repeatRow = showField('repeat')
+    ? editRow({
+      id: 'repeat',
+      icon: <Repeat className="size-4.5" />,
+      label: t('transactionForm.repeat'),
+      value: repeatValue,
+      placeholder: t('transactionForm.repeatNever'),
+      children: (
+        <>
+          <input type="hidden" name="frequency" value={recurringFrequency} />
+          {optionList(
+            [
+              { value: '', label: t('transactionForm.repeatNever') },
+              ...RECURRING_FREQUENCIES.map((f) => ({
+                value: f.value,
+                label: ui(f.label),
+              })),
+            ],
+            recurringFrequency,
+            (value) => {
+              setRecurringFrequency(value)
+              setExpandedField(null)
+            }
+          )}
+        </>
+      ),
+    })
+    : null
+
   const mobileFields = (
     <div className="rounded-xl border px-2">
       {/* Selection lives in hidden inputs that stay mounted regardless of the
@@ -1959,6 +1989,7 @@ export function TransactionForm({
 
       {/* A transfer's From/To selectors live in the amounts card above, beside
           the figure each one applies to — they are deliberately absent here. */}
+      {isTransfer ? repeatRow : null}
       {isTransfer ? null : (
         <>
           {/* BR-046: account and category swap places with the field-order
@@ -1979,34 +2010,7 @@ export function TransactionForm({
                 placeholder: '—',
               })
             : null}
-          {showField('repeat')
-            ? editRow({
-                id: 'repeat',
-                icon: <Repeat className="size-4.5" />,
-                label: t('transactionForm.repeat'),
-                value: repeatValue,
-                placeholder: t('transactionForm.repeatNever'),
-                children: (
-                  <>
-                    <input type="hidden" name="frequency" value={recurringFrequency} />
-                    {optionList(
-                      [
-                        { value: '', label: t('transactionForm.repeatNever') },
-                        ...RECURRING_FREQUENCIES.map((f) => ({
-                          value: f.value,
-                          label: ui(f.label),
-                        })),
-                      ],
-                      recurringFrequency,
-                      (value) => {
-                        setRecurringFrequency(value)
-                        setExpandedField(null)
-                      }
-                    )}
-                  </>
-                ),
-              })
-            : null}
+          {repeatRow}
         </>
       )}
 
@@ -2475,6 +2479,29 @@ export function TransactionForm({
           </div>
           {statusField}
 
+          {showField('repeat') ? (
+            <div className="space-y-1.5">
+              <SelectField
+                id="frequency"
+                name="frequency"
+                label={t('transactionForm.repeat')}
+                leading={<Repeat className="size-4.5" />}
+                value={recurringFrequency}
+                onChange={(e) => setRecurringFrequency(e.target.value)}
+              >
+                <option value="">{t('transactionForm.repeatNever')}</option>
+                {RECURRING_FREQUENCIES.map((frequency) => (
+                  <option key={frequency.value} value={frequency.value}>
+                    {ui(frequency.label)}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+          ) : null}
+          {recurringFrequency ? (
+            <p className="text-xs text-muted-foreground col-span-2">{t('transactionForm.repeatHelp')}</p>
+          ) : null}
+
           {/* Description: kept essential (visible on mobile too). */}
           <div className="space-y-1.5 col-span-2">
             <Label htmlFor="description">{t('transactionForm.description')}</Label>
@@ -2548,8 +2575,8 @@ export function TransactionForm({
           </div>
 
           {/* UC-10: turn a normal entry into a recurring one. Kept essential so
-              the recurring feature is discoverable. Transfers are not supported
-              as recurring templates yet, so this is income/expense only. */}
+              the recurring feature is discoverable. Transfers have their
+              own copy of this field in the branch above. */}
           {showField('repeat') ? (
             <div className="space-y-1.5">
               <SelectField

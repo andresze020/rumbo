@@ -483,6 +483,8 @@ export async function createTransferTransactionAction(formData: FormData) {
   // Unified transfer cost (FX spread + fee) in base currency + its category.
   const costBase = parseNonNegativeNumber(formData.get('cost_base'))
   const costCategoryId = String(formData.get('cost_category_id') ?? '').trim() || null
+  // Optional recurrence (same field as income/expense). Empty = "Does not repeat".
+  const frequency = String(formData.get('frequency') ?? '').trim()
 
   if (!fromAccountId) {
     redirectWithError('Select the source account.')
@@ -585,6 +587,59 @@ export async function createTransferTransactionAction(formData: FormData) {
         'Transfer created, but its fee could not be recorded. Add it as an expense.'
       )
     }
+  }
+
+  // UC-9: a frequency turns this transfer into a recurring template too. The
+  // first occurrence was just posted above; the template schedules the rest.
+  // A transfer template has no category and no payee (DB shape constraint), and
+  // never auto-posts from here: the user opts in on /dashboard/recurring, and a
+  // cross-currency one cannot auto-post at all.
+  if (isFrequency(frequency)) {
+    const { data: fromAccount } = await supabase
+      .from('accounts')
+      .select('currency_code')
+      .eq('id', fromAccountId)
+      .eq('household_id', profile.default_household_id)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (!fromAccount) {
+      redirectWithError(
+        'Transfer created, but the recurring schedule could not be saved (account not found). You can add it under Recurring.'
+      )
+    }
+
+    const today = await getRequestToday()
+    const firstNext = computeNextRunDate(transactionDate, frequency)
+    const nextRunDate =
+      firstNext > today ? firstNext : advanceUntilFuture(firstNext, frequency, today)
+
+    const { error: recurringError } = await supabase.from('recurring_transactions').insert({
+      household_id: profile.default_household_id,
+      name: (description || 'Recurring transfer').slice(0, RECURRING_NAME_MAX_LENGTH),
+      transaction_type: 'transfer',
+      account_id: fromAccountId,
+      to_account_id: toAccountId,
+      category_id: null,
+      payee_id: null,
+      amount,
+      currency_code: fromAccount.currency_code,
+      frequency,
+      start_date: transactionDate,
+      end_date: null,
+      next_run_date: nextRunDate,
+      auto_post: false,
+      is_active: true,
+      created_by: user.id,
+    })
+
+    if (recurringError) {
+      redirectWithError(
+        'Transfer created, but the recurring schedule could not be saved. You can add it under Recurring.'
+      )
+    }
+
+    revalidatePath('/dashboard/recurring')
   }
 
   revalidatePath('/dashboard/transactions')
