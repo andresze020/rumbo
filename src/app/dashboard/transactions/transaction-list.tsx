@@ -741,8 +741,9 @@ function DisplayRow({
           // Every column is a fixed width except the description, which takes
           // the slack. An `auto` amount column made each row size itself to
           // its own figure, so "COP 122,342" pushed its category left and
-          // "$2.94" pushed it right - no two rows lined up.
-          'grid-cols-[2.5rem_minmax(0,1fr)_auto] @min-[60rem]:grid-cols-[2.5rem_minmax(0,1fr)_8rem_9.5rem_auto]',
+          // "$2.94" pushed it right - no two rows lined up. The last column
+          // is amount + chevron and must stay fixed for the same reason.
+          'grid-cols-[2.5rem_minmax(0,1fr)_auto] @min-[60rem]:grid-cols-[2.5rem_minmax(0,1fr)_8rem_9.5rem_10rem]',
           // 44px minimum on the tap target even at the tightest density.
           compact ? 'min-h-11 py-1.5' : 'min-h-14 py-2'
         )}
@@ -841,7 +842,7 @@ function DisplayRow({
         {/* Category / Account: their own columns from `lg` up. */}
         <span className="hidden min-w-0 items-center gap-1.5 @min-[60rem]:flex">
           {row.isTransfer ? (
-            <span className="truncate text-sm text-muted-foreground/70">
+            <span className="truncate text-sm text-muted-foreground">
               {ui('Transfer')}
             </span>
           ) : (
@@ -877,7 +878,7 @@ function DisplayRow({
           <ChevronDown
             aria-hidden="true"
             className={cn(
-              'size-4 shrink-0 text-muted-foreground/50 transition-transform duration-200 group-hover/row:text-muted-foreground motion-reduce:transition-none',
+              'size-4 shrink-0 text-muted-foreground/70 transition-transform duration-200 group-hover/row:text-muted-foreground motion-reduce:transition-none',
               expanded && 'rotate-180'
             )}
           />
