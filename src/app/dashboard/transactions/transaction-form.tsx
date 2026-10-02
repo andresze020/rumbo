@@ -26,6 +26,8 @@ import {
 import {
   createManualTransactionAction,
   createTransferTransactionAction,
+  updateManualTransactionAction,
+  updateTransferTransactionAction,
 } from './actions'
 import { PayeePicker, type PayeeOption } from './payee-picker'
 import { RelativeDateChips } from './relative-date-chips'
@@ -168,6 +170,22 @@ type TransactionFormProps = {
    */
   categoryMemory?: CategoryEntryMemory
   returnTo?: string
+  /**
+   * Edit mode: the id of the transaction being edited. The same form then saves
+   * through the update actions instead of the create ones, so Add and Edit can
+   * never drift apart. What it switches off is what only makes sense for a new
+   * entry — the type switch (a transaction's type is fixed once recorded),
+   * recurrence, "Save & add next", the category autofill and the exchange-rate
+   * entry on a single-account transaction (the update RPC keeps the saved rate).
+   */
+  editTransactionId?: string
+  /** Edit mode: `HH:MM`, or empty for an untimed transaction (BR-045). */
+  defaultTime?: string
+  /** Edit mode, transfers: the saved rate to base, to prefill the rate field. */
+  defaultExchangeRateToBase?: number
+  /** Edit mode, transfers: the saved transfer cost (base currency) + category. */
+  defaultCost?: number
+  defaultCostCategoryId?: string | null
 }
 
 const CATEGORY_USAGE_KEY = 'af_category_usage'
@@ -224,12 +242,24 @@ export function TransactionForm({
   defaultFromAccountId,
   defaultToAccountId,
   visibleFields,
-  quickEntry = DEFAULT_UI_PREFERENCES.quickEntry,
+  quickEntry: quickEntryPreference = DEFAULT_UI_PREFERENCES.quickEntry,
   categoryMemory,
   returnTo,
+  editTransactionId,
+  defaultTime,
+  defaultExchangeRateToBase,
+  defaultCost,
+  defaultCostCategoryId: savedCostCategoryId,
 }: TransactionFormProps) {
   const { t, locale } = useLanguage()
   const ui = useUiTranslation()
+  const isEdit = Boolean(editTransactionId)
+  // Editing keeps the field order but not the fill-fast behaviours: an existing
+  // entry is already complete, so auto-advancing would open a picker behind
+  // every correction and the autofill would overwrite what was saved.
+  const quickEntry = isEdit
+    ? { ...quickEntryPreference, autoAdvance: false, autofillFromLastInCategory: false }
+    : quickEntryPreference
   // BR-032: a field is shown unless the user has explicitly turned it off.
   // A hidden field is not rendered at all, so it submits nothing and the server
   // action falls back to its own default (e.g. status → posted).
@@ -243,7 +273,9 @@ export function TransactionForm({
   // the same precedent for reading local time in an initializer. Only submitted
   // when the field is visible (it is off by default), so a household that does
   // not record times never writes one.
-  const [transactionTime, setTransactionTime] = useState(() => currentTimeLocal())
+  const [transactionTime, setTransactionTime] = useState(() =>
+    isEdit ? (defaultTime ?? '') : currentTimeLocal()
+  )
   const [accountId, setAccountId] = useState(defaultAccountId ?? '')
   const [fromAccountId, setFromAccountId] = useState(defaultFromAccountId ?? '')
   const [toAccountId, setToAccountId] = useState(defaultToAccountId ?? '')
@@ -252,9 +284,10 @@ export function TransactionForm({
   // BR-007: destination amount for a cross-currency transfer (to-account currency).
   const [toAmountInput, setToAmountInput] = useState(defaultToAmount ?? '')
   // Unified transfer cost (FX spread + fee), in base currency, + its category.
-  const [costInput, setCostInput] = useState('')
-  const [costTouched, setCostTouched] = useState(false)
-  const [costCategoryId, setCostCategoryId] = useState('')
+  const [costInput, setCostInput] = useState(defaultCost ? defaultCost.toFixed(2) : '')
+  // A saved cost is the user's figure, so it is not replaced by the estimate.
+  const [costTouched, setCostTouched] = useState((defaultCost ?? 0) > 0)
+  const [costCategoryId, setCostCategoryId] = useState(savedCostCategoryId ?? '')
   // Each cross-currency leg's market rate to base (1 for base), for the estimate.
   const [fromRateToBase, setFromRateToBase] = useState<number | null>(null)
   const [toRateToBase, setToRateToBase] = useState<number | null>(null)
@@ -362,7 +395,12 @@ export function TransactionForm({
       }
     }
   }, [expandedField])
-  const [userRate, setUserRate] = useState('')
+  // The rate is shown as "1 base = X foreign"; the database stores its inverse.
+  const [userRate, setUserRate] = useState(
+    defaultExchangeRateToBase && defaultExchangeRateToBase > 0 && defaultExchangeRateToBase !== 1
+      ? String(parseFloat((1 / defaultExchangeRateToBase).toFixed(6)))
+      : ''
+  )
   const [fetchingRate, setFetchingRate] = useState(false)
   const [fxNote, setFxNote] = useState('')
   const [fxError, setFxError] = useState('')
@@ -377,9 +415,10 @@ export function TransactionForm({
   // *offered* as one-tap chips, which suggests without deciding.
 
   const selectedAccount = availableAccounts.find((a) => a.id === accountId)
-  const isMultiCurrency = Boolean(
-    selectedAccount && selectedAccount.currency_code !== baseCurrency
-  )
+  // Not in edit mode: the update RPC takes no rate, so asking for one would
+  // block a save over a figure that is then thrown away.
+  const isMultiCurrency =
+    !isEdit && Boolean(selectedAccount && selectedAccount.currency_code !== baseCurrency)
   const parsedRate = Number(userRate)
   const rateIsValid =
     userRate.trim() !== '' && Number.isFinite(parsedRate) && parsedRate > 0
@@ -507,8 +546,17 @@ export function TransactionForm({
     )?.id ?? ''
   const effectiveCostCategoryId = costCategoryId || defaultCostCategoryId
   const submitAction = isTransfer
-    ? createTransferTransactionAction
-    : createManualTransactionAction
+    ? isEdit
+      ? updateTransferTransactionAction
+      : createTransferTransactionAction
+    : isEdit
+      ? updateManualTransactionAction
+      : createManualTransactionAction
+  // BR-045: edit always offers the time (otherwise a time set once could never
+  // be cleared) — except on a transfer, whose update action does not store one.
+  const timeVisible = showField('time') && !(isEdit && isTransfer)
+  // Turning an entry into a recurring one is a creation-time choice.
+  const repeatVisible = showField('repeat') && !isEdit
   const canSubmit = isTransfer
     ? availableAccounts.length >= 2 &&
       Boolean(fromAccountId) &&
@@ -662,7 +710,7 @@ export function TransactionForm({
 
   // BR-045: time of day, opt-in via preferences. Clearing it is meaningful —
   // an empty value submits nothing and the transaction stays untimed.
-  const timeField = showField('time') ? (
+  const timeField = timeVisible ? (
     <TimeField
       id="transaction_time"
       name="transaction_time"
@@ -1888,7 +1936,7 @@ export function TransactionForm({
   })
 
   // Shared by the expense/income rows and the transfer rows below.
-  const repeatRow = showField('repeat')
+  const repeatRow = repeatVisible
     ? editRow({
       id: 'repeat',
       icon: <Repeat className="size-4.5" />,
@@ -1976,7 +2024,7 @@ export function TransactionForm({
 
       {/* BR-045: sits directly under the date, since together they are one
           "when". Absent entirely unless the user turned the field on. */}
-      {showField('time')
+      {timeVisible
         ? editRow({
             id: 'time',
             icon: <Clock className="size-4.5" />,
@@ -2389,6 +2437,9 @@ export function TransactionForm({
       className="space-y-3 max-sm:flex max-sm:min-h-full max-sm:flex-1 max-sm:flex-col"
     >
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
+      {editTransactionId ? (
+        <input type="hidden" name="transaction_id" value={editTransactionId} />
+      ) : null}
 
       <SelectorSheet
         open={sheetField !== null}
@@ -2401,21 +2452,25 @@ export function TransactionForm({
       </SelectorSheet>
 
       {/* ── Type: segmented control ──────────────────────────────────── */}
-      <SegmentedField
-        name="transaction_type"
-        value={transactionType}
-        onChange={(value) => handleTransactionTypeChange(value as TransactionType)}
-        options={typeOptions.map(({ value, label, Icon, activeCls }) => ({
-          value,
-          activeCls,
-          label: (
-            <>
-              <Icon className="size-4" aria-hidden="true" />
-              <span className="truncate">{label}</span>
-            </>
-          ),
-        }))}
-      />
+      {/* A recorded transaction keeps its type: the dialog title says which one
+          it is, and switching would mean a different set of ledger entries. */}
+      {isEdit ? null : (
+        <SegmentedField
+          name="transaction_type"
+          value={transactionType}
+          onChange={(value) => handleTransactionTypeChange(value as TransactionType)}
+          options={typeOptions.map(({ value, label, Icon, activeCls }) => ({
+            value,
+            activeCls,
+            label: (
+              <>
+                <Icon className="size-4" aria-hidden="true" />
+                <span className="truncate">{label}</span>
+              </>
+            ),
+          }))}
+        />
+      )}
 
       {/* ── Amount: one hero for expense/income, a paired card for transfers ── */}
       {isTransfer ? (
@@ -2479,7 +2534,7 @@ export function TransactionForm({
           </div>
           {statusField}
 
-          {showField('repeat') ? (
+          {repeatVisible ? (
             <div className="space-y-1.5">
               <SelectField
                 id="frequency"
@@ -2577,7 +2632,7 @@ export function TransactionForm({
           {/* UC-10: turn a normal entry into a recurring one. Kept essential so
               the recurring feature is discoverable. Transfers have their
               own copy of this field in the branch above. */}
-          {showField('repeat') ? (
+          {repeatVisible ? (
             <div className="space-y-1.5">
               <SelectField
                 id="frequency"
@@ -2720,7 +2775,7 @@ export function TransactionForm({
       ) : null}
 
       {/* ── Same-currency: optional explicit fee (a real cash charge) ──── */}
-      {isTransfer && !isCrossCurrencyTransfer && selectedFromAccount && selectedToAccount ? (
+      {isTransfer && !isEdit && !isCrossCurrencyTransfer && selectedFromAccount && selectedToAccount ? (
         <div className="rounded-2xl border bg-muted/30 p-3">
           <div className="flex items-center justify-between">
             <Label
@@ -2831,11 +2886,25 @@ export function TransactionForm({
             type="submit"
             disabled={!canSubmit}
             className="h-11 flex-1 rounded-none text-sm font-semibold sm:h-9 sm:flex-none sm:rounded-lg"
-            pendingText={isTransfer ? t('transactionForm.creatingTransfer') : t('transactionForm.creatingTransaction')}
+            pendingText={
+              isEdit
+                ? isTransfer
+                  ? 'Saving transfer'
+                  : 'Saving transaction'
+                : isTransfer
+                  ? t('transactionForm.creatingTransfer')
+                  : t('transactionForm.creatingTransaction')
+            }
           >
-            {isTransfer ? t('transactionForm.createTransfer') : t('transactionForm.createTransaction')}
+            {isEdit
+              ? isTransfer
+                ? 'Save transfer'
+                : 'Save transaction'
+              : isTransfer
+                ? t('transactionForm.createTransfer')
+                : t('transactionForm.createTransaction')}
           </SubmitButton>
-          {!isTransfer ? (
+          {!isTransfer && !isEdit ? (
             <SubmitButton
               type="submit"
               name="add_next"
