@@ -3,9 +3,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { Store, X } from 'lucide-react'
-import { TransactionEditForm } from './transaction-edit-form'
 import { RefundForm } from './refund-form'
-import { TransferEditForm } from './transfer-edit-form'
+import { TransactionForm } from './transaction-form'
 import { TransactionFilters } from './transaction-filters'
 import {
   TransactionList,
@@ -707,17 +706,6 @@ export default async function TransactionsPage({
       !c.is_archived &&
       (c.category_type === 'income' || c.category_type === 'expense')
   )
-  // Active expense categories (path-labelled) for the transfer-cost picker.
-  const allCategoriesById = new Map(allCategories.map((c) => [c.id, c]))
-  const costCategoryOptions = allCategories
-    .filter((c) => !c.is_archived && c.category_type === 'expense')
-    .map((c) => {
-      const parent = c.parent_category_id
-        ? allCategoriesById.get(c.parent_category_id)
-        : null
-      const name = parent ? `${parent.name} / ${c.name}` : c.name
-      return { id: c.id, label: c.icon ? `${c.icon} ${name}` : name }
-    })
 
   // Selecting a parent category should also match transactions filed under any
   // of its child categories (e.g. "Transport" matches "Transport / Subway").
@@ -1542,36 +1530,41 @@ export default async function TransactionsPage({
           title={selectedEditRow.canEditTransfer ? 'Edit transfer' : 'Edit transaction'}
           description={`Update ${selectedEditRow.title}. Existing safe edit rules still apply.`}
           cancelHref={returnTo}
-          wide
         >
+          {/* The same form the Add dialog uses, in edit mode — one layout, so the
+              two can't drift apart. */}
           {selectedEditRow.canEdit &&
           selectedEditRow.entry &&
           selectedEditRow.allocation ? (
-            <TransactionEditForm
-              transactionId={selectedEditRow.transaction.id}
-              transactionType={
+            <TransactionForm
+              editTransactionId={selectedEditRow.transaction.id}
+              defaultType={
                 selectedEditRow.transaction.transaction_type as 'income' | 'expense'
               }
-              transactionDate={selectedEditRow.transaction.transaction_date}
+              defaultDate={selectedEditRow.transaction.transaction_date}
               // BR-045: Postgres returns `HH:MM:SS`; an `<input type="time">`
               // without a step only round-trips `HH:MM`, so trim the seconds or
               // the control renders empty and a save would silently clear it.
-              transactionTime={
+              defaultTime={
                 selectedEditRow.transaction.transaction_time?.slice(0, 5) ?? ''
               }
-              accountId={selectedEditRow.entry.account_id}
-              categoryId={selectedEditRow.allocation.category_id}
-              amount={Math.abs(Number(selectedEditRow.entry.amount_account_currency))}
-              cancelHref={returnTo}
-              description={selectedEditRow.transaction.description ?? ''}
-              merchantName={selectedEditRow.transaction.merchant_name ?? ''}
-              notes={selectedEditRow.transaction.notes ?? ''}
-              status={selectedEditRow.transaction.status}
+              defaultAccountId={selectedEditRow.entry.account_id}
+              defaultCategoryId={selectedEditRow.allocation.category_id}
+              defaultAmount={Math.abs(
+                Number(selectedEditRow.entry.amount_account_currency)
+              ).toFixed(2)}
+              defaultDescription={selectedEditRow.transaction.description ?? ''}
+              defaultMerchantName={selectedEditRow.transaction.merchant_name ?? ''}
+              defaultNotes={selectedEditRow.transaction.notes ?? ''}
+              defaultStatus={selectedEditRow.transaction.status}
+              defaultTagIds={selectedEditTagIds}
               accounts={activeAccounts}
               categories={activeCategories}
               payees={payeeOptions}
               tags={editFormTags}
-              selectedTagIds={selectedEditTagIds}
+              baseCurrency={household.base_currency}
+              quickEntry={preferences.quickEntry}
+              cancelHref={returnTo}
               returnTo={returnTo}
             />
           ) : null}
@@ -1579,26 +1572,35 @@ export default async function TransactionsPage({
           {selectedEditRow.canEditTransfer &&
           selectedEditRow.transferOutEntry &&
           selectedEditRow.transferInEntry ? (
-            <TransferEditForm
-              transactionId={selectedEditRow.transaction.id}
-              transactionDate={selectedEditRow.transaction.transaction_date}
-              fromAccountId={selectedEditRow.transferOutEntry.account_id}
-              toAccountId={selectedEditRow.transferInEntry.account_id}
-              amount={Math.abs(Number(selectedEditRow.transferOutEntry.amount_account_currency))}
-              initialToAmount={Math.abs(Number(selectedEditRow.transferInEntry.amount_account_currency))}
-              cancelHref={returnTo}
-              description={selectedEditRow.transaction.description ?? ''}
-              notes={selectedEditRow.transaction.notes ?? ''}
-              status={selectedEditRow.transaction.status}
-              accounts={activeAccounts}
-              returnTo={returnTo}
-              baseCurrency={household.base_currency}
-              initialExchangeRateToBase={Number(selectedEditRow.transferOutEntry.exchange_rate_to_base ?? 1)}
-              costCategories={costCategoryOptions}
-              initialCost={Math.abs(
+            <TransactionForm
+              editTransactionId={selectedEditRow.transaction.id}
+              defaultType="transfer"
+              defaultDate={selectedEditRow.transaction.transaction_date}
+              defaultFromAccountId={selectedEditRow.transferOutEntry.account_id}
+              defaultToAccountId={selectedEditRow.transferInEntry.account_id}
+              defaultAmount={Math.abs(
+                Number(selectedEditRow.transferOutEntry.amount_account_currency)
+              ).toFixed(2)}
+              defaultToAmount={Math.abs(
+                Number(selectedEditRow.transferInEntry.amount_account_currency)
+              ).toFixed(2)}
+              defaultDescription={selectedEditRow.transaction.description ?? ''}
+              defaultNotes={selectedEditRow.transaction.notes ?? ''}
+              defaultStatus={selectedEditRow.transaction.status}
+              defaultExchangeRateToBase={Number(
+                selectedEditRow.transferOutEntry.exchange_rate_to_base ?? 1
+              )}
+              defaultCost={Math.abs(
                 Number(selectedEditRow.allocation?.amount_base_currency ?? 0)
               )}
-              initialCostCategoryId={selectedEditRow.allocation?.category_id ?? null}
+              defaultCostCategoryId={selectedEditRow.allocation?.category_id ?? null}
+              accounts={activeAccounts}
+              categories={activeCategories}
+              payees={payeeOptions}
+              baseCurrency={household.base_currency}
+              quickEntry={preferences.quickEntry}
+              cancelHref={returnTo}
+              returnTo={returnTo}
             />
           ) : null}
         </FormDialog>
