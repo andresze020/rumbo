@@ -107,6 +107,8 @@ function formatColumnCount(count: number) {
   return `${count} column${count === 1 ? '' : 's'}`
 }
 
+const PREVIEW_PAGE_SIZE = 50
+
 function formatBatchDate(value: string) {
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return value
@@ -143,6 +145,10 @@ export function CsvImportClient({
   const [targetAccountId, setTargetAccountId] = useState('')
   const [presetName, setPresetName] = useState('')
   const [fileError, setFileError] = useState<string | null>(null)
+  // Every valid row is imported unless the user unticks it, so we track the
+  // exceptions (by CSV row number) rather than the selection.
+  const [excludedRows, setExcludedRows] = useState<Set<number>>(() => new Set())
+  const [visibleRowCount, setVisibleRowCount] = useState(PREVIEW_PAGE_SIZE)
   const previewRows = useMemo(
     () =>
       buildValidatedRows({
@@ -159,6 +165,9 @@ export function CsvImportClient({
   const validRows = previewRows.filter((row) => row.status === 'valid')
   const invalidRows = previewRows.filter((row) => row.status === 'invalid')
   const duplicateRows = previewRows.filter((row) => row.status === 'duplicate')
+  const selectedRows = validRows.filter(
+    (row) => !excludedRows.has(row.rowNumber)
+  )
   const hasNonBaseAccounts = accounts.some(
     (account) => account.currency_code !== baseCurrency
   )
@@ -168,13 +177,16 @@ export function CsvImportClient({
     Boolean(mapping.amount) &&
     Boolean(mapping.description) &&
     (Boolean(mapping.account) || Boolean(targetAccountId)) &&
-    validRows.length > 0
+    selectedRows.length > 0
+  // Unticked rows are left out of the batch entirely (not logged as invalid).
   const rowsJson = JSON.stringify(
-    previewRows.map((row) => ({
-      rowNumber: row.rowNumber,
-      rawData: row.rawData,
-      mappedData: row.mappedData,
-    }))
+    previewRows
+      .filter((row) => !excludedRows.has(row.rowNumber))
+      .map((row) => ({
+        rowNumber: row.rowNumber,
+        rawData: row.rawData,
+        mappedData: row.mappedData,
+      }))
   )
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -186,6 +198,8 @@ export function CsvImportClient({
     setHeaders([])
     setRows([])
     setMapping(emptyMapping)
+    setExcludedRows(new Set())
+    setVisibleRowCount(PREVIEW_PAGE_SIZE)
 
     if (!file) {
       return
@@ -209,6 +223,24 @@ export function CsvImportClient({
     setHeaders(parsedCsv.headers)
     setRows(parsedCsv.rows)
     setMapping({ ...emptyMapping, ...guessCsvMapping(parsedCsv.headers) })
+  }
+
+  function toggleRow(rowNumber: number) {
+    setExcludedRows((current) => {
+      const next = new Set(current)
+      if (next.has(rowNumber)) {
+        next.delete(rowNumber)
+      } else {
+        next.add(rowNumber)
+      }
+      return next
+    })
+  }
+
+  function setAllRowsSelected(selected: boolean) {
+    setExcludedRows(
+      selected ? new Set() : new Set(validRows.map((row) => row.rowNumber))
+    )
   }
 
   function updateMapping(field: keyof CsvMapping, columnName: string) {
@@ -495,7 +527,13 @@ export function CsvImportClient({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div className="rounded-lg bg-muted/40 p-3">
+                <p className="text-xs text-muted-foreground">Selected</p>
+                <p className="mt-1 text-lg font-semibold tabular-nums">
+                  {selectedRows.length}
+                </p>
+              </div>
               <div className="rounded-lg bg-muted/40 p-3">
                 <p className="text-xs text-muted-foreground">Valid</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
@@ -516,10 +554,46 @@ export function CsvImportClient({
               </div>
             </div>
 
+            {validRows.length ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  onClick={() => setAllRowsSelected(true)}
+                  disabled={selectedRows.length === validRows.length}
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  onClick={() => setAllRowsSelected(false)}
+                  disabled={selectedRows.length === 0}
+                >
+                  Deselect all
+                </button>
+              </div>
+            ) : null}
+
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full min-w-[48rem] text-sm">
                 <thead className="bg-muted/50 text-left">
                   <tr>
+                    <th className="w-10 px-3 py-2 font-medium">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all valid rows"
+                        className="size-4 accent-primary"
+                        checked={
+                          validRows.length > 0 &&
+                          selectedRows.length === validRows.length
+                        }
+                        disabled={validRows.length === 0}
+                        onChange={(event) =>
+                          setAllRowsSelected(event.target.checked)
+                        }
+                      />
+                    </th>
                     <th className="px-3 py-2 font-medium">Row</th>
                     <th className="px-3 py-2 font-medium">Status</th>
                     <th className="px-3 py-2 font-medium">Date</th>
@@ -530,8 +604,29 @@ export function CsvImportClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {previewRows.slice(0, 50).map((row) => (
-                    <tr key={row.rowNumber}>
+                  {previewRows.slice(0, visibleRowCount).map((row) => (
+                    <tr
+                      key={row.rowNumber}
+                      className={
+                        row.status === 'valid' &&
+                        excludedRows.has(row.rowNumber)
+                          ? 'opacity-50'
+                          : undefined
+                      }
+                    >
+                      <td className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          aria-label={`Import row ${row.rowNumber}`}
+                          className="size-4 accent-primary"
+                          checked={
+                            row.status === 'valid' &&
+                            !excludedRows.has(row.rowNumber)
+                          }
+                          disabled={row.status !== 'valid'}
+                          onChange={() => toggleRow(row.rowNumber)}
+                        />
+                      </td>
                       <td className="px-3 py-2">{row.rowNumber}</td>
                       <td className="px-3 py-2">
                         <Badge
@@ -567,10 +662,28 @@ export function CsvImportClient({
               </table>
             </div>
 
-            {previewRows.length > 50 ? (
-              <p className="text-sm text-muted-foreground">
-                Showing first 50 rows of {previewRows.length}.
-              </p>
+            {previewRows.length > visibleRowCount ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {`Showing ${visibleRowCount} of ${previewRows.length} rows.`}
+                </p>
+                <button
+                  type="button"
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  onClick={() =>
+                    setVisibleRowCount((count) => count + PREVIEW_PAGE_SIZE)
+                  }
+                >
+                  Show more
+                </button>
+                <button
+                  type="button"
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  onClick={() => setVisibleRowCount(previewRows.length)}
+                >
+                  Show all
+                </button>
+              </div>
             ) : null}
           </CardContent>
         </Card>
@@ -606,13 +719,13 @@ export function CsvImportClient({
                 disabled={!canImport || !accounts.length || !categories.length}
                 pendingText="Importing rows"
               >
-                Import valid rows
+                Import selected rows
               </SubmitButton>
 
               {!canImport ? (
                 <p className="text-sm text-muted-foreground">
                   Complete required mappings, select an account if needed, and
-                  make sure at least one row is valid.
+                  make sure at least one valid row is selected.
                 </p>
               ) : null}
             </form>
