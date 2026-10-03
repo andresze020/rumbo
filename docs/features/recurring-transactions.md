@@ -83,9 +83,12 @@ read as money leaving the household, which it is not.
   advances `next_run_date` by one frequency step and auto-deactivates once it
   passes `end_date`. The post dialog collects an FX rate only when the account
   currency ≠ household base currency.
-- **`next_run_date` semantics:** first occurrence = `start_date` (or the next
-  future occurrence if `start_date` is in the past). Reactivation recomputes
-  from today (no missed-entry backlog — Open Decision #6).
+- **`next_run_date` semantics:** first occurrence = `start_date`, even when it
+  is in the past, so a template created with a past start date owes every
+  occurrence since (they show as due; auto-post posts one per daily run, each on
+  its own due date). Changing the schedule of an existing template, and
+  reactivation, still jump to the next future occurrence (no missed-entry
+  backlog — Open Decision #6): those past occurrences were already handled.
 
 ---
 

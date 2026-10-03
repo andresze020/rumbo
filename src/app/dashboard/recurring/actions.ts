@@ -260,11 +260,13 @@ export async function createRecurringAction(formData: FormData) {
   const { supabase, userId, householdId } = await getAuthenticatedHousehold()
   const t = await parseAndValidateTemplate(supabase, householdId, formData)
 
-  // First occurrence is the start date itself; if it is in the past, advance to
-  // the next future occurrence so the template doesn't show a backlog.
-  const today = await getRequestToday()
-  const nextRunDate =
-    t.startDate > today ? t.startDate : advanceUntilFuture(t.startDate, t.frequency, today)
+  // First occurrence is the start date itself, even when it is in the past: a
+  // template started on the 17th of last month owes the 17th, the 24th and the
+  // 1st, so they show as due (or auto-post on their own dates) instead of being
+  // skipped. Only a *new* template does this; editing the schedule of an
+  // existing one still jumps ahead, because its past occurrences were already
+  // posted.
+  const nextRunDate = t.startDate
 
   const { error: insertError } = await supabase.from('recurring_transactions').insert({
     household_id: householdId,
