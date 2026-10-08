@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react'
 import { after } from 'next/server'
+import { redirect } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { AppSidebar } from '@/components/app-sidebar'
 import { MobileNav } from '@/components/mobile-nav'
@@ -45,6 +46,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     getUiPreferences(),
     getHouseholdContext(),
   ])
+
+  // MEM-7: the active household was not one the user belongs to any more and
+  // has just been repointed. Start over from a clean request: the dashboard of
+  // the household they were moved to, or onboarding when none is left.
+  if (householdContext.recovered) {
+    redirect(householdContext.currentId ? '/dashboard' : '/onboarding')
+  }
 
   return (
     <LanguageProvider locale={locale}>

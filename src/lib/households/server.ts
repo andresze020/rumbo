@@ -2,13 +2,21 @@ import 'server-only'
 import { createClient } from '@/lib/supabase/server'
 import { getRequestProfile, getRequestUser } from '@/lib/supabase/request'
 import type { HouseholdOption } from '@/components/household-switcher'
+import { resolveActiveHousehold } from './active'
 
 export type HouseholdContext = {
   currentId: string | null
   households: HouseholdOption[]
+  /**
+   * MEM-7: the stored default household was not an active membership and has
+   * just been repointed to `currentId` (null: none left). The layout redirects
+   * on it, so every read of this request — which may still hold the stale id —
+   * is thrown away.
+   */
+  recovered: boolean
 }
 
-const EMPTY: HouseholdContext = { currentId: null, households: [] }
+const EMPTY: HouseholdContext = { currentId: null, households: [], recovered: false }
 
 /**
  * The households this user can switch between, and which one is active.
@@ -19,6 +27,11 @@ const EMPTY: HouseholdContext = { currentId: null, households: [] }
  *
  * The membership join is what bounds the list — RLS already restricts it to
  * this user's rows, and nothing here widens that.
+ *
+ * MEM-7 lives here, in one place: a stored default that is not an active
+ * membership is repointed (see `resolveActiveHousehold`) without an error page
+ * and without naming the household it pointed at. Only on two successful
+ * reads — a failed one must never wipe a valid default.
  */
 export async function getHouseholdContext(): Promise<HouseholdContext> {
   try {
@@ -26,7 +39,7 @@ export async function getHouseholdContext(): Promise<HouseholdContext> {
     if (!user) return EMPTY
 
     const supabase = await createClient()
-    const [profile, { data: memberships }] = await Promise.all([
+    const [profile, { data: memberships, error: membershipsError }] = await Promise.all([
       getRequestProfile(),
       supabase
         .from('household_members')
@@ -50,10 +63,23 @@ export async function getHouseholdContext(): Promise<HouseholdContext> {
     }
     households.sort((a, b) => a.name.localeCompare(b.name))
 
-    return {
-      currentId: (profile?.default_household_id as string | null) ?? null,
-      households,
-    }
+    const storedId = (profile?.default_household_id as string | null) ?? null
+    if (!profile || membershipsError) return { currentId: storedId, households, recovered: false }
+
+    const { currentId, stale } = resolveActiveHousehold(storedId, households)
+    if (!stale) return { currentId, households, recovered: false }
+
+    // The user's own profile row: RLS lets them write it, as the household
+    // switcher does. Not a Server Action because it runs during render; the
+    // layout redirects right after, so nothing rendered from the stale id
+    // reaches the screen.
+    const { error: repairError } = await supabase
+      .from('profiles')
+      .update({ default_household_id: currentId })
+      .eq('id', user.id)
+    if (repairError) return { currentId: storedId, households, recovered: false }
+
+    return { currentId, households, recovered: true }
   } catch {
     return EMPTY
   }

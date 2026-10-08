@@ -52,54 +52,17 @@ export async function createHouseholdAction(formData: FormData) {
     failSetup('Could not prepare your profile. Please try again.')
   }
 
-  const { data: household, error: householdError } = await supabase
-    .from('households')
-    .insert({
-      name,
-      base_currency: baseCurrency,
-      created_by: user.id,
-    })
-    .select('id')
-    .single()
+  // HH-0: the household, its owner membership, the default categories and
+  // this profile's default_household_id in ONE call — one transaction, so a
+  // failure leaves nothing half-built. Clients can no longer insert into
+  // households or household_members directly.
+  const { error: householdError } = await supabase.rpc('create_household_with_owner', {
+    p_name: name,
+    p_base_currency: baseCurrency,
+  })
 
   if (householdError) {
     failSetup('Could not create your household. Please try again.')
-  }
-
-  const { error: memberError } = await supabase
-    .from('household_members')
-    .insert({
-      household_id: household.id,
-      user_id: user.id,
-      role: 'owner',
-      status: 'active',
-      joined_at: new Date().toISOString(),
-    })
-
-  if (memberError) {
-    failSetup('Could not finish household setup. Please try again.')
-  }
-
-  const { error: defaultCategoriesError } = await supabase.rpc(
-    'create_default_categories_for_household',
-    {
-      p_household_id: household.id,
-    }
-  )
-
-  if (defaultCategoriesError) {
-    failSetup('Could not finish household setup. Please try again.')
-  }
-
-  const { error: updateProfileError } = await supabase
-    .from('profiles')
-    .update({
-      default_household_id: household.id,
-    })
-    .eq('id', user.id)
-
-  if (updateProfileError) {
-    failSetup('Could not finish household setup. Please try again.')
   }
 
   // A new household changes every page: drop anything the Router Cache kept.
