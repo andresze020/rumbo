@@ -249,14 +249,17 @@ grant execute on function public.create_household_with_owner(text, text) to auth
 -- 5. get_household_members(p_household_id)
 -- ------------------------------------------------------------
 -- Member list for the household screens. A function (not a direct read of
--- household_members) because it joins profiles, whose RLS only lets a user
--- read their own row.
+-- household_members) because it joins profiles and auth.users, which no
+-- client can read for another user.
 --
 --   * Emails only for owner/admin (MEM-1); everyone else gets NULL.
 --   * Removed members are included and flagged is_former = true (MEM-5), so
 --     history that names them still resolves. Invited rows are excluded:
 --     invitations get their own table in HH-4.
---   * Emails come from profiles.email (public schema), never auth.users.
+--   * Emails come from auth.users, the verified sign-in address (the one an
+--     invitation will be matched against in HH-4, S10) — not profiles.email,
+--     which every user can rewrite on their own row (profiles_update_own), so
+--     a member could otherwise show an admin someone else's address.
 --
 -- Every column reference below is qualified with its table alias because
 -- user_id, display_name, email, role, status and joined_at are also OUT
@@ -293,13 +296,14 @@ begin
   select
     m.user_id,
     p.display_name,
-    case when v_can_see_email then p.email end,
+    case when v_can_see_email then u.email::text end,
     m.role,
     m.status,
     m.joined_at,
     (m.status = 'removed')
   from public.household_members m
   left join public.profiles p on p.id = m.user_id
+  left join auth.users u on u.id = m.user_id
   where m.household_id = p_household_id
     and m.status in ('active', 'removed')
   order by

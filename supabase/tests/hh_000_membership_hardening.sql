@@ -13,13 +13,16 @@
 --   * against the live project: only with --co-member=<uuid> --subject=<uuid>,
 --     otherwise skipped with a notice.
 --
--- What it pins (S2, S8):
+-- What it pins (S2):
 --   1. no member — owner and admin included — can insert or update a
 --      household_members row, or write the audit log;
 --   2. a household's creator who is not an active member cannot read it;
---   3. one active owner per household, enforced by a unique index;
---   4. anon cannot execute any SECURITY DEFINER function;
---   5. get_household_members lists the members, emails for owner/admin only.
+--   3. a second active owner is refused by the unique index;
+--   4. get_household_members lists the members, emails for owner/admin only.
+-- The checks that need no second member — the policy shapes, one active owner
+-- in every household, and S8 (anon cannot execute any SECURITY DEFINER
+-- function) — are in hh_000_owner_and_definer_invariants.sql, so the live
+-- runner checks them on every run, with or without --co-member.
 --
 -- Nothing persists. A write probe that succeeds raises, which aborts its
 -- statement's transaction; the begin … rollback blocks create a throwaway
@@ -31,22 +34,6 @@
 -- ============================================================
 
 -- ── 1. Membership rows have no client write path ──────────────────────────
-
-select
-  'HH-0 household_members has no client INSERT or UPDATE policy' as check_name,
-  not exists (
-    select 1 from pg_catalog.pg_policies
-    where schemaname = 'public' and tablename = 'household_members'
-      and cmd in ('INSERT', 'UPDATE', 'ALL')
-  ) as passed;
-
-select
-  'HH-0 households has no client INSERT policy and no creator clause' as check_name,
-  not exists (
-    select 1 from pg_catalog.pg_policies
-    where schemaname = 'public' and tablename = 'households'
-      and (cmd in ('INSERT', 'ALL') or (cmd = 'SELECT' and qual ilike '%created_by%'))
-  ) as passed;
 
 -- RLS itself refuses (42501) before any constraint is looked at. Under the old
 -- owner/admin INSERT policy the owner's run got past RLS and failed on the
@@ -141,25 +128,17 @@ begin
 end $$;
 rollback;
 
--- ── 3. One active owner per household ─────────────────────────────────────
-
-select
-  'HH-0 the household has exactly one active owner' as check_name,
-  (select count(*) from public.household_members m
-   where m.household_id = '__HOUSEHOLD_ID__'::uuid and m.role = 'owner' and m.status = 'active') = 1 as passed;
+-- ── 3. One active owner per household (the index) ─────────────────────────
 
 -- The index refuses a second active owner, whoever writes it — even the table
--- owner, here, on the probe household. Then, still as the table owner, every
--- household in the database is checked for exactly one (the index guarantees
--- "at most"; "at least" is the RPCs' job, S26 in HH-5).
--- check: HH-0 a second active owner is refused, and every household has exactly one
+-- owner, here, on the probe household. (Every household having exactly one is
+-- hh_000_owner_and_definer_invariants.sql, which needs no second member.)
+-- check: HH-0 a second active owner is refused by the unique index
 begin;
 select set_config('hh0.probe', public.create_household_with_owner(
   'HH-0 probe', (select h.base_currency from public.households h where h.id = '__HOUSEHOLD_ID__'::uuid))::text, true);
 reset role;
 do $$
-declare
-  n bigint;
 begin
   begin
     insert into public.household_members (household_id, user_id, role, status, joined_at)
@@ -174,62 +153,10 @@ begin
       where household_id = current_setting('hh0.probe')::uuid and role = 'owner' and status = 'active') <> 1 then
     raise exception 'LEAK: the probe household has two active owners';
   end if;
-
-  select count(*) into n
-  from public.households h
-  where (select count(*) from public.household_members m
-         where m.household_id = h.id and m.role = 'owner' and m.status = 'active') <> 1;
-  if n > 0 then
-    raise exception '% household(s) without exactly one active owner', n;
-  end if;
 end $$;
 rollback;
 
--- ── 4. S8: definer functions and anon ─────────────────────────────────────
-
-select
-  'HH-0 anon cannot execute any SECURITY DEFINER function in public' as check_name,
-  not exists (
-    select 1 from pg_catalog.pg_proc p
-    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.prosecdef
-      and has_function_privilege('anon', p.oid, 'EXECUTE')
-  ) as passed;
-
-select
-  'HH-0 trigger-only SECURITY DEFINER functions are not callable by signed-in users' as check_name,
-  not exists (
-    select 1 from pg_catalog.pg_proc p
-    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.prosecdef
-      and p.prorettype in ('pg_catalog.trigger'::regtype, 'pg_catalog.event_trigger'::regtype)
-      and has_function_privilege('authenticated', p.oid, 'EXECUTE')
-  ) as passed;
-
-select
-  'HH-0 membership helpers and RPCs stay callable by signed-in users' as check_name,
-  has_function_privilege('authenticated', 'public.is_household_member(uuid)', 'EXECUTE')
-  and has_function_privilege('authenticated', 'public.is_household_editor(uuid)', 'EXECUTE')
-  and has_function_privilege('authenticated', 'public.is_household_admin(uuid)', 'EXECUTE')
-  and has_function_privilege('authenticated', 'public.create_household_with_owner(text, text)', 'EXECUTE')
-  and has_function_privilege('authenticated', 'public.get_household_members(uuid)', 'EXECUTE') as passed;
-
-select
-  'HH-0 set_updated_at has a fixed search_path' as check_name,
-  exists (
-    select 1 from pg_catalog.pg_proc p
-    where p.oid = 'public.set_updated_at()'::regprocedure
-      and exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')
-  ) as passed;
-
-select
-  'HH-0 no policy in public is granted to PUBLIC (anon included)' as check_name,
-  not exists (
-    select 1 from pg_catalog.pg_policies
-    where schemaname = 'public' and 'public' = any (roles)
-  ) as passed;
-
--- ── 5. get_household_members ──────────────────────────────────────────────
+-- ── 4. get_household_members ──────────────────────────────────────────────
 
 -- From both sides: as the plain member (A2) no email is returned, as the owner
 -- (A1) every one is. Same rows either way, matching the membership table.
