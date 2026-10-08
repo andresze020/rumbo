@@ -47,11 +47,12 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     getHouseholdContext(),
   ])
 
-  // MEM-7: the active household was not one the user belongs to any more and
-  // has just been repointed. Start over from a clean request: the dashboard of
-  // the household they were moved to, or onboarding when none is left.
-  if (householdContext.recovered) {
-    redirect(householdContext.currentId ? '/dashboard' : '/onboarding')
+  // MEM-7: the active household is not one the user belongs to any more. Hand
+  // off to /onboarding, which repairs it in a Server Action — the same place
+  // every page under this layout already redirects to when it cannot read the
+  // household, so whichever redirect wins the race lands in one spot.
+  if (householdContext.staleId) {
+    redirect('/onboarding')
   }
 
   return (

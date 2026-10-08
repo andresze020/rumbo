@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getHouseholdContext } from '@/lib/households/server'
 import { WelcomeButton } from './welcome-button'
+import { RecoverActiveHousehold } from './recover-active-household'
 import {
   Card,
   CardContent,
@@ -33,13 +35,19 @@ export default async function OnboardingWelcomePage() {
     redirect('/login')
   }
 
+  // MEM-7: a default household the user no longer belongs to. The dashboard
+  // layout and its pages all land here with one, so this is where it is
+  // repaired (RecoverActiveHousehold); the welcome below only shows if that
+  // repair fails.
+  const { staleId } = await getHouseholdContext()
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('default_household_id')
     .eq('id', user.id)
     .maybeSingle()
 
-  if (profile?.default_household_id) {
+  if (profile?.default_household_id && !staleId) {
     const { count: accountCount } = await supabase
       .from('accounts')
       .select('id', { count: 'exact', head: true })
@@ -51,7 +59,7 @@ export default async function OnboardingWelcomePage() {
     }
   }
 
-  return (
+  const welcome = (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/8 via-background to-background p-4 sm:p-6">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
@@ -78,4 +86,6 @@ export default async function OnboardingWelcomePage() {
       </Card>
     </main>
   )
+
+  return staleId ? <RecoverActiveHousehold>{welcome}</RecoverActiveHousehold> : welcome
 }
