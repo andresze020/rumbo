@@ -73,11 +73,19 @@ export async function getHouseholdContext(): Promise<HouseholdContext> {
     // switcher does. Not a Server Action because it runs during render; the
     // layout redirects right after, so nothing rendered from the stale id
     // reaches the screen.
-    const { error: repairError } = await supabase
+    //
+    // Compare-and-swap on the stale id: if anything changed the default since
+    // it was read (a switch, a future invitation accept), this writes nothing
+    // and reports no recovery, rather than overwriting a value it never saw.
+    // Exactly one changed row is the only "recovered" — so a write that
+    // silently matched nothing can never send the layout into a redirect loop.
+    const { data: repaired, error: repairError } = await supabase
       .from('profiles')
       .update({ default_household_id: currentId })
       .eq('id', user.id)
-    if (repairError) return { currentId: storedId, households, recovered: false }
+      .eq('default_household_id', storedId as string)
+      .select('id')
+    if (repairError || repaired?.length !== 1) return { currentId: storedId, households, recovered: false }
 
     return { currentId, households, recovered: true }
   } catch {
