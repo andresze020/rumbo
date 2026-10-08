@@ -83,7 +83,8 @@ describe('liveRunPlan (db-test against the live project)', () => {
 
   it('runs a non-member file as --outsider, or as a fresh stranger', () => {
     expect(liveRunPlan({ 'run-as': 'non-member' }, { outsider: A1 })).toEqual({ runAs: A1, label: 'non-member' })
-    expect(liveRunPlan({ 'run-as': 'non-member' }, {}, () => 'fresh-uuid').runAs).toBe('fresh-uuid')
+    const fresh = '00000000-0000-4000-a000-00000000f00d'
+    expect(liveRunPlan({ 'run-as': 'non-member' }, {}, () => fresh).runAs).toBe(fresh)
   })
 
   it('runs an ordinary file as --user (or postgres when absent)', () => {
