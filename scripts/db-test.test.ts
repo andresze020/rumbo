@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { asMember, fileDirectives, splitStatements } from './db-test.mjs'
+import { asMember, fileDirectives, liveRunPlan, splitStatements, substitutePlaceholders } from './db-test.mjs'
 
 /**
  * RUM-010b — the plumbing both SQL runners share. `db-test.mjs` (live project)
@@ -38,8 +38,57 @@ describe('fileDirectives', () => {
     expect(fileDirectives('-- rumbo-test: run-as=non-member\nselect 1;')).toEqual({ 'run-as': 'non-member' })
   })
 
+  it('reads the run-as directive a co-member file declares (HH-0)', () => {
+    expect(fileDirectives('-- rumbo-test: run-as=co-member\nselect 1;')).toEqual({ 'run-as': 'co-member' })
+  })
+
   it('returns nothing for an ordinary file', () => {
     expect(fileDirectives('-- just a comment\nselect 1;')).toEqual({})
+  })
+})
+
+const HOUSEHOLD = '10000000-0000-4000-a000-00000000000a'
+const A1 = '00000000-0000-4000-a000-0000000000a1'
+const A2 = '00000000-0000-4000-a000-0000000000a2'
+
+describe('substitutePlaceholders', () => {
+  it('fills the household and the subject everywhere they appear', () => {
+    const sql = "select '__HOUSEHOLD_ID__', '__SUBJECT_USER_ID__', '__SUBJECT_USER_ID__';"
+    expect(substitutePlaceholders(sql, HOUSEHOLD, A2)).toBe(`select '${HOUSEHOLD}', '${A2}', '${A2}';`)
+  })
+
+  it('needs no subject for a file that names none', () => {
+    expect(substitutePlaceholders("select '__HOUSEHOLD_ID__';", HOUSEHOLD, undefined)).toBe(`select '${HOUSEHOLD}';`)
+  })
+
+  it('refuses a file that names a subject when none was given', () => {
+    expect(() => substitutePlaceholders("select '__SUBJECT_USER_ID__';", HOUSEHOLD, undefined)).toThrow(
+      '__SUBJECT_USER_ID__ needs a subject user'
+    )
+  })
+})
+
+describe('liveRunPlan (db-test against the live project)', () => {
+  const coMember = { 'run-as': 'co-member' }
+
+  it('runs a co-member file as --co-member, about --subject', () => {
+    expect(liveRunPlan(coMember, { 'co-member': A2, subject: A1 })).toEqual({ runAs: A2, subject: A1, label: 'co-member' })
+  })
+
+  it('skips a co-member file, with a notice, when either flag is missing', () => {
+    expect(liveRunPlan(coMember, {}).skip).toContain('--co-member=<uuid> --subject=<uuid>')
+    expect(liveRunPlan(coMember, { 'co-member': A2 }).skip).toBeDefined()
+    expect(liveRunPlan(coMember, { subject: A1, user: A1 }).skip).toBeDefined()
+  })
+
+  it('runs a non-member file as --outsider, or as a fresh stranger', () => {
+    expect(liveRunPlan({ 'run-as': 'non-member' }, { outsider: A1 })).toEqual({ runAs: A1, label: 'non-member' })
+    expect(liveRunPlan({ 'run-as': 'non-member' }, {}, () => 'fresh-uuid').runAs).toBe('fresh-uuid')
+  })
+
+  it('runs an ordinary file as --user (or postgres when absent)', () => {
+    expect(liveRunPlan({}, { user: A1 })).toEqual({ runAs: A1 })
+    expect(liveRunPlan({}, {})).toEqual({ runAs: undefined })
   })
 })
 
