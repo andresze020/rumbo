@@ -69,6 +69,31 @@ begin
   assert cardinality(empty) = 0, 'household-scoped tables with no fixture rows: ' || array_to_string(empty, ', ');
 end $$;
 
+-- HH-0: hh_000_membership_hardening.sql (run-as=co-member) runs in A from both
+-- sides. It only proves anything if one side is the owner (an admin, whom the
+-- old policies let write membership rows) and the other a plain member (who
+-- must not see emails or the audit log) — and if the audit log really holds a
+-- row, written by create_household_with_owner, for the member not to see.
+-- check: HH-0 household A has one active owner and one active plain member, and each household its creation event
+do $$
+declare
+  a constant uuid := '__HOUSEHOLD_ID__';
+  b constant uuid := '10000000-0000-4000-a000-00000000000b';
+begin
+  assert (select count(*) from public.household_members
+          where household_id = a and status = 'active' and role = 'owner'
+            and user_id = '00000000-0000-4000-a000-0000000000a1') = 1, 'A: A1 should be the one active owner';
+  assert (select count(*) from public.household_members
+          where household_id = a and status = 'active' and role = 'member'
+            and user_id = '00000000-0000-4000-a000-0000000000a2') = 1, 'A: A2 should be an active plain member';
+  assert (select count(*) from public.household_audit_log
+          where household_id = a and action = 'household_created'
+            and actor_id = '00000000-0000-4000-a000-0000000000a1') = 1, 'A: expected one household_created event by A1';
+  assert (select count(*) from public.household_audit_log
+          where household_id = b and action = 'household_created'
+            and actor_id = '00000000-0000-4000-a000-0000000000b1') = 1, 'B: expected one household_created event by B1';
+end $$;
+
 -- check: overpaid credit card holds a positive (favourable) balance
 do $$
 begin

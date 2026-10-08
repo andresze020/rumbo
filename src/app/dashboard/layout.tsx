@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react'
 import { after } from 'next/server'
+import { redirect } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { AppSidebar } from '@/components/app-sidebar'
 import { MobileNav } from '@/components/mobile-nav'
@@ -45,6 +46,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     getUiPreferences(),
     getHouseholdContext(),
   ])
+
+  // MEM-7: the active household is not one the user belongs to any more. Hand
+  // off to /onboarding, which repairs it in a Server Action — the same place
+  // every page under this layout already redirects to when it cannot read the
+  // household, so whichever redirect wins the race lands in one spot.
+  if (householdContext.staleId) {
+    redirect('/onboarding')
+  }
 
   return (
     <LanguageProvider locale={locale}>

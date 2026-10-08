@@ -24,6 +24,9 @@
 //   node scripts/db-test.mjs --household=<uuid>    # pick the household to test
 //   node scripts/db-test.mjs --file=br_040         # only files matching a substring
 //   node scripts/db-test.mjs --user=<uuid>         # run as that member, not postgres
+//   node scripts/db-test.mjs --co-member=<uuid> --subject=<uuid>
+//                                                  # two active members of the household,
+//                                                  # for the run-as=co-member files (HH-0)
 //
 // Env: SUPABASE_ACCESS_TOKEN (personal access token, sbp_…)
 //      SUPABASE_PROJECT_REF  (optional; defaults to supabase/.temp/project-ref)
@@ -51,17 +54,18 @@ import { apiContext, fail, log, runScript, runSql } from './lib/supabase-api.mjs
 
 const TESTS_DIR = 'supabase/tests'
 const HOUSEHOLD_PLACEHOLDER = '__HOUSEHOLD_ID__'
+const SUBJECT_PLACEHOLDER = '__SUBJECT_USER_ID__'
 
 // ── CLI plumbing ────────────────────────────────────────────────────────────
 
-const KNOWN_FLAGS = new Set(['household', 'file', 'user', 'outsider'])
+const KNOWN_FLAGS = new Set(['household', 'file', 'user', 'outsider', 'co-member', 'subject'])
 
 function parseArgs(argv) {
   const options = {}
   for (const token of argv) {
     const match = token.match(/^--([a-z-]+)(?:=(.*))?$/)
     if (!match || !KNOWN_FLAGS.has(match[1])) {
-      fail(`Unrecognised argument: ${token}\n  Usage: node scripts/db-test.mjs [--household=<uuid>] [--file=<substring>] [--user=<uuid>] [--outsider=<uuid>]`)
+      fail(`Unrecognised argument: ${token}\n  Usage: node scripts/db-test.mjs [--household=<uuid>] [--file=<substring>] [--user=<uuid>] [--outsider=<uuid>] [--co-member=<uuid> --subject=<uuid>]`)
     }
     options[match[1]] = match[2] ?? true
   }
@@ -89,8 +93,12 @@ function checkName(chunk) {
 
 /**
  * A file-level directive on a `-- rumbo-test: key=value` line. Today only
- * `run-as=non-member`: the file asserts what a signed-in user who does NOT
- * belong to the household can see, so it must never run as a member.
+ * `run-as`:
+ *   * `non-member` — the file asserts what a signed-in user who does NOT
+ *     belong to the household can see, so it must never run as a member;
+ *   * `co-member` (HH-0) — the file asserts what one active member can do to
+ *     or see of ANOTHER active member of the same household. It runs as the
+ *     co-member, with the other one's id substituted for __SUBJECT_USER_ID__.
  */
 export function fileDirectives(sql) {
   const directives = {}
@@ -274,6 +282,25 @@ export function testFiles(filter) {
  * this affects exactly the chunk it is prepended to, whether that chunk is a
  * plain check or a whole `begin; … rollback;` block.
  */
+/**
+ * Who a file runs as on the live project, from its directive and the flags.
+ * `{ skip }` carries the notice for a file that cannot run with what was given:
+ * a co-member file needs two real members, and there is no safe way to guess
+ * them (a random uuid would make every check vacuous, not refused).
+ */
+export function liveRunPlan(directives, options, newOutsider = randomUUID) {
+  if (directives['run-as'] === 'non-member') {
+    return { runAs: options.outsider ?? newOutsider(), label: 'non-member' }
+  }
+  if (directives['run-as'] === 'co-member') {
+    if (!options['co-member'] || !options.subject) {
+      return { skip: 'run-as=co-member needs --co-member=<uuid> --subject=<uuid> (two active members of the household)' }
+    }
+    return { runAs: options['co-member'], subject: options.subject, label: 'co-member' }
+  }
+  return { runAs: options.user }
+}
+
 export function asMember(chunk, userId) {
   if (!userId) return chunk
   const claims = JSON.stringify({ sub: userId, role: 'authenticated' })
@@ -283,20 +310,39 @@ ${chunk}`
 }
 
 /**
+ * The household under test, and — for a co-member file — the OTHER member the
+ * checks are about. A file that names a subject and gets none is an error, not
+ * a run: the literal placeholder would only fail as a uuid cast, far from the
+ * cause.
+ */
+export function substitutePlaceholders(sql, householdId, subjectId) {
+  if (sql.includes(SUBJECT_PLACEHOLDER) && !subjectId) {
+    throw new Error(`${SUBJECT_PLACEHOLDER} needs a subject user (run-as=co-member)`)
+  }
+  const withHousehold = sql.split(HOUSEHOLD_PLACEHOLDER).join(householdId)
+  return subjectId ? withHousehold.split(SUBJECT_PLACEHOLDER).join(subjectId) : withHousehold
+}
+
+/**
  * Runs one test file. `execute(sql)` runs one chunk and resolves to its result
  * rows (or throws): the Management API for the live project, `psql` for the
  * local fixture database (scripts/db-local.mjs). Everything else — splitting,
  * naming, the placeholder, the pass/fail rules — is shared, so a check means
  * the same thing wherever it runs.
  */
-export async function runFile(execute, file, householdId, userId) {
+export async function runFile(execute, file, householdId, userId, subjectId) {
   const raw = readFileSync(`${TESTS_DIR}/${file}`, 'utf8')
 
   if (!raw.includes(HOUSEHOLD_PLACEHOLDER)) {
     log(`  ⚠ ${file} has no ${HOUSEHOLD_PLACEHOLDER} placeholder — running as written.`)
   }
 
-  const sql = raw.split(HOUSEHOLD_PLACEHOLDER).join(householdId)
+  let sql
+  try {
+    sql = substitutePlaceholders(raw, householdId, subjectId)
+  } catch (error) {
+    return [{ name: file, passed: false, error: error.message }]
+  }
   const results = []
 
   for (const chunk of splitStatements(sql)) {
@@ -331,8 +377,8 @@ export async function runFile(execute, file, householdId, userId) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2))
-  if (options.user && !UUID_RE.test(options.user)) {
-    fail(`--user must be a uuid, got: ${options.user}`)
+  for (const flag of ['user', 'outsider', 'co-member', 'subject']) {
+    if (options[flag] && !UUID_RE.test(options[flag])) fail(`--${flag} must be a uuid, got: ${options[flag]}`)
   }
   const context = apiContext()
   const householdId = await resolveHousehold(context, options.household)
@@ -351,12 +397,15 @@ async function main() {
   for (const file of testFiles(options.file)) {
     const directives = fileDirectives(readFileSync(`${TESTS_DIR}/${file}`, 'utf8'))
     // A non-member file runs as a stranger: --outsider if given, else a fresh
-    // random uuid, which by construction belongs to no household.
-    const runAs = directives['run-as'] === 'non-member'
-      ? options.outsider ?? randomUUID()
-      : options.user
-    log(directives['run-as'] === 'non-member' ? `${file}  (as non-member ${runAs})` : file)
-    const results = await runFile(execute, file, householdId, runAs)
+    // random uuid, which by construction belongs to no household. A co-member
+    // file runs as --co-member, about --subject, or not at all.
+    const plan = liveRunPlan(directives, options)
+    if (plan.skip) {
+      log(`${file}  — skipped: ${plan.skip}\n`)
+      continue
+    }
+    log(plan.label ? `${file}  (as ${plan.label} ${plan.runAs}${plan.subject ? `, subject ${plan.subject}` : ''})` : file)
+    const results = await runFile(execute, file, householdId, plan.runAs, plan.subject)
 
     if (results.length === 0) {
       log('  (no checks reported a passed column)')

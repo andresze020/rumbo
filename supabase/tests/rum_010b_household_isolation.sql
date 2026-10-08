@@ -72,7 +72,9 @@ begin
     'select count(*) from public.get_monthly_dashboard_summary($1, current_date)',
     'select count(*) from public.get_monthly_expenses_by_category($1, current_date)',
     'select count(*) from public.get_monthly_budget_details($1, current_date)',
-    'select count(*) from public.search_household_transactions($1, null, null, null, null, null, null, null, null, null, null, 50, 0)'
+    'select count(*) from public.search_household_transactions($1, null, null, null, null, null, null, null, null, null, null, 50, 0)',
+    -- HH-0: names (and, for admins, emails) of the members.
+    'select count(*) from public.get_household_members($1)'
   ] loop
     begin
       execute fn into n using hh;

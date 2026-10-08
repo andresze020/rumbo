@@ -2,13 +2,22 @@ import 'server-only'
 import { createClient } from '@/lib/supabase/server'
 import { getRequestProfile, getRequestUser } from '@/lib/supabase/request'
 import type { HouseholdOption } from '@/components/household-switcher'
+import { resolveActiveHousehold } from './active'
 
 export type HouseholdContext = {
   currentId: string | null
   households: HouseholdOption[]
+  /**
+   * MEM-7: the stored default household when it is NOT an active membership
+   * (null otherwise). `currentId` is then the one it falls back to (null: no
+   * membership left). Nothing is written here — reads only, so a prefetch or
+   * a retried render changes nothing; `recoverActiveHouseholdAction` does the
+   * repair.
+   */
+  staleId: string | null
 }
 
-const EMPTY: HouseholdContext = { currentId: null, households: [] }
+const EMPTY: HouseholdContext = { currentId: null, households: [], staleId: null }
 
 /**
  * The households this user can switch between, and which one is active.
@@ -19,6 +28,11 @@ const EMPTY: HouseholdContext = { currentId: null, households: [] }
  *
  * The membership join is what bounds the list — RLS already restricts it to
  * this user's rows, and nothing here widens that.
+ *
+ * MEM-7 is detected here, in one place: a stored default that is not an
+ * active membership comes back as `staleId`, with the fallback in `currentId`
+ * (see `resolveActiveHousehold`). Only on two successful reads — a failed one
+ * must never mark a valid default stale.
  */
 export async function getHouseholdContext(): Promise<HouseholdContext> {
   try {
@@ -26,7 +40,7 @@ export async function getHouseholdContext(): Promise<HouseholdContext> {
     if (!user) return EMPTY
 
     const supabase = await createClient()
-    const [profile, { data: memberships }] = await Promise.all([
+    const [profile, { data: memberships, error: membershipsError }] = await Promise.all([
       getRequestProfile(),
       supabase
         .from('household_members')
@@ -50,10 +64,11 @@ export async function getHouseholdContext(): Promise<HouseholdContext> {
     }
     households.sort((a, b) => a.name.localeCompare(b.name))
 
-    return {
-      currentId: (profile?.default_household_id as string | null) ?? null,
-      households,
-    }
+    const storedId = (profile?.default_household_id as string | null) ?? null
+    if (!profile || membershipsError) return { currentId: storedId, households, staleId: null }
+
+    const { currentId, stale } = resolveActiveHousehold(storedId, households)
+    return { currentId, households, staleId: stale ? storedId : null }
   } catch {
     return EMPTY
   }

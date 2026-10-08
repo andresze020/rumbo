@@ -122,7 +122,8 @@ server binaries and `psql` — no Docker, no Supabase CLI, no credentials:
    as `authenticated`, so RLS and every guard apply;
 4. runs every `supabase/tests/*.sql` for both fixture households, and the
    `run-as=non-member` files as the other household's owner and as a user with
-   no household;
+   no household, and the `run-as=co-member` files in household A only, as A2
+   about A1 and then as A1 about A2;
 5. runs `supabase/local/fixture-expectations.sql`;
 6. deletes the cluster (`--keep` leaves it running; `--bench` times the RPCs).
 
@@ -132,6 +133,10 @@ the check-file format:
 
 - `-- rumbo-test: run-as=non-member` on a file makes the runner execute it as a
   user outside the household (live: a random uuid).
+- `-- rumbo-test: run-as=co-member` (HH-0) makes it execute as one active
+  member, with another active member's id in `__SUBJECT_USER_ID__`. Live, it
+  needs `--co-member=<uuid> --subject=<uuid>` and is skipped with a notice
+  without them.
 - A `do` block preceded by `-- check: <name>` passes by finishing without an
   error, so assertion-style checks can be named.
 

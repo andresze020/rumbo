@@ -88,22 +88,26 @@ grant execute on all functions in schema fixture to authenticated;
 -- ============================================================
 -- Household A (as A1)
 -- ============================================================
+-- HH-0: a household is created the way onboarding creates one — a single
+-- create_household_with_owner call as its owner, under RLS (households and
+-- household_members no longer accept a client INSERT). It writes the
+-- household, the owner row, the default categories, the owner's
+-- default_household_id and the 'household_created' audit row. Only the id is
+-- pinned, through the column default for this one call, so every fixed id the
+-- tests reference stays put; the default is restored once the block commits.
+alter table public.households alter column id set default '10000000-0000-4000-a000-00000000000a'::uuid;
+
 begin;
 set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"00000000-0000-4000-a000-0000000000a1","role":"authenticated"}', true);
 
 do $$
-declare
-  hh constant uuid := '10000000-0000-4000-a000-00000000000a';
-  a1 constant uuid := '00000000-0000-4000-a000-0000000000a1';
 begin
-  insert into public.households (id, name, base_currency, created_by)
-  values (hh, 'Fixture Family', 'CAD', a1);
-  insert into public.household_members (household_id, user_id, role, status, joined_at)
-  values (hh, a1, 'owner', 'active', now());
-  update public.profiles set default_household_id = hh where id = a1;
-  perform public.create_default_categories_for_household(hh);
+  -- Not inside an assert: with plpgsql.check_asserts off it would not run.
+  if public.create_household_with_owner('Fixture Family', 'CAD') <> '10000000-0000-4000-a000-00000000000a' then
+    raise exception 'household A did not get its fixed id';
+  end if;
 end $$;
 
 -- Accounts. Ids 2000…-0000000000NN. account_class follows the app's rule
@@ -374,12 +378,18 @@ begin
   -- Archive the two retired accounts (after their history exists).
   update public.accounts set is_archived = true
   where id in (store, oldchk, '20000000-0000-4000-a000-000000000019');
-
-  -- Second member.
-  insert into public.household_members (household_id, user_id, role, status, joined_at)
-  values (hh, '00000000-0000-4000-a000-0000000000a2', 'member', 'active', now());
 end $$;
 commit;
+
+alter table public.households alter column id set default gen_random_uuid();
+
+-- Second member. HH-0 SHORTCUT, outside RLS (as the table owner, not as A1):
+-- HH-0 removed the owner/admin INSERT policy this row used to go through, and
+-- no RPC adds a member until HH-4. Replace this insert with
+-- create_household_invitation (as A1) + accept_household_invitation (as A2)
+-- when HH-4 lands.
+insert into public.household_members (household_id, user_id, role, status, joined_at)
+values ('10000000-0000-4000-a000-00000000000a', '00000000-0000-4000-a000-0000000000a2', 'member', 'active', now());
 
 -- A2's default household (their own profile row; RLS lets a user edit it).
 begin;
@@ -393,22 +403,20 @@ commit;
 -- ============================================================
 -- Household B (as B1) — base COP, smaller, 3 years
 -- ============================================================
+-- Created like A (see there): one create_household_with_owner call, id pinned.
+alter table public.households alter column id set default '10000000-0000-4000-a000-00000000000b'::uuid;
+
 begin;
 set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"00000000-0000-4000-a000-0000000000b1","role":"authenticated"}', true);
 
 do $$
-declare
-  hh constant uuid := '10000000-0000-4000-a000-00000000000b';
-  b1 constant uuid := '00000000-0000-4000-a000-0000000000b1';
 begin
-  insert into public.households (id, name, base_currency, created_by)
-  values (hh, 'Fixture Solo', 'COP', b1);
-  insert into public.household_members (household_id, user_id, role, status, joined_at)
-  values (hh, b1, 'owner', 'active', now());
-  update public.profiles set default_household_id = hh where id = b1;
-  perform public.create_default_categories_for_household(hh);
+  -- Not inside an assert: with plpgsql.check_asserts off it would not run.
+  if public.create_household_with_owner('Fixture Solo', 'COP') <> '10000000-0000-4000-a000-00000000000b' then
+    raise exception 'household B did not get its fixed id';
+  end if;
 end $$;
 
 insert into public.accounts
@@ -477,6 +485,8 @@ begin
   update public.accounts set is_archived = true where id = '30000000-0000-4000-a000-000000000007';
 end $$;
 commit;
+
+alter table public.households alter column id set default gen_random_uuid();
 
 -- ============================================================
 -- Every household-scoped table gets at least one row in EACH household, so the

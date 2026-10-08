@@ -15,7 +15,9 @@
 //      under RLS;
 //   4. run every supabase/tests/*.sql for BOTH households, as a member — and
 //      the `run-as=non-member` files as the OTHER household's owner and as a
-//      user with no household at all;
+//      user with no household at all, and the `run-as=co-member` files (HH-0)
+//      in household A only, once from each side: as A2 about A1, then as A1
+//      about A2 (B has one member, so there is no co-member to be);
 //   5. run supabase/local/fixture-expectations.sql (checks tied to the fixture
 //      shape: the edge cases really exist, and behave);
 //   6. optionally (--bench) time the reporting RPCs as `authenticated`;
@@ -51,13 +53,36 @@ const DB = 'rumbo_local'
 // Fixed ids from supabase/local/fixtures.sql.
 const USERS = {
   a1: '00000000-0000-4000-a000-0000000000a1',
+  a2: '00000000-0000-4000-a000-0000000000a2',
   b1: '00000000-0000-4000-a000-0000000000b1',
   outsider: '00000000-0000-4000-a000-0000000000ff',
 }
 const HOUSEHOLDS = [
-  { label: 'A (CAD, 2 members, 4y)', id: '10000000-0000-4000-a000-00000000000a', member: USERS.a1, otherOwner: USERS.b1 },
-  { label: 'B (COP, 1 member, 3y)', id: '10000000-0000-4000-a000-00000000000b', member: USERS.b1, otherOwner: USERS.a1 },
+  {
+    label: 'A (CAD, 2 members, 4y)', id: '10000000-0000-4000-a000-00000000000a', member: USERS.a1, otherOwner: USERS.b1,
+    coMembers: [USERS.a1, USERS.a2],
+  },
+  { label: 'B (COP, 1 member, 3y)', id: '10000000-0000-4000-a000-00000000000b', member: USERS.b1, otherOwner: USERS.a1, coMembers: [] },
 ]
+
+const NAMES = { [USERS.a1]: 'A1 (owner)', [USERS.a2]: 'A2 (member)' }
+
+/**
+ * The runs a `run-as=co-member` file gets in one household: every ordered pair
+ * of its members, each acting on the other. With A's two members that is A2
+ * about A1 and A1 about A2 — the same file has to hold from the owner's side
+ * and from the plain member's. A household with fewer than two members has no
+ * co-member to be, so it gets none.
+ */
+export function coMemberRuns(members) {
+  const runs = []
+  for (const runAs of [...members].reverse()) {
+    for (const subject of members) {
+      if (subject !== runAs) runs.push({ runAs, subject })
+    }
+  }
+  return runs
+}
 
 const log = (...args) => console.log(...args)
 
@@ -221,7 +246,14 @@ async function runSuite(cluster, fileFilter) {
     log(`\nHousehold ${household.label} — ${household.id}`)
     for (const file of testFiles(fileFilter)) {
       const directives = fileDirectives(readFileSync(`supabase/tests/${file}`, 'utf8'))
-      if (directives['run-as'] === 'non-member') {
+      if (directives['run-as'] === 'co-member') {
+        const runs = coMemberRuns(household.coMembers)
+        if (runs.length === 0) log(`  ${file}  (skipped: no second member to act as)`)
+        for (const { runAs, subject } of runs) {
+          log(`  ${file}  (as co-member ${NAMES[runAs] ?? runAs}, subject ${NAMES[subject] ?? subject})`)
+          report(await runFile(execute, file, household.id, runAs, subject), tally)
+        }
+      } else if (directives['run-as'] === 'non-member') {
         // The strong case (a user with a household of their own) and the plain
         // one (a signed-in user with none).
         for (const [who, user] of [['other household owner', household.otherOwner], ['user with no household', USERS.outsider]]) {
