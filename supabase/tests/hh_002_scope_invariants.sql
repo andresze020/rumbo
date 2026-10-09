@@ -131,8 +131,10 @@ select
   (exists (select 1 from cm) and exists (select 1 from pm)) = exists (select 1 from public.accounts x where x.household_id = (select hh from params) and x.private_owner_id = (select auth.uid()))
   and (select count(*) from ch) + (select count(*) from cm) = (select count(*) from ca)
   and not exists (select account_id from ca except (select account_id from ch union all select account_id from cm))
-  and (select count(*) from ph) + (select count(*) from pm) = (select count(*) from pa)
-  and not exists (select id from pa except (select id from ph union all select id from pm))
+  -- payees: household ∪ mine = all (a shared payee the caller's private
+  -- transactions use is in both; its counts are checked below)
+  and not exists (select id from pa except (select id from ph union select id from pm))
+  and not exists ((select id from ph union select id from pm) except select id from pa)
   -- income and expense transactions have one entry, so they are never mixed:
   -- their totals add up even though a mixed transfer is listed in both scopes
   and (select sum(total_income_base) filter (where scope in ('household', 'mine')) from t)
@@ -141,6 +143,65 @@ select
     = (select total_expense_base from t where scope = 'all')
   and ((select total_income_base from t where scope = 'mine') <> 0) = exists (select 1 from public.accounts x where x.household_id = (select hh from params) and x.private_owner_id = (select auth.uid()))
   as passed;
+
+-- A private expense may reuse an existing shared payee (PRV-7: a private
+-- context reuses rather than shadows a shared name). That payee then shows in
+-- mine as well, and its counts still add up: household + mine = all, less the
+-- caller's mixed transfers, which both count.
+-- check: HH-2 a shared payee used by the caller's private expense counts in mine, and per-payee counts add up
+begin;
+do $$
+declare
+  hh constant uuid := '__HOUSEHOLD_ID__';
+  me constant uuid := (select auth.uid());
+  ccy text := (select h.base_currency from public.households h where h.id = hh);
+  v_cat uuid;
+  v_private uuid;
+  v_payee record;
+  v_tx uuid;
+  v_bad text;
+begin
+  select c.id into v_cat from public.categories c
+  where c.household_id = hh and c.category_type = 'expense' and c.deleted_at is null and not c.is_archived
+  order by c.sort_order limit 1;
+  select p.id, p.name into v_payee from public.payees p
+  where p.household_id = hh and p.private_owner_id is null and not p.is_archived
+    and not exists (
+      select 1 from public.payees q
+      where q.household_id = hh and q.private_owner_id = me and lower(q.name) = lower(p.name)
+    )
+  order by p.name limit 1;
+  if v_cat is null or v_payee.id is null then
+    raise exception 'setup: no expense category or shared payee';
+  end if;
+
+  insert into public.accounts (household_id, name, account_type, account_class, currency_code, private_owner_id, created_by)
+  values (hh, 'HH-2 payee probe', 'cash', 'asset', ccy, me, me)
+  returning id into v_private;
+  v_tx := public.create_manual_transaction(hh, 'expense', current_date, v_private, v_cat, 5,
+    'HH-2 payee probe', null, null, 'posted', 1, v_payee.name);
+  if (select payee_id from public.transactions where id = v_tx) <> v_payee.id then
+    raise exception 'setup: the private expense did not reuse the shared payee';
+  end if;
+
+  if not exists (select 1 from public.get_payees_with_stats(hh, 'mine') m where m.id = v_payee.id and m.txn_count >= 1) then
+    raise exception 'a shared payee used by the caller''s private expense is missing from mine';
+  end if;
+
+  select string_agg(a.name, ', ') into v_bad
+  from public.get_payees_with_stats(hh, 'all') a
+  left join public.get_payees_with_stats(hh, 'household') h on h.id = a.id
+  left join public.get_payees_with_stats(hh, 'mine') m on m.id = a.id
+  where a.txn_count <> coalesce(h.txn_count, 0) + coalesce(m.txn_count, 0) - (
+    select count(*) from public.transactions t
+    where t.payee_id = a.id and t.deleted_at is null
+      and t.visibility = 'mixed' and t.private_owner_id = me
+  );
+  if v_bad is not null then
+    raise exception 'per-payee counts do not add up (household + mine = all) for: %', v_bad;
+  end if;
+end $$;
+rollback;
 
 -- A mixed transfer is listed in every scope its viewer may see: household
 -- (it touches a shared account) and mine (its private side is the caller's).

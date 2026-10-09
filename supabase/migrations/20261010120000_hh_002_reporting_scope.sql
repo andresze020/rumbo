@@ -1213,7 +1213,22 @@ begin
     and (
       p_scope = 'all'
       or (p_scope = 'household' and p.private_owner_id is null)
-      or (p_scope = 'mine' and p.private_owner_id = (select auth.uid()))
+      -- mine: the caller's private payees, and any shared payee their own
+      -- transactions use (a private context reuses an existing shared payee
+      -- rather than shadow it, PRV-7)
+      or (
+        p_scope = 'mine'
+        and (
+          p.private_owner_id = (select auth.uid())
+          or exists (
+            select 1 from public.transactions tm
+            where tm.payee_id = p.id
+              and tm.household_id = p.household_id
+              and tm.deleted_at is null
+              and tm.private_owner_id = (select auth.uid())
+          )
+        )
+      )
     )
   group by p.id, p.name, p.is_archived, p.created_at;
 end;
