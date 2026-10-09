@@ -14,13 +14,16 @@
 --   4. p_dry_run: return the counts and change nothing (HH-3's confirmation
 --      dialog states them, PRV-5);
 --   5. otherwise flip the account, re-derive every dependent row in this one
---      transaction (hh_propagate_account_privacy), write one audit row, and
---      return the same counts.
+--      transaction (hh_propagate_account_privacy) and return the same counts.
 --
 -- set_account_private (shared -> private), D6/PRV-6: only an owner/admin, and
 -- only while the household has exactly one active member. (HH-4 adds "and no
--- pending invitation" when the invitations table exists.) Payees stay shared:
--- with one member there is nobody to hide them from.
+-- pending invitation" when the invitations table exists.) Payees used only by
+-- what becomes private go private with it — this runs right before someone is
+-- invited, and a payee name is as revealing as the account's. It writes NO
+-- audit row: the log is readable by every later owner/admin, and even an id
+-- and a count would tell them a hidden account exists (D2; found in the HH-1
+-- review).
 --
 -- share_private_account (private -> shared), D6/PRV-5: only the account's
 -- owner, with editor rights. With more than one member it cannot be undone.
@@ -29,8 +32,10 @@
 -- of the same name when there is one, otherwise flipped to shared.
 --
 -- PRV-8 is checked before any write in both directions (the accounts guard
--- trigger would also refuse, with a less helpful message). Audit rows carry
--- the account id and counts, never its name.
+-- trigger would also refuse, with a less helpful message), and so are the
+-- per-owner name indexes of accounts and import presets (S6). The one audit
+-- row (account_shared) is written when the account becomes visible anyway; it
+-- carries the account id and counts, never its name.
 -- ============================================================
 
 -- ------------------------------------------------------------
@@ -52,7 +57,16 @@ begin
   update public.goals set private_owner_id = private_owner_id where linked_account_id = p_account_id;
   update public.recurring_transactions set private_owner_id = private_owner_id
   where account_id = p_account_id or to_account_id = p_account_id;
-  update public.import_batches set private_owner_id = private_owner_id where target_account_id = p_account_id;
+  -- Batches that target the account, and batches whose transactions touch it
+  -- (a CSV's Account column can send rows to any account).
+  update public.import_batches set private_owner_id = private_owner_id
+  where target_account_id = p_account_id
+     or id in (
+       select t.import_batch_id
+       from public.transactions t
+       join public.transaction_entries e on e.transaction_id = t.id
+       where e.account_id = p_account_id and t.import_batch_id is not null
+     );
   update public.csv_import_presets set private_owner_id = private_owner_id where target_account_id = p_account_id;
 end;
 $$;
@@ -108,6 +122,9 @@ declare
   v_user uuid := auth.uid();
   v_account record;
   v_impact jsonb;
+  v_payee record;
+  v_payee_ids uuid[];
+  v_twin uuid;
 begin
   if v_user is null then
     raise exception 'Not authorized';
@@ -164,7 +181,67 @@ begin
     raise exception 'You already have a private account with this name. Rename one first';
   end if;
 
-  v_impact := public.hh_account_privacy_impact(p_account_id) || jsonb_build_object('payees', 0);
+  if exists (
+    select 1 from public.csv_import_presets cp
+    join public.csv_import_presets mine
+      on mine.household_id = cp.household_id
+     and mine.private_owner_id = v_user
+     and lower(mine.name) = lower(cp.name)
+    where cp.target_account_id = p_account_id
+  ) then
+    raise exception 'You already have a private import preset with the same name as one that uses this account. Rename one first';
+  end if;
+
+  -- Shared payees that only what becomes private uses: transactions that will
+  -- have every entry in this account or in the caller's private accounts, and
+  -- rules or plans on this account (or already private).
+  with becomes_private as (
+    select t.id
+    from public.transactions t
+    where t.household_id = v_account.household_id
+      and exists (
+        select 1 from public.transaction_entries e
+        where e.transaction_id = t.id and e.account_id = p_account_id
+      )
+      and not exists (
+        select 1 from public.transaction_entries e
+        join public.accounts a on a.id = e.account_id
+        where e.transaction_id = t.id
+          and a.id <> p_account_id
+          and a.private_owner_id is distinct from v_user
+      )
+  )
+  select coalesce(array_agg(p.id), '{}')
+  into v_payee_ids
+  from public.payees p
+  where p.household_id = v_account.household_id
+    and p.private_owner_id is null
+    and exists (
+      select 1 from public.transactions t
+      where t.payee_id = p.id and t.id in (select bp.id from becomes_private bp)
+    )
+    and not exists (
+      select 1 from public.transactions t
+      where t.payee_id = p.id
+        and t.visibility <> 'private'
+        and t.id not in (select bp.id from becomes_private bp)
+    )
+    and not exists (
+      select 1 from public.recurring_transactions r
+      where r.payee_id = p.id
+        and r.private_owner_id is null
+        and r.account_id is distinct from p_account_id
+        and r.to_account_id is distinct from p_account_id
+    )
+    and not exists (
+      select 1 from public.installment_plans ip
+      where ip.payee_id = p.id
+        and ip.private_owner_id is null
+        and ip.account_id <> p_account_id
+    );
+
+  v_impact := public.hh_account_privacy_impact(p_account_id)
+    || jsonb_build_object('payees', cardinality(v_payee_ids));
 
   if coalesce(p_dry_run, false) then
     return v_impact || jsonb_build_object('applied', false);
@@ -173,9 +250,27 @@ begin
   update public.accounts set private_owner_id = v_user where id = p_account_id;
   perform public.hh_propagate_account_privacy(p_account_id);
 
-  insert into public.household_audit_log (household_id, actor_id, action, target_user_id, metadata)
-  values (v_account.household_id, v_user, 'account_made_private', v_user,
-          jsonb_build_object('account_id', p_account_id) || v_impact);
+  -- Each such payee goes private, or folds into the caller's private payee of
+  -- the same name when there already is one.
+  for v_payee in
+    select p.id, p.name from public.payees p where p.id = any(v_payee_ids)
+  loop
+    select p.id into v_twin
+    from public.payees p
+    where p.household_id = v_account.household_id
+      and p.private_owner_id = v_user
+      and lower(p.name) = lower(v_payee.name)
+    limit 1;
+
+    if v_twin is null then
+      update public.payees set private_owner_id = v_user where id = v_payee.id;
+    else
+      update public.transactions set payee_id = v_twin where payee_id = v_payee.id;
+      update public.recurring_transactions set payee_id = v_twin where payee_id = v_payee.id;
+      update public.installment_plans set payee_id = v_twin where payee_id = v_payee.id;
+      update public.payees set is_archived = true where id = v_payee.id;
+    end if;
+  end loop;
 
   return v_impact || jsonb_build_object('applied', true);
 end;
@@ -244,6 +339,17 @@ begin
       and lower(o.name) = lower(v_account.name)
   ) then
     raise exception 'The household already has a shared account with this name. Rename this one first';
+  end if;
+
+  if exists (
+    select 1 from public.csv_import_presets cp
+    join public.csv_import_presets shared
+      on shared.household_id = cp.household_id
+     and shared.private_owner_id is null
+     and lower(shared.name) = lower(cp.name)
+    where cp.target_account_id = p_account_id
+  ) then
+    raise exception 'The household already has a shared import preset with the same name as one that uses this account. Rename one first';
   end if;
 
   -- The caller's private payees that become visible with this account: those

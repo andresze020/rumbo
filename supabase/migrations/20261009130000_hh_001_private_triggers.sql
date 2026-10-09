@@ -192,6 +192,17 @@ begin
   set private_owner_id = v_link_owner
   where tt.transaction_id = p_transaction_id
     and tt.private_owner_id is distinct from v_link_owner;
+
+  -- An imported transaction that lands in a private account makes its batch
+  -- (and, through it, the batch's rows) private, even when the batch targets
+  -- a shared account: a CSV's Account column can send rows elsewhere. Touching
+  -- the batch re-runs its derivation trigger.
+  if v_owner is not null then
+    update public.import_batches b
+    set private_owner_id = b.private_owner_id
+    where b.id = (select t.import_batch_id from public.transactions t where t.id = p_transaction_id)
+      and b.private_owner_id is distinct from v_owner;
+  end if;
 end;
 $$;
 
@@ -449,26 +460,41 @@ for each row
 when (old.private_owner_id is distinct from new.private_owner_id)
 execute function public.hh_recurring_propagate();
 
--- import_batches: the target account; with none (accounts chosen per row) the
--- batch is private to whoever uploaded it (§4, accepted limit §6). That is
--- decided at INSERT; an update without a target keeps the value it had, so
--- batches that predate HH-1 stay shared.
+-- import_batches (§4, accepted limit §6): private to the target account's
+-- owner; also private to whoever owns any of its transactions — a CSV's Account
+-- column can send rows to a private account even when the target is shared,
+-- and the batch's rows carry those transactions' raw data (found in the HH-1
+-- review). With no target (accounts chosen per row) the batch is private to
+-- its uploader, decided at INSERT and kept on update; batches that predate
+-- HH-1 and have no target stay shared unless one of their transactions turns
+-- private (hh_recompute_transaction_privacy touches the batch when that
+-- happens).
 create or replace function public.hh_import_batches_derive()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_owner uuid;
 begin
   if new.target_account_id is not null then
-    new.private_owner_id := (
-      select a.private_owner_id from public.accounts a where a.id = new.target_account_id
-    );
-  elsif tg_op = 'INSERT' then
-    new.private_owner_id := new.uploaded_by;
-  else
-    new.private_owner_id := old.private_owner_id;
+    v_owner := (select a.private_owner_id from public.accounts a where a.id = new.target_account_id);
   end if;
+
+  if v_owner is null and tg_op = 'UPDATE' then
+    v_owner := (
+      select t.private_owner_id from public.transactions t
+      where t.import_batch_id = new.id and t.private_owner_id is not null
+      limit 1
+    );
+  end if;
+
+  if v_owner is null and new.target_account_id is null then
+    v_owner := case when tg_op = 'INSERT' then new.uploaded_by else old.private_owner_id end;
+  end if;
+
+  new.private_owner_id := v_owner;
   return new;
 end;
 $$;

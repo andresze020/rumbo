@@ -15,7 +15,9 @@
 --   * INSERT / UPDATE / DELETE everywhere: P. On transaction_entries,
 --     transaction_allocations and transaction_tags the parent transaction must
 --     pass P as well — that is what stops a co-member editing or deleting the
---     shared side of someone's mixed transfer (S22).
+--     shared side of someone's mixed transfer (S22). A private entry also
+--     needs a parent the caller created, so no one can pull a co-member's
+--     shared transaction into their own private side.
 --   * accounts INSERT / UPDATE: a shared account is owner/admin work as
 --     today; a private one is any editor's, for themselves (D5):
 --       (private_owner_id is null and is_household_admin)
@@ -164,6 +166,18 @@ with check (
     where a.id = account_id
       and a.household_id = transaction_entries.household_id
   )
+  -- A private entry joins only a transaction the caller created: nobody can
+  -- turn a co-member's shared transaction into their own mixed one (and lock
+  -- its creator out of it, S22). Found in the HH-1 review.
+  and (
+    private_owner_id is null
+    or exists (
+      select 1
+      from public.transactions t
+      where t.id = transaction_id
+        and t.created_by = (select auth.uid())
+    )
+  )
 );
 
 drop policy if exists "transaction_entries_update_editor" on public.transaction_entries;
@@ -196,6 +210,18 @@ with check (
     from public.accounts a
     where a.id = account_id
       and a.household_id = transaction_entries.household_id
+  )
+  -- A private entry joins only a transaction the caller created: nobody can
+  -- turn a co-member's shared transaction into their own mixed one (and lock
+  -- its creator out of it, S22). Found in the HH-1 review.
+  and (
+    private_owner_id is null
+    or exists (
+      select 1
+      from public.transactions t
+      where t.id = transaction_id
+        and t.created_by = (select auth.uid())
+    )
   )
 );
 

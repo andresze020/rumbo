@@ -22,6 +22,7 @@ type ImportedRow = {
   created_transaction_id: string | null
   mapped_data: {
     merchant_name?: unknown
+    account_id?: unknown
   } | null
 }
 
@@ -121,38 +122,23 @@ export async function createCsvImportAction(formData: FormData) {
           ? row.mapped_data.merchant_name.trim()
           : ''
 
+      // The account this row posted to: its own (an Account column), else the
+      // import's target — the same rule create_csv_import applies.
+      const accountId =
+        typeof row.mapped_data?.account_id === 'string' && row.mapped_data.account_id.trim()
+          ? row.mapped_data.account_id.trim()
+          : targetAccountId || null
+
       return {
         transactionId: row.created_transaction_id,
         merchantName,
+        accountId,
       }
     })
     .filter((row) => row.transactionId && row.merchantName)
 
-  // HH-1 (PRV-7): a payee is private only when every row that uses it landed in
-  // the importer's own private accounts, so read which account each imported
-  // transaction posted to.
-  const accountIdsByTransaction = new Map<string, string[]>()
-  const importedTransactionIds = [
-    ...new Set(merchantUpdates.flatMap((row) => (row.transactionId ? [row.transactionId] : []))),
-  ]
-  if (importedTransactionIds.length > 0) {
-    const { data: importedEntries, error: importedEntriesError } = await supabase
-      .from('transaction_entries')
-      .select('transaction_id, account_id')
-      .eq('household_id', householdId)
-      .in('transaction_id', importedTransactionIds)
-
-    if (importedEntriesError) {
-      redirectWithError('CSV imported, but payees could not be saved.')
-    }
-
-    for (const entry of (importedEntries ?? []) as { transaction_id: string; account_id: string }[]) {
-      const accountIds = accountIdsByTransaction.get(entry.transaction_id) ?? []
-      accountIds.push(entry.account_id)
-      accountIdsByTransaction.set(entry.transaction_id, accountIds)
-    }
-  }
-
+  // HH-1 (PRV-7): a payee is private only when every row that uses it posted
+  // to the importer's own private accounts (get_or_create_payee decides).
   // BR-009: resolve each imported merchant name to a payee so CSV rows land with
   // a payee_id (matching manual entry). Resolve once per distinct name — payees
   // are case/whitespace-insensitive — then reuse the id across its rows.
@@ -167,7 +153,7 @@ export async function createCsvImportAction(formData: FormData) {
           ...new Set(
             merchantUpdates
               .filter((row) => row.merchantName === name)
-              .flatMap((row) => (row.transactionId ? accountIdsByTransaction.get(row.transactionId) ?? [] : []))
+              .flatMap((row) => (row.accountId ? [row.accountId] : []))
           ),
         ],
       })

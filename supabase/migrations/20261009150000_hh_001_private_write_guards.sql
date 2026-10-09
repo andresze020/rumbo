@@ -15,7 +15,9 @@
 -- the change named in its section header:
 --    1  get_or_create_payee        new signature: privacy context (PRV-7)
 --    2  create_manual_transaction  payee context
---    3  update_manual_transaction  S22 owner guard + payee context
+--    3  update_manual_transaction  S22 owner guard + payee context (a kept
+--                                  private payee follows the transaction to
+--                                  a shared account)
 --    4  update_transfer_transaction  S22
 --    5  void_transaction           S22
 --    6  unvoid_transaction         S22
@@ -365,7 +367,9 @@ $$;
 
 
 -- ------------------------------------------------------------
--- 3. update_manual_transaction: S22 owner guard + payee privacy context
+-- 3. update_manual_transaction: S22 owner guard + payee privacy context; a
+-- kept private payee is replaced by the shared one when the transaction moves
+-- to a shared account
 -- ------------------------------------------------------------
 create or replace function public.update_manual_transaction(
   p_transaction_id uuid,
@@ -552,6 +556,19 @@ begin
   if p_payee_name is null then
     v_payee_id := v_transaction.payee_id;
     v_merchant_name := nullif(trim(coalesce(p_merchant_name, '')), '');
+
+    -- HH-1: a payee is never more private than its transaction. Moving the
+    -- transaction onto a shared account turns a kept private payee into the
+    -- shared payee of the same name.
+    if v_payee_id is not null
+       and exists (select 1 from public.payees p where p.id = v_payee_id and p.private_owner_id is not null)
+       and exists (select 1 from public.accounts a where a.id = p_account_id and a.private_owner_id is null) then
+      v_payee_id := public.get_or_create_payee(
+        v_transaction.household_id,
+        (select p.name from public.payees p where p.id = v_payee_id),
+        array[p_account_id]
+      );
+    end if;
   else
     v_payee_id := public.get_or_create_payee(v_transaction.household_id, p_payee_name, array[p_account_id]);
     v_merchant_name := coalesce(
