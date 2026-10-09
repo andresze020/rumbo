@@ -14,8 +14,10 @@
 --   goals                    ← linked_account_id (no link = shared)
 --   recurring_transactions   ← account_id or to_account_id
 --   recurring_autopost_log   ← its recurring rule
---   import_batches           ← target_account_id; no target = the uploader,
---                              decided at INSERT (existing rows stay shared)
+--   import_batches           ← target_account_id, or any of its transactions
+--                              (a CSV row can name its own account); no
+--                              target = the uploader, decided at INSERT
+--                              (existing rows stay shared)
 --   import_rows              ← its batch
 --   csv_import_presets       ← target_account_id (no target = shared)
 --
