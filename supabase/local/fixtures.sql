@@ -583,5 +583,117 @@ update public.categories set exclude_from_reports = true
 where household_id = '10000000-0000-4000-a000-00000000000a' and name = 'Fees';
 commit;
 
+-- ============================================================
+-- HH-1: private accounts, for A1 (owner) and A2 (member)
+--
+-- ADDED only: no existing id, date or amount changes, and no PRNG call (the
+-- amounts above come from the seeded random() sequence, so this section sits
+-- after all of it and uses fixed amounts). Each owner gets a private checking
+-- account and a private card, then — through the app's own paths, as that
+-- owner, under RLS — an opening balance, an expense with a new payee (a
+-- private payee, PRV-7), an income, a mixed transfer each way with a shared
+-- account (PRV-4), a tag on a private transaction, a private goal, a private
+-- debt (on the private card), a recurring rule, an
+-- installment plan on the card, an import batch with a row, and an import
+-- preset — at least one private row in every table that has private_owner_id,
+-- for two different owners (S17; fixture-expectations.sql enforces it).
+--
+-- Dated 2025-03 … 2025-05, away from 2026-08: fixture-expectations.sql
+-- compares the two members' dashboards for that month, and until HH-2 adds the
+-- scope each member's own private side is part of their numbers.
+--
+-- A1's card is paid from A1's private account; A2's from the shared joint
+-- account (a private card may bill to a shared one, PRV-8).
+-- ============================================================
+create function fixture.seed_private(
+  p_household uuid, p_owner uuid, p_label text,
+  p_account uuid, p_card uuid, p_shared uuid, p_billing uuid
+) returns void
+language plpgsql as $$
+declare
+  v_tx uuid;
+  v_tag uuid;
+  v_batch uuid;
+begin
+  insert into public.accounts
+    (id, household_id, name, account_type, account_class, currency_code,
+     opening_balance_date, include_in_net_worth, private_owner_id, created_by)
+  values
+    (p_account, p_household, p_label || ' private checking', 'checking', 'asset', 'CAD',
+     date '2025-01-01', true, p_owner, p_owner),
+    (p_card, p_household, p_label || ' private card', 'credit_card', 'liability', 'CAD',
+     date '2025-01-01', true, p_owner, p_owner);
+  update public.accounts set billing_account_id = p_billing, statement_day = 20, payment_day = 5
+  where id = p_card;
+
+  perform public.create_opening_balance(p_household, p_account, 3000, date '2025-01-01', 1, 'fixture');
+
+  v_tx := public.create_manual_transaction(p_household, 'expense', date '2025-03-10', p_account,
+    fixture.cat(p_household, 'Restaurants'), 85.40, p_label || ' private dinner', null, null, 'posted', 1,
+    p_label || ' private bistro');
+  select id into v_tag from public.tags where household_id = p_household and name = 'fixture-tag';
+  perform public.set_transaction_tags(v_tx, array[v_tag]);
+
+  perform public.create_manual_transaction(p_household, 'income', date '2025-03-15', p_account,
+    fixture.cat(p_household, 'Side Income'), 640, p_label || ' private side job', null, null, 'posted', 1, null);
+
+  perform fixture.xfer(p_household, p_account, p_shared, 250, date '2025-04-02', p_label || ' to shared');
+  perform fixture.xfer(p_household, p_shared, p_account, 120, date '2025-04-20', p_label || ' from shared');
+
+  insert into public.goals
+    (household_id, name, goal_type, target_amount, current_amount, currency_code, linked_account_id, created_by)
+  values (p_household, p_label || ' private goal', 'custom', 2000, 0, 'CAD', p_account, p_owner);
+
+  -- On the private card (an existing private account), not a new account:
+  -- household A stays inside the 20–30 accounts fixture-expectations.sql
+  -- asserts. The p_private path (a new private liability account) is
+  -- exercised in hh_001_private_invariants.sql.
+  perform public.create_debt_with_account(p_household, p_label || ' private card debt', p_card, 'credit_card',
+    'CAD', null, date '2025-02-01', 1, 300, 19.9, 'annual', 25, 5, 'Fixture bank', 'fixture');
+
+  insert into public.recurring_transactions
+    (household_id, name, transaction_type, account_id, category_id, amount, currency_code,
+     frequency, start_date, next_run_date, created_by)
+  values (p_household, p_label || ' private subscription', 'expense', p_account,
+    fixture.cat(p_household, 'Internet'), 30, 'CAD', 'monthly', date '2027-01-01', date '2027-01-01', p_owner);
+
+  perform public.create_installment_plan(p_household, p_card, fixture.cat(p_household, 'Shopping'), 300, 3,
+    date '2025-05-01', p_label || ' private headphones', null, null, 1);
+
+  insert into public.import_batches (household_id, uploaded_by, file_name, target_account_id)
+  values (p_household, p_owner, p_label || '-private.csv', p_account) returning id into v_batch;
+  insert into public.import_rows (household_id, import_batch_id, row_number)
+  values (p_household, v_batch, 1);
+
+  insert into public.csv_import_presets (household_id, name, created_by, target_account_id)
+  values (p_household, p_label || ' private preset', p_owner, p_account);
+end $$;
+grant execute on function fixture.seed_private(uuid, uuid, text, uuid, uuid, uuid, uuid) to authenticated;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"00000000-0000-4000-a000-0000000000a1","role":"authenticated"}', true);
+select fixture.seed_private('10000000-0000-4000-a000-00000000000a', '00000000-0000-4000-a000-0000000000a1', 'A1',
+  '20000000-0000-4000-a000-000000000101', '20000000-0000-4000-a000-000000000102',
+  '20000000-0000-4000-a000-000000000001', '20000000-0000-4000-a000-000000000101');
+commit;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"00000000-0000-4000-a000-0000000000a2","role":"authenticated"}', true);
+select fixture.seed_private('10000000-0000-4000-a000-00000000000a', '00000000-0000-4000-a000-0000000000a2', 'A2',
+  '20000000-0000-4000-a000-000000000201', '20000000-0000-4000-a000-000000000202',
+  '20000000-0000-4000-a000-000000000002', '20000000-0000-4000-a000-000000000002');
+commit;
+
+-- The private rules' autopost log rows, inserted as the table owner like the
+-- shared ones above (the log is written only by the job).
+insert into public.recurring_autopost_log (household_id, recurring_id, run_date, status)
+select r.household_id, r.id, date '2025-03-01', 'posted'
+from public.recurring_transactions r
+where r.private_owner_id is not null;
+
 -- Planner stats so plans resemble a real, analysed database.
 analyze;

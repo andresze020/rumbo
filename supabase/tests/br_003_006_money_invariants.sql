@@ -84,6 +84,11 @@ same_currency_transfers as (
     and t.transaction_type = 'transfer'
     and t.status = 'posted'
     and t.deleted_at is null
+    -- HH-1 (PRV-4): another member's mixed transfer shows the caller only its
+    -- shared leg, so it cannot net to zero from here. Skipped only for such a
+    -- caller (as postgres auth.uid() is null and nothing is skipped);
+    -- hh_001_private_invariants.sql checks every transfer as the table owner.
+    and not (t.visibility = 'mixed' and t.private_owner_id <> (select auth.uid()))
   group by t.id
 )
 select
