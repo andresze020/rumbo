@@ -62,6 +62,9 @@ returns table (
 language plpgsql
 security invoker
 set search_path = public
+-- HH-2: plan each call with its actual scope; the generic plan (from the
+-- 6th call in a session) cannot drop the scope branches and is ~4x slower.
+set plan_cache_mode = force_custom_plan
 as $$
 declare
   v_base_currency varchar(3);
@@ -203,6 +206,9 @@ returns table (
 language plpgsql
 security invoker
 set search_path = public
+-- HH-2: plan each call with its actual scope; the generic plan (from the
+-- 6th call in a session) cannot drop the scope branches and is ~4x slower.
+set plan_cache_mode = force_custom_plan
 as $$
 declare
   v_base_currency varchar(3);
