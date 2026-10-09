@@ -6,6 +6,7 @@ import type { Locale } from '@/lib/i18n/dictionaries'
 import { localeToBcp47 } from '@/lib/format'
 import { parseMonthStartDay } from '@/lib/periods/month'
 import type { PrivacyScope } from '@/lib/privacy/scope'
+import { getPrivacyScope } from '@/lib/privacy/server'
 
 /**
  * Shared server-side data helpers for the analysis & planning screens
@@ -44,6 +45,9 @@ export async function getHousehold(): Promise<HouseholdContext> {
     .eq('id', user.id)
     .maybeSingle()
   if (!profile?.default_household_id) redirect('/onboarding')
+  // HH-2: warm the request's privacy scope (memoized per request) so it
+  // resolves while the household is read; the pages await the same promise.
+  void getPrivacyScope(profile.default_household_id)
 
   const { data: household } = await supabase
     .from('households')

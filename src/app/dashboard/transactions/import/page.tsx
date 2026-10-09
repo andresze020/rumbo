@@ -1,8 +1,6 @@
 import { redirect } from 'next/navigation'
 import { CsvImportClient } from './csv-import-client'
 import { createClient } from '@/lib/supabase/server'
-import { getPrivacyScope } from '@/lib/privacy/server'
-import { scopeByOwner } from '@/lib/privacy/scope'
 import type {
   CsvMapping,
   ImportBatch,
@@ -82,7 +80,6 @@ export default async function CsvImportPage({ searchParams }: ImportPageProps) {
   if (householdError || !household) {
     redirect('/onboarding')
   }
-  const privacy = await getPrivacyScope(household.id)
 
   // HH-2: scope all — the import's target-account picker.
   const { data: accounts, error: accountsError } = await supabase
@@ -142,17 +139,17 @@ export default async function CsvImportPage({ searchParams }: ImportPageProps) {
     .order('name', { ascending: true })
 
   // BR-024: recent import batches (for the "Import history" / revert section).
-  const { data: batchRows } = await scopeByOwner(
-    supabase
-      .from('import_batches')
-      .select(
-        'id, file_name, status, total_rows, imported_transactions_count, invalid_rows, duplicate_rows, created_at, metadata'
-      )
-      .eq('household_id', household.id)
-      .is('deleted_at', null),
-    privacy.scope,
-    privacy.userId
-  )
+  // HH-2: scope all on purpose — this lists what the user can revert, and
+  // Imports is not a scoped screen (SCP-3). A batch with no target account is
+  // private to its uploader even when they own no private account (HH-1), so a
+  // household-scoped read would hide it, and its Revert, from them.
+  const { data: batchRows } = await supabase
+    .from('import_batches')
+    .select(
+      'id, file_name, status, total_rows, imported_transactions_count, invalid_rows, duplicate_rows, created_at, metadata'
+    )
+    .eq('household_id', household.id)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(10)
 
