@@ -23,6 +23,9 @@
 -- 6. A shared account's balance is the same for both members.
 -- 7. A transaction cannot touch two members' private accounts.
 -- 8. D6: no account can be made private while the household has two members.
+-- 9. The caller cannot pull someone else's shared transaction into their
+--    private account by adding or moving a leg (it would vanish from the
+--    household's view).
 --
 -- Where a check needs the subject's private ids, it reads them as the table
 -- owner (`reset role`, read-only) into a transaction-local setting, then acts
@@ -326,5 +329,67 @@ begin
       raise;
     end if;
   end;
+end $$;
+rollback;
+
+-- A private leg only goes into a transaction its owner created: otherwise a
+-- member could hide anyone's shared expense by adding a private leg to it.
+-- The subject's shared expense is created here, acting as the subject (as the
+-- balance check above does), so both directions have one to probe.
+-- check: HH-1 the caller cannot add or move a private leg into someone else's transaction
+begin;
+do $$
+declare
+  hh constant uuid := '__HOUSEHOLD_ID__';
+  me constant uuid := (select auth.uid());
+  ccy text := (select h.base_currency from public.households h where h.id = hh);
+  v_cat uuid;
+  v_shared uuid;
+  v_private uuid;
+  v_tx uuid;
+  v_entry uuid;
+  n bigint;
+begin
+  select c.id into v_cat from public.categories c
+  where c.household_id = hh and c.category_type = 'expense' and c.deleted_at is null and not c.is_archived
+  order by c.sort_order limit 1;
+  select a.id into v_shared from public.accounts a
+  where a.household_id = hh and a.private_owner_id is null and a.deleted_at is null and not a.is_archived
+    and a.currency_code = ccy
+  order by a.created_at limit 1;
+  if v_cat is null or v_shared is null then
+    raise exception 'setup: no shared account or expense category';
+  end if;
+
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '__SUBJECT_USER_ID__', 'role', 'authenticated')::text, true);
+  v_tx := public.create_manual_transaction(hh, 'expense', current_date, v_shared, v_cat, 8,
+    'HH-1 hijack target', null, null, 'posted', 1, null);
+  perform set_config('request.jwt.claims', json_build_object('sub', me, 'role', 'authenticated')::text, true);
+  select e.id into v_entry from public.transaction_entries e where e.transaction_id = v_tx limit 1;
+
+  insert into public.accounts (household_id, name, account_type, account_class, currency_code, private_owner_id, created_by)
+  values (hh, 'HH-1 hijack probe', 'cash', 'asset', ccy, me, me) returning id into v_private;
+
+  begin
+    insert into public.transaction_entries
+      (household_id, transaction_id, account_id, amount_account_currency, currency_code, exchange_rate_to_base, amount_base_currency)
+    values (hh, v_tx, v_private, 0.01, ccy, 1, 0.01);
+    raise exception 'LEAK: a private leg was added to someone else''s transaction';
+  exception when insufficient_privilege then null;
+  end;
+
+  begin
+    update public.transaction_entries set account_id = v_private where id = v_entry;
+    get diagnostics n = row_count;
+    if n > 0 then
+      raise exception 'LEAK: a leg of someone else''s transaction was moved into a private account';
+    end if;
+  exception when insufficient_privilege then null;
+  end;
+
+  if (select visibility from public.transactions where id = v_tx) <> 'shared' then
+    raise exception 'LEAK: someone else''s transaction is no longer shared';
+  end if;
 end $$;
 rollback;

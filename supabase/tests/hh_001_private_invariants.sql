@@ -178,6 +178,71 @@ begin
 end $$;
 rollback;
 
+-- A CSV can send a row to an account other than the batch's target (its
+-- Account column). A row that lands in a private account makes the whole
+-- batch, and so every raw row, private; a batch that only touches shared
+-- accounts stays shared.
+-- check: HH-1 a CSV batch with a row in a private account is private
+begin;
+do $$
+declare
+  hh constant uuid := '__HOUSEHOLD_ID__';
+  me constant uuid := (select auth.uid());
+  ccy text := (select h.base_currency from public.households h where h.id = hh);
+  v_cat uuid;
+  v_shared uuid;
+  v_private uuid;
+  v_batch uuid;
+  v_plain uuid;
+begin
+  select c.id into v_cat from public.categories c
+  where c.household_id = hh and c.category_type = 'expense' and c.reporting_type = 'expense'
+    and c.deleted_at is null and not c.is_archived
+  order by c.sort_order limit 1;
+  select a.id into v_shared from public.accounts a
+  where a.household_id = hh and a.private_owner_id is null and a.deleted_at is null and not a.is_archived
+    and a.currency_code = ccy
+  order by a.created_at limit 1;
+  if v_cat is null or v_shared is null then return; end if;
+
+  insert into public.accounts (household_id, name, account_type, account_class, currency_code, private_owner_id, created_by)
+  values (hh, 'HH-1 csv probe', 'cash', 'asset', ccy, me, me)
+  returning id into v_private;
+
+  v_batch := public.create_csv_import(hh, 'hh1-probe.csv', null, v_shared, '{}'::jsonb,
+    jsonb_build_array(
+      jsonb_build_object('rowNumber', 1, 'rawData', jsonb_build_object('memo', 'shared row'),
+        'mappedData', jsonb_build_object('transaction_date', '2000-01-03', 'amount', '-4',
+          'description', 'HH-1 csv shared', 'category_id', v_cat)),
+      jsonb_build_object('rowNumber', 2, 'rawData', jsonb_build_object('memo', 'private row'),
+        'mappedData', jsonb_build_object('transaction_date', '2000-01-04', 'amount', '-6',
+          'description', 'HH-1 csv private', 'category_id', v_cat, 'account_id', v_private))));
+  v_plain := public.create_csv_import(hh, 'hh1-probe-shared.csv', null, v_shared, '{}'::jsonb,
+    jsonb_build_array(
+      jsonb_build_object('rowNumber', 1, 'rawData', jsonb_build_object('memo', 'shared row'),
+        'mappedData', jsonb_build_object('transaction_date', '2000-01-05', 'amount', '-3',
+          'description', 'HH-1 csv shared only', 'category_id', v_cat))));
+
+  if (select count(*) from public.transactions where import_batch_id = v_batch) <> 2 then
+    raise exception 'setup: the probe import did not post both rows';
+  end if;
+  if (select private_owner_id from public.import_batches where id = v_batch) is distinct from me
+     or exists (
+       select 1 from public.import_rows r
+       where r.import_batch_id = v_batch and r.private_owner_id is distinct from me
+     ) then
+    raise exception 'LEAK: a batch with a row in a private account stayed shared';
+  end if;
+  if (select private_owner_id from public.import_batches where id = v_plain) is not null
+     or exists (
+       select 1 from public.import_rows r
+       where r.import_batch_id = v_plain and r.private_owner_id is not null
+     ) then
+    raise exception 'a batch that only touches shared accounts went private';
+  end if;
+end $$;
+rollback;
+
 -- S6: a private name never blocks, or reveals, a shared one — and vice versa.
 -- check: HH-1 private and shared names do not collide (accounts, payees)
 begin;
@@ -231,6 +296,51 @@ begin
   end if;
   if public.get_or_create_payee(hh, 'HH-1 probe payee', array[v_private]) <> v_private_payee then
     raise exception 'a private context did not reuse the private payee';
+  end if;
+end $$;
+rollback;
+
+-- Moving a transaction from a private account to a shared one, keeping its
+-- payee, must not leave a private payee on a shared transaction.
+-- check: HH-1 moving a transaction to a shared account takes a shared payee
+begin;
+do $$
+declare
+  hh constant uuid := '__HOUSEHOLD_ID__';
+  me constant uuid := (select auth.uid());
+  ccy text := (select h.base_currency from public.households h where h.id = hh);
+  v_cat uuid;
+  v_shared uuid;
+  v_private uuid;
+  v_tx uuid;
+  v_payee record;
+begin
+  select c.id into v_cat from public.categories c
+  where c.household_id = hh and c.category_type = 'expense' and c.deleted_at is null and not c.is_archived
+  order by c.sort_order limit 1;
+  select a.id into v_shared from public.accounts a
+  where a.household_id = hh and a.private_owner_id is null and a.deleted_at is null and not a.is_archived
+    and a.currency_code = ccy
+  order by a.created_at limit 1;
+  if v_cat is null or v_shared is null then return; end if;
+
+  insert into public.accounts (household_id, name, account_type, account_class, currency_code, private_owner_id, created_by)
+  values (hh, 'HH-1 move probe', 'cash', 'asset', ccy, me, me)
+  returning id into v_private;
+  v_tx := public.create_manual_transaction(hh, 'expense', current_date, v_private, v_cat, 9,
+    'HH-1 move', null, null, 'posted', 1, 'HH-1 move probe payee');
+  if (select p.private_owner_id from public.transactions t join public.payees p on p.id = t.payee_id
+      where t.id = v_tx) is distinct from me then
+    raise exception 'setup: the payee typed on a private account is not private';
+  end if;
+
+  perform public.update_manual_transaction(v_tx, v_shared, v_cat, 9, current_date);
+
+  select p.name, p.private_owner_id into v_payee
+  from public.transactions t join public.payees p on p.id = t.payee_id
+  where t.id = v_tx;
+  if v_payee.private_owner_id is not null or lower(v_payee.name) <> lower('HH-1 move probe payee') then
+    raise exception 'LEAK: a shared transaction kept a private payee: %', v_payee;
   end if;
 end $$;
 rollback;
@@ -337,8 +447,10 @@ end $$;
 rollback;
 
 -- D6 / PRV-5 / PRV-6, in a probe household (one member): make an account
--- private, then share it back; the dry runs change nothing; sharing flips a
--- private payee with no shared twin and merges one that has a twin.
+-- private, then share it back; the dry runs change nothing. Making it private
+-- takes along the payees only it uses (flipped, or folded into a private twin)
+-- and leaves an audit trail of nothing; sharing flips a private payee with no
+-- shared twin and merges one that has a twin.
 -- check: HH-1 set_account_private and share_private_account move every dependent row
 begin;
 select set_config('hh1.probe', public.create_household_with_owner(
@@ -357,6 +469,11 @@ declare
   v_twin uuid;
   v_flip uuid;
   v_merge uuid;
+  v_shop uuid;
+  v_common uuid;
+  v_fold uuid;
+  v_fold_twin uuid;
+  v_fold_tx uuid;
 begin
   insert into public.accounts (household_id, name, account_type, account_class, currency_code, created_by)
   values (hh, 'Wallet', 'cash', 'asset', ccy, me) returning id into v_account;
@@ -364,18 +481,50 @@ begin
   values (hh, 'Other', 'cash', 'asset', ccy, me) returning id into v_other;
   v_tx := public.create_manual_transaction(hh, 'expense', current_date, v_account, v_cat, 12,
     'probe', null, null, 'posted', 1, 'Probe shop');
+  -- 'Common' is also used on a shared account: it stays shared.
+  perform public.create_manual_transaction(hh, 'expense', current_date, v_account, v_cat, 5,
+    'c1', null, null, 'posted', 1, 'Common');
+  perform public.create_manual_transaction(hh, 'expense', current_date, v_other, v_cat, 6,
+    'c2', null, null, 'posted', 1, 'Common');
+  -- 'Fold' is shared and used only here, and the caller also has a private
+  -- 'Fold' of their own: the shared one folds into it.
+  v_fold_tx := public.create_manual_transaction(hh, 'expense', current_date, v_account, v_cat, 7,
+    'f1', null, null, 'posted', 1, 'Fold');
+  select payee_id into v_fold from public.transactions where id = v_fold_tx;
+  insert into public.payees (household_id, name, private_owner_id)
+  values (hh, 'Fold', me) returning id into v_fold_twin;
+  select id into v_shop from public.payees where household_id = hh and name = 'Probe shop';
+  select id into v_common from public.payees where household_id = hh and name = 'Common';
 
   v_result := public.set_account_private(v_account, true);
-  if (v_result ->> 'applied')::boolean or (v_result ->> 'transactions')::int <> 1 then
+  if (v_result ->> 'applied')::boolean or (v_result ->> 'transactions')::int <> 3
+     or (v_result ->> 'payees')::int <> 2 then
     raise exception 'dry run: %', v_result;
   end if;
-  if (select private_owner_id from public.accounts where id = v_account) is not null then
-    raise exception 'a dry run changed the account';
+  if (select private_owner_id from public.accounts where id = v_account) is not null
+     or (select private_owner_id from public.payees where id = v_shop) is not null then
+    raise exception 'a dry run changed the account or a payee';
   end if;
 
   v_result := public.set_account_private(v_account);
   if (select visibility from public.transactions where id = v_tx) <> 'private' then
     raise exception 'the account''s transaction did not become private: %', v_result;
+  end if;
+  if (select private_owner_id from public.payees where id = v_shop) is distinct from me then
+    raise exception 'a payee only the account used stayed shared';
+  end if;
+  if (select private_owner_id from public.payees where id = v_common) is not null then
+    raise exception 'a payee a shared account also uses went private';
+  end if;
+  if (select payee_id from public.transactions where id = v_fold_tx) <> v_fold_twin
+     or not (select is_archived from public.payees where id = v_fold) then
+    raise exception 'a payee with a private twin was not folded into it';
+  end if;
+  if exists (
+    select 1 from public.household_audit_log l
+    where l.household_id = hh and l.metadata ->> 'account_id' = v_account::text
+  ) then
+    raise exception 'making an account private left an audit row';
   end if;
 
   -- Now private: a payee typed on it is private. 'Twin' then also gets a
@@ -393,7 +542,8 @@ begin
   end if;
 
   v_result := public.share_private_account(v_account, true);
-  if (v_result ->> 'payees')::int <> 2 or (v_result ->> 'applied')::boolean then
+  -- Only mine, Twin, Probe shop, Fold (the private twin it was folded into).
+  if (v_result ->> 'payees')::int <> 4 or (v_result ->> 'applied')::boolean then
     raise exception 'share dry run: %', v_result;
   end if;
 
@@ -411,11 +561,11 @@ begin
   if not exists (
     select 1 from public.household_audit_log l
     where l.household_id = hh and l.action = 'account_shared'
-  ) or not exists (
+  ) or exists (
     select 1 from public.household_audit_log l
     where l.household_id = hh and l.action = 'account_made_private'
   ) then
-    raise exception 'missing audit rows';
+    raise exception 'expected one account_shared audit row and no account_made_private';
   end if;
 end $$;
 rollback;

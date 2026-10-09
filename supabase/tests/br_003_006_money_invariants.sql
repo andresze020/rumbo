@@ -88,7 +88,7 @@ same_currency_transfers as (
     -- shared leg, so it cannot net to zero from here. Skipped only for such a
     -- caller (as postgres auth.uid() is null and nothing is skipped);
     -- hh_001_private_invariants.sql checks every transfer as the table owner.
-    and not (t.visibility = 'mixed' and t.private_owner_id <> (select auth.uid()))
+    and (t.visibility <> 'mixed' or t.private_owner_id = coalesce((select auth.uid()), t.private_owner_id))
   group by t.id
 )
 select
