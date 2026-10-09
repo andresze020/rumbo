@@ -57,8 +57,9 @@ begin
   update public.goals set private_owner_id = private_owner_id where linked_account_id = p_account_id;
   update public.recurring_transactions set private_owner_id = private_owner_id
   where account_id = p_account_id or to_account_id = p_account_id;
-  -- Batches that target the account, and batches whose transactions touch it
-  -- (a CSV's Account column can send rows to any account).
+  -- Batches that target the account, and batches whose transactions or rows
+  -- touch it (a CSV's Account column can send rows to any account; an invalid
+  -- row keeps its mapped account and posts nothing).
   update public.import_batches set private_owner_id = private_owner_id
   where target_account_id = p_account_id
      or id in (
@@ -66,6 +67,12 @@ begin
        from public.transactions t
        join public.transaction_entries e on e.transaction_id = t.id
        where e.account_id = p_account_id and t.import_batch_id is not null
+     )
+     or id in (
+       select r.import_batch_id
+       from public.import_rows r
+       where r.household_id = (select a.household_id from public.accounts a where a.id = p_account_id)
+         and lower(trim(r.mapped_data ->> 'account_id')) = p_account_id::text
      );
   update public.csv_import_presets set private_owner_id = private_owner_id where target_account_id = p_account_id;
 end;
@@ -194,7 +201,8 @@ begin
 
   -- Shared payees that only what becomes private uses: transactions that will
   -- have every entry in this account or in the caller's private accounts, and
-  -- rules or plans on this account (or already private).
+  -- rules or plans on this account (or already private). A rule that has not
+  -- posted yet counts too.
   with becomes_private as (
     select t.id
     from public.transactions t
@@ -216,9 +224,19 @@ begin
   from public.payees p
   where p.household_id = v_account.household_id
     and p.private_owner_id is null
-    and exists (
-      select 1 from public.transactions t
-      where t.payee_id = p.id and t.id in (select bp.id from becomes_private bp)
+    and (
+      exists (
+        select 1 from public.transactions t
+        where t.payee_id = p.id and t.id in (select bp.id from becomes_private bp)
+      )
+      or exists (
+        select 1 from public.recurring_transactions r
+        where r.payee_id = p.id and (r.account_id = p_account_id or r.to_account_id = p_account_id)
+      )
+      or exists (
+        select 1 from public.installment_plans ip
+        where ip.payee_id = p.id and ip.account_id = p_account_id
+      )
     )
     and not exists (
       select 1 from public.transactions t
@@ -251,9 +269,10 @@ begin
   perform public.hh_propagate_account_privacy(p_account_id);
 
   -- Each such payee goes private, or folds into the caller's private payee of
-  -- the same name when there already is one.
+  -- the same name when there already is one (unarchived if the folded payee
+  -- was in use: the name must stay pickable).
   for v_payee in
-    select p.id, p.name from public.payees p where p.id = any(v_payee_ids)
+    select p.id, p.name, p.is_archived from public.payees p where p.id = any(v_payee_ids)
   loop
     select p.id into v_twin
     from public.payees p
@@ -269,6 +288,9 @@ begin
       update public.recurring_transactions set payee_id = v_twin where payee_id = v_payee.id;
       update public.installment_plans set payee_id = v_twin where payee_id = v_payee.id;
       update public.payees set is_archived = true where id = v_payee.id;
+      if not v_payee.is_archived then
+        update public.payees set is_archived = false where id = v_twin and is_archived;
+      end if;
     end if;
   end loop;
 
@@ -385,9 +407,10 @@ begin
   update public.accounts set private_owner_id = null where id = p_account_id;
   perform public.hh_propagate_account_privacy(p_account_id);
 
-  -- Payees: merge into the shared payee of the same name, else flip to shared.
+  -- Payees: merge into the shared payee of the same name (unarchived if the
+  -- merged payee was in use), else flip to shared.
   for v_payee in
-    select p.id, p.name from public.payees p where p.id = any(v_payee_ids)
+    select p.id, p.name, p.is_archived from public.payees p where p.id = any(v_payee_ids)
   loop
     select p.id into v_shared_payee_id
     from public.payees p
@@ -403,6 +426,9 @@ begin
       update public.recurring_transactions set payee_id = v_shared_payee_id where payee_id = v_payee.id;
       update public.installment_plans set payee_id = v_shared_payee_id where payee_id = v_payee.id;
       update public.payees set is_archived = true where id = v_payee.id;
+      if not v_payee.is_archived then
+        update public.payees set is_archived = false where id = v_shared_payee_id and is_archived;
+      end if;
     end if;
   end loop;
 

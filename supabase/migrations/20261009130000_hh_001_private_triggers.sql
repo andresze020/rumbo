@@ -18,16 +18,17 @@
 --                              (a CSV row can name its own account); no
 --                              target = the uploader, decided at INSERT
 --                              (existing rows stay shared)
---   import_rows              ← its batch
+--   import_rows              ← its batch, or its own mapped account
 --   csv_import_presets       ← target_account_id (no target = shared)
 --
 -- Derivation triggers are SECURITY DEFINER with a fixed search_path: they must
 -- read the true owner of an account the writer may not be able to see. The
--- two guard triggers (accounts, payees) are SECURITY INVOKER on purpose: they
--- decide by `current_user`, which inside a definer function is always the
--- owner. Clients and every invoker RPC run as `authenticated`; only the
--- definer RPCs of 20261009160000 (set_account_private / share_private_account)
--- run as the table owner and may change an account's visibility.
+-- guard triggers (accounts, payees, and the ledger links of 3g) are SECURITY
+-- INVOKER on purpose: they decide by `current_user`, which inside a definer
+-- function is always the owner. Clients and every invoker RPC run as
+-- `authenticated`; only the definer RPCs of 20261009160000
+-- (set_account_private / share_private_account) run as the table owner and
+-- may change an account's visibility.
 --
 -- A transaction that would touch private accounts of two different members is
 -- rejected. None of these functions is callable by a client.
@@ -339,6 +340,50 @@ create trigger trg_hh_transaction_tags_derive
 before insert or update on public.transaction_tags
 for each row execute function public.hh_transaction_links_derive();
 
+-- 3g. Who created a transaction, and which transaction a leg or allocation
+-- belongs to, never change from a client. The private-entry rule of the
+-- policies (20261009140000) trusts created_by, and moving a co-member's leg or
+-- allocation into one's own private transaction would hide it from them
+-- (found in the HH-1 review). No RPC changes either column. SECURITY INVOKER,
+-- like the account and payee guards, because it decides by current_user.
+create or replace function public.hh_ledger_links_guard()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if current_user not in ('authenticated', 'anon') then
+    return new;
+  end if;
+
+  if tg_table_name = 'transactions' then
+    if new.created_by is distinct from old.created_by then
+      raise exception 'A transaction''s creator cannot be changed';
+    end if;
+  elsif new.transaction_id is distinct from old.transaction_id then
+    raise exception 'A ledger row cannot be moved to another transaction';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_hh_transactions_links_guard on public.transactions;
+create trigger trg_hh_transactions_links_guard
+before update on public.transactions
+for each row execute function public.hh_ledger_links_guard();
+
+drop trigger if exists trg_hh_entries_links_guard on public.transaction_entries;
+create trigger trg_hh_entries_links_guard
+before update on public.transaction_entries
+for each row execute function public.hh_ledger_links_guard();
+
+drop trigger if exists trg_hh_allocations_links_guard on public.transaction_allocations;
+create trigger trg_hh_allocations_links_guard
+before update on public.transaction_allocations
+for each row execute function public.hh_ledger_links_guard();
+
 -- ------------------------------------------------------------
 -- 4. Everything that hangs from an account
 -- ------------------------------------------------------------
@@ -462,15 +507,44 @@ for each row
 when (old.private_owner_id is distinct from new.private_owner_id)
 execute function public.hh_recurring_propagate();
 
+-- The owner of the account a CSV row was mapped to (its Account column), when
+-- that account is private to the batch's uploader. A row keeps its mapped
+-- account even when it is invalid or a duplicate and posts no transaction, so
+-- its raw line must follow that account, not only the transactions. An id
+-- that is not a uuid, or anyone else's account, gives null: such a row holds
+-- only what its uploader typed.
+create or replace function public.hh_import_row_owner(
+  p_household_id uuid,
+  p_uploaded_by uuid,
+  p_mapped_data jsonb
+)
+returns uuid
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select a.private_owner_id
+  from public.accounts a
+  where a.household_id = p_household_id
+    and a.private_owner_id = p_uploaded_by
+    and a.id = case
+      when trim(coalesce(p_mapped_data ->> 'account_id', ''))
+           ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      then trim(p_mapped_data ->> 'account_id')::uuid
+    end
+$$;
+
 -- import_batches (§4, accepted limit §6): private to the target account's
--- owner; also private to whoever owns any of its transactions — a CSV's Account
--- column can send rows to a private account even when the target is shared,
--- and the batch's rows carry those transactions' raw data (found in the HH-1
--- review). With no target (accounts chosen per row) the batch is private to
--- its uploader, decided at INSERT and kept on update; batches that predate
--- HH-1 and have no target stay shared unless one of their transactions turns
--- private (hh_recompute_transaction_privacy touches the batch when that
--- happens).
+-- owner; also private when any of its transactions, or any of its rows (see
+-- above), is in a private account — a CSV's Account column can send rows to a
+-- private account even when the target is shared, and the batch's rows carry
+-- their raw data (found in the HH-1 review). create_csv_import ends with an
+-- UPDATE of the batch, which applies this. With no target (accounts chosen
+-- per row) the batch is private to its uploader, decided at INSERT and kept on
+-- update; batches that predate HH-1 and have no target stay shared unless one
+-- of their transactions turns private (hh_recompute_transaction_privacy
+-- touches the batch when that happens).
 create or replace function public.hh_import_batches_derive()
 returns trigger
 language plpgsql
@@ -492,6 +566,19 @@ begin
     );
   end if;
 
+  if v_owner is null and tg_op = 'UPDATE' then
+    v_owner := (
+      select x.owner
+      from (
+        select public.hh_import_row_owner(new.household_id, new.uploaded_by, r.mapped_data) as owner
+        from public.import_rows r
+        where r.import_batch_id = new.id
+      ) x
+      where x.owner is not null
+      limit 1
+    );
+  end if;
+
   if v_owner is null and new.target_account_id is null then
     v_owner := case when tg_op = 'INSERT' then new.uploaded_by else old.private_owner_id end;
   end if;
@@ -506,16 +593,25 @@ create trigger trg_hh_import_batches_derive
 before insert or update on public.import_batches
 for each row execute function public.hh_import_batches_derive();
 
--- import_rows: their batch.
+-- import_rows: their batch, or their own mapped account while the batch is
+-- still shared (the batch follows at create_csv_import's closing UPDATE).
 create or replace function public.hh_import_rows_derive()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_batch record;
 begin
-  new.private_owner_id := (
-    select b.private_owner_id from public.import_batches b where b.id = new.import_batch_id
+  select b.private_owner_id, b.uploaded_by
+  into v_batch
+  from public.import_batches b
+  where b.id = new.import_batch_id;
+
+  new.private_owner_id := coalesce(
+    v_batch.private_owner_id,
+    public.hh_import_row_owner(new.household_id, v_batch.uploaded_by, new.mapped_data)
   );
   return new;
 end;
@@ -579,6 +675,8 @@ revoke all on function public.hh_entries_derive() from public, anon, authenticat
 revoke all on function public.hh_entries_recompute() from public, anon, authenticated;
 revoke all on function public.hh_transactions_derive() from public, anon, authenticated;
 revoke all on function public.hh_transaction_links_derive() from public, anon, authenticated;
+revoke all on function public.hh_ledger_links_guard() from public, anon, authenticated;
+revoke all on function public.hh_import_row_owner(uuid, uuid, jsonb) from public, anon, authenticated;
 revoke all on function public.hh_account_child_derive() from public, anon, authenticated;
 revoke all on function public.hh_goals_derive() from public, anon, authenticated;
 revoke all on function public.hh_recurring_derive() from public, anon, authenticated;
