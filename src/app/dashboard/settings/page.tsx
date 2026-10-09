@@ -62,7 +62,8 @@ export default async function SettingsPage({ searchParams }: Props) {
     .maybeSingle()
 
   // BR-032 + BR-038: the preferences card needs the household's active accounts
-  // for the "default account" picker.
+  // for the "default account" picker. HH-2: scope all — any account the user
+  // may write to.
   const preferences = await getUiPreferences()
   const { data: accountRows } = await supabase
     .from('accounts')
@@ -75,7 +76,8 @@ export default async function SettingsPage({ searchParams }: Props) {
 
   // Exchange rates: one row per foreign currency the household actually holds
   // accounts in — a rate for a currency nobody uses is noise. Archived accounts
-  // count, since their balance still shows on the accounts screen.
+  // count, since their balance still shows on the accounts screen. HH-2: scope
+  // all — rates are household-shared (D7) and every visible account needs one.
   const baseCurrency = household?.base_currency ?? 'CAD'
   const { data: currencyRows } = await supabase
     .from('accounts')

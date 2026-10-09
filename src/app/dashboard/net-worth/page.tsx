@@ -16,6 +16,7 @@ import { AccountsViewToggle } from '@/components/accounts-view-toggle'
 import { getAccountsView, type AccountsView } from '@/lib/accounts-view/server'
 import { groupAccountsByType } from '@/lib/accounts-view/group'
 import { createClient } from '@/lib/supabase/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
 import { groupByAsOfDate } from '@/lib/balances/multi-date'
 import {
   computeValuation,
@@ -229,6 +230,8 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
     .eq('id', user.id)
     .maybeSingle()
   if (!profile?.default_household_id) redirect('/onboarding')
+  // HH-2: started now so it overlaps the household read below.
+  const privacyPromise = getPrivacyScope(profile.default_household_id)
 
   const { data: household, error: householdError } = await supabase
     .from('households')
@@ -248,9 +251,10 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
   const evolutionSnapshotDates = evolutionMonths.map((month) => snapshotDateForMonth(month, todayIso))
   const requestedDates = [selectedSnapshotDate, ...evolutionSnapshotDates]
 
+  const { scope } = await privacyPromise
   const { data: allBalances, error: balancesError } = await supabase.rpc(
     'get_account_balances_as_of_many',
-    { p_household_id: household.id, p_as_of_dates: requestedDates }
+    { p_household_id: household.id, p_as_of_dates: requestedDates, p_scope: scope }
   )
   const balancesByDate = groupByAsOfDate((allBalances ?? []) as MultiDateAccountBalance[])
   const selectedBalances = balancesByDate.get(selectedSnapshotDate) ?? []

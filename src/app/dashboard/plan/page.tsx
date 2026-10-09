@@ -12,6 +12,8 @@ import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
 import { EmptyState } from '@/components/empty-state'
 import { createClient } from '@/lib/supabase/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
+import { scopeByOwner } from '@/lib/privacy/scope'
 import { getDisplayedLiabilityBalance } from '@/lib/net-worth/valuation'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
@@ -77,6 +79,8 @@ export default async function PlanPage() {
     .eq('id', user.id)
     .maybeSingle()
   if (!profile?.default_household_id) redirect('/onboarding')
+  // HH-2: started now so it overlaps the household read below.
+  const privacyPromise = getPrivacyScope(profile.default_household_id)
 
   const { data: household, error: householdError } = await supabase
     .from('households')
@@ -88,6 +92,7 @@ export default async function PlanPage() {
   const baseCurrency = household.base_currency as string
   const today = await getRequestToday()
 
+  const { scope, userId } = await privacyPromise
   const [
     { data: budgetRows, error: budgetError },
     { data: debts, error: debtsError },
@@ -99,27 +104,40 @@ export default async function PlanPage() {
       p_household_id: household.id,
       p_budget_month: `${today.slice(0, 7)}-01`,
     }),
-    supabase
-      .from('debts')
-      .select('account_id, name, payment_due_day, status')
-      .eq('household_id', household.id)
-      .is('deleted_at', null),
+    scopeByOwner(
+      supabase
+        .from('debts')
+        .select('account_id, name, payment_due_day, status')
+        .eq('household_id', household.id)
+        .is('deleted_at', null),
+      scope,
+      userId
+    ),
     supabase.rpc('get_account_balances', {
       p_household_id: household.id,
       p_as_of_date: today,
+      p_scope: scope,
     }),
-    supabase
-      .from('recurring_transactions')
-      .select('id, name, amount, currency_code, next_run_date, is_active')
-      .eq('household_id', household.id)
-      .eq('is_active', true)
-      .not('next_run_date', 'is', null)
+    scopeByOwner(
+      supabase
+        .from('recurring_transactions')
+        .select('id, name, amount, currency_code, next_run_date, is_active')
+        .eq('household_id', household.id)
+        .eq('is_active', true)
+        .not('next_run_date', 'is', null),
+      scope,
+      userId
+    )
       .order('next_run_date', { ascending: true })
       .limit(5),
-    supabase
-      .from('goals')
-      .select('id, target_amount, current_amount, currency_code, status')
-      .eq('household_id', household.id),
+    scopeByOwner(
+      supabase
+        .from('goals')
+        .select('id, target_amount, current_amount, currency_code, status')
+        .eq('household_id', household.id),
+      scope,
+      userId
+    ),
   ])
 
   // Budgets summary (current month).

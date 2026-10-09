@@ -22,6 +22,8 @@ import { FormDialog } from '@/components/form-dialog'
 import { AccountsViewToggle } from '@/components/accounts-view-toggle'
 import { getAccountsView } from '@/lib/accounts-view/server'
 import { createClient } from '@/lib/supabase/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
+import { scopeByOwner } from '@/lib/privacy/scope'
 import { getDisplayedLiabilityBalance } from '@/lib/net-worth/valuation'
 import { formatCurrency, formatIsoDate, formatLabel, formatMonthLabelShort } from '@/lib/format'
 import { offsetDate } from '@/lib/periods/transaction-period'
@@ -691,6 +693,8 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   if (!profile?.default_household_id) {
     redirect('/onboarding')
   }
+  // HH-2: started now so it overlaps the household read below.
+  const privacyPromise = getPrivacyScope(profile.default_household_id)
 
   const { data: household, error: householdError } = await supabase
     .from('households')
@@ -701,6 +705,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   if (householdError || !household) {
     redirect('/onboarding')
   }
+  const { scope, userId } = await privacyPromise
 
   const prevMonthEnd = offsetDate(`${today.slice(0, 7)}-01`, -1)
   // Six independent reads, one round trip. They were sequential awaits, so the
@@ -731,6 +736,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     // archived accounts, matching this page's own display.
     supabase.rpc('get_account_balances', {
       p_household_id: household.id,
+      p_scope: scope,
     }),
     // The previous month-end figure ("vs. previous month") only ever needs a
     // real as-of snapshot, so the already-bounded two-arg overload (which
@@ -739,30 +745,40 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     supabase.rpc('get_account_balances', {
       p_household_id: household.id,
       p_as_of_date: prevMonthEnd,
+      p_scope: scope,
     }),
-    supabase
-      .from('accounts')
-      .select(
-        'id, name, account_type, account_class, currency_code, institution_name, last_four, color, icon, opening_balance_date, is_archived, include_in_net_worth, treat_transfers_as_expense, statement_day, payment_day, billing_account_id, sort_order, notes'
-      )
-      .eq('household_id', household.id)
-      .is('deleted_at', null)
+    scopeByOwner(
+      supabase
+        .from('accounts')
+        .select(
+          'id, name, account_type, account_class, currency_code, institution_name, last_four, color, icon, opening_balance_date, is_archived, include_in_net_worth, treat_transfers_as_expense, statement_day, payment_day, billing_account_id, sort_order, notes'
+        )
+        .eq('household_id', household.id)
+        .is('deleted_at', null),
+      scope,
+      userId
+    )
       .order('is_archived', { ascending: true })
       .order('sort_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true }),
     supabase.rpc('get_card_cycle_summaries', {
       p_household_id: household.id,
       p_as_of: today,
+      p_scope: scope,
     }),
-    supabase
-      .from('transaction_entries')
-      .select(
-        'account_id, transactions!inner(transaction_type, deleted_at, status)'
-      )
-      .eq('household_id', household.id)
-      .eq('transactions.transaction_type', 'opening_balance')
-      .is('transactions.deleted_at', null)
-      .in('transactions.status', ['pending', 'posted']),
+    scopeByOwner(
+      supabase
+        .from('transaction_entries')
+        .select(
+          'account_id, transactions!inner(transaction_type, deleted_at, status)'
+        )
+        .eq('household_id', household.id)
+        .eq('transactions.transaction_type', 'opening_balance')
+        .is('transactions.deleted_at', null)
+        .in('transactions.status', ['pending', 'posted']),
+      scope,
+      userId
+    ),
   ])
 
   if (currenciesError) {
@@ -794,6 +810,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   let accountEntriesError = false
 
   if (missingBalanceIds.length) {
+    // Already scoped: these ids come from the scoped account list above.
     const { data: entries, error: entriesError } = await supabase
       .from('transaction_entries')
       .select(

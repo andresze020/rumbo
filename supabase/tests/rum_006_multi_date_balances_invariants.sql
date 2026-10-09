@@ -123,8 +123,9 @@ active_accounts as (
 ),
 early as (
   select *
+  -- HH-2: scope 'all' = every account the caller can see, as counted above.
   from public.get_account_balances_as_of_many(
-    (select household_id from params), array['0001-01-02'::date]
+    (select household_id from params), array['0001-01-02'::date], false, 'all'
   )
 )
 select

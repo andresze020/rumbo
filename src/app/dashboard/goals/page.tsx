@@ -5,6 +5,8 @@ import { GoalForm } from './goal-form'
 import { GoalProgressForm } from './goal-progress-form'
 import { GoalCard } from './goal-card'
 import { createClient } from '@/lib/supabase/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
+import { scopeByOwner } from '@/lib/privacy/scope'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
@@ -80,6 +82,8 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
     .eq('id', user.id)
     .maybeSingle()
   if (!profile?.default_household_id) redirect('/onboarding')
+  // HH-2: started now so it overlaps the household read below.
+  const privacyPromise = getPrivacyScope(profile.default_household_id)
 
   const { data: household, error: householdError } = await supabase
     .from('households')
@@ -90,14 +94,19 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
 
   const baseCurrency = household.base_currency as string
 
+  const { scope, userId } = await privacyPromise
   const [{ data: goals, error: goalsError }, { data: accounts }] = await Promise.all([
-    supabase
-      .from('goals')
-      .select(
-        'id, name, goal_type, target_amount, current_amount, currency_code, target_date, linked_account_id, status'
-      )
-      .eq('household_id', household.id)
-      .order('created_at', { ascending: false }),
+    scopeByOwner(
+      supabase
+        .from('goals')
+        .select(
+          'id, name, goal_type, target_amount, current_amount, currency_code, target_date, linked_account_id, status'
+        )
+        .eq('household_id', household.id),
+      scope,
+      userId
+    ).order('created_at', { ascending: false }),
+    // HH-2: scope all — a form picker (and the names it lends the list).
     supabase
       .from('accounts')
       .select('id, name, currency_code, institution_name, is_archived, account_class, account_type')

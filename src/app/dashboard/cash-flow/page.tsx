@@ -24,6 +24,7 @@ import {
   SERIES_PALETTE,
 } from '@/lib/analysis/server'
 import { getRequestToday } from '@/lib/periods/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
 
 type CashFlowPageProps = {
   searchParams: Promise<{ month?: string; range?: string }>
@@ -52,13 +53,14 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
 
   const ctx = await getHousehold()
   const currency = ctx.household.base_currency
+  const { scope } = await getPrivacyScope(ctx.household.id)
 
   const months = lastNMonths(month, range)
   const [series, categoryLookup] = await Promise.all([
-    getMonthlySeries(ctx, months, locale),
+    getMonthlySeries(ctx, months, scope, locale),
     getCategoryLookup(ctx),
   ])
-  const categories = await getExpenseCategories(ctx, month, categoryLookup)
+  const categories = await getExpenseCategories(ctx, month, scope, categoryLookup)
   const topCategories = categories.slice(0, 5)
 
   const thisMonth = series[series.length - 1] ?? {

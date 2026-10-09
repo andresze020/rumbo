@@ -1,5 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
+import { scopeByTransaction } from '@/lib/privacy/scope'
+import type { RequestPrivacyScope } from '@/lib/privacy/server'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 
@@ -96,17 +98,24 @@ function clampLimit(limit: unknown) {
   return Math.min(Math.trunc(parsed), 50)
 }
 
-/** Executes a tool call by name, scoping every query to the resolved household. */
+/**
+ * Executes a tool call by name, scoping every query to the resolved household
+ * and to the request's privacy scope (HH-2, S21) — both resolved server-side,
+ * never chosen by the model.
+ */
 export async function executeAssistantTool(
   supabase: SupabaseServerClient,
   householdId: string,
+  privacy: RequestPrivacyScope,
   toolName: string,
   toolInput: Record<string, unknown>
 ): Promise<unknown> {
+  const { scope } = privacy
   switch (toolName) {
     case 'get_account_balances': {
       const { data, error } = await supabase.rpc('get_account_balances', {
         p_household_id: householdId,
+        p_scope: scope,
       })
       if (error) throw error
       return data
@@ -116,6 +125,7 @@ export async function executeAssistantTool(
       const { data, error } = await supabase.rpc('get_monthly_dashboard_summary', {
         p_household_id: householdId,
         p_month: String(toolInput.month ?? ''),
+        p_scope: scope,
       })
       if (error) throw error
       return data
@@ -125,6 +135,7 @@ export async function executeAssistantTool(
       const { data, error } = await supabase.rpc('get_monthly_expenses_by_category', {
         p_household_id: householdId,
         p_month: String(toolInput.month ?? ''),
+        p_scope: scope,
       })
       if (error) throw error
       return data
@@ -140,13 +151,17 @@ export async function executeAssistantTool(
     }
 
     case 'search_transactions': {
-      let query = supabase
-        .from('transactions')
-        .select(
-          'id, transaction_date, transaction_type, status, description, merchant_name, transaction_allocations(amount_base_currency, categories(name))'
-        )
-        .eq('household_id', householdId)
-        .is('deleted_at', null)
+      let query = scopeByTransaction(
+        supabase
+          .from('transactions')
+          .select(
+            'id, transaction_date, transaction_type, status, description, merchant_name, transaction_allocations(amount_base_currency, categories(name))'
+          )
+          .eq('household_id', householdId)
+          .is('deleted_at', null),
+        scope,
+        privacy.userId
+      )
         .order('transaction_date', { ascending: false })
         .limit(clampLimit(toolInput.limit))
 

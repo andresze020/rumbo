@@ -1,4 +1,6 @@
 import type { createClient } from '@/lib/supabase/server'
+import { scopeByOwner, scopeByTransaction } from '@/lib/privacy/scope'
+import type { RequestPrivacyScope } from '@/lib/privacy/server'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 
@@ -71,6 +73,8 @@ export type HomeChecklistInput = {
   hasBudget: boolean
   /** Whether the month before `month` has any income or expense worth closing. */
   previousMonthHasActivity: boolean
+  /** HH-2: the scope the Control center reads (due rules, the review backlog). */
+  privacy: RequestPrivacyScope
 }
 
 // ── Month helpers (local: this module must not drag in the analysis layer) ───
@@ -150,6 +154,7 @@ async function routineTasks({
   today,
   hasBudget,
   previousMonthHasActivity,
+  privacy,
 }: Omit<HomeChecklistInput, 'householdCreatedAt' | 'hasAccounts' | 'hasTransactions'>): Promise<ChecklistTask[]> {
   const thisMonth = today.slice(0, 7)
   const previousMonth = shiftMonth(month, -1)
@@ -169,26 +174,35 @@ async function routineTasks({
       .in('closure_month', [monthStartDate(previousMonth), monthStartDate(month)]),
     // "Due" is relative to today, not to the browsed month: an overdue template
     // is overdue whichever month you happen to be looking at.
-    supabase
-      .from('recurring_transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('household_id', householdId)
-      .eq('is_active', true)
-      .not('next_run_date', 'is', null)
-      .lte('next_run_date', today),
-    supabase
-      .from('transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('household_id', householdId)
-      .eq('review_status', 'unreviewed')
-      .neq('transaction_type', 'opening_balance')
-      .neq('status', 'voided')
-      .is('deleted_at', null)
-      .gte('transaction_date', monthStartDate(month))
-      .lte('transaction_date', monthEndDate(month)),
+    scopeByOwner(
+      supabase
+        .from('recurring_transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('household_id', householdId)
+        .eq('is_active', true)
+        .not('next_run_date', 'is', null)
+        .lte('next_run_date', today),
+      privacy.scope,
+      privacy.userId
+    ),
+    scopeByTransaction(
+      supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('household_id', householdId)
+        .eq('review_status', 'unreviewed')
+        .neq('transaction_type', 'opening_balance')
+        .neq('status', 'voided')
+        .is('deleted_at', null)
+        .gte('transaction_date', monthStartDate(month))
+        .lte('transaction_date', monthEndDate(month)),
+      privacy.scope,
+      privacy.userId
+    ),
     // Transactions land as `unreviewed` by default, so an untouched household
     // would show a permanent "N to review" nag. Only households that actually
-    // work the review queue get the row.
+    // work the review queue get the row. (HH-2: unscoped on purpose — whether
+    // the household uses the queue at all, not what this scope shows.)
     supabase
       .from('transactions')
       .select('id', { count: 'exact', head: true })

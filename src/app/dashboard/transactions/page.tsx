@@ -25,6 +25,7 @@ import { FormDialog } from '@/components/form-dialog'
 import { Callout } from '@/components/callout'
 import { createClient } from '@/lib/supabase/server'
 import { getRequestProfile, getRequestUser } from '@/lib/supabase/request'
+import { getPrivacyScope } from '@/lib/privacy/server'
 import { getUiPreferences } from '@/lib/preferences/server'
 import {
   TRANSACTION_SCOPE_COOKIE,
@@ -602,6 +603,8 @@ export default async function TransactionsPage({
 
   const profile = await getRequestProfile()
   if (!profile?.default_household_id) redirect('/onboarding')
+  // HH-2: started now so it overlaps the reads below.
+  const privacyPromise = getPrivacyScope(profile.default_household_id)
 
   const { data: household, error: householdError } = await supabase
     .from('households')
@@ -613,7 +616,9 @@ export default async function TransactionsPage({
   // Four independent lookups, one round trip. Accounts and categories come back
   // unfiltered by `deleted_at`: the pickers drop the deleted ones in JS below,
   // and keeping them here means the row-level name lookups further down need no
-  // queries of their own.
+  // queries of their own. HH-2: accounts and payees are read in scope `all` —
+  // they feed the form's pickers (any account the user may write to) and name
+  // the legs of the listed rows, which a mixed transfer has in both scopes.
   const [
     { data: accountRows, error: accountsError },
     { data: categoryRows, error: categoriesError },
@@ -748,6 +753,7 @@ export default async function TransactionsPage({
       p_tag_ids: selectedTagIds.length ? selectedTagIds : null,
       p_limit: PAGE_SIZE,
       p_offset: pageOffset,
+      p_scope: (await privacyPromise).scope,
     }
   )
   if (transactionsError) throw new Error('Could not load transactions.')
@@ -776,7 +782,7 @@ export default async function TransactionsPage({
 
   // MQ-003: "No transactions yet" is a claim about the household, so it is
   // checked against the household — one row, and only when this view came back
-  // empty. A failed read counts as "has history": better to say "nothing in
+  // empty (HH-2: unscoped on purpose, every row the user can see). A failed read counts as "has history": better to say "nothing in
   // this period" to an empty household than "yet" to one with years of it.
   let householdHasTransactions = true
   if (totalCount === 0) {
@@ -822,7 +828,8 @@ export default async function TransactionsPage({
 
   // Everything the loaded page of transactions needs, in one round trip. The
   // account and category names used to be two more sequential queries; both
-  // re-read rows the household lookups above already carry.
+  // re-read rows the household lookups above already carry. HH-2: keyed by the
+  // rows the scoped search returned, so no further scope applies here.
   if (transactionIds.length) {
     const [
       { data: tagLinks },
@@ -1074,6 +1081,7 @@ export default async function TransactionsPage({
   let refundedAlreadyBase = 0
   if (selectedRefundRow) {
     // Refunds are stored as negative allocations, so this sum is negative or 0.
+    // HH-2: unscoped on purpose — the refund ceiling counts every prior refund.
     const { data: priorRefunds } = await supabase
       .from('transactions')
       .select('transaction_allocations(amount_base_currency)')

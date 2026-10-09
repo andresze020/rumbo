@@ -7,6 +7,7 @@ import {
   type MerchantSlice,
   type MonthlyPoint,
 } from './server'
+import { scopeByOwner, scopeByTransaction, type PrivacyScope } from '@/lib/privacy/scope'
 
 /**
  * Filter-aware reporting for /dashboard/reports.
@@ -138,6 +139,7 @@ async function fetchFilteredRows(
   ctx: HouseholdContext,
   from: string,
   to: string,
+  scope: PrivacyScope,
   filters: {
     type: 'all' | 'income' | 'expense'
     accountIds: string[]
@@ -145,15 +147,21 @@ async function fetchFilteredRows(
     tagIds: string[]
   }
 ): Promise<FilteredRow[]> {
-  let txQuery = ctx.supabase
-    .from('transactions')
-    .select('id, transaction_type, merchant_name, transaction_date')
-    .eq('household_id', ctx.household.id)
-    .eq('status', 'posted')
-    .is('deleted_at', null)
-    .in('transaction_type', ['income', 'expense'])
-    .gte('transaction_date', from)
-    .lte('transaction_date', to)
+  // HH-2: income and expense have a single entry, so a transaction's scope is
+  // its allocation's — the same rows get_monthly_dashboard_summary counts.
+  let txQuery = scopeByTransaction(
+    ctx.supabase
+      .from('transactions')
+      .select('id, transaction_type, merchant_name, transaction_date')
+      .eq('household_id', ctx.household.id)
+      .eq('status', 'posted')
+      .is('deleted_at', null)
+      .in('transaction_type', ['income', 'expense'])
+      .gte('transaction_date', from)
+      .lte('transaction_date', to),
+    scope,
+    ctx.userId
+  )
 
   if (filters.type !== 'all') {
     txQuery = txQuery.eq('transaction_type', filters.type)
@@ -252,6 +260,9 @@ async function fetchFilteredRows(
  *
  * The ledger is not consulted differently and not written: this only re-labels a
  * balance-neutral movement on the way into a report.
+ *
+ * HH-2: scoped through `transferExpenseAccounts` — only the flagged accounts in
+ * the report's scope are passed in, and only their legs are read.
  */
 async function fetchTransferExpenseRows(
   ctx: HouseholdContext,
@@ -470,6 +481,7 @@ export type CalendarMonth = {
 export async function getCalendarMonth(
   ctx: HouseholdContext,
   month: string,
+  scope: PrivacyScope,
   transferExpenseAccounts: Map<string, string> = new Map()
 ): Promise<CalendarMonth> {
   const [year, monthNumber] = month.split('-').map(Number)
@@ -485,7 +497,7 @@ export async function getCalendarMonth(
   }
 
   const [ledgerRows, transferRows] = await Promise.all([
-    fetchFilteredRows(ctx, monthStart, monthEnd, noFilters),
+    fetchFilteredRows(ctx, monthStart, monthEnd, scope, noFilters),
     fetchTransferExpenseRows(ctx, monthStart, monthEnd, {
       ...noFilters,
       transferExpenseAccounts,
@@ -525,16 +537,22 @@ export async function getCalendarMonth(
 /**
  * BR-039 — the household's accounts that opted into "transfers in count as
  * expense". Returned as id → name so the reporting rows can label themselves.
+ * HH-2: in `scope`, by the account's owner (the leg it receives is its own).
  */
 export async function getTransferExpenseAccounts(
-  ctx: HouseholdContext
+  ctx: HouseholdContext,
+  scope: PrivacyScope
 ): Promise<Map<string, string>> {
-  const { data } = await ctx.supabase
-    .from('accounts')
-    .select('id, name')
-    .eq('household_id', ctx.household.id)
-    .eq('treat_transfers_as_expense', true)
-    .is('deleted_at', null)
+  const { data } = await scopeByOwner(
+    ctx.supabase
+      .from('accounts')
+      .select('id, name')
+      .eq('household_id', ctx.household.id)
+      .eq('treat_transfers_as_expense', true)
+      .is('deleted_at', null),
+    scope,
+    ctx.userId
+  )
   return new Map(
     ((data ?? []) as TransferExpenseAccount[]).map((a) => [a.id, a.name])
   )
@@ -543,6 +561,7 @@ export async function getTransferExpenseAccounts(
 export async function getReportData(
   ctx: HouseholdContext,
   filters: ReportFilters,
+  scope: PrivacyScope,
   categoryLookup: Map<string, CategoryLookup>,
   /** BR-039: id → name. Pass an empty map (the default) to report the pure ledger. */
   transferExpenseAccounts: Map<string, string> = new Map()
@@ -570,8 +589,8 @@ export async function getReportData(
 
   const [ledgerRangeRows, ledgerTrendRows, transferRangeRows, transferTrendRows] =
     await Promise.all([
-      fetchFilteredRows(ctx, filters.dateFrom, filters.dateTo, rowFilters),
-      fetchFilteredRows(ctx, trendStart, filters.dateTo, rowFilters),
+      fetchFilteredRows(ctx, filters.dateFrom, filters.dateTo, scope, rowFilters),
+      fetchFilteredRows(ctx, trendStart, filters.dateTo, scope, rowFilters),
       fetchTransferExpenseRows(ctx, filters.dateFrom, filters.dateTo, transferFilters),
       fetchTransferExpenseRows(ctx, trendStart, filters.dateTo, transferFilters),
     ])

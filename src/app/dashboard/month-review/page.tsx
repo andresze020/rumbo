@@ -41,6 +41,8 @@ import {
   SERIES_PALETTE,
 } from '@/lib/analysis/server'
 import { getRequestToday } from '@/lib/periods/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
+import { scopeByTransaction } from '@/lib/privacy/scope'
 
 type MonthReviewPageProps = {
   searchParams: Promise<{
@@ -121,15 +123,20 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
   const prevMonth = shiftMonth(month, -1)
   const ctx = await getHousehold()
   const currency = ctx.household.base_currency
+  const privacy = await getPrivacyScope(ctx.household.id)
+  const { scope } = privacy
 
-  const [series, categoryLookup, budget] = await Promise.all([
-    getMonthlySeries(ctx, [prevMonth, month], locale),
+  const [series, categoryLookup, budget, householdSeries] = await Promise.all([
+    getMonthlySeries(ctx, [prevMonth, month], scope, locale),
     getCategoryLookup(ctx),
     getBudgetLines(ctx, month),
+    // HH-2: the close-month snapshot is always the household's (SCP-4),
+    // whatever scope the page itself shows.
+    scope === 'household' ? null : getMonthlySeries(ctx, [month], 'household', locale),
   ])
   const [thisCats, prevCats] = await Promise.all([
-    getExpenseCategories(ctx, month, categoryLookup),
-    getExpenseCategories(ctx, prevMonth, categoryLookup),
+    getExpenseCategories(ctx, month, scope, categoryLookup),
+    getExpenseCategories(ctx, prevMonth, scope, categoryLookup),
   ])
 
   const prev = series[0] ?? { income: 0, expenses: 0, savings: 0, savingsRate: null }
@@ -149,7 +156,7 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
   // it is not a comparison either.
   const isFutureMonth = month > todayIso.slice(0, 7)
   const dailyCashFlow = isOpenMonth
-    ? await getDailyCashFlow(ctx.supabase, ctx.household.id, `${prevMonth}-01`, monthEndDate(month))
+    ? await getDailyCashFlow(ctx.supabase, ctx.household.id, `${prevMonth}-01`, monthEndDate(month), privacy)
     : null
   const comparison = dailyCashFlow ? cashFlowComparison(month, todayIso, dailyCashFlow) : null
   let comparePrevious: CashFlowTotals | null = null
@@ -241,16 +248,20 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
   //    Home badge, so both surfaces report the same number for the month.
   let pendingReview: number | null = null
   {
-    const { count, error } = await ctx.supabase
-      .from('transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('household_id', ctx.household.id)
-      .eq('review_status', 'unreviewed')
-      .neq('transaction_type', 'opening_balance')
-      .neq('status', 'voided')
-      .is('deleted_at', null)
-      .gte('transaction_date', `${month}-01`)
-      .lte('transaction_date', monthEndDate(month))
+    const { count, error } = await scopeByTransaction(
+      ctx.supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('household_id', ctx.household.id)
+        .eq('review_status', 'unreviewed')
+        .neq('transaction_type', 'opening_balance')
+        .neq('status', 'voided')
+        .is('deleted_at', null)
+        .gte('transaction_date', `${month}-01`)
+        .lte('transaction_date', monthEndDate(month)),
+      scope,
+      privacy.userId
+    )
     if (!error) pendingReview = count ?? 0
   }
 
@@ -268,6 +279,18 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
   })
   const score = health?.score ?? null
   const scoreGrade = health?.grade ?? null
+
+  // HH-2: what "Close month" stores — the household's month (SCP-4). The same
+  // as the page's own figures unless the page reads a wider scope.
+  const snapshotMonth = householdSeries?.[0] ?? curr
+  const snapshotHealth = householdSeries
+    ? monthHealth({
+        savingsRate: snapshotMonth.savingsRate,
+        hasBudget,
+        budgetPercent: totalBudgetPercent,
+        hasActivity: (snapshotMonth.transactionCount ?? 0) > 0,
+      })
+    : health
 
   // ── BR-021: light "close month" state (marker + snapshot, no ledger lock). ──
   const monthClosed = params.closed === '1'
@@ -462,12 +485,12 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
             ) : (
               <form action={closeMonthAction}>
                 <input type="hidden" name="month" value={month} />
-                <input type="hidden" name="income" value={curr.income} />
-                <input type="hidden" name="expenses" value={curr.expenses} />
-                <input type="hidden" name="savings" value={curr.savings} />
-                <input type="hidden" name="savings_rate" value={curr.savingsRate ?? ''} />
-                <input type="hidden" name="score" value={score ?? ''} />
-                <input type="hidden" name="grade" value={scoreGrade ?? ''} />
+                <input type="hidden" name="income" value={snapshotMonth.income} />
+                <input type="hidden" name="expenses" value={snapshotMonth.expenses} />
+                <input type="hidden" name="savings" value={snapshotMonth.savings} />
+                <input type="hidden" name="savings_rate" value={snapshotMonth.savingsRate ?? ''} />
+                <input type="hidden" name="score" value={snapshotHealth?.score ?? ''} />
+                <input type="hidden" name="grade" value={snapshotHealth?.grade ?? ''} />
                 <input type="hidden" name="currency" value={currency} />
                 <SubmitButton type="submit" size="sm" className="gap-2" pendingText="Closing…">
                   <Lock aria-hidden="true" />

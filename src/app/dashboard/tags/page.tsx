@@ -6,6 +6,7 @@ import { TagRow, type TagVM } from './tag-row'
 import { archiveTagAction } from './actions'
 import { isTagColor } from './colors'
 import { createClient } from '@/lib/supabase/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
 import { buttonVariants } from '@/components/ui/button'
 import { ArchiveToast } from '@/components/archive-toast'
 import { EmptyState } from '@/components/empty-state'
@@ -87,6 +88,8 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
     .eq('id', user.id)
     .maybeSingle()
   if (!profile?.default_household_id) redirect('/onboarding')
+  // HH-2: started now so it overlaps the household read below.
+  const privacyPromise = getPrivacyScope(profile.default_household_id)
 
   const { data: household, error: householdError } = await supabase
     .from('households')
@@ -95,9 +98,10 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
     .single()
   if (householdError || !household) redirect('/onboarding')
 
+  const { scope } = await privacyPromise
   const { data: statsData, error: tagsError } = await supabase.rpc(
     'get_tags_with_stats',
-    { p_household_id: household.id }
+    { p_household_id: household.id, p_scope: scope }
   )
 
   const allTags = ((statsData ?? []) as TagStatsRow[])

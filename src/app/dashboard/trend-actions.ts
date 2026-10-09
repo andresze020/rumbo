@@ -12,6 +12,7 @@ import {
 } from '@/lib/net-worth/trend'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { getRequestToday } from '@/lib/periods/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
 
 export type TrendMetric =
   | 'monthly-income'
@@ -55,6 +56,8 @@ export async function getDashboardTrend(
   const supabase = await createClient()
   const householdId = profile.default_household_id
   const monthDates = lastNMonthDates(currentMonth, numMonths)
+  // HH-2: the request's own scope — never one sent by the client.
+  const { scope } = await getPrivacyScope(householdId)
 
   const isMonthlyMetric =
     metric === 'monthly-income' ||
@@ -68,6 +71,7 @@ export async function getDashboardTrend(
         supabase.rpc('get_monthly_dashboard_summary', {
           p_household_id: householdId,
           p_month: d,
+          p_scope: scope,
         })
       )
     )
@@ -103,6 +107,7 @@ export async function getDashboardTrend(
   const { data: multiDateBalances } = await supabase.rpc('get_account_balances_as_of_many', {
     p_household_id: householdId,
     p_as_of_dates: dates.snapshotDates,
+    p_scope: scope,
   })
   // RUM-002: valued through the one shared formula (lib/net-worth/trend →
   // computeValuation); see that module for the history of this block.

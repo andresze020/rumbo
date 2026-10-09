@@ -91,7 +91,8 @@ months as (
 dashboard as (
   select sm.month_start, sm.monthly_income, sm.monthly_expenses
   from months
-  cross join lateral public.get_monthly_dashboard_summary((select household_id from params), months.m) sm
+  -- HH-2: scope 'all' = every allocation the caller can see, as the ledger reads.
+  cross join lateral public.get_monthly_dashboard_summary((select household_id from params), months.m, 'all') sm
 ),
 ledger as (
   select
@@ -188,7 +189,8 @@ per_month as (
     months.m,
     (months.m + interval '1 month - 1 day')::date,
     null, null, null, null, null, null, null, null,
-    1000000, 0
+    1000000, 0,
+    'all' -- HH-2: every transaction the caller can see, as the ledger counts
   ) r on true
   group by months.m
 )

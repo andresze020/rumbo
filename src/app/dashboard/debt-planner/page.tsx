@@ -17,6 +17,8 @@ import { AmountInput } from '@/components/amount-input'
 import { formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { getHousehold } from '@/lib/analysis/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
+import { scopeByOwner } from '@/lib/privacy/scope'
 import { getRequestToday } from '@/lib/periods/server'
 
 const CARD = 'rounded-2xl border bg-card shadow-sm shadow-black/[0.03]'
@@ -207,19 +209,25 @@ export default async function DebtPlannerPage({ searchParams }: DebtPlannerPageP
 
   const ctx = await getHousehold()
   const currency = ctx.household.base_currency
+  const { scope, userId } = await getPrivacyScope(ctx.household.id)
 
   // Fetch active debts and current balances, exactly like the debts page.
   const [{ data: debtsData }, { data: balancesData }] = await Promise.all([
-    ctx.supabase
-      .from('debts')
-      .select(
-        'id, account_id, name, lender_name, original_principal, interest_rate, interest_rate_period, minimum_payment, payment_due_day, status'
-      )
-      .eq('household_id', ctx.household.id)
-      .is('deleted_at', null),
+    scopeByOwner(
+      ctx.supabase
+        .from('debts')
+        .select(
+          'id, account_id, name, lender_name, original_principal, interest_rate, interest_rate_period, minimum_payment, payment_due_day, status'
+        )
+        .eq('household_id', ctx.household.id)
+        .is('deleted_at', null),
+      scope,
+      userId
+    ),
     ctx.supabase.rpc('get_account_balances', {
       p_household_id: ctx.household.id,
       p_as_of_date: await getRequestToday(),
+      p_scope: scope,
     }),
   ])
 

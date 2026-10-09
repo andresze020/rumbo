@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { buildCsv } from '@/lib/exports/csv'
 import { buildXlsx, type XlsxColumn } from '@/lib/exports/xlsx'
 import { getRequestToday } from '@/lib/periods/server'
+import { getPrivacyScope, type RequestPrivacyScope } from '@/lib/privacy/server'
+import { isPrivacyScope, scopeByOwner, scopeByTransaction } from '@/lib/privacy/scope'
 
 const EXPORT_TYPES = ['transactions', 'accounts', 'categories'] as const
 const EXPORT_FORMATS = ['csv', 'xlsx'] as const
@@ -249,50 +251,71 @@ async function getAuthenticatedHousehold() {
 async function buildTransactionsTable({
   household,
   supabase,
+  privacy,
 }: {
   household: Household
   supabase: Awaited<ReturnType<typeof createClient>>
+  privacy: RequestPrivacyScope
 }) {
+  const { scope, userId } = privacy
+  // HH-2: transactions as the list shows them (a mixed transfer in every scope
+  // its viewer may see); legs, allocations and accounts by their own owner, so
+  // household exports only the shared side of a mixed transfer.
   const transactions = await fetchAllRows<Transaction>((from, to) =>
-    supabase
-      .from('transactions')
-      .select(
-        'id, transaction_date, transaction_type, status, source, description, merchant_name, notes, created_at, updated_at, voided_at, void_reason, import_batch_id, import_row_id'
-      )
-      .eq('household_id', household.id)
-      .is('deleted_at', null)
+    scopeByTransaction(
+      supabase
+        .from('transactions')
+        .select(
+          'id, transaction_date, transaction_type, status, source, description, merchant_name, notes, created_at, updated_at, voided_at, void_reason, import_batch_id, import_row_id'
+        )
+        .eq('household_id', household.id)
+        .is('deleted_at', null),
+      scope,
+      userId
+    )
       .order('transaction_date', { ascending: true })
       .order('created_at', { ascending: true })
       .range(from, to)
   )
   const entries = await fetchAllRows<TransactionEntry>((from, to) =>
-    supabase
-      .from('transaction_entries')
-      .select(
-        'id, transaction_id, account_id, entry_type, amount_account_currency, currency_code, exchange_rate_to_base, amount_base_currency, notes, created_at, updated_at'
-      )
-      .eq('household_id', household.id)
+    scopeByOwner(
+      supabase
+        .from('transaction_entries')
+        .select(
+          'id, transaction_id, account_id, entry_type, amount_account_currency, currency_code, exchange_rate_to_base, amount_base_currency, notes, created_at, updated_at'
+        )
+        .eq('household_id', household.id),
+      scope,
+      userId
+    )
       .order('created_at', { ascending: true })
       .range(from, to)
   )
   const allocations = await fetchAllRows<TransactionAllocation>((from, to) =>
-    supabase
-      .from('transaction_allocations')
-      .select(
-        'id, transaction_id, category_id, allocation_type, amount_original_currency, currency_code, exchange_rate_to_base, amount_base_currency, notes, created_at'
-      )
-      .eq('household_id', household.id)
+    scopeByOwner(
+      supabase
+        .from('transaction_allocations')
+        .select(
+          'id, transaction_id, category_id, allocation_type, amount_original_currency, currency_code, exchange_rate_to_base, amount_base_currency, notes, created_at'
+        )
+        .eq('household_id', household.id),
+      scope,
+      userId
+    )
       .order('created_at', { ascending: true })
       .range(from, to)
   )
   const accounts = await fetchAllRows<Account>((from, to) =>
-    supabase
-      .from('accounts')
-      .select(
-        'id, name, account_type, account_class, currency_code, institution_name, last_four, opening_balance_date, is_archived, include_in_net_worth, notes, created_at, updated_at'
-      )
-      .eq('household_id', household.id)
-      .range(from, to)
+    scopeByOwner(
+      supabase
+        .from('accounts')
+        .select(
+          'id, name, account_type, account_class, currency_code, institution_name, last_four, opening_balance_date, is_archived, include_in_net_worth, notes, created_at, updated_at'
+        )
+        .eq('household_id', household.id),
+      scope,
+      userId
+    ).range(from, to)
   )
   const categories = await fetchAllRows<Category>((from, to) =>
     supabase
@@ -443,18 +466,24 @@ async function buildTransactionsTable({
 async function buildAccountsTable({
   household,
   supabase,
+  privacy,
 }: {
   household: Household
   supabase: Awaited<ReturnType<typeof createClient>>
+  privacy: RequestPrivacyScope
 }) {
   const accounts = await fetchAllRows<Account>((from, to) =>
-    supabase
-      .from('accounts')
-      .select(
-        'id, name, account_type, account_class, currency_code, institution_name, last_four, opening_balance_date, is_archived, include_in_net_worth, notes, created_at, updated_at'
-      )
-      .eq('household_id', household.id)
-      .is('deleted_at', null)
+    scopeByOwner(
+      supabase
+        .from('accounts')
+        .select(
+          'id, name, account_type, account_class, currency_code, institution_name, last_four, opening_balance_date, is_archived, include_in_net_worth, notes, created_at, updated_at'
+        )
+        .eq('household_id', household.id)
+        .is('deleted_at', null),
+      privacy.scope,
+      privacy.userId
+    )
       .order('sort_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true })
       .range(from, to)
@@ -464,6 +493,7 @@ async function buildAccountsTable({
     {
       p_household_id: household.id,
       p_as_of_date: await getRequestToday(),
+      p_scope: privacy.scope,
     }
   )
 
@@ -607,13 +637,22 @@ export async function GET(request: NextRequest) {
     return error ?? errorResponse('Could not load your household.', 403)
   }
 
+  // HH-2 (S21): `?scope=household|mine|all`, else the request's own scope. A
+  // scope only narrows what RLS already lets this user read.
+  const resolved = await getPrivacyScope(household.id)
+  const requestedScope = request.nextUrl.searchParams.get('scope')
+  const privacy: RequestPrivacyScope = {
+    scope: isPrivacyScope(requestedScope) ? requestedScope : resolved.scope,
+    userId: resolved.userId,
+  }
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const table: ExportTable<any> =
       exportType === 'transactions'
-        ? await buildTransactionsTable({ household, supabase })
+        ? await buildTransactionsTable({ household, supabase, privacy })
         : exportType === 'accounts'
-          ? await buildAccountsTable({ household, supabase })
+          ? await buildAccountsTable({ household, supabase, privacy })
           : await buildCategoriesTable({ household, supabase })
 
     const filename = `rumbo-${exportType}-${await getRequestToday()}.${format}`
