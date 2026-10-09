@@ -94,6 +94,54 @@ begin
             and actor_id = '00000000-0000-4000-a000-0000000000b1') = 1, 'B: expected one household_created event by B1';
 end $$;
 
+-- HH-1 (S17): hh_001_private_isolation.sql discovers every table with a
+-- private_owner_id column and asserts a co-member reads none of the other's
+-- private rows. That proves something only if every such table really holds a
+-- private row for BOTH fixture owners — and if each owner has mixed transfers
+-- in both directions, so the S22 refusals and the "shared leg only" check have
+-- something to act on. A table that gains the column later fails this until
+-- the fixtures seed it.
+-- check: HH-1 every table with private_owner_id holds private rows of A1 and of A2, and mixed transfers both ways
+do $$
+declare
+  owners constant uuid[] := array['00000000-0000-4000-a000-0000000000a1', '00000000-0000-4000-a000-0000000000a2']::uuid[];
+  owner uuid;
+  t text;
+  n bigint;
+  missing text[] := '{}';
+begin
+  for t in
+    select c.relname::text
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace ns on ns.oid = c.relnamespace
+    join pg_catalog.pg_attribute a on a.attrelid = c.oid and a.attname = 'private_owner_id' and not a.attisdropped
+    where ns.nspname = 'public' and c.relkind in ('r', 'p')
+    order by 1
+  loop
+    foreach owner in array owners loop
+      execute format('select count(*) from public.%I where private_owner_id = %L', t, owner) into n;
+      if n = 0 then missing := missing || format('%s (%s)', t, owner); end if;
+    end loop;
+  end loop;
+  assert cardinality(missing) = 0, 'tables with no private fixture row: ' || array_to_string(missing, ', ');
+
+  foreach owner in array owners loop
+    assert exists (
+      select 1 from public.transactions t where t.private_owner_id = owner and t.visibility = 'private'
+    ), format('%s has no private transaction', owner);
+    assert exists (
+      select 1 from public.transactions t join public.transaction_entries e on e.transaction_id = t.id
+      where t.private_owner_id = owner and t.visibility = 'mixed'
+        and e.private_owner_id = owner and e.amount_account_currency < 0
+    ), format('%s has no mixed transfer out of a private account', owner);
+    assert exists (
+      select 1 from public.transactions t join public.transaction_entries e on e.transaction_id = t.id
+      where t.private_owner_id = owner and t.visibility = 'mixed'
+        and e.private_owner_id = owner and e.amount_account_currency > 0
+    ), format('%s has no mixed transfer into a private account', owner);
+  end loop;
+end $$;
+
 -- check: overpaid credit card holds a positive (favourable) balance
 do $$
 begin

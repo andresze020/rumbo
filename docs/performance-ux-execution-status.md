@@ -224,6 +224,52 @@ quedaban cortos.
 > Plantilla para cada entrada. Añade la tuya arriba del todo al cerrar un
 > ticket, con el formato de §4.5 del backlog.
 
+### HH-1 — Costo de la cláusula de privacidad en RLS · 2026-10-09 · rama `ccr-8e8266e9-ohd8cq` · PR pendiente
+
+No es un ticket RUM: [`features/household-sharing.md`](./features/household-sharing.md)
+§7 (HH-1) pide re-medir los planes de RUM-004 tras añadir a las políticas de
+`select` la cláusula de cuentas privadas — `private_owner_id is null or
+private_owner_id = (select auth.uid())` (en `transactions`: `visibility <>
+'private' or …`) — y quedar dentro del 10 % de la línea base.
+
+**Producción, antes** (`npm run perf:baseline -- --household=6505088e-… --user=dc32b7b3-… --runs=3 --explain`,
+el mismo household y usuario que RUM-004, 2026-10-09, migraciones de HH-1 sin aplicar):
+
+| Probe | Tiempo | Buffers |
+|---|---:|---:|
+| `get_account_balances` (today) | 22,94 ms | 3.036 |
+| `search_household_transactions` (all-time, page 1) | 29,69 ms | 1.746 |
+| `search_household_transactions` (one month) | 6,94 ms | 1.624 |
+
+**Producción, después:** pendiente — se mide con el mismo comando cuando las
+migraciones de HH-1 estén aplicadas.
+
+**Fixtures, antes y después** (`npm run db:local`, hogar A como A1 con RLS,
+`EXPLAIN (ANALYZE, BUFFERS)` en caliente — caché de planes de plpgsql ya
+llena —, mediana de 3 corridas; "antes" = `main` en `d04ab01`):
+
+| Probe | Buffers antes → después | Tiempo antes → después |
+|---|---:|---:|
+| `get_account_balances` (today) | 244 → 241 | 6,52 → 6,98 ms (+7 %) |
+| `search_household_transactions` (all-time, 50) | 151 → 156 | 5,77 → 6,35 ms (+10 %) |
+| `search_household_transactions` (month, 50) | 84 → 86 | 1,43 → 1,72 ms (+20 %) |
+
+`npm run db:local -- --bench` (p50, mediana de 3 corridas, antes → después):
+`get_account_balances` 5,46 → 5,91 ms (+8 %); `get_account_balances_as_of_many`
+(13 fechas) 50,36 → 51,70 ms (+3 %); `search_household_transactions` all-time
+5,80 → 6,08 ms (+5 %) y mes 1,38 → 1,60 ms (+16 %); budget details, dashboard
+summary y expenses by category sin cambio (±3 %).
+
+**Lectura.** Los buffers no cambian (±3 %, y los fixtures crecieron 18
+transacciones privadas): los planes conservan su forma — nada parecido al
+Nested Loop que RUM-004 eliminó, que multiplicaba los buffers. Lo que sube es
+CPU por evaluar un predicado más por fila y un `(select auth.uid())` más por
+política, un costo casi fijo por consulta (~0,3 ms) que pesa en porcentaje
+solo en la consulta chica del mes (1,4 ms). Los dos probes de RUM-004 quedan
+en +7 % y +10 %; el de un mes, +20 % (0,3 ms absolutos), fuera del 10 %
+pedido — registrado como desviación en el PR de HH-1, con la medición de
+producción pendiente para confirmar.
+
 ### RUM-005 — Cache e invalidación (cierre del ticket) · 2026-09-25 · rama `claude/next-backlog-ticket-2azpv2` · PR [#81](https://github.com/andresze020/rumbo/pull/81)
 
 **Qué faltaba.** Dos criterios de aceptación que las entregas de 2026-09-21
@@ -2152,6 +2198,7 @@ código de saldos ni del dashboard.
 
 | Fecha | Cambio |
 |---|---|
+| 2026-10-09 | **HH-1 (cuentas privadas): costo de la cláusula de privacidad medido.** Mismos buffers antes y después (planes intactos); tiempo +7 % `get_account_balances` y +10 % `search_household_transactions` all-time en fixtures, +20 % (0,3 ms) en la búsqueda de un mes. Producción «antes» registrado; «después» pendiente de aplicar las migraciones. |
 | 2026-09-25 | **Después del backlog: rediseño del Dashboard y primera carga de Transactions** ([`features/dashboard-layout.md`](./features/dashboard-layout.md)). Dashboard: una tarjeta de flujo de caja reemplaza los 4 KPI + Month health; sin Recent activity; 26 → 15 queries por render (`cache()` por request para usuario/perfil, una sola llamada de balances). A la misma latencia de red: render de servidor 524 → 442 ms p50; página lista 927 → 628 ms p50. Transactions: la «pantalla negra» al abrir en frío era el `redirect()` del scope recordado (flash de «This page couldn't load» + segundo documento); ahora se renderiza directo y el URL se sincroniza con `history.replaceState`. La memoria del scope baja de 12 h a 30 min. Apertura en frío con 6 meses recordados: 1062–1931 → 656–682 ms. |
 | 2026-09-25 | **RUM-005 cerrado: Router Cache de 30 s + invalidación auditada; B-5 cerrado.** Decisión del usuario: `staleTimes` `{ dynamic: 30, static: 30 }`, sin cache de servidor (RLS intacta). Revisitas p75 ~500–730 ms → ~80 ms, 0 perdidas. Test nuevo: las 71 Server Actions que escriben o cambian sesión invalidan (2 faltaban: onboarding, idioma; sign-in/out explícitos). Verificado en vivo 6/6 (revisita sin servidor, escritura propia al instante, otro dispositivo ≤30 s, sign-out/in nunca cacheado). `perf:nav --think` añadido: el cambio de mes tras una revisita instantánea espera ~380 ms si el clic llega en <100 ms (prefetches de la página recién montada); con pausa humana no cambia. Capa B medida: `/dashboard` 26 queries, ~400 ms de servidor. |
 | 2026-09-25 | **Migración de B-8 aplicada en producción (a pedido del usuario): release aprobado.** `db-push push --apply` → 62/62, 0 pendientes; `db:test` en el household real 46/46; Transactions (posted) = Dashboard al centavo en los 12 últimos meses. |

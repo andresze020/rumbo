@@ -22,6 +22,7 @@ type ImportedRow = {
   created_transaction_id: string | null
   mapped_data: {
     merchant_name?: unknown
+    account_id?: unknown
   } | null
 }
 
@@ -121,13 +122,23 @@ export async function createCsvImportAction(formData: FormData) {
           ? row.mapped_data.merchant_name.trim()
           : ''
 
+      // The account this row posted to: its own (an Account column), else the
+      // import's target — the same rule create_csv_import applies.
+      const accountId =
+        typeof row.mapped_data?.account_id === 'string' && row.mapped_data.account_id.trim()
+          ? row.mapped_data.account_id.trim()
+          : targetAccountId || null
+
       return {
         transactionId: row.created_transaction_id,
         merchantName,
+        accountId,
       }
     })
     .filter((row) => row.transactionId && row.merchantName)
 
+  // HH-1 (PRV-7): a payee is private only when every row that uses it posted
+  // to the importer's own private accounts (get_or_create_payee decides).
   // BR-009: resolve each imported merchant name to a payee so CSV rows land with
   // a payee_id (matching manual entry). Resolve once per distinct name — payees
   // are case/whitespace-insensitive — then reuse the id across its rows.
@@ -138,6 +149,13 @@ export async function createCsvImportAction(formData: FormData) {
       supabase.rpc('get_or_create_payee', {
         p_household_id: householdId,
         p_name: name,
+        p_account_ids: [
+          ...new Set(
+            merchantUpdates
+              .filter((row) => row.merchantName === name)
+              .flatMap((row) => (row.accountId ? [row.accountId] : []))
+          ),
+        ],
       })
     )
   )
