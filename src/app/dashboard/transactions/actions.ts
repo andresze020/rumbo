@@ -324,6 +324,8 @@ export async function createManualTransactionAction(formData: FormData) {
       const { data: resolvedPayeeId } = await supabase.rpc('get_or_create_payee', {
         p_household_id: profile.default_household_id,
         p_name: payeeName,
+        // HH-1 (PRV-7): a template on a private account gets a private payee.
+        p_account_ids: [accountId],
       })
       recurringPayeeId = (resolvedPayeeId as string | null) ?? null
     }

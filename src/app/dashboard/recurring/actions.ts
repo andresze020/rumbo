@@ -232,7 +232,8 @@ async function parseAndValidateTemplate(
   if (payeeName && !isTransfer) {
     const { data: resolvedPayeeId, error: payeeError } = await supabase.rpc(
       'get_or_create_payee',
-      { p_household_id: householdId, p_name: payeeName }
+      // HH-1 (PRV-7): a template on a private account gets a private payee.
+      { p_household_id: householdId, p_name: payeeName, p_account_ids: [accountId] }
     )
     if (payeeError) {
       redirectWithError('Could not save the payee. Please try again.')
