@@ -24,8 +24,9 @@
 -- 7. A transaction cannot touch two members' private accounts.
 -- 8. D6: no account can be made private while the household has two members.
 -- 9. The caller cannot pull someone else's shared transaction into their
---    private account by adding or moving a leg (it would vanish from the
---    household's view).
+--    private account by adding or moving a leg, by first claiming to have
+--    created it, or by moving its leg or allocation into a transaction of
+--    their own (it would vanish from the household's view).
 --
 -- Where a check needs the subject's private ids, it reads them as the table
 -- owner (`reset role`, read-only) into a transaction-local setting, then acts
@@ -348,6 +349,7 @@ declare
   v_private uuid;
   v_tx uuid;
   v_entry uuid;
+  v_mine_tx uuid;
   n bigint;
 begin
   select c.id into v_cat from public.categories c
@@ -370,6 +372,8 @@ begin
 
   insert into public.accounts (household_id, name, account_type, account_class, currency_code, private_owner_id, created_by)
   values (hh, 'HH-1 hijack probe', 'cash', 'asset', ccy, me, me) returning id into v_private;
+  v_mine_tx := public.create_manual_transaction(hh, 'expense', current_date, v_private, v_cat, 1,
+    'HH-1 hijack mine', null, null, 'posted', 1, null);
 
   begin
     insert into public.transaction_entries
@@ -388,8 +392,41 @@ begin
   exception when insufficient_privilege then null;
   end;
 
-  if (select visibility from public.transactions where id = v_tx) <> 'shared' then
-    raise exception 'LEAK: someone else''s transaction is no longer shared';
+  -- Claiming to have created it first is refused too.
+  begin
+    update public.transactions set created_by = me where id = v_tx;
+    get diagnostics n = row_count;
+    if n > 0 then
+      raise exception 'LEAK: the caller rewrote who created someone else''s transaction';
+    end if;
+  exception when others then
+    if sqlerrm <> 'A transaction''s creator cannot be changed' then raise; end if;
+  end;
+
+  -- …and so is moving its leg or its allocation into the caller's own
+  -- private transaction.
+  begin
+    update public.transaction_entries set transaction_id = v_mine_tx where id = v_entry;
+    get diagnostics n = row_count;
+    if n > 0 then
+      raise exception 'LEAK: a leg of someone else''s transaction was moved into the caller''s';
+    end if;
+  exception when others then
+    if sqlerrm <> 'A ledger row cannot be moved to another transaction' then raise; end if;
+  end;
+  begin
+    update public.transaction_allocations set transaction_id = v_mine_tx where transaction_id = v_tx;
+    get diagnostics n = row_count;
+    if n > 0 then
+      raise exception 'LEAK: an allocation of someone else''s transaction was moved into the caller''s';
+    end if;
+  exception when others then
+    if sqlerrm <> 'A ledger row cannot be moved to another transaction' then raise; end if;
+  end;
+
+  if (select visibility from public.transactions where id = v_tx) <> 'shared'
+     or (select created_by from public.transactions where id = v_tx) = me then
+    raise exception 'LEAK: someone else''s transaction is no longer shared, or no longer theirs';
   end if;
 end $$;
 rollback;

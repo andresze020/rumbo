@@ -180,8 +180,9 @@ rollback;
 
 -- A CSV can send a row to an account other than the batch's target (its
 -- Account column). A row that lands in a private account makes the whole
--- batch, and so every raw row, private; a batch that only touches shared
--- accounts stays shared.
+-- batch, and so every raw row, private — and so does a row aimed at one that
+-- is invalid and posts nothing (its raw line is still stored); a batch that
+-- only touches shared accounts stays shared.
 -- check: HH-1 a CSV batch with a row in a private account is private
 begin;
 do $$
@@ -194,6 +195,7 @@ declare
   v_private uuid;
   v_batch uuid;
   v_plain uuid;
+  v_invalid uuid;
 begin
   select c.id into v_cat from public.categories c
   where c.household_id = hh and c.category_type = 'expense' and c.reporting_type = 'expense'
@@ -222,6 +224,14 @@ begin
       jsonb_build_object('rowNumber', 1, 'rawData', jsonb_build_object('memo', 'shared row'),
         'mappedData', jsonb_build_object('transaction_date', '2000-01-05', 'amount', '-3',
           'description', 'HH-1 csv shared only', 'category_id', v_cat))));
+  v_invalid := public.create_csv_import(hh, 'hh1-probe-invalid.csv', null, v_shared, '{}'::jsonb,
+    jsonb_build_array(
+      jsonb_build_object('rowNumber', 1, 'rawData', jsonb_build_object('memo', 'shared row'),
+        'mappedData', jsonb_build_object('transaction_date', '2000-01-06', 'amount', '-2',
+          'description', 'HH-1 csv shared beside invalid', 'category_id', v_cat)),
+      jsonb_build_object('rowNumber', 2, 'rawData', jsonb_build_object('memo', 'private row, no category'),
+        'mappedData', jsonb_build_object('transaction_date', '2000-01-07', 'amount', '-9',
+          'description', 'HH-1 csv invalid private', 'account_id', v_private))));
 
   if (select count(*) from public.transactions where import_batch_id = v_batch) <> 2 then
     raise exception 'setup: the probe import did not post both rows';
@@ -232,6 +242,16 @@ begin
        where r.import_batch_id = v_batch and r.private_owner_id is distinct from me
      ) then
     raise exception 'LEAK: a batch with a row in a private account stayed shared';
+  end if;
+  if (select count(*) from public.transactions where import_batch_id = v_invalid) <> 1 then
+    raise exception 'setup: the invalid probe row posted, or the valid one did not';
+  end if;
+  if (select private_owner_id from public.import_batches where id = v_invalid) is distinct from me
+     or exists (
+       select 1 from public.import_rows r
+       where r.import_batch_id = v_invalid and r.private_owner_id is distinct from me
+     ) then
+    raise exception 'LEAK: a batch with an invalid row aimed at a private account stayed shared';
   end if;
   if (select private_owner_id from public.import_batches where id = v_plain) is not null
      or exists (
@@ -448,9 +468,10 @@ rollback;
 
 -- D6 / PRV-5 / PRV-6, in a probe household (one member): make an account
 -- private, then share it back; the dry runs change nothing. Making it private
--- takes along the payees only it uses (flipped, or folded into a private twin)
--- and leaves an audit trail of nothing; sharing flips a private payee with no
--- shared twin and merges one that has a twin.
+-- takes along the payees only it uses, a not-yet-posted rule's included
+-- (flipped, or folded into a private twin, which is unarchived), and leaves an
+-- audit trail of nothing; sharing flips a private payee with no shared twin
+-- and merges one that has a twin.
 -- check: HH-1 set_account_private and share_private_account move every dependent row
 begin;
 select set_config('hh1.probe', public.create_household_with_owner(
@@ -474,6 +495,7 @@ declare
   v_fold uuid;
   v_fold_twin uuid;
   v_fold_tx uuid;
+  v_rule_payee uuid;
 begin
   insert into public.accounts (household_id, name, account_type, account_class, currency_code, created_by)
   values (hh, 'Wallet', 'cash', 'asset', ccy, me) returning id into v_account;
@@ -491,14 +513,21 @@ begin
   v_fold_tx := public.create_manual_transaction(hh, 'expense', current_date, v_account, v_cat, 7,
     'f1', null, null, 'posted', 1, 'Fold');
   select payee_id into v_fold from public.transactions where id = v_fold_tx;
-  insert into public.payees (household_id, name, private_owner_id)
-  values (hh, 'Fold', me) returning id into v_fold_twin;
+  insert into public.payees (household_id, name, private_owner_id, is_archived)
+  values (hh, 'Fold', me, true) returning id into v_fold_twin;
+  -- 'Rule only' is used by a rule on the account that has not posted yet.
+  v_rule_payee := public.get_or_create_payee(hh, 'Rule only', array[v_account]);
+  insert into public.recurring_transactions
+    (household_id, name, transaction_type, account_id, category_id, payee_id, amount, currency_code,
+     frequency, start_date, next_run_date, created_by)
+  values (hh, 'Rule', 'expense', v_account, v_cat, v_rule_payee, 10, ccy,
+          'monthly', date '2027-01-01', date '2027-01-01', me);
   select id into v_shop from public.payees where household_id = hh and name = 'Probe shop';
   select id into v_common from public.payees where household_id = hh and name = 'Common';
 
   v_result := public.set_account_private(v_account, true);
   if (v_result ->> 'applied')::boolean or (v_result ->> 'transactions')::int <> 3
-     or (v_result ->> 'payees')::int <> 2 then
+     or (v_result ->> 'payees')::int <> 3 then
     raise exception 'dry run: %', v_result;
   end if;
   if (select private_owner_id from public.accounts where id = v_account) is not null
@@ -519,6 +548,12 @@ begin
   if (select payee_id from public.transactions where id = v_fold_tx) <> v_fold_twin
      or not (select is_archived from public.payees where id = v_fold) then
     raise exception 'a payee with a private twin was not folded into it';
+  end if;
+  if (select is_archived from public.payees where id = v_fold_twin) then
+    raise exception 'the private twin a payee in use folded into stayed archived';
+  end if;
+  if (select private_owner_id from public.payees where id = v_rule_payee) is distinct from me then
+    raise exception 'a payee only a rule on the account used stayed shared';
   end if;
   if exists (
     select 1 from public.household_audit_log l
@@ -542,8 +577,9 @@ begin
   end if;
 
   v_result := public.share_private_account(v_account, true);
-  -- Only mine, Twin, Probe shop, Fold (the private twin it was folded into).
-  if (v_result ->> 'payees')::int <> 4 or (v_result ->> 'applied')::boolean then
+  -- Only mine, Twin, Probe shop, Fold (the private twin it was folded into),
+  -- Rule only.
+  if (v_result ->> 'payees')::int <> 5 or (v_result ->> 'applied')::boolean then
     raise exception 'share dry run: %', v_result;
   end if;
 
