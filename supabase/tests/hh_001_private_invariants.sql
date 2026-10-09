@@ -496,6 +496,7 @@ declare
   v_fold_twin uuid;
   v_fold_tx uuid;
   v_rule_payee uuid;
+  v_batch uuid;
 begin
   insert into public.accounts (household_id, name, account_type, account_class, currency_code, created_by)
   values (hh, 'Wallet', 'cash', 'asset', ccy, me) returning id into v_account;
@@ -522,12 +523,19 @@ begin
      frequency, start_date, next_run_date, created_by)
   values (hh, 'Rule', 'expense', v_account, v_cat, v_rule_payee, 10, ccy,
           'monthly', date '2027-01-01', date '2027-01-01', me);
+  -- A CSV aimed at 'Other' whose one row names this account and is invalid
+  -- (no category): linked to the account only through that row.
+  v_batch := public.create_csv_import(hh, 'probe.csv', null, v_other, '{}'::jsonb,
+    jsonb_build_array(jsonb_build_object('rowNumber', 1, 'rawData', jsonb_build_object('memo', 'row'),
+      'mappedData', jsonb_build_object('transaction_date', '2000-01-08', 'amount', '-1',
+        'description', 'probe row', 'account_id', v_account))));
   select id into v_shop from public.payees where household_id = hh and name = 'Probe shop';
   select id into v_common from public.payees where household_id = hh and name = 'Common';
 
   v_result := public.set_account_private(v_account, true);
   if (v_result ->> 'applied')::boolean or (v_result ->> 'transactions')::int <> 3
-     or (v_result ->> 'payees')::int <> 3 then
+     or (v_result ->> 'payees')::int <> 3
+     or (v_result ->> 'linked_items')::int <> 2 then -- the rule and the CSV
     raise exception 'dry run: %', v_result;
   end if;
   if (select private_owner_id from public.accounts where id = v_account) is not null
@@ -554,6 +562,9 @@ begin
   end if;
   if (select private_owner_id from public.payees where id = v_rule_payee) is distinct from me then
     raise exception 'a payee only a rule on the account used stayed shared';
+  end if;
+  if (select private_owner_id from public.import_batches where id = v_batch) is distinct from me then
+    raise exception 'a CSV linked to the account through a row stayed shared';
   end if;
   if exists (
     select 1 from public.household_audit_log l
@@ -586,6 +597,10 @@ begin
   v_result := public.share_private_account(v_account);
   if exists (select 1 from public.transactions t where t.household_id = hh and t.visibility <> 'shared') then
     raise exception 'transactions stayed private after sharing';
+  end if;
+  if (select private_owner_id from public.import_batches where id = v_batch) is not null
+     or exists (select 1 from public.import_rows r where r.import_batch_id = v_batch and r.private_owner_id is not null) then
+    raise exception 'a CSV linked to the account through a row stayed private after sharing';
   end if;
   if (select private_owner_id from public.payees where id = v_flip) is not null then
     raise exception 'a private payee with no shared twin was not flipped';

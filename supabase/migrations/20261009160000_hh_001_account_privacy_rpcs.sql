@@ -41,6 +41,35 @@
 -- ------------------------------------------------------------
 -- 1. Re-derive everything that hangs from one account
 -- ------------------------------------------------------------
+-- The import batches an account's privacy reaches: those that target it, and
+-- those whose transactions or rows touch it (a CSV's Account column can send
+-- rows to any account; an invalid row keeps its mapped account and posts
+-- nothing). One definition, so what is changed and what the dry run counts
+-- cannot drift apart.
+create or replace function public.hh_account_import_batch_ids(p_account_id uuid)
+returns setof uuid
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select b.id
+  from public.import_batches b
+  where b.target_account_id = p_account_id
+  union
+  select t.import_batch_id
+  from public.transactions t
+  join public.transaction_entries e on e.transaction_id = t.id
+  where e.account_id = p_account_id and t.import_batch_id is not null
+  union
+  select r.import_batch_id
+  from public.import_rows r
+  where r.household_id = (select a.household_id from public.accounts a where a.id = p_account_id)
+    and lower(trim(r.mapped_data ->> 'account_id')) = p_account_id::text
+$$;
+
+revoke all on function public.hh_account_import_batch_ids(uuid) from public, anon, authenticated;
+
 -- Touching each row re-runs its BEFORE trigger, which re-reads the account.
 -- Entries cascade to their transactions, allocations and tag links (AFTER
 -- trigger); rules cascade to their autopost log, batches to their rows.
@@ -57,23 +86,8 @@ begin
   update public.goals set private_owner_id = private_owner_id where linked_account_id = p_account_id;
   update public.recurring_transactions set private_owner_id = private_owner_id
   where account_id = p_account_id or to_account_id = p_account_id;
-  -- Batches that target the account, and batches whose transactions or rows
-  -- touch it (a CSV's Account column can send rows to any account; an invalid
-  -- row keeps its mapped account and posts nothing).
   update public.import_batches set private_owner_id = private_owner_id
-  where target_account_id = p_account_id
-     or id in (
-       select t.import_batch_id
-       from public.transactions t
-       join public.transaction_entries e on e.transaction_id = t.id
-       where e.account_id = p_account_id and t.import_batch_id is not null
-     )
-     or id in (
-       select r.import_batch_id
-       from public.import_rows r
-       where r.household_id = (select a.household_id from public.accounts a where a.id = p_account_id)
-         and lower(trim(r.mapped_data ->> 'account_id')) = p_account_id::text
-     );
+  where id in (select public.hh_account_import_batch_ids(p_account_id));
   update public.csv_import_presets set private_owner_id = private_owner_id where target_account_id = p_account_id;
 end;
 $$;
@@ -105,7 +119,8 @@ as $$
       + (select count(*) from public.recurring_transactions r
          where r.account_id = p_account_id or r.to_account_id = p_account_id)
       + (select count(*) from public.import_batches b
-         where b.target_account_id = p_account_id and b.deleted_at is null)
+         where b.id in (select public.hh_account_import_batch_ids(p_account_id))
+           and b.deleted_at is null)
       + (select count(*) from public.csv_import_presets cp where cp.target_account_id = p_account_id)
     )
   )
