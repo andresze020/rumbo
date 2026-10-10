@@ -48,9 +48,12 @@ begin
     begin
       execute format('select count(*) from public.%I where household_id = %L', t, '__HOUSEHOLD_ID__') into n;
     exception
-      -- A table no client may read at all (HH-4: household_invitations) is
-      -- isolated by its grants, which is stricter than RLS: nothing leaks.
+      -- household_invitations (HH-4) has no client grant on purpose: isolated
+      -- by its grants, which is stricter than RLS. Only that table may refuse.
       when insufficient_privilege then
+        if t <> 'household_invitations' then
+          raise;  -- any other table losing its grant is a bug, not isolation
+        end if;
         n := 0;
     end;
     if n > 0 then leaked := leaked || format('%s (%s)', t, n); end if;

@@ -6,6 +6,7 @@ import {
   invitePath,
   parseInviteReturnPath,
 } from './invitations'
+import { isHouseholdSharingEnabled } from './sharing-flag'
 
 /**
  * S14: return-after-sign-in for an invitation. httpOnly (no script reads it),
@@ -17,6 +18,8 @@ import {
  * Action or a route handler (Next refuses cookie writes during render).
  */
 export async function readInviteReturnPath(): Promise<string | null> {
+  // With invitations switched off, a leftover cookie leads nowhere useful.
+  if (!isHouseholdSharingEnabled()) return null
   const store = await cookies()
   return parseInviteReturnPath(store.get(INVITE_RETURN_COOKIE)?.value)
 }

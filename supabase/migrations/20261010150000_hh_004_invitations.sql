@@ -169,7 +169,9 @@ begin
   end if;
 
   -- One creation at a time per household, so the caps count what they see.
-  perform 1 from public.households h where h.id = p_household_id for update;
+  -- NO KEY UPDATE: serializes invitation work without blocking inserts that
+  -- reference the household (accounts, transactions take KEY SHARE).
+  perform 1 from public.households h where h.id = p_household_id for no key update;
 
   if (
     select count(*) from public.household_members m
@@ -214,7 +216,7 @@ begin
   insert into public.household_audit_log (household_id, actor_id, action, target_user_id, metadata)
   values (
     p_household_id, v_user, 'invitation_created', null,
-    jsonb_build_object('invitation_id', v_invitation_id, 'email', v_email, 'role', p_role)
+    jsonb_build_object('invitation_id', v_invitation_id, 'role', p_role)
   );
 
   -- The only time the raw token leaves the database.
@@ -273,7 +275,7 @@ begin
   insert into public.household_audit_log (household_id, actor_id, action, target_user_id, metadata)
   values (
     v_invitation.household_id, v_user, 'invitation_revoked', null,
-    jsonb_build_object('invitation_id', v_invitation.id, 'email', v_invitation.email, 'role', v_invitation.role)
+    jsonb_build_object('invitation_id', v_invitation.id, 'role', v_invitation.role)
   );
 end;
 $$;
@@ -437,6 +439,15 @@ begin
     raise exception 'This invitation is no longer valid';
   end if;
 
+  -- Lock order everywhere: household, then invitation (create does the same),
+  -- so a concurrent create and accept cannot deadlock.
+  perform 1 from public.households h
+  where h.id = (
+    select i.household_id from public.household_invitations i
+    where i.token_hash = public.hh_invitation_token_hash(p_token)
+  )
+  for no key update;
+
   -- S9: single use. The row lock makes a second, concurrent accept wait and
   -- then see accepted_at.
   select i.* into v_invitation
@@ -478,9 +489,7 @@ begin
     );
   end if;
 
-  -- INV-10: the member cap, counted under the household lock.
-  perform 1 from public.households h where h.id = v_invitation.household_id for update;
-
+  -- INV-10: the member cap, counted under the household lock taken above.
   if (
     select count(*) from public.household_members m
     where m.household_id = v_invitation.household_id and m.status = 'active'

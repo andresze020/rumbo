@@ -40,6 +40,8 @@ import { switchHouseholdAction } from '../household-actions'
 import { HouseholdInvitationsSection, type PendingInvitation } from './household-invitations-section'
 
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 type Props = {
   searchParams: Promise<Record<string, string | undefined>>
 }
@@ -163,7 +165,7 @@ export default async function SettingsPage({ searchParams }: Props) {
       .maybeSingle(),
     // Accepted an invitation while keeping another household active: offer the
     // switch (RLS shows the name only to a member of it).
-    sp.joined && sp.joined !== householdId
+    sharingEnabled && typeof sp.joined === 'string' && UUID_PATTERN.test(sp.joined) && sp.joined !== householdId
       ? supabase.from('households').select('id, name').eq('id', sp.joined).maybeSingle()
       : Promise.resolve({ data: null }),
   ])
