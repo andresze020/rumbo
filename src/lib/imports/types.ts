@@ -14,7 +14,10 @@ export type CsvMapping = {
 
 export type ImportAccount = {
   id: string
+  /** Display name: a private account's carries the lock (HH-3, PRV-2). */
   name: string
+  /** The name as stored, set only when `name` is decorated. */
+  storedName?: string
   currency_code: string
   institution_name: string | null
 }

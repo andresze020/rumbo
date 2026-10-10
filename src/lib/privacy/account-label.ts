@@ -13,21 +13,29 @@ export function markPrivateName(name: string, isPrivate: boolean): string {
   return isPrivate ? `${name} ${PRIVATE_ACCOUNT_MARK}` : name
 }
 
-/** The same accounts, a private one's display name carrying the lock. */
+/**
+ * The same accounts, a private one's display name carrying the lock and its
+ * name as stored kept in `storedName`, for anything that compares names.
+ */
 export function markPrivateAccounts<T extends { id: string; name: string }>(
   accounts: T[],
   privateIds: ReadonlySet<string>
-): T[] {
+): (T & { storedName?: string })[] {
   if (privateIds.size === 0) return accounts
   return accounts.map((account) =>
-    privateIds.has(account.id) ? { ...account, name: markPrivateName(account.name, true) } : account
+    privateIds.has(account.id)
+      ? { ...account, name: markPrivateName(account.name, true), storedName: account.name }
+      : account
   )
 }
 
-/** The name as stored, for comparing what someone typed against it. */
-export function stripPrivateMark(name: string): string {
-  const suffix = ` ${PRIVATE_ACCOUNT_MARK}`
-  return name.endsWith(suffix) ? name.slice(0, -suffix.length) : name
+/**
+ * The name as stored, for comparing what someone typed (or a CSV says)
+ * against it. Read from `storedName`, never by trimming the display name: a
+ * shared account may really be called "Vault 🔒".
+ */
+export function storedAccountName(account: { name: string; storedName?: string }): string {
+  return account.storedName ?? account.name
 }
 
 /** `markPrivateAccounts` for balance RPC rows (`account_id`, `account_name`). */

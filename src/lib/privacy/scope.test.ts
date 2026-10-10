@@ -7,7 +7,7 @@ import {
   scopeByOwner,
   scopeByTransaction,
 } from './scope'
-import { markPrivateAccounts, PRIVATE_ACCOUNT_MARK, stripPrivateMark } from './account-label'
+import { markPrivateAccounts, PRIVATE_ACCOUNT_MARK, storedAccountName } from './account-label'
 
 // A stand-in for the PostgREST filter builder: records each filter call.
 function recorder() {
@@ -105,7 +105,7 @@ describe('markPrivateAccounts', () => {
     ]
     expect(markPrivateAccounts(accounts, new Set(['b']))).toEqual([
       { id: 'a', name: 'Joint', currency_code: 'USD' },
-      { id: 'b', name: `Wallet ${PRIVATE_ACCOUNT_MARK}`, currency_code: 'USD' },
+      { id: 'b', name: `Wallet ${PRIVATE_ACCOUNT_MARK}`, storedName: 'Wallet', currency_code: 'USD' },
     ])
   })
   it('returns the list untouched for a user with no private account', () => {
@@ -114,10 +114,13 @@ describe('markPrivateAccounts', () => {
   })
 })
 
-describe('stripPrivateMark', () => {
-  it('gives back the stored name', () => {
-    expect(stripPrivateMark(`Wallet ${PRIVATE_ACCOUNT_MARK}`)).toBe('Wallet')
-    expect(stripPrivateMark('Joint')).toBe('Joint')
+describe('storedAccountName', () => {
+  it('gives back the stored name of a marked account', () => {
+    const [wallet] = markPrivateAccounts([{ id: 'b', name: 'Wallet' }], new Set(['b']))
+    expect(storedAccountName(wallet)).toBe('Wallet')
+  })
+  it("never trims a shared account's own name, lock and all", () => {
+    expect(storedAccountName({ name: `Vault ${PRIVATE_ACCOUNT_MARK}` })).toBe(`Vault ${PRIVATE_ACCOUNT_MARK}`)
   })
 })
 

@@ -7,7 +7,7 @@ import type {
   MappedImportRow,
 } from './types'
 import { findMatchingRule, type CategorizationRule } from '@/lib/rules/match'
-import { stripPrivateMark } from '@/lib/privacy/account-label'
+import { storedAccountName } from '@/lib/privacy/account-label'
 
 function normalize(value: string) {
   return value.trim().toLowerCase()
@@ -128,7 +128,7 @@ export function buildValidatedRows({
   for (const account of accounts) {
     // HH-3: a CSV (or Rumbo's own export) names the account as stored, never
     // with the lock a private account's name carries on screen (PRV-2).
-    const storedName = stripPrivateMark(account.name)
+    const storedName = storedAccountName(account)
     accountsByName.set(normalizeLookup(storedName), account)
     accountsByName.set(
       normalizeLookup(
@@ -184,7 +184,7 @@ export function buildValidatedRows({
         description: rawDescription || null,
         merchantName: getMappedValue(row, mapping.merchant_name) || null,
         amount,
-        accountName: account ? stripPrivateMark(account.name) : null,
+        accountName: account ? storedAccountName(account) : null,
       })
       if (matched) {
         const ruleCategory = categoriesById.get(matched.categoryId)

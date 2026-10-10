@@ -21,6 +21,8 @@ const accounts = markPrivateAccounts(
   [
     { id: 'joint', name: 'Joint', currency_code: 'USD', institution_name: null },
     { id: 'wallet', name: 'Wallet', currency_code: 'USD', institution_name: 'Bank' },
+    // A shared account whose real name ends in the lock: never trimmed.
+    { id: 'vault', name: 'Vault 🔒', currency_code: 'USD', institution_name: null },
   ],
   new Set(['wallet'])
 )
@@ -44,5 +46,8 @@ describe('buildValidatedRows with a private account', () => {
   })
   it("matches Rumbo's own export label (name · bank · currency)", () => {
     expect(accountIdFor('Wallet · Bank · USD')).toBe('wallet')
+  })
+  it('matches a shared account whose real name ends in the lock', () => {
+    expect(accountIdFor('Vault 🔒')).toBe('vault')
   })
 })

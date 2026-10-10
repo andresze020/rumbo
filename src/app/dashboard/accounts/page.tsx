@@ -13,6 +13,7 @@ import {
   parseAccountPrivacyImpact,
   type AccountPrivacyImpact,
 } from './account-privacy'
+import { markPrivateName } from '@/lib/privacy/account-label'
 import { CurrencyChangeGuard } from './currency-change-guard'
 import {
   AccountTypeDependentFields,
@@ -1054,7 +1055,8 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   // BR-030: a card is paid from an asset account, never from another liability.
   const billingAccounts: BillingAccountOption[] = allAccounts
     .filter((account) => !account.is_archived && account.account_class === 'asset')
-    .map((account) => ({ id: account.id, name: account.name }))
+    // PRV-2: the select shows the lock; it submits the id.
+    .map((account) => ({ id: account.id, name: markPrivateName(account.name, account.private_owner_id !== null) }))
   // PRV-8: a shared card is never paid from a private account.
   const privateAccountIds = new Set(
     allAccounts.filter((account) => account.private_owner_id !== null).map((account) => account.id)
