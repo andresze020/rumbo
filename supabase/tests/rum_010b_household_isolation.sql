@@ -45,7 +45,14 @@ begin
     order by 1
   loop
     checked := checked + 1;
-    execute format('select count(*) from public.%I where household_id = %L', t, '__HOUSEHOLD_ID__') into n;
+    begin
+      execute format('select count(*) from public.%I where household_id = %L', t, '__HOUSEHOLD_ID__') into n;
+    exception
+      -- A table no client may read at all (HH-4: household_invitations) is
+      -- isolated by its grants, which is stricter than RLS: nothing leaks.
+      when insufficient_privilege then
+        n := 0;
+    end;
     if n > 0 then leaked := leaked || format('%s (%s)', t, n); end if;
   end loop;
   if checked < 20 then
