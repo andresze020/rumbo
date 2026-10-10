@@ -31,6 +31,20 @@ export function defaultPrivacyScope(ownsPrivateAccount: boolean): PrivacyScope {
   return ownsPrivateAccount ? 'all' : 'household'
 }
 
+/**
+ * The scope a request reads (HH-3, SCP-1/5/6): the one the user last chose in
+ * the app bar while they own a private account in the household, else the
+ * default above. Without a private account there is no switch and no choice —
+ * household, the same rows as everything for them.
+ */
+export function resolvePrivacyScope(
+  ownsPrivateAccount: boolean,
+  remembered: PrivacyScope | null
+): PrivacyScope {
+  if (!ownsPrivateAccount) return 'household'
+  return remembered ?? defaultPrivacyScope(true)
+}
+
 // The query type parameters are unconstrained on purpose: checking a PostgREST
 // builder (whose type parses the select string) against any method-shaped
 // constraint exceeds the compiler's instantiation depth (TS2589). Callers pass

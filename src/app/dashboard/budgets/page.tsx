@@ -27,6 +27,7 @@ import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { SectionHeading } from '@/components/section-heading'
 import { Callout } from '@/components/callout'
+import { HouseholdOnlyNote } from '@/components/household-only-note'
 import { FlashToast, type FlashFlag } from '@/components/flash-toast'
 import { SubmitButton } from '@/components/submit-button'
 import { createClient } from '@/lib/supabase/server'
@@ -38,6 +39,7 @@ import type { PickerGroup, PickerOption } from '@/components/searchable-picker'
 import { formActionsCls } from '@/lib/form-styles'
 import { BudgetCategoryPicker } from './budget-category-picker'
 import { getRequestToday } from '@/lib/periods/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
 import { parseMonthParam } from '@/lib/analysis/server'
 
 type BudgetsPageProps = {
@@ -255,6 +257,8 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
     .eq('id', profile.default_household_id)
     .single()
   if (householdError || !household) redirect('/onboarding')
+  // SCP-4: budgets ignore the scope switch; tell the one user who has it.
+  const { ownsPrivateAccount } = await getPrivacyScope(household.id)
 
   const { data: budgetRows, error: budgetError } = await supabase.rpc(
     'get_monthly_budget_details',
@@ -522,6 +526,12 @@ export default async function BudgetsPage({ searchParams }: BudgetsPageProps) {
           nextLabel={translate(locale, 'common.nextMonth')}
         />
       </div>
+
+      {ownsPrivateAccount ? (
+        <HouseholdOnlyNote>
+          Budgets and rollover count shared accounts only, whatever you show elsewhere.
+        </HouseholdOnlyNote>
+      ) : null}
 
       {/* Notifications */}
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}

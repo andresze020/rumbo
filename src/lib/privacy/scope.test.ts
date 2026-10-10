@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { defaultPrivacyScope, isPrivacyScope, scopeByOwner, scopeByTransaction } from './scope'
+import {
+  defaultPrivacyScope,
+  isPrivacyScope,
+  resolvePrivacyScope,
+  scopeByOwner,
+  scopeByTransaction,
+} from './scope'
 
 // A stand-in for the PostgREST filter builder: records each filter call.
 function recorder() {
@@ -28,6 +34,20 @@ describe('defaultPrivacyScope', () => {
   })
   it('reads the household for everyone else (the same rows for them)', () => {
     expect(defaultPrivacyScope(false)).toBe('household')
+  })
+})
+
+describe('resolvePrivacyScope', () => {
+  it('defaults an owner of a private account to everything (SCP-5)', () => {
+    expect(resolvePrivacyScope(true, null)).toBe('all')
+  })
+  it("keeps an owner's remembered choice", () => {
+    expect(resolvePrivacyScope(true, 'mine')).toBe('mine')
+    expect(resolvePrivacyScope(true, 'household')).toBe('household')
+  })
+  it('ignores a remembered choice once the user owns no private account (SCP-6)', () => {
+    expect(resolvePrivacyScope(false, 'mine')).toBe('household')
+    expect(resolvePrivacyScope(false, null)).toBe('household')
   })
 })
 

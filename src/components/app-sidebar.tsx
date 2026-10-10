@@ -17,6 +17,8 @@ import {
   HouseholdSwitcher,
   type HouseholdOption,
 } from '@/components/household-switcher'
+import { PrivacyScopeSwitch } from '@/components/privacy-scope-switch'
+import type { PrivacyScope } from '@/lib/privacy/scope'
 import { navGroups, PHASE_LABEL_KEY, type Phase } from '@/lib/nav/config'
 
 type SidebarLinkProps = {
@@ -85,11 +87,16 @@ export function AppSidebar({
   userEmail,
   households = [],
   currentHouseholdId = null,
+  privacyScope = 'household',
+  showPrivacyScope = false,
 }: {
   className?: string
   userEmail?: string | null
   households?: HouseholdOption[]
   currentHouseholdId?: string | null
+  /** HH-3: the scope this request reads, and whether the switch shows at all (SCP-1). */
+  privacyScope?: PrivacyScope
+  showPrivacyScope?: boolean
 }) {
   const pathname = usePathname()
   const { t } = useLanguage()
@@ -155,10 +162,15 @@ export function AppSidebar({
       {/* The active household, same control as the mobile bar. Hidden when the
           rail is collapsed: a name truncated to two letters says nothing. */}
       {!collapsed ? (
-        <div className="shrink-0 border-b px-3 py-2">
+        <div className="shrink-0 space-y-1.5 border-b px-3 py-2">
           <HouseholdSwitcher
             households={households}
             currentId={currentHouseholdId}
+            className="w-full justify-start"
+          />
+          <PrivacyScopeSwitch
+            scope={privacyScope}
+            visible={showPrivacyScope}
             className="w-full justify-start"
           />
         </div>
