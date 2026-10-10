@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getOwnPrivateAccountIds } from '@/lib/privacy/server'
+import { markPrivateAccounts } from '@/lib/privacy/account-label'
 import {
   Card,
   CardContent,
@@ -316,7 +318,10 @@ export default async function SettingsPage({ searchParams }: Props) {
       {/* ── Preferences (BR-032 + BR-038) ───────────────────────────── */}
       <PreferencesSection
         preferences={preferences}
-        accounts={(accountRows ?? []) as { id: string; name: string }[]}
+        accounts={markPrivateAccounts(
+          (accountRows ?? []) as { id: string; name: string }[],
+          await getOwnPrivateAccountIds(profile.default_household_id)
+        )}
       />
 
       {/* ── Exchange rates ──────────────────────────────────────────── */}

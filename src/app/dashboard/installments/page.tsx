@@ -4,7 +4,8 @@ import { Plus } from 'lucide-react'
 import { InstallmentForm } from './installment-form'
 import { InstallmentPlanRow, type InstallmentPlanVM } from './installment-plan-row'
 import { createClient } from '@/lib/supabase/server'
-import { getPrivacyScope } from '@/lib/privacy/server'
+import { getOwnPrivateAccountIds, getPrivacyScope } from '@/lib/privacy/server'
+import { markPrivateAccounts } from '@/lib/privacy/account-label'
 import { scopeByOwner } from '@/lib/privacy/scope'
 import { buttonVariants } from '@/components/ui/button'
 import { Callout } from '@/components/callout'
@@ -131,13 +132,17 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
   ])
 
   const plans = (planRows ?? []) as PlanRow[]
-  const allAccounts = (accountRows ?? []) as Array<{
-    id: string
-    name: string
-    currency_code: string
-    institution_name: string | null
-    is_archived: boolean
-  }>
+  const allAccounts = markPrivateAccounts(
+    (accountRows ?? []) as Array<{
+      id: string
+      name: string
+      currency_code: string
+      institution_name: string | null
+      is_archived: boolean
+    }>,
+    // HH-3 (PRV-2): a private account's name carries the lock everywhere below.
+    await getOwnPrivateAccountIds(householdId)
+  )
   const allCategories = (categoryRows ?? []) as Array<{
     id: string
     name: string
@@ -188,7 +193,8 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
       id: plan.id,
       description: plan.description,
       status: plan.status,
-      accountName: accountNamesById.get(plan.account_id) ?? ui('Unknown account'),
+      // HH-3: an id with no visible account is a private one (PRV-4).
+      accountName: accountNamesById.get(plan.account_id) ?? ui('Private account'),
       categoryName: categoryNamesById.get(plan.category_id) ?? ui('Unknown category'),
       totalLabel: formatCurrency(Number(plan.total_amount), plan.currency_code, locale),
       perInstallmentLabel: formatCurrency(perInstallment, plan.currency_code, locale),

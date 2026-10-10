@@ -3,6 +3,8 @@ import { AssistantChat } from './assistant-chat'
 import { Callout } from '@/components/callout'
 import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { createClient } from '@/lib/supabase/server'
+import { getOwnPrivateAccountIds } from '@/lib/privacy/server'
+import { markPrivateAccounts } from '@/lib/privacy/account-label'
 
 type AssistantPageProps = {
   searchParams: Promise<{ created?: string }>
@@ -69,7 +71,7 @@ export default async function AssistantPage({ searchParams }: AssistantPageProps
 
       <AssistantChat
         baseCurrency={household.base_currency}
-        accounts={accountRows ?? []}
+        accounts={markPrivateAccounts(accountRows ?? [], await getOwnPrivateAccountIds(household.id))}
         categories={categoryRows ?? []}
         payees={payeeRows ?? []}
       />

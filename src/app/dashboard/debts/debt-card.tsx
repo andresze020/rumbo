@@ -109,7 +109,8 @@ export function DebtCard({
 
       <div className="mt-auto flex items-center justify-between gap-2 border-t pt-3.5">
         <span className="min-w-0 truncate text-xs text-muted-foreground">
-          {debt.lender_name ?? account?.name ?? 'Liability account'}
+          {/* HH-3: no visible account means a private one (PRV-4). */}
+          {debt.lender_name ?? (account ? account.name : 'Private account')}
         </span>
         <div className="flex shrink-0 items-center gap-1.5">
           <Link href={editHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>

@@ -26,7 +26,8 @@ import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { createClient } from '@/lib/supabase/server'
-import { getPrivacyScope } from '@/lib/privacy/server'
+import { getOwnPrivateAccountIds, getPrivacyScope } from '@/lib/privacy/server'
+import { markPrivateAccounts } from '@/lib/privacy/account-label'
 import { scopeByOwner } from '@/lib/privacy/scope'
 import { nativeSelectCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
@@ -247,7 +248,11 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
 
   const currencyOptions = (currencies ?? []) as Currency[]
   const debtRows = (debts ?? []) as Debt[]
-  const accountRows = (accounts ?? []) as Account[]
+  // HH-3 (PRV-2): a private account's name carries the lock everywhere below.
+  const accountRows = markPrivateAccounts(
+    (accounts ?? []) as Account[],
+    await getOwnPrivateAccountIds(profile.default_household_id)
+  )
   const accountBalances = (balances ?? []) as AccountBalance[]
   const accountsById = new Map(accountRows.map((a) => [a.id, a]))
   const balancesByAccountId = new Map(accountBalances.map((b) => [b.account_id, b]))

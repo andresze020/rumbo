@@ -33,6 +33,7 @@ import { PayeePicker, type PayeeOption } from './payee-picker'
 import { RelativeDateChips } from './relative-date-chips'
 import { SelectorSheet } from '@/components/selector-sheet'
 import { useIsMobile } from '@/lib/use-is-mobile'
+import { stripPrivateMark } from '@/lib/privacy/account-label'
 import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
 import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
@@ -1410,7 +1411,7 @@ export function TransactionForm({
       accountSearchText(a).toLowerCase().includes(query)
     )
     const hasExact = availableAccounts.some(
-      (a) => a.name.toLowerCase() === query && query !== ''
+      (a) => stripPrivateMark(a.name).toLowerCase() === query && query !== ''
     )
     return (
       <>

@@ -25,7 +25,8 @@ import { FormDialog } from '@/components/form-dialog'
 import { Callout } from '@/components/callout'
 import { createClient } from '@/lib/supabase/server'
 import { getRequestProfile, getRequestUser } from '@/lib/supabase/request'
-import { getPrivacyScope } from '@/lib/privacy/server'
+import { getOwnPrivateAccountIds, getPrivacyScope } from '@/lib/privacy/server'
+import { markPrivateAccounts } from '@/lib/privacy/account-label'
 import { getUiPreferences } from '@/lib/preferences/server'
 import {
   TRANSACTION_SCOPE_COOKIE,
@@ -221,6 +222,12 @@ type TransactionRow = {
   transferInEntry?: TransactionEntry
   transferOutEntry?: TransactionEntry
   transferToAccountName: string
+  /**
+   * HH-3: another member's mixed transfer — one leg is their private account,
+   * which RLS hides. Shown, never changed: only its owner can edit, void,
+   * review or copy it (PRV-4).
+   */
+  isReadOnly: boolean
 }
 
 function normalizeOption(value: string | undefined, allowedValues: string[]) {
@@ -660,7 +667,11 @@ export default async function TransactionsPage({
   if (accountsError) throw new Error('Could not load accounts.')
   if (categoriesError) throw new Error('Could not load categories.')
 
-  const allAccountRows = (accountRows ?? []) as Account[]
+  // HH-3 (PRV-2): a private account's name carries the lock everywhere below.
+  const allAccountRows = markPrivateAccounts(
+    (accountRows ?? []) as Account[],
+    await getOwnPrivateAccountIds(household.id)
+  )
   const allCategoryRows = (categoryRows ?? []) as Category[]
   const accounts = allAccountRows.filter((a) => a.deleted_at === null)
   const categories = allCategoryRows.filter((c) => c.deleted_at === null)
@@ -825,16 +836,22 @@ export default async function TransactionsPage({
   let transactionEntries: TransactionEntry[] = []
   let transactionAllocations: TransactionAllocation[] = []
   let transactionDetailsError = false
+  // HH-3 (PRV-4): the listed transactions that are someone else's mixed
+  // transfer. The search RPC does not return visibility, so it is read here,
+  // keyed by the same page of ids.
+  const othersMixedTransactionIds = new Set<string>()
 
   // Everything the loaded page of transactions needs, in one round trip. The
   // account and category names used to be two more sequential queries; both
   // re-read rows the household lookups above already carry. HH-2: keyed by the
   // rows the scoped search returned, so no further scope applies here.
   if (transactionIds.length) {
+    const { userId } = await privacyPromise
     const [
       { data: tagLinks },
       { data: entries, error: entriesError },
       { data: allocations, error: allocationsError },
+      { data: mixedRows },
     ] = await Promise.all([
       supabase
         .from('transaction_tags')
@@ -851,7 +868,17 @@ export default async function TransactionsPage({
         .select('transaction_id, category_id, amount_base_currency')
         .eq('household_id', household.id)
         .in('transaction_id', transactionIds),
+      supabase
+        .from('transactions')
+        .select('id, private_owner_id')
+        .eq('household_id', household.id)
+        .eq('visibility', 'mixed')
+        .in('id', transactionIds),
     ])
+
+    for (const row of (mixedRows ?? []) as { id: string; private_owner_id: string | null }[]) {
+      if (row.private_owner_id !== userId) othersMixedTransactionIds.add(row.id)
+    }
 
     for (const link of tagLinks ?? []) {
       const list = tagIdsByTransaction.get(link.transaction_id) ?? []
@@ -928,13 +955,19 @@ export default async function TransactionsPage({
     const isDebtPayment = transaction.transaction_type === 'debt_payment'
     const isBalanceMovement = isTransfer || isDebtPayment
     const isVoided = transaction.status === 'voided'
+    const isReadOnly = othersMixedTransactionIds.has(transaction.id)
     const entries = entriesByTransactionId.get(transaction.id) ?? []
     const entry = entries[0]
+    // HH-3: legs are told apart by sign. The positional fallback is only for a
+    // movement whose legs are all visible; with one leg hidden (another
+    // member's private account) it used to make that one leg both ends.
+    const hasEveryLeg = entries.length > 1
     const transferOutEntry =
-      entries.find((e) => Number(e.amount_account_currency) < 0) ?? entry
+      entries.find((e) => Number(e.amount_account_currency) < 0) ??
+      (hasEveryLeg ? entry : undefined)
     const transferInEntry =
       entries.find((e) => Number(e.amount_account_currency) > 0) ??
-      entries.find((e) => e !== transferOutEntry)
+      (hasEveryLeg ? entries.find((e) => e !== transferOutEntry) : undefined)
     const allocation = allocationsByTransactionId.get(transaction.id)
     const canEdit =
       transaction.source === 'manual' &&
@@ -950,6 +983,7 @@ export default async function TransactionsPage({
       transaction.status === 'posted' &&
       Boolean(entry && allocation)
     const canEditTransfer =
+      !isReadOnly &&
       transaction.source === 'manual' &&
       transaction.transaction_type === 'transfer' &&
       (transaction.status === 'posted' || transaction.status === 'pending') &&
@@ -959,12 +993,16 @@ export default async function TransactionsPage({
           activeAccounts.some((a) => a.id === transferOutEntry.account_id) &&
           activeAccounts.some((a) => a.id === transferInEntry.account_id)
       )
+    // On another member's mixed transfer the leg the caller cannot see is
+    // their private account (PRV-4); anywhere else a missing leg is unknown.
+    const unknownAccount = ui('Unknown account')
+    const missingLegName = isReadOnly ? ui('Private account') : unknownAccount
     const transferFromAccountName = transferOutEntry
-      ? (accountNamesById.get(transferOutEntry.account_id) ?? 'Unknown account')
-      : 'Unknown account'
+      ? (accountNamesById.get(transferOutEntry.account_id) ?? unknownAccount)
+      : missingLegName
     const transferToAccountName = transferInEntry
-      ? (accountNamesById.get(transferInEntry.account_id) ?? 'Unknown account')
-      : 'Unknown account'
+      ? (accountNamesById.get(transferInEntry.account_id) ?? unknownAccount)
+      : missingLegName
     const title = isOpeningBalance
       ? 'Opening balance'
       : isTransfer
@@ -977,8 +1015,8 @@ export default async function TransactionsPage({
     const accountName = isBalanceMovement
       ? `${transferFromAccountName} → ${transferToAccountName}`
       : entry
-      ? (accountNamesById.get(entry.account_id) ?? 'Unknown account')
-      : 'Unknown account'
+      ? (accountNamesById.get(entry.account_id) ?? unknownAccount)
+      : unknownAccount
     const categoryName = isTransfer
       ? 'Transfer'
       : isOpeningBalance
@@ -1019,7 +1057,7 @@ export default async function TransactionsPage({
       canEdit,
       canEditTransfer,
       canRefund,
-      canVoid: !['voided', 'deleted_soft'].includes(transaction.status),
+      canVoid: !isReadOnly && !['voided', 'deleted_soft'].includes(transaction.status),
       categoryColor,
       categoryIcon,
       categoryName,
@@ -1031,6 +1069,7 @@ export default async function TransactionsPage({
       isDebtPayment,
       isImported: transaction.source === 'csv_import',
       isOpeningBalance,
+      isReadOnly,
       isTransfer,
       isVoided,
       title: resolvedTitle,
@@ -1065,8 +1104,11 @@ export default async function TransactionsPage({
   const filteredExpenseBase = totalExpenseBase
   const hasFilteredTotals = filteredIncomeBase !== 0 || filteredExpenseBase !== 0
 
+  // Only a row this user can change opens the edit dialog — a hand-typed
+  // ?edit= for anything else (another member's mixed transfer) opened an
+  // empty one.
   const selectedEditRow = transactionRows.find(
-    (row) => row.transaction.id === editTransactionId
+    (row) => row.transaction.id === editTransactionId && (row.canEdit || row.canEditTransfer)
   )
 
   // BR-040: the expense being refunded, and how much of it is still refundable.
@@ -1238,7 +1280,7 @@ export default async function TransactionsPage({
    * the form defaults it to today.
    */
   function buildCopyPayload(row: TransactionRow): TransactionCopyPayload | null {
-    if (row.isOpeningBalance || row.isDebtPayment) return null
+    if (row.isOpeningBalance || row.isDebtPayment || row.isReadOnly) return null
 
     if (row.isTransfer) {
       const from = row.transferOutEntry
@@ -1341,6 +1383,7 @@ export default async function TransactionsPage({
           : null,
       canEdit: row.canEdit,
       canEditTransfer: row.canEditTransfer,
+      isReadOnly: row.isReadOnly,
       refundHref: row.canRefund
         ? transactionsPath(filters, { refund: row.transaction.id })
         : null,
