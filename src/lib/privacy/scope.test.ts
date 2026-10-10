@@ -3,6 +3,7 @@ import {
   defaultPrivacyScope,
   isPrivacyScope,
   resolvePrivacyScope,
+  safeScopeReturnTo,
   scopeByOwner,
   scopeByTransaction,
 } from './scope'
@@ -117,5 +118,17 @@ describe('stripPrivateMark', () => {
   it('gives back the stored name', () => {
     expect(stripPrivateMark(`Wallet ${PRIVATE_ACCOUNT_MARK}`)).toBe('Wallet')
     expect(stripPrivateMark('Joint')).toBe('Joint')
+  })
+})
+
+describe('safeScopeReturnTo', () => {
+  it('keeps a dashboard path with its query', () => {
+    expect(safeScopeReturnTo('/dashboard')).toBe('/dashboard')
+    expect(safeScopeReturnTo('/dashboard/transactions?type=expense')).toBe('/dashboard/transactions?type=expense')
+  })
+  it('refuses anything that could leave the app', () => {
+    for (const bad of ['//evil.com', '/\\evil.com', '/\t/evil.com', '/\n/evil.com', 'https://evil.com', '/dashboardx', '/login', undefined]) {
+      expect(safeScopeReturnTo(bad)).toBe('/dashboard')
+    }
   })
 })

@@ -1,3 +1,5 @@
+import { isPrivacyScope, type PrivacyScope } from '@/lib/privacy/scope'
+
 /**
  * Per-user interface preferences (BR-032 + BR-038).
  *
@@ -37,8 +39,6 @@ export const QUICK_ENTRY_AUTOFILL_FIELDS = ['account', 'payee', 'tags'] as const
 export type QuickEntryAutofillField = (typeof QUICK_ENTRY_AUTOFILL_FIELDS)[number]
 
 /** App-wide type scale. */
-import { isPrivacyScope, type PrivacyScope } from '@/lib/privacy/scope'
-
 export const TEXT_SIZES = ['default', 'large', 'larger'] as const
 export type TextSize = (typeof TEXT_SIZES)[number]
 

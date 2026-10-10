@@ -320,6 +320,7 @@ export function TransactionList({
   const allRows = useMemo(() => groups.flatMap((g) => g.rows), [groups])
   // HH-3: a read-only row is never part of a bulk action.
   const allIds = useMemo(() => allRows.filter((r) => !r.isReadOnly).map((r) => r.id), [allRows])
+  const selectableIds = useMemo(() => new Set(allIds), [allIds])
   const allSelected = allIds.length > 0 && selected.size === allIds.length
 
   const categoriesById = useMemo(
@@ -341,6 +342,7 @@ export function TransactionList({
   }))
 
   function toggleRow(id: string) {
+    if (!selectableIds.has(id)) return
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -360,7 +362,7 @@ export function TransactionList({
 
   /** Long-press: enter selection mode with the pressed row already picked. */
   function beginSelection(id: string) {
-    if (!allIds.includes(id)) return
+    if (!selectableIds.has(id)) return
     setSelectionMode(true)
     setExpandedId(null)
     setSelected(new Set([id]))
@@ -559,7 +561,8 @@ export function TransactionList({
                       // While triaging, a tap picks the row rather than opening
                       // it — the native pattern, and the only one that does not
                       // ask for a 16px checkbox to be hit repeatedly.
-                      selectionMode
+                      // A read-only row is never picked; it still opens.
+                      selectionMode && !row.isReadOnly
                         ? toggleRow(row.id)
                         : setExpandedId((prev) => (prev === row.id ? null : row.id))
                     }

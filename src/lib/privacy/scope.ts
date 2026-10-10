@@ -86,3 +86,15 @@ export function scopeByTransaction<Q>(query: Q, scope: PrivacyScope, userId: str
   if (scope === 'mine') return builder.eq(`${prefix}private_owner_id`, userId) as Q
   return query
 }
+
+/**
+ * Where the scope switch sends the user back to: a dashboard path, nothing
+ * else. A browser reads `\` as `/` and drops tabs and newlines, so
+ * `/\evil.com` or `/<TAB>/evil.com` would leave the app; both are refused.
+ */
+export function safeScopeReturnTo(value: unknown): string {
+  const fallback = '/dashboard'
+  if (typeof value !== 'string') return fallback
+  if (/[\\\u0000-\u001f\u007f]/.test(value)) return fallback
+  return /^\/dashboard(?:[/?#]|$)/.test(value) ? value : fallback
+}

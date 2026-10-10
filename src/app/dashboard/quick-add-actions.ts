@@ -2,11 +2,23 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getUiPreferences } from '@/lib/preferences/server'
+import { markPrivateAccounts } from '@/lib/privacy/account-label'
 import {
   loadCategoryEntryMemory,
   type CategoryEntryMemory,
 } from '@/lib/quick-entry/category-memory'
 import type { UiPreferences } from '@/lib/preferences/shared'
+
+/**
+ * HH-3 (PRV-2): a private account's name carries the lock in the "+" form's
+ * pickers. Every private account the caller can see is their own (RLS), so
+ * the row's own `private_owner_id` says which. Refetched on every open, so a
+ * share or make-private shows on the next one.
+ */
+function lockPrivateAccounts(rows: (QuickAddAccount & { private_owner_id: string | null })[]): QuickAddAccount[] {
+  const privateIds = new Set(rows.filter((row) => row.private_owner_id !== null).map((row) => row.id))
+  return markPrivateAccounts(rows, privateIds)
+}
 
 export type QuickAddAccount = {
   id: string
@@ -92,7 +104,7 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
       // HH-2: scope all — the form's pickers (any account the user may write to).
       supabase
         .from('accounts')
-        .select('id, name, currency_code, institution_name, account_type, icon, color')
+        .select('id, name, currency_code, institution_name, account_type, icon, color, private_owner_id')
         .eq('household_id', householdId)
         .eq('is_archived', false)
         .is('deleted_at', null)
@@ -134,7 +146,9 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
     return {
       householdId,
       baseCurrency: householdResult.data?.base_currency ?? 'CAD',
-      accounts: (accountsResult.data ?? []) as QuickAddAccount[],
+      accounts: lockPrivateAccounts(
+        (accountsResult.data ?? []) as (QuickAddAccount & { private_owner_id: string | null })[]
+      ),
       categories: (categoriesResult.data ?? []) as QuickAddCategory[],
       payees: (payeesResult.data ?? []) as QuickAddPayee[],
       tags: (tagsResult.data ?? []) as QuickAddTag[],

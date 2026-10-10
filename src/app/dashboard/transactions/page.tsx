@@ -840,6 +840,9 @@ export default async function TransactionsPage({
   // transfer. The search RPC does not return visibility, so it is read here,
   // keyed by the same page of ids.
   const othersMixedTransactionIds = new Set<string>()
+  // If that read fails, fail closed: any movement with a leg missing is then
+  // treated as someone else's (the database refuses their writes anyway).
+  let mixedLookupFailed = false
 
   // Everything the loaded page of transactions needs, in one round trip. The
   // account and category names used to be two more sequential queries; both
@@ -851,7 +854,7 @@ export default async function TransactionsPage({
       { data: tagLinks },
       { data: entries, error: entriesError },
       { data: allocations, error: allocationsError },
-      { data: mixedRows },
+      { data: mixedRows, error: mixedError },
     ] = await Promise.all([
       supabase
         .from('transaction_tags')
@@ -876,6 +879,7 @@ export default async function TransactionsPage({
         .in('id', transactionIds),
     ])
 
+    mixedLookupFailed = Boolean(mixedError)
     for (const row of (mixedRows ?? []) as { id: string; private_owner_id: string | null }[]) {
       if (row.private_owner_id !== userId) othersMixedTransactionIds.add(row.id)
     }
@@ -955,13 +959,17 @@ export default async function TransactionsPage({
     const isDebtPayment = transaction.transaction_type === 'debt_payment'
     const isBalanceMovement = isTransfer || isDebtPayment
     const isVoided = transaction.status === 'voided'
-    const isReadOnly = othersMixedTransactionIds.has(transaction.id)
     const entries = entriesByTransactionId.get(transaction.id) ?? []
     const entry = entries[0]
     // HH-3: legs are told apart by sign. The positional fallback is only for a
     // movement whose legs are all visible; with one leg hidden (another
     // member's private account) it used to make that one leg both ends.
     const hasEveryLeg = entries.length > 1
+    const isReadOnly =
+      othersMixedTransactionIds.has(transaction.id) ||
+      (mixedLookupFailed &&
+        (transaction.transaction_type === 'transfer' || transaction.transaction_type === 'debt_payment') &&
+        !hasEveryLeg)
     const transferOutEntry =
       entries.find((e) => Number(e.amount_account_currency) < 0) ??
       (hasEveryLeg ? entry : undefined)

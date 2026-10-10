@@ -188,6 +188,11 @@ async function assertBillingAccountBelongsToHousehold(
   }
 }
 
+// HH-1's accounts trigger (PRV-8), shown as is: the create form lists every
+// account the caller can see as a card's payment account, before it knows
+// whether the new card will be shared.
+const PRV8_REFUSAL = 'A shared card cannot be paid from a private account'
+
 export async function createAccountAction(formData: FormData) {
   // The onboarding wizard reuses this action; `return_to=onboarding` keeps
   // success/error redirects inside the wizard instead of /dashboard/accounts.
@@ -272,7 +277,9 @@ export async function createAccountAction(formData: FormData) {
     fail(
       insertError.code === '42501' && !isPrivate
         ? 'Only an owner or admin can add a shared account. Choose Only me.'
-        : 'Could not create the account. Please check the form and try again.'
+        : insertError.message === PRV8_REFUSAL
+          ? PRV8_REFUSAL
+          : 'Could not create the account. Please check the form and try again.'
     )
   }
 

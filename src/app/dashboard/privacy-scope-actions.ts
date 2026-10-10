@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { isPrivacyScope } from '@/lib/privacy/scope'
+import { isPrivacyScope, safeScopeReturnTo } from '@/lib/privacy/scope'
 
 /**
  * HH-3 (SCP-1, SCP-5): remember the Household / Mine / Everything scope the
@@ -16,9 +16,8 @@ import { isPrivacyScope } from '@/lib/privacy/scope'
  */
 export async function setPrivacyScopeAction(formData: FormData) {
   const scope = formData.get('scope')
-  const returnTo = String(formData.get('return_to') ?? '/dashboard')
-  // Only ever back into this app, never to an absolute URL a form could carry.
-  const safeReturnTo = returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/dashboard'
+  // Only ever back into the dashboard, never anywhere a form could point.
+  const safeReturnTo = safeScopeReturnTo(formData.get('return_to'))
 
   if (!isPrivacyScope(scope)) redirect(safeReturnTo)
 
@@ -38,10 +37,12 @@ export async function setPrivacyScopeAction(formData: FormData) {
       ? (profile.ui_preferences as Record<string, unknown>)
       : {}
 
-  await supabase
+  const { error } = await supabase
     .from('profiles')
     .update({ ui_preferences: { ...current, privacyScope: scope } })
     .eq('id', user.id)
+  // Nothing saved: back to the same view, which still shows the old scope.
+  if (error) redirect(safeReturnTo)
 
   // Every scoped screen reads it, so none of the cached ones survive this.
   revalidatePath('/dashboard', 'layout')
