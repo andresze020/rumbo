@@ -13,6 +13,7 @@ import {
   type UiPreferences,
 } from '@/lib/preferences/shared'
 import { getRequestToday } from '@/lib/periods/server'
+import { getUiPreferences } from '@/lib/preferences/server'
 
 async function getAuthContext() {
   const supabase = await createClient()
@@ -253,6 +254,9 @@ export async function updateUiPreferencesAction(formData: FormData) {
       compactList: formData.get('compact_list') !== null,
       showBalanceAdjustments: formData.get('show_balance_adjustments') !== null,
     },
+    // HH-3: not on this form — chosen in the app bar. Carried over, since this
+    // save replaces the whole preferences object.
+    privacyScope: (await getUiPreferences()).privacyScope,
   }
 
   const { supabase, user, householdId } = await getAuthContext()

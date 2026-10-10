@@ -31,6 +31,20 @@ export function defaultPrivacyScope(ownsPrivateAccount: boolean): PrivacyScope {
   return ownsPrivateAccount ? 'all' : 'household'
 }
 
+/**
+ * The scope a request reads (HH-3, SCP-1/5/6): the one the user last chose in
+ * the app bar while they own a private account in the household, else the
+ * default above. Without a private account there is no switch and no choice —
+ * household, the same rows as everything for them.
+ */
+export function resolvePrivacyScope(
+  ownsPrivateAccount: boolean,
+  remembered: PrivacyScope | null
+): PrivacyScope {
+  if (!ownsPrivateAccount) return 'household'
+  return remembered ?? defaultPrivacyScope(true)
+}
+
 // The query type parameters are unconstrained on purpose: checking a PostgREST
 // builder (whose type parses the select string) against any method-shaped
 // constraint exceeds the compiler's instantiation depth (TS2589). Callers pass
@@ -71,4 +85,16 @@ export function scopeByTransaction<Q>(query: Q, scope: PrivacyScope, userId: str
   if (scope === 'household') return builder.neq(`${prefix}visibility`, 'private') as Q
   if (scope === 'mine') return builder.eq(`${prefix}private_owner_id`, userId) as Q
   return query
+}
+
+/**
+ * Where the scope switch sends the user back to: a dashboard path, nothing
+ * else. A browser reads `\` as `/` and drops tabs and newlines, so
+ * `/\evil.com` or `/<TAB>/evil.com` would leave the app; both are refused.
+ */
+export function safeScopeReturnTo(value: unknown): string {
+  const fallback = '/dashboard'
+  if (typeof value !== 'string') return fallback
+  if (/[\\\u0000-\u001f\u007f]/.test(value)) return fallback
+  return /^\/dashboard(?:[/?#]|$)/.test(value) ? value : fallback
 }

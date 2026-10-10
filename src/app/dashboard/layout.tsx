@@ -19,6 +19,7 @@ import { APP_SCROLL_ID } from '@/lib/app-scroll'
 import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { getHouseholdContext } from '@/lib/households/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
 import { reportPerfAfterResponse } from '@/lib/perf/collector'
 import { getUiPreferences } from '@/lib/preferences/server'
 import { getRequestUser } from '@/lib/supabase/request'
@@ -54,6 +55,12 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   if (householdContext.staleId) {
     redirect('/onboarding')
   }
+
+  // HH-3: the Household / Mine / Everything switch (SCP-1). Memoized for this
+  // request, so the page under this layout reads the same answer for free.
+  const privacy = householdContext.currentId
+    ? await getPrivacyScope(householdContext.currentId)
+    : null
 
   return (
     <LanguageProvider locale={locale}>
@@ -97,6 +104,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             userEmail={userEmail}
             households={householdContext.households}
             currentHouseholdId={householdContext.currentId}
+            privacyScope={privacy?.scope}
+            showPrivacyScope={privacy?.ownsPrivateAccount ?? false}
           />
 
           {/* Main content area */}
@@ -106,6 +115,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
               className="lg:hidden"
               households={householdContext.households}
               currentHouseholdId={householdContext.currentId}
+              privacyScope={privacy?.scope}
+              showPrivacyScope={privacy?.ownsPrivateAccount ?? false}
             />
 
             {/* Tops up the household's FX rates once a day, so a

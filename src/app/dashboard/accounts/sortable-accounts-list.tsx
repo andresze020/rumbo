@@ -23,6 +23,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { AccountAvatar } from '@/components/account-avatar'
 import { BalanceAmount } from '@/components/balance-amount'
 import { Callout } from '@/components/callout'
+import { PrivateAccountMarker } from '@/components/private-account-marker'
 import { useLanguage } from '@/components/language-provider'
 import { groupAccountsByType } from '@/lib/accounts-view/group'
 import { formatCurrency } from '@/lib/format'
@@ -39,6 +40,8 @@ export type AccountRowVM = {
   accountClass: 'asset' | 'liability'
   currencyCode: string
   isArchived: boolean
+  /** HH-3 (PRV-2): the caller's own private account — the only kind they can see. */
+  isPrivate: boolean
   includeInNetWorth: boolean
   /** BR-039: reporting-only "transfers in count as expense" opt-in. */
   treatTransfersAsExpense: boolean
@@ -137,6 +140,12 @@ function AccountRow({
               )}
             >
               {row.name}
+              {row.isPrivate ? (
+                <PrivateAccountMarker
+                  label={t('accounts.privateMarker')}
+                  className="ml-1 -mt-0.5 align-middle"
+                />
+              ) : null}
             </span>
             {hasSecondLine ? (
               <span className="col-start-1 row-start-2 mt-0.5 flex min-w-0 items-center gap-1.5 self-start">

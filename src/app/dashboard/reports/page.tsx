@@ -31,7 +31,8 @@ import {
   getTransferExpenseAccounts,
   type ReportFilters as ReportFilterValues,
 } from '@/lib/analysis/report-query'
-import { getPrivacyScope } from '@/lib/privacy/server'
+import { getOwnPrivateAccountIds, getPrivacyScope } from '@/lib/privacy/server'
+import { markPrivateAccounts } from '@/lib/privacy/account-label'
 import { scopeByOwner } from '@/lib/privacy/scope'
 import { getRequestToday } from '@/lib/periods/server'
 
@@ -205,7 +206,11 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   )
 
   // ── Filter options ──────────────────────────────────────────────────────
-  const accountOptions: MultiSelectOption[] = (accountRows ?? []).map((a) => ({
+  // HH-3 (PRV-2): a private account's name carries the lock everywhere below.
+  const accountOptions: MultiSelectOption[] = markPrivateAccounts(
+    (accountRows ?? []) as { id: string; name: string; institution_name: string | null; currency_code: string; is_archived: boolean }[],
+    await getOwnPrivateAccountIds(ctx.household.id)
+  ).map((a) => ({
     id: a.id as string,
     label: [a.name, a.institution_name, a.currency_code].filter(Boolean).join(' · '),
     isArchived: Boolean(a.is_archived),

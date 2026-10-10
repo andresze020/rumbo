@@ -33,6 +33,7 @@ import { PayeePicker, type PayeeOption } from './payee-picker'
 import { RelativeDateChips } from './relative-date-chips'
 import { SelectorSheet } from '@/components/selector-sheet'
 import { useIsMobile } from '@/lib/use-is-mobile'
+import { storedAccountName } from '@/lib/privacy/account-label'
 import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
 import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
@@ -108,6 +109,8 @@ const ENTRY_CHAINS: Record<
 export type TransactionFormAccount = {
   id: string
   name: string
+  /** HH-3: the name as stored when `name` carries a private account's lock. */
+  storedName?: string
   currency_code: string
   institution_name: string | null
   account_type?: string
@@ -1410,7 +1413,7 @@ export function TransactionForm({
       accountSearchText(a).toLowerCase().includes(query)
     )
     const hasExact = availableAccounts.some(
-      (a) => a.name.toLowerCase() === query && query !== ''
+      (a) => storedAccountName(a).toLowerCase() === query && query !== ''
     )
     return (
       <>

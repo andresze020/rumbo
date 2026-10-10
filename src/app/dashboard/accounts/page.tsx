@@ -1,11 +1,19 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { Plus } from 'lucide-react'
+import { Lock, Plus, Users } from 'lucide-react'
 import {
   archiveAccountAction,
   createAccountAction,
+  makeAccountPrivateAction,
+  shareAccountAction,
   updateAccountAction,
 } from './actions'
+import {
+  accountPrivacyRefusal,
+  parseAccountPrivacyImpact,
+  type AccountPrivacyImpact,
+} from './account-privacy'
+import { markPrivateName } from '@/lib/privacy/account-label'
 import { CurrencyChangeGuard } from './currency-change-guard'
 import {
   AccountTypeDependentFields,
@@ -62,6 +70,8 @@ type AccountsPageProps = {
     adjustBalance?: string
     info?: string
     error?: string
+    shared?: string
+    madePrivate?: string
   }>
 }
 
@@ -137,6 +147,22 @@ type AccountMetadata = {
   billing_account_id: string | null
   sort_order: number | null
   notes: string | null
+  /** HH-1: set only on the caller's own private accounts (RLS hides the rest). */
+  private_owner_id: string | null
+}
+
+/**
+ * HH-3 (PRV-5, PRV-6): the edit dialog's "Who can see this account?" row.
+ * `action` is what the caller may do from here; the dry run's counts (or its
+ * refusal) are what the confirmation states.
+ */
+type AccountPrivacyControl = {
+  isPrivate: boolean
+  action: 'share' | 'makePrivate' | null
+  impact: AccountPrivacyImpact | null
+  refusal: string | null
+  /** A shared account, an owner/admin, other members: D6 explains the missing button. */
+  singleMemberRule: boolean
 }
 
 type AccountRow = {
@@ -286,6 +312,7 @@ function CreateAccountForm({
   defaultCurrency,
   showArchived,
   billingAccounts,
+  canAddSharedAccount,
   locale,
 }: {
   activeCurrencies: Currency[]
@@ -293,6 +320,8 @@ function CreateAccountForm({
   showArchived: boolean
   /** BR-030: accounts a card can be paid from. */
   billingAccounts: BillingAccountOption[]
+  /** HH-3 (PRV-1): owners and admins choose; members can only add their own. */
+  canAddSharedAccount: boolean
   locale: Locale
 }) {
   const accountTypes = getAccountTypes(locale)
@@ -356,6 +385,8 @@ function CreateAccountForm({
         <Textarea id="notes" name="notes" />
       </div>
 
+      <AccountVisibilityField canAddSharedAccount={canAddSharedAccount} locale={locale} />
+
       <Label className="items-start gap-3 rounded-lg border p-3">
         <input
           type="checkbox"
@@ -386,6 +417,145 @@ function CreateAccountForm({
   )
 }
 
+/**
+ * HH-3 (PRV-1): "Who can see this account?" — chosen once, at creation. After
+ * that the edit dialog's Share / Make private buttons are the only way to
+ * change it (the update action never writes `private_owner_id`).
+ */
+function AccountVisibilityField({
+  canAddSharedAccount,
+  locale,
+}: {
+  canAddSharedAccount: boolean
+  locale: Locale
+}) {
+  const options = [
+    ...(canAddSharedAccount
+      ? [
+          {
+            value: 'household',
+            icon: Users,
+            label: translate(locale, 'accounts.visibilityHousehold'),
+            description: translate(locale, 'accounts.visibilityHouseholdDesc'),
+          },
+        ]
+      : []),
+    {
+      value: 'private',
+      icon: Lock,
+      label: translate(locale, 'accounts.visibilityPrivate'),
+      description: translate(locale, 'accounts.visibilityPrivateDesc'),
+    },
+  ]
+
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-medium">{translate(locale, 'accounts.visibilityLabel')}</legend>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {options.map((option, index) => {
+          const Icon = option.icon
+          return (
+            <Label key={option.value} className="items-start gap-3 rounded-lg border p-3 has-checked:border-primary/50 has-checked:bg-primary/5">
+              <input
+                type="radio"
+                name="visibility"
+                value={option.value}
+                defaultChecked={index === 0}
+                className="mt-0.5 size-4"
+              />
+              <span className="space-y-1">
+                <span className="flex items-center gap-1.5">
+                  <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+                  {option.label}
+                </span>
+                <span className="block text-sm font-normal text-muted-foreground">{option.description}</span>
+              </span>
+            </Label>
+          )
+        })}
+      </div>
+      {!canAddSharedAccount ? (
+        <p className="text-xs text-muted-foreground">{translate(locale, 'accounts.visibilityMemberNote')}</p>
+      ) : null}
+    </fieldset>
+  )
+}
+
+/** The counts a share / make-private confirmation states (PRV-5). */
+function AccountPrivacyImpactList({
+  impact,
+  locale,
+}: {
+  impact: AccountPrivacyImpact
+  locale: Locale
+}) {
+  const rows = [
+    translate(locale, 'accounts.privacyImpactTransactions', { count: impact.transactions }),
+    translate(locale, 'accounts.privacyImpactPayees', { count: impact.payees }),
+    translate(locale, 'accounts.privacyImpactLinkedItems', { count: impact.linkedItems }),
+  ]
+  // Spans, not a list: an alert dialog's description is a paragraph.
+  return (
+    <span className="mt-3 block space-y-1 rounded-lg border bg-muted/40 px-3 py-2 text-foreground tabular-nums">
+      {rows.map((row) => (
+        <span key={row} className="block">
+          {row}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+function AccountPrivacySection({
+  accountId,
+  privacy,
+  locale,
+}: {
+  accountId: string
+  privacy: AccountPrivacyControl
+  locale: Locale
+}) {
+  const StateIcon = privacy.isPrivate ? Lock : Users
+  const isShare = privacy.action === 'share'
+
+  return (
+    <div className="mt-4 space-y-2 border-t pt-4">
+      <p className="text-sm font-medium">{translate(locale, 'accounts.visibilityLabel')}</p>
+      <p className="flex items-start gap-2 text-sm text-muted-foreground">
+        <StateIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        {privacy.isPrivate
+          ? translate(locale, 'accounts.visibilityPrivateState')
+          : translate(locale, 'accounts.visibilitySharedState')}
+      </p>
+      {privacy.singleMemberRule ? (
+        <p className="text-xs text-muted-foreground">{translate(locale, 'accounts.makePrivateSingleMemberOnly')}</p>
+      ) : null}
+      {/* The RPC's own reason, when its dry run refused (PRV-8, names, D6). */}
+      {privacy.action && privacy.refusal ? (
+        <Callout variant="warning" className="text-xs">{privacy.refusal}</Callout>
+      ) : null}
+      {privacy.action && privacy.impact && !privacy.refusal ? (
+        <ConfirmActionButton
+          action={isShare ? shareAccountAction : makeAccountPrivateAction}
+          hiddenFields={{ account_id: accountId }}
+          triggerVariant="outline"
+          triggerLabel={translate(locale, isShare ? 'accounts.shareAccount' : 'accounts.makePrivate')}
+          pendingLabel={translate(locale, isShare ? 'accounts.sharingAccount' : 'accounts.makingPrivate')}
+          title={translate(locale, isShare ? 'accounts.shareConfirmTitle' : 'accounts.makePrivateConfirmTitle')}
+          description={
+            <>
+              {translate(locale, isShare ? 'accounts.shareConfirmDescription' : 'accounts.makePrivateConfirmDescription')}
+              <AccountPrivacyImpactList impact={privacy.impact} locale={locale} />
+            </>
+          }
+          cancelLabel={translate(locale, 'common.cancel')}
+          confirmLabel={translate(locale, isShare ? 'accounts.shareAccount' : 'accounts.makePrivate')}
+        />
+      ) : null}
+    </div>
+  )
+}
+
 function EditAccountForm({
   row,
   activeCurrencies,
@@ -395,6 +565,7 @@ function EditAccountForm({
   openingBalanceHref,
   adjustBalanceHref,
   billingAccounts,
+  privacy,
   locale,
 }: {
   row: AccountRow
@@ -407,6 +578,8 @@ function EditAccountForm({
   adjustBalanceHref: string
   /** BR-030: accounts a card can be paid from. */
   billingAccounts: BillingAccountOption[]
+  /** HH-3: null while the dialog has nothing to offer (an archived account). */
+  privacy: AccountPrivacyControl | null
   locale: Locale
 }) {
   const account = row.metadata
@@ -607,6 +780,7 @@ function EditAccountForm({
         </Link>
       </div>
     </CurrencyChangeGuard>
+    {privacy ? <AccountPrivacySection accountId={account.id} privacy={privacy} locale={locale} /> : null}
     <div className="mt-4 flex flex-wrap gap-2 border-t pt-4">
       {!account.is_archived && !hasOpeningBalance ? (
         <Link href={openingBalanceHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
@@ -662,6 +836,8 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   // comparison and the card cycles all hang off it.
   const today = await getRequestToday()
   const created = params.created === '1'
+  const accountShared = params.shared === '1'
+  const accountMadePrivate = params.madePrivate === '1'
   const updated = params.updated === '1'
   const openingBalanceSet = params.openingBalanceSet === '1'
   const adjustBalanceSet = params.adjustBalanceSet === '1'
@@ -708,7 +884,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const { scope, userId } = await privacyPromise
 
   const prevMonthEnd = offsetDate(`${today.slice(0, 7)}-01`, -1)
-  // Six independent reads, one round trip. They were sequential awaits, so the
+  // Eight independent reads, one round trip. They were sequential awaits, so the
   // page paid the network latency six times over before it could render a
   // single row; none of them depends on another's result.
   const [
@@ -721,6 +897,10 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     // already show, so the page degrades to today's single-balance view.
     { data: cardCycleRows },
     { data: openingBalanceEntries, error: openingBalanceEntriesError },
+    // HH-3 (PRV-1, PRV-6): who may add a shared account, and whether one may
+    // still be made private (D6: only while there is a single member).
+    { data: isHouseholdAdmin },
+    { count: activeMemberCount },
   ] = await Promise.all([
     supabase
       .from('currencies')
@@ -751,7 +931,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       supabase
         .from('accounts')
         .select(
-          'id, name, account_type, account_class, currency_code, institution_name, last_four, color, icon, opening_balance_date, is_archived, include_in_net_worth, treat_transfers_as_expense, statement_day, payment_day, billing_account_id, sort_order, notes'
+          'id, name, account_type, account_class, currency_code, institution_name, last_four, color, icon, opening_balance_date, is_archived, include_in_net_worth, treat_transfers_as_expense, statement_day, payment_day, billing_account_id, sort_order, notes, private_owner_id'
         )
         .eq('household_id', household.id)
         .is('deleted_at', null),
@@ -779,6 +959,12 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       scope,
       userId
     ),
+    supabase.rpc('is_household_admin', { p_household_id: household.id }),
+    supabase
+      .from('household_members')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('household_id', household.id)
+      .eq('status', 'active'),
   ])
 
   if (currenciesError) {
@@ -869,7 +1055,13 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   // BR-030: a card is paid from an asset account, never from another liability.
   const billingAccounts: BillingAccountOption[] = allAccounts
     .filter((account) => !account.is_archived && account.account_class === 'asset')
-    .map((account) => ({ id: account.id, name: account.name }))
+    // PRV-2: the select shows the lock; it submits the id.
+    .map((account) => ({ id: account.id, name: markPrivateName(account.name, account.private_owner_id !== null) }))
+  // PRV-8: a shared card is never paid from a private account.
+  const privateAccountIds = new Set(
+    allAccounts.filter((account) => account.private_owner_id !== null).map((account) => account.id)
+  )
+  const sharedBillingAccounts = billingAccounts.filter((account) => !privateAccountIds.has(account.id))
 
   /**
    * BR-030 — format one card's cycle for display. The *window dates come from
@@ -933,6 +1125,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       accountClass: isLiability ? 'liability' : 'asset',
       currencyCode: metadata.currency_code,
       isArchived: metadata.is_archived,
+      isPrivate: metadata.private_owner_id !== null,
       includeInNetWorth: metadata.include_in_net_worth,
       treatTransfersAsExpense: metadata.treat_transfers_as_expense,
       hasOpeningBalance: row.hasOpeningBalance,
@@ -1012,6 +1205,34 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
 
     canChangeCurrency = !entryCountError && !count
   }
+
+  // HH-3 (PRV-5, PRV-6): what the edit dialog offers, and — through the RPC's
+  // dry run, which changes nothing — exactly what the change would reveal or
+  // hide, so the confirmation can state it. Only for the account being edited.
+  const canAddSharedAccount = isHouseholdAdmin === true
+  let accountPrivacy: AccountPrivacyControl | null = null
+  if (selectedEditRow && !selectedEditRow.metadata.is_archived) {
+    const isPrivate = selectedEditRow.metadata.private_owner_id !== null
+    const isOnlyMember = activeMemberCount === 1
+    const action = isPrivate ? 'share' : canAddSharedAccount && isOnlyMember ? 'makePrivate' : null
+    accountPrivacy = {
+      isPrivate,
+      action,
+      impact: null,
+      refusal: null,
+      singleMemberRule: !isPrivate && canAddSharedAccount && !isOnlyMember,
+    }
+    if (action) {
+      const { data, error } = await supabase.rpc(
+        action === 'share' ? 'share_private_account' : 'set_account_private',
+        { p_account_id: selectedEditRow.metadata.id, p_dry_run: true }
+      )
+      accountPrivacy.impact = error ? null : parseAccountPrivacyImpact(data)
+      accountPrivacy.refusal = error
+        ? accountPrivacyRefusal(error.message, 'This change is not available right now.')
+        : null
+    }
+  }
   const selectedOpeningBalanceRow = displayRows.find(
     (row) =>
       row.metadata.id === openingBalanceAccountId &&
@@ -1076,6 +1297,10 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
       {created ? <Callout variant="success">{translate(locale, 'accounts.accountCreated')}</Callout> : null}
       {updated ? <Callout variant="success">{translate(locale, 'accounts.accountUpdated')}</Callout> : null}
+      {accountShared ? <Callout variant="success">{translate(locale, 'accounts.accountShared')}</Callout> : null}
+      {accountMadePrivate ? (
+        <Callout variant="success">{translate(locale, 'accounts.accountMadePrivate')}</Callout>
+      ) : null}
       {infoMessage ? <Callout variant="info">{infoMessage}</Callout> : null}
       {currenciesMissingRate.length ? (
         <Callout variant="info">
@@ -1138,6 +1363,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
             defaultCurrency={defaultCurrency}
             showArchived={showArchived}
             billingAccounts={billingAccounts}
+            canAddSharedAccount={canAddSharedAccount}
             locale={locale}
           />
         </FormDialog>
@@ -1158,7 +1384,10 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
             hasOpeningBalance={selectedEditRow.hasOpeningBalance}
             openingBalanceHref={accountsPath({ showArchived, openingBalance: selectedEditRow.metadata.id })}
             adjustBalanceHref={accountsPath({ showArchived, adjustBalance: selectedEditRow.metadata.id })}
-            billingAccounts={billingAccounts}
+            billingAccounts={
+              selectedEditRow.metadata.private_owner_id === null ? sharedBillingAccounts : billingAccounts
+            }
+            privacy={accountPrivacy}
             locale={locale}
           />
         </FormDialog>

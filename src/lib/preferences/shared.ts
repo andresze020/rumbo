@@ -1,3 +1,5 @@
+import { isPrivacyScope, type PrivacyScope } from '@/lib/privacy/scope'
+
 /**
  * Per-user interface preferences (BR-032 + BR-038).
  *
@@ -85,6 +87,13 @@ export type UiPreferences = {
     /** BR-017 balance adjustments are shown by default. */
     showBalanceAdjustments: boolean
   }
+  /**
+   * HH-3 (SCP-5): the Household / Mine / Everything scope last chosen in the
+   * app bar. `null` = never chosen, which reads as Everything. Only consulted
+   * while the user owns a private account in the household; everyone else
+   * reads the household (see `getPrivacyScope`).
+   */
+  privacyScope: PrivacyScope | null
 }
 
 export const DEFAULT_UI_PREFERENCES: UiPreferences = {
@@ -115,6 +124,7 @@ export const DEFAULT_UI_PREFERENCES: UiPreferences = {
     compactList: false,
     showBalanceAdjustments: true,
   },
+  privacyScope: null,
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -203,6 +213,7 @@ export function parseUiPreferences(raw: unknown): UiPreferences {
         DEFAULT_UI_PREFERENCES.transactions.showBalanceAdjustments
       ),
     },
+    privacyScope: isPrivacyScope(root.privacyScope) ? root.privacyScope : null,
   }
 }
 

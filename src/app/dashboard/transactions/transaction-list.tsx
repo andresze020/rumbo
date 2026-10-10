@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Copy,
   Flag,
+  Lock,
   MoreHorizontal,
   Pencil,
   RotateCcw,
@@ -114,6 +115,12 @@ export type TransactionListRow = {
   canEdit: boolean
   canEditTransfer: boolean
   canVoid: boolean
+  /**
+   * HH-3 (PRV-4): another member's mixed transfer. Shown with "Private
+   * account" as its hidden end; never selected, reviewed, edited, copied or
+   * voided here — only its owner can.
+   */
+  isReadOnly: boolean
   editHref: string
   /** BR-040 — set only on a posted expense that can still be refunded. */
   refundHref: string | null
@@ -311,7 +318,9 @@ export function TransactionList({
   const [selectionMode, setSelectionMode] = useState(false)
 
   const allRows = useMemo(() => groups.flatMap((g) => g.rows), [groups])
-  const allIds = useMemo(() => allRows.map((r) => r.id), [allRows])
+  // HH-3: a read-only row is never part of a bulk action.
+  const allIds = useMemo(() => allRows.filter((r) => !r.isReadOnly).map((r) => r.id), [allRows])
+  const selectableIds = useMemo(() => new Set(allIds), [allIds])
   const allSelected = allIds.length > 0 && selected.size === allIds.length
 
   const categoriesById = useMemo(
@@ -333,6 +342,7 @@ export function TransactionList({
   }))
 
   function toggleRow(id: string) {
+    if (!selectableIds.has(id)) return
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -352,6 +362,7 @@ export function TransactionList({
 
   /** Long-press: enter selection mode with the pressed row already picked. */
   function beginSelection(id: string) {
+    if (!selectableIds.has(id)) return
     setSelectionMode(true)
     setExpandedId(null)
     setSelected(new Set([id]))
@@ -550,7 +561,8 @@ export function TransactionList({
                       // While triaging, a tap picks the row rather than opening
                       // it — the native pattern, and the only one that does not
                       // ask for a 16px checkbox to be hit repeatedly.
-                      selectionMode
+                      // A read-only row is never picked; it still opens.
+                      selectionMode && !row.isReadOnly
                         ? toggleRow(row.id)
                         : setExpandedId((prev) => (prev === row.id ? null : row.id))
                     }
@@ -680,7 +692,7 @@ function DisplayRow({
   const ui = useUiTranslation()
   const { openDialog } = useTransactionDialog()
   const longPress = useLongPress(onLongPress)
-  const showCheckbox = selectionMode || selected
+  const showCheckbox = !row.isReadOnly && (selectionMode || selected)
   const amountClass = row.isVoided
     ? 'text-muted-foreground line-through'
     : getAmountColorClass(row.transactionType)
@@ -760,20 +772,22 @@ function DisplayRow({
               <RowAvatar row={row} compact={compact} />
             </span>
           )}
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={onToggle}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-            className={cn(
-              'size-4 cursor-pointer rounded border-input accent-primary',
-              showCheckbox
-                ? ''
-                : 'absolute inset-0 m-auto hidden opacity-0 transition-opacity focus-visible:opacity-100 group-hover/row:opacity-100 @min-[60rem]:block'
-            )}
-            aria-label={ui(`Select ${row.title}`)}
-          />
+          {row.isReadOnly ? null : (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggle}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              className={cn(
+                'size-4 cursor-pointer rounded border-input accent-primary',
+                showCheckbox
+                  ? ''
+                  : 'absolute inset-0 m-auto hidden opacity-0 transition-opacity focus-visible:opacity-100 group-hover/row:opacity-100 @min-[60rem]:block'
+              )}
+              aria-label={ui(`Select ${row.title}`)}
+            />
+          )}
         </span>
 
         {/* Description (+ everything the narrow layout has no column for). */}
@@ -966,7 +980,7 @@ function DisplayRow({
               {/* BR-011: the review state lives here, not on the collapsed row.
                   The column, the filter and the bulk actions are untouched —
                   only the place it is shown moved. */}
-              {row.isVoided ? (
+              {row.isVoided || row.isReadOnly ? (
                 <Badge
                   variant="outline"
                   className={cn('text-xs', reviewStyles[row.reviewStatus].className)}
@@ -984,6 +998,13 @@ function DisplayRow({
                   <TagChip key={tag.id} name={tag.name} color={tag.color} size="sm" />
                 ))}
               </div>
+            ) : null}
+
+            {row.isReadOnly ? (
+              <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                <Lock className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+                {ui("Moved from or to another member's private account. Only they can change it.")}
+              </p>
             ) : null}
 
             <div className="flex flex-wrap items-center gap-1.5">

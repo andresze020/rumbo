@@ -5,7 +5,8 @@ import { GoalForm } from './goal-form'
 import { GoalProgressForm } from './goal-progress-form'
 import { GoalCard } from './goal-card'
 import { createClient } from '@/lib/supabase/server'
-import { getPrivacyScope } from '@/lib/privacy/server'
+import { getOwnPrivateAccountIds, getPrivacyScope } from '@/lib/privacy/server'
+import { markPrivateAccounts } from '@/lib/privacy/account-label'
 import { scopeByOwner } from '@/lib/privacy/scope'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
@@ -117,7 +118,11 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
   ])
 
   const allGoals = (goals ?? []) as Goal[]
-  const allAccounts = (accounts ?? []) as Account[]
+  // HH-3 (PRV-2): a private account's name carries the lock everywhere below.
+  const allAccounts = markPrivateAccounts(
+    (accounts ?? []) as Account[],
+    await getOwnPrivateAccountIds(profile.default_household_id)
+  )
   const accountsById = new Map(allAccounts.map((a) => [a.id, a]))
 
   const activeGoals = allGoals.filter((g) => g.status === 'active')
@@ -180,7 +185,9 @@ export default async function GoalsPage({ searchParams }: GoalsPageProps) {
     const account = goal.linked_account_id ? accountsById.get(goal.linked_account_id) : undefined
     return {
       goal,
-      linkedAccountName: account?.name ?? null,
+      // HH-3: a linked id with no visible account is a private one (PRV-4);
+      // null still means "no linked account".
+      linkedAccountName: goal.linked_account_id ? (account?.name ?? 'Private account') : null,
       editHref: `/dashboard/goals?edit=${goal.id}`,
       contributeHref: `/dashboard/goals?contribute=${goal.id}`,
       withdrawHref: `/dashboard/goals?withdraw=${goal.id}`,

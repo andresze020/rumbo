@@ -16,7 +16,8 @@ import { AccountsViewToggle } from '@/components/accounts-view-toggle'
 import { getAccountsView, type AccountsView } from '@/lib/accounts-view/server'
 import { groupAccountsByType } from '@/lib/accounts-view/group'
 import { createClient } from '@/lib/supabase/server'
-import { getPrivacyScope } from '@/lib/privacy/server'
+import { getOwnPrivateAccountIds, getPrivacyScope } from '@/lib/privacy/server'
+import { markPrivateBalanceRows } from '@/lib/privacy/account-label'
 import { groupByAsOfDate } from '@/lib/balances/multi-date'
 import {
   computeValuation,
@@ -256,7 +257,13 @@ export default async function NetWorthPage({ searchParams }: NetWorthPageProps) 
     'get_account_balances_as_of_many',
     { p_household_id: household.id, p_as_of_dates: requestedDates, p_scope: scope }
   )
-  const balancesByDate = groupByAsOfDate((allBalances ?? []) as MultiDateAccountBalance[])
+  // HH-3 (PRV-2): a private account's name carries the lock.
+  const balancesByDate = groupByAsOfDate(
+    markPrivateBalanceRows(
+      (allBalances ?? []) as MultiDateAccountBalance[],
+      await getOwnPrivateAccountIds(household.id)
+    )
+  )
   const selectedBalances = balancesByDate.get(selectedSnapshotDate) ?? []
   const selectedBalancesError = balancesError
 

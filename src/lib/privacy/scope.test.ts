@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { defaultPrivacyScope, isPrivacyScope, scopeByOwner, scopeByTransaction } from './scope'
+import {
+  defaultPrivacyScope,
+  isPrivacyScope,
+  resolvePrivacyScope,
+  safeScopeReturnTo,
+  scopeByOwner,
+  scopeByTransaction,
+} from './scope'
+import { markPrivateAccounts, PRIVATE_ACCOUNT_MARK, storedAccountName } from './account-label'
 
 // A stand-in for the PostgREST filter builder: records each filter call.
 function recorder() {
@@ -28,6 +36,20 @@ describe('defaultPrivacyScope', () => {
   })
   it('reads the household for everyone else (the same rows for them)', () => {
     expect(defaultPrivacyScope(false)).toBe('household')
+  })
+})
+
+describe('resolvePrivacyScope', () => {
+  it('defaults an owner of a private account to everything (SCP-5)', () => {
+    expect(resolvePrivacyScope(true, null)).toBe('all')
+  })
+  it("keeps an owner's remembered choice", () => {
+    expect(resolvePrivacyScope(true, 'mine')).toBe('mine')
+    expect(resolvePrivacyScope(true, 'household')).toBe('household')
+  })
+  it('ignores a remembered choice once the user owns no private account (SCP-6)', () => {
+    expect(resolvePrivacyScope(false, 'mine')).toBe('household')
+    expect(resolvePrivacyScope(false, null)).toBe('household')
   })
 })
 
@@ -72,5 +94,44 @@ describe('scopeByTransaction', () => {
     expect(scopeByTransaction(recorder(), 'household', 'u1', 'transactions.').calls).toEqual([
       'neq transactions.visibility private',
     ])
+  })
+})
+
+describe('markPrivateAccounts', () => {
+  it('locks only the private ones and keeps every other field', () => {
+    const accounts = [
+      { id: 'a', name: 'Joint', currency_code: 'USD' },
+      { id: 'b', name: 'Wallet', currency_code: 'USD' },
+    ]
+    expect(markPrivateAccounts(accounts, new Set(['b']))).toEqual([
+      { id: 'a', name: 'Joint', currency_code: 'USD' },
+      { id: 'b', name: `Wallet ${PRIVATE_ACCOUNT_MARK}`, storedName: 'Wallet', currency_code: 'USD' },
+    ])
+  })
+  it('returns the list untouched for a user with no private account', () => {
+    const accounts = [{ id: 'a', name: 'Joint' }]
+    expect(markPrivateAccounts(accounts, new Set())).toBe(accounts)
+  })
+})
+
+describe('storedAccountName', () => {
+  it('gives back the stored name of a marked account', () => {
+    const [wallet] = markPrivateAccounts([{ id: 'b', name: 'Wallet' }], new Set(['b']))
+    expect(storedAccountName(wallet)).toBe('Wallet')
+  })
+  it("never trims a shared account's own name, lock and all", () => {
+    expect(storedAccountName({ name: `Vault ${PRIVATE_ACCOUNT_MARK}` })).toBe(`Vault ${PRIVATE_ACCOUNT_MARK}`)
+  })
+})
+
+describe('safeScopeReturnTo', () => {
+  it('keeps a dashboard path with its query', () => {
+    expect(safeScopeReturnTo('/dashboard')).toBe('/dashboard')
+    expect(safeScopeReturnTo('/dashboard/transactions?type=expense')).toBe('/dashboard/transactions?type=expense')
+  })
+  it('refuses anything that could leave the app', () => {
+    for (const bad of ['//evil.com', '/\\evil.com', '/\t/evil.com', '/\n/evil.com', 'https://evil.com', '/dashboardx', '/login', undefined]) {
+      expect(safeScopeReturnTo(bad)).toBe('/dashboard')
+    }
   })
 })

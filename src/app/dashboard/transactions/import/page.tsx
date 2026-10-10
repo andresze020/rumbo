@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { CsvImportClient } from './csv-import-client'
 import { createClient } from '@/lib/supabase/server'
+import { getOwnPrivateAccountIds } from '@/lib/privacy/server'
+import { markPrivateAccounts } from '@/lib/privacy/account-label'
 import type {
   CsvMapping,
   ImportBatch,
@@ -184,7 +186,7 @@ export default async function CsvImportPage({ searchParams }: ImportPageProps) {
     <CsvImportClient
       householdName={household.name}
       baseCurrency={household.base_currency}
-      accounts={(accounts ?? []) as Account[]}
+      accounts={markPrivateAccounts((accounts ?? []) as Account[], await getOwnPrivateAccountIds(household.id))}
       categories={(categories ?? []) as Category[]}
       currencies={(currencies ?? []) as Currency[]}
       rules={rules}

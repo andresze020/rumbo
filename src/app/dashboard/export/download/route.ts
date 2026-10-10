@@ -644,6 +644,7 @@ export async function GET(request: NextRequest) {
   const privacy: RequestPrivacyScope = {
     scope: isPrivacyScope(requestedScope) ? requestedScope : resolved.scope,
     userId: resolved.userId,
+    ownsPrivateAccount: resolved.ownsPrivateAccount,
   }
 
   try {

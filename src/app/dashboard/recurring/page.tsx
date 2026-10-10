@@ -5,7 +5,8 @@ import { RecurringForm } from './recurring-form'
 import { RecurringRow, type RecurringRowVM } from './recurring-row'
 import { PostForm } from './post-form'
 import { createClient } from '@/lib/supabase/server'
-import { getPrivacyScope } from '@/lib/privacy/server'
+import { getOwnPrivateAccountIds, getPrivacyScope } from '@/lib/privacy/server'
+import { markPrivateAccounts } from '@/lib/privacy/account-label'
 import { scopeByOwner } from '@/lib/privacy/scope'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
@@ -168,7 +169,11 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
   ])
 
   const allRecurring = (recurring ?? []) as RecurringTransaction[]
-  const allAccounts = (accounts ?? []) as Account[]
+  // HH-3 (PRV-2): a private account's name carries the lock everywhere below.
+  const allAccounts = markPrivateAccounts(
+    (accounts ?? []) as Account[],
+    await getOwnPrivateAccountIds(profile.default_household_id)
+  )
   const allCategories = (categories ?? []) as Category[]
   const allPayees = (payees ?? []) as Payee[]
   const accountsById = new Map(allAccounts.map((a) => [a.id, a]))
@@ -189,7 +194,8 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
       // UC-9: a transfer's "category" slot shows its destination instead — the
       // row has no category to show, and the destination is the other half of
       // what the template actually does.
-      toAccountName: toAccount?.name ?? null,
+      // HH-3: an id with no visible account is a private one (PRV-4).
+      toAccountName: row.to_account_id ? (toAccount?.name ?? 'Private account') : null,
       amount: Number(row.amount),
       currency_code: row.currency_code,
       frequencyLabel: frequencyLabel(row.frequency),
@@ -200,7 +206,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
       isDue: Boolean(row.next_run_date && row.next_run_date <= today),
       autoPost: row.auto_post,
       lastError: row.last_error,
-      accountName: account?.name ?? 'Unknown account',
+      accountName: account?.name ?? 'Private account',
       categoryName: categoryPath(category, categoriesById),
       categoryIcon: category?.icon ?? null,
       editHref: `/dashboard/recurring?edit=${row.id}`,

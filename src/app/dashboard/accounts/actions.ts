@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { accountPrivacyRefusal } from './account-privacy'
 
 const ACCOUNT_TYPES = [
   'cash',
@@ -187,6 +188,11 @@ async function assertBillingAccountBelongsToHousehold(
   }
 }
 
+// HH-1's accounts trigger (PRV-8), shown as is: the create form lists every
+// account the caller can see as a card's payment account, before it knows
+// whether the new card will be shared.
+const PRV8_REFUSAL = 'A shared card cannot be paid from a private account'
+
 export async function createAccountAction(formData: FormData) {
   // The onboarding wizard reuses this action; `return_to=onboarding` keeps
   // success/error redirects inside the wizard instead of /dashboard/accounts.
@@ -205,6 +211,10 @@ export async function createAccountAction(formData: FormData) {
   const lastFour = String(formData.get('last_four') ?? '').trim()
   const notes = String(formData.get('notes') ?? '').trim()
   const includeInNetWorth = formData.get('include_in_net_worth') !== null
+  // HH-3 (PRV-1): "Who can see this account?" Absent (onboarding) means the
+  // household, as before. Only an owner/admin may add a shared account; RLS
+  // enforces that, the message below just explains it.
+  const isPrivate = String(formData.get('visibility') ?? 'household') === 'private'
 
   if (!name) {
     fail('Account name is required.')
@@ -257,14 +267,28 @@ export async function createAccountAction(formData: FormData) {
     notes: notes || null,
     include_in_net_worth: includeInNetWorth,
     ...cycleFields,
+    // Set once here; afterwards only share_private_account /
+    // set_account_private can change it (the HH-1 guard trigger).
+    private_owner_id: isPrivate ? userId : null,
     created_by: userId,
   })
 
   if (insertError) {
-    fail('Could not create the account. Please check the form and try again.')
+    fail(
+      insertError.code === '42501' && !isPrivate
+        ? 'Only an owner or admin can add a shared account. Choose Only me.'
+        : insertError.message === PRV8_REFUSAL
+          ? PRV8_REFUSAL
+          : 'Could not create the account. Please check the form and try again.'
+    )
   }
 
-  revalidatePath('/dashboard/accounts')
+  if (isPrivate) {
+    // A first private account brings the scope switch into the app bar.
+    revalidatePath('/dashboard', 'layout')
+  } else {
+    revalidatePath('/dashboard/accounts')
+  }
   redirect(fromOnboarding ? '/onboarding/account?created=1' : '/dashboard/accounts?created=1')
 }
 
@@ -471,6 +495,58 @@ export async function archiveAccountAction(formData: FormData) {
   redirect(`/dashboard/accounts?${redirectParams.toString()}`)
 }
 
+/**
+ * HH-3 (PRV-5): the owner shares a private account with the household. The
+ * dialog that posts here stated the dry run's counts; the RPC checks every
+ * rule again and does the whole change in one transaction.
+ */
+export async function shareAccountAction(formData: FormData) {
+  const accountId = String(formData.get('account_id') ?? '').trim()
+
+  if (!accountId) {
+    redirectWithError('Account is required.')
+  }
+
+  const { supabase } = await getAuthenticatedHousehold()
+  const { error } = await supabase.rpc('share_private_account', {
+    p_account_id: accountId,
+    p_dry_run: false,
+  })
+
+  if (error) {
+    redirectWithError(accountPrivacyRefusal(error.message, 'Could not share the account. Please try again.'))
+  }
+
+  // Every scoped screen, and the switch itself, can change with it.
+  revalidatePath('/dashboard', 'layout')
+  redirect('/dashboard/accounts?shared=1')
+}
+
+/**
+ * HH-3 (PRV-6, D6): an owner/admin makes a shared account private — only
+ * while they are the household's only member, which the RPC enforces.
+ */
+export async function makeAccountPrivateAction(formData: FormData) {
+  const accountId = String(formData.get('account_id') ?? '').trim()
+
+  if (!accountId) {
+    redirectWithError('Account is required.')
+  }
+
+  const { supabase } = await getAuthenticatedHousehold()
+  const { error } = await supabase.rpc('set_account_private', {
+    p_account_id: accountId,
+    p_dry_run: false,
+  })
+
+  if (error) {
+    redirectWithError(accountPrivacyRefusal(error.message, 'Could not make the account private. Please try again.'))
+  }
+
+  revalidatePath('/dashboard', 'layout')
+  redirect('/dashboard/accounts?madePrivate=1')
+}
+
 export async function reorderAccountsAction(orderedIds: string[]) {
   if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
     return { error: 'No accounts to reorder.' }
@@ -483,6 +559,9 @@ export async function reorderAccountsAction(orderedIds: string[]) {
   const { supabase, userId, householdId } = await getAuthenticatedHousehold()
 
   // Verify every id belongs to this household before writing any order.
+  // HH-3: RLS already hides other members' private accounts, so this also
+  // means reorder only ever touches what the caller can see — and with the
+  // scope switch on Household or Mine, only the accounts on screen.
   const { data: ownedAccounts, error: ownedError } = await supabase
     .from('accounts')
     .select('id')

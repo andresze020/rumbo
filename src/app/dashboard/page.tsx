@@ -3,7 +3,8 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getRequestProfile, getRequestUser } from '@/lib/supabase/request'
-import { getPrivacyScope } from '@/lib/privacy/server'
+import { getOwnPrivateAccountIds, getPrivacyScope } from '@/lib/privacy/server'
+import { markPrivateBalanceRows } from '@/lib/privacy/account-label'
 import { scopeByTransaction } from '@/lib/privacy/scope'
 import { groupByAsOfDate } from '@/lib/balances/multi-date'
 import { balanceTrendDates, balanceTrendFromRows, type BalanceTrendRow } from '@/lib/net-worth/trend'
@@ -231,7 +232,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     // allocations get_monthly_dashboard_summary adds up.
     getDailyCashFlow(supabase, household.id, prevMonthDate, monthEndDate(selectedMonth), privacy),
   ])
-  const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as MultiDateAccountBalance[])
+  // HH-3 (PRV-2): a private account's name carries the lock.
+  const balancesByDate = groupByAsOfDate(
+    markPrivateBalanceRows(
+      (multiDateBalances ?? []) as MultiDateAccountBalance[],
+      await getOwnPrivateAccountIds(household.id)
+    )
+  )
   const accountBalances = balancesByDate.get(selectedSnapshotDate) ?? []
   const prevBalanceRows = balancesByDate.get(prevMonthEndDate) ?? []
 

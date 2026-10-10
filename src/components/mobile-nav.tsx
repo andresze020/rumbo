@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { useOpenAssistant } from '@/components/assistant-drawer'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { HouseholdSwitcher, type HouseholdOption } from '@/components/household-switcher'
+import { PrivacyScopeSwitch } from '@/components/privacy-scope-switch'
+import type { PrivacyScope } from '@/lib/privacy/scope'
 import { useLanguage } from '@/components/language-provider'
 
 /**
@@ -25,10 +27,15 @@ export function MobileNav({
   className,
   households = [],
   currentHouseholdId = null,
+  privacyScope = 'household',
+  showPrivacyScope = false,
 }: {
   className?: string
   households?: HouseholdOption[]
   currentHouseholdId?: string | null
+  /** HH-3: the scope this request reads, and whether the switch shows at all (SCP-1). */
+  privacyScope?: PrivacyScope
+  showPrivacyScope?: boolean
 }) {
   const { t } = useLanguage()
   const ui = useUiTranslation()
@@ -61,6 +68,7 @@ export function MobileNav({
         currentId={currentHouseholdId}
         className="min-w-0 shrink"
       />
+      <PrivacyScopeSwitch scope={privacyScope} visible={showPrivacyScope} />
 
       <div className="ml-auto flex shrink-0 items-center gap-1">
         <Button

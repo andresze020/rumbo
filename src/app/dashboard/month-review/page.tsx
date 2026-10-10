@@ -18,6 +18,7 @@ import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { LocalizedClientBoundary } from '@/components/localized-client-boundary'
 import { MonthNav } from '@/components/month-nav'
 import { Callout } from '@/components/callout'
+import { HouseholdOnlyNote } from '@/components/household-only-note'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { SubmitButton } from '@/components/submit-button'
 import { formatCurrency, formatIsoDate, formatPercent, localeToBcp47 } from '@/lib/format'
@@ -500,6 +501,9 @@ export default async function MonthReviewPage({ searchParams }: MonthReviewPageP
             )}
           </div>
         </div>
+        {privacy.ownsPrivateAccount ? (
+          <HouseholdOnlyNote>The month close saves the household&apos;s numbers: shared accounts only.</HouseholdOnlyNote>
+        ) : null}
         {health ? <MonthHealthBreakdown breakdown={health} month={month} locale={locale} /> : null}
       </div>
 
