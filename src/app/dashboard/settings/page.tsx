@@ -30,6 +30,14 @@ import { getLocale } from '@/lib/i18n/server'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { translate } from '@/lib/i18n/translate'
 import { fxToday } from '@/lib/fx'
+import { isHouseholdSharingEnabled } from '@/lib/households/sharing-flag'
+import {
+  invitableRoles,
+  isInvitationRefusal,
+  isInvitationRole,
+} from '@/lib/households/invitations'
+import { switchHouseholdAction } from '../household-actions'
+import { HouseholdInvitationsSection, type PendingInvitation } from './household-invitations-section'
 
 
 type Props = {
@@ -142,6 +150,68 @@ export default async function SettingsPage({ searchParams }: Props) {
       }
     })
 
+  // ── HH-4: invitations (owner/admin, flag on) and the INV-9 switch offer ──
+  const householdId = profile.default_household_id
+  const sharingEnabled = isHouseholdSharingEnabled()
+  const [{ data: myMembership }, { data: joinedHousehold }] = await Promise.all([
+    supabase
+      .from('household_members')
+      .select('role')
+      .eq('household_id', householdId)
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle(),
+    // Accepted an invitation while keeping another household active: offer the
+    // switch (RLS shows the name only to a member of it).
+    sp.joined && sp.joined !== householdId
+      ? supabase.from('households').select('id, name').eq('id', sp.joined).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+  const callerRole = (myMembership as { role?: string } | null)?.role ?? null
+  const inviteRoles = sharingEnabled ? invitableRoles(callerRole) : []
+
+  let pendingInvitations: PendingInvitation[] = []
+  let inviteReview: { id: string; name: string; isPrivate: boolean }[] | null = null
+  if (inviteRoles.length > 0) {
+    const [{ data: invitationRows }, { count: activeMembers }, { data: reviewRows }] = await Promise.all([
+      supabase.rpc('list_household_invitations', { p_household_id: householdId }),
+      supabase
+        .from('household_members')
+        .select('user_id', { count: 'exact', head: true })
+        .eq('household_id', householdId)
+        .eq('status', 'active'),
+      supabase
+        .from('accounts')
+        .select('id, name, private_owner_id')
+        .eq('household_id', householdId)
+        .is('deleted_at', null)
+        .order('is_archived', { ascending: true })
+        .order('sort_order', { ascending: true, nullsFirst: false })
+        .order('name', { ascending: true }),
+    ])
+    pendingInvitations = ((invitationRows ?? []) as {
+      id: string
+      email: string
+      role: string
+      invited_by_name: string | null
+      expires_at: string
+    }[])
+      .filter((row) => isInvitationRole(row.role))
+      .map((row) => ({
+        id: row.id,
+        email: row.email,
+        role: row.role as PendingInvitation['role'],
+        invitedByName: row.invited_by_name,
+        expiresAt: row.expires_at,
+      }))
+    // INV-3: before the first link — a single member and nothing pending.
+    if (activeMembers === 1 && pendingInvitations.length === 0) {
+      inviteReview = ((reviewRows ?? []) as { id: string; name: string; private_owner_id: string | null }[]).map(
+        (row) => ({ id: row.id, name: row.name, isPrivate: row.private_owner_id !== null })
+      )
+    }
+  }
+
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6">
       <PageHeader
@@ -150,6 +220,24 @@ export default async function SettingsPage({ searchParams }: Props) {
       />
 
       {errorMsg && <Callout variant="error">{errorMsg}</Callout>}
+      {joinedHousehold ? (
+        <Callout variant="success" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            {translate(locale, 'invitations.settings.joined', {
+              household: (joinedHousehold as { name: string }).name,
+            })}
+          </span>
+          <form action={switchHouseholdAction}>
+            <input type="hidden" name="household_id" value={(joinedHousehold as { id: string }).id} />
+            <input type="hidden" name="return_to" value="/dashboard" />
+            <SubmitButton type="submit" size="sm">
+              {translate(locale, 'invitations.settings.switchTo', {
+                household: (joinedHousehold as { name: string }).name,
+              })}
+            </SubmitButton>
+          </form>
+        </Callout>
+      ) : null}
       {saved === 'profile' && <Callout variant="success">{ui('Profile updated.')}</Callout>}
       {saved === 'password' && (
         <Callout variant="success">{ui('Password updated successfully.')}</Callout>
@@ -314,6 +402,20 @@ export default async function SettingsPage({ searchParams }: Props) {
           </form>
         </CardContent>
       </Card>
+
+      {/* ── Invitations (HH-4) ─────────────────────────────────────── */}
+      {inviteRoles.length > 0 && callerRole ? (
+        <HouseholdInvitationsSection
+          locale={locale}
+          callerRole={callerRole}
+          roles={inviteRoles}
+          invitations={pendingInvitations}
+          review={inviteReview}
+          dialogOpen={sp.invite === '1'}
+          revoked={sp.invitationRevoked === '1'}
+          errorCode={isInvitationRefusal(sp.invitationError) ? sp.invitationError : null}
+        />
+      ) : null}
 
       {/* ── Preferences (BR-032 + BR-038) ───────────────────────────── */}
       <PreferencesSection

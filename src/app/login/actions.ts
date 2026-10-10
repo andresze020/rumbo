@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { LOCALE_COOKIE, normalizeLocale } from '@/lib/i18n/server'
 import { createClient } from '@/lib/supabase/server'
+import { readInviteReturnPath } from '@/lib/households/invite-cookie'
 
 function redirectWithLoginError(message: string, mode?: string): never {
   const modeParam = mode ? `&mode=${mode}` : ''
@@ -51,7 +52,8 @@ export async function signInAction(formData: FormData) {
 
   // A new session: nothing the Router Cache kept for a previous one may show.
   revalidatePath('/', 'layout')
-  redirect('/dashboard')
+  // HH-4 (S14): an invitee goes back to the invitation they opened.
+  redirect((await readInviteReturnPath()) ?? '/dashboard')
 }
 
 export async function signUpAction(formData: FormData) {
@@ -97,5 +99,8 @@ export async function signUpAction(formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/onboarding')
+  // HH-4 (S14, INV-9): an invitee goes back to the invitation instead of
+  // creating a household of their own. (With email confirmation on, the
+  // invitation page asks them to confirm and sign in first.)
+  redirect((await readInviteReturnPath()) ?? '/onboarding')
 }

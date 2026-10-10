@@ -10,6 +10,9 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { SubmitButton } from '@/components/submit-button'
 import { cn } from '@/lib/utils'
+import { readInviteReturnPath } from '@/lib/households/invite-cookie'
+import { getLocale } from '@/lib/i18n/server'
+import { translate } from '@/lib/i18n/translate'
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -29,7 +32,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (user) redirect('/dashboard')
+  // HH-4 (S14): an invitee who is already signed in goes back to the invitation.
+  const invitePath = await readInviteReturnPath()
+  if (user) redirect(invitePath ?? '/dashboard')
+  const inviteNotice = invitePath ? translate(await getLocale(), 'invitations.loginNotice') : null
 
   const tabClass = (active: boolean) =>
     cn(
@@ -68,6 +74,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               {errorMessage}
             </div>
           )}
+
+          {inviteNotice ? (
+            <p className="rounded-lg border bg-muted/50 px-3 py-2 text-sm">{inviteNotice}</p>
+          ) : null}
 
           {/* Google */}
           <GoogleSignInButton />

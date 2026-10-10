@@ -97,6 +97,7 @@ Then create a `.env.local`:
 | `ANTHROPIC_API_KEY` | The in-app assistant only. Skip it and the rest of the app works. |
 | `SUPABASE_ACCESS_TOKEN` | The `db:*` scripts only. A personal access token (`sbp_…`). |
 | `SUPABASE_PROJECT_REF` | The `db:*` scripts, and only if `supabase/.temp/project-ref` isn't set. |
+| `RUMBO_HOUSEHOLD_SHARING` | Household invitations (Settings › Invitations and `/invite/<token>`). Off unless `1` or `true`; turning it off disables the whole invite flow. |
 
 The app opens at http://localhost:3000 and redirects to `/login`.
 
