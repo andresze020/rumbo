@@ -75,6 +75,8 @@ export async function loadCategoryEntryMemory(
   supabase: Awaited<ReturnType<typeof createClient>>,
   householdId: string
 ): Promise<CategoryEntryMemory> {
+  // HH-2: scope all — it pre-fills the form from the user's own recent entries,
+  // whichever account they were on.
   const { data, error } = await supabase
     .from('transactions')
     .select(

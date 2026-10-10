@@ -3,6 +3,8 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getRequestProfile, getRequestUser } from '@/lib/supabase/request'
+import { getPrivacyScope } from '@/lib/privacy/server'
+import { scopeByTransaction } from '@/lib/privacy/scope'
 import { groupByAsOfDate } from '@/lib/balances/multi-date'
 import { balanceTrendDates, balanceTrendFromRows, type BalanceTrendRow } from '@/lib/net-worth/trend'
 import { computeValuation, selectNetWorthAccounts } from '@/lib/net-worth/valuation'
@@ -137,6 +139,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const profile = await getRequestProfile()
   if (!profile?.default_household_id) redirect('/onboarding')
+  // HH-2: started now so it overlaps the household read below.
+  const privacyPromise = getPrivacyScope(profile.default_household_id)
 
   const { data: household, error } = await supabase
     .from('households')
@@ -165,6 +169,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   // through getDashboardTrend, with its own auth + profile lookups (2026-09-25).
   const trendDates = balanceTrendDates(selectedMonth, MAX_MONTHLY_TIMEFRAME_MONTHS, todayIso)
   const balanceDates = [...new Set([...trendDates.snapshotDates, selectedSnapshotDate, prevMonthEndDate])]
+  const privacy = await privacyPromise
+  const { scope } = privacy
 
   const [
     { data: multiDateBalances, error: accountBalancesError },
@@ -181,19 +187,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     supabase.rpc('get_account_balances_as_of_many', {
       p_household_id: household.id,
       p_as_of_dates: balanceDates,
+      p_scope: scope,
     }),
     supabase.rpc('get_monthly_dashboard_summary', {
       p_household_id: household.id,
       p_month: selectedMonthDate,
+      p_scope: scope,
     }),
     supabase.rpc('get_monthly_dashboard_summary', {
       p_household_id: household.id,
       p_month: prevMonthDate,
+      p_scope: scope,
     }),
     supabase.rpc('get_monthly_budget_details', {
       p_household_id: household.id,
       p_budget_month: selectedMonthDate,
     }),
+    // Onboarding's "has any transaction": household-wide, not scoped (HH-2).
     supabase
       .from('transactions')
       .select('id', { count: 'exact', head: true })
@@ -202,20 +212,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .is('deleted_at', null),
     // RUM-009: the month on screen's review backlog (not all time). Moved up
     // from the removed Recent activity card to the cash-flow card's header.
-    supabase
-      .from('transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('household_id', household.id)
-      .eq('review_status', 'unreviewed')
-      .neq('transaction_type', 'opening_balance')
-      .neq('status', 'voided')
-      .is('deleted_at', null)
-      .gte('transaction_date', selectedMonthDate)
-      .lte('transaction_date', monthEndDate(selectedMonth)),
+    scopeByTransaction(
+      supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('household_id', household.id)
+        .eq('review_status', 'unreviewed')
+        .neq('transaction_type', 'opening_balance')
+        .neq('status', 'voided')
+        .is('deleted_at', null)
+        .gte('transaction_date', selectedMonthDate)
+        .lte('transaction_date', monthEndDate(selectedMonth)),
+      scope,
+      privacy.userId
+    ),
     // Spending pace (2026-09-26) and the same-day Cash flow deltas (MQ-005):
     // income and expense per day for last month and this one, the same
     // allocations get_monthly_dashboard_summary adds up.
-    getDailyCashFlow(supabase, household.id, prevMonthDate, monthEndDate(selectedMonth)),
+    getDailyCashFlow(supabase, household.id, prevMonthDate, monthEndDate(selectedMonth), privacy),
   ])
   const balancesByDate = groupByAsOfDate((multiDateBalances ?? []) as MultiDateAccountBalance[])
   const accountBalances = balancesByDate.get(selectedSnapshotDate) ?? []
@@ -247,6 +261,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     previousMonthHasActivity:
       Number(prevSummary?.monthly_income ?? 0) !== 0 ||
       Number(prevSummary?.monthly_expenses ?? 0) !== 0,
+    privacy,
   })
 
   const dashboardCurrency = monthlySummary?.base_currency ?? baseCurrency

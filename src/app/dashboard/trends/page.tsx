@@ -8,6 +8,7 @@ import { MAX_MONTHLY_TIMEFRAME_MONTHS, MONTHLY_TIMEFRAME_OPTIONS } from '@/lib/c
 import { getHousehold, getMonthlySeries, lastNMonths, parseMonthParam } from '@/lib/analysis/server'
 import { TrendsExplorer } from './trends-explorer'
 import { getRequestToday } from '@/lib/periods/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
 
 type TrendsPageProps = {
   searchParams: Promise<{ month?: string; range?: string }>
@@ -22,10 +23,11 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
   const defaultMonths = params.range === '12' ? 12 : 6
   const ctx = await getHousehold()
   const currency = ctx.household.base_currency
+  const { scope } = await getPrivacyScope(ctx.household.id)
 
   const months = lastNMonths(month, MAX_MONTHLY_TIMEFRAME_MONTHS)
   const [monthly, netWorthResult] = await Promise.all([
-    getMonthlySeries(ctx, months, locale),
+    getMonthlySeries(ctx, months, scope, locale),
     getDashboardTrend('net-worth', month, MAX_MONTHLY_TIMEFRAME_MONTHS, locale),
   ])
   const netWorth = netWorthResult.ok ? netWorthResult.data : []

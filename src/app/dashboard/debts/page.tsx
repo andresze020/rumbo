@@ -26,6 +26,8 @@ import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import { createUiTranslator } from '@/lib/i18n/ui'
 import { createClient } from '@/lib/supabase/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
+import { scopeByOwner } from '@/lib/privacy/scope'
 import { nativeSelectCls, formBtnCls } from '@/lib/form-styles'
 import { cn } from '@/lib/utils'
 import { getRequestToday } from '@/lib/periods/server'
@@ -191,6 +193,8 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
     .eq('id', user.id)
     .maybeSingle()
   if (!profile?.default_household_id) redirect('/onboarding')
+  // HH-2: started now so it overlaps the household read below.
+  const privacyPromise = getPrivacyScope(profile.default_household_id)
 
   const { data: household, error: householdError } = await supabase
     .from('households')
@@ -205,16 +209,23 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
     .eq('is_active', true)
     .order('code', { ascending: true })
 
-  const { data: debts, error: debtsError } = await supabase
-    .from('debts')
-    .select(
-      'id, account_id, name, lender_name, original_principal, interest_rate, interest_rate_period, minimum_payment, payment_due_day, status, notes, created_at'
-    )
-    .eq('household_id', household.id)
-    .is('deleted_at', null)
+  const { scope, userId } = await privacyPromise
+  const { data: debts, error: debtsError } = await scopeByOwner(
+    supabase
+      .from('debts')
+      .select(
+        'id, account_id, name, lender_name, original_principal, interest_rate, interest_rate_period, minimum_payment, payment_due_day, status, notes, created_at'
+      )
+      .eq('household_id', household.id)
+      .is('deleted_at', null),
+    scope,
+    userId
+  )
     .order('status', { ascending: true })
     .order('created_at', { ascending: true })
 
+  // HH-2: scope all — the "existing account" picker, and the names and types
+  // of the (scoped) debts' accounts.
   const { data: accounts, error: accountsError } = await supabase
     .from('accounts')
     .select(
@@ -230,6 +241,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageProps) {
     {
       p_household_id: household.id,
       p_as_of_date: today,
+      p_scope: scope,
     }
   )
 

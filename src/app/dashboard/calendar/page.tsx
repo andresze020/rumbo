@@ -34,6 +34,7 @@ import {
   getTransferExpenseAccounts,
   type CalendarDay,
 } from '@/lib/analysis/report-query'
+import { getPrivacyScope } from '@/lib/privacy/server'
 import { getRequestToday } from '@/lib/periods/server'
 
 type CalendarPageProps = {
@@ -137,8 +138,9 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
 
   const ctx = await getHousehold()
   const currency = ctx.household.base_currency
-  const transferExpenseAccounts = await getTransferExpenseAccounts(ctx)
-  const calendar = await getCalendarMonth(ctx, month, transferExpenseAccounts)
+  const { scope } = await getPrivacyScope(ctx.household.id)
+  const transferExpenseAccounts = await getTransferExpenseAccounts(ctx, scope)
+  const calendar = await getCalendarMonth(ctx, month, scope, transferExpenseAccounts)
 
   const blanks = leadingBlanks(month)
   const weekdays = weekdayLabels(locale)

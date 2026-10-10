@@ -6,6 +6,7 @@ import { PayeeMergeForm } from './payee-merge-form'
 import { PayeeRow, type PayeeVM } from './payee-row'
 import { archivePayeeAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
 import { buttonVariants } from '@/components/ui/button'
 import { ArchiveToast } from '@/components/archive-toast'
 import { EmptyState } from '@/components/empty-state'
@@ -97,6 +98,8 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
     .eq('id', user.id)
     .maybeSingle()
   if (!profile?.default_household_id) redirect('/onboarding')
+  // HH-2: started now so it overlaps the household read below.
+  const privacyPromise = getPrivacyScope(profile.default_household_id)
 
   const { data: household, error: householdError } = await supabase
     .from('households')
@@ -105,9 +108,10 @@ export default async function PayeesPage({ searchParams }: PayeesPageProps) {
     .single()
   if (householdError || !household) redirect('/onboarding')
 
+  const { scope } = await privacyPromise
   const { data: statsData, error: payeesError } = await supabase.rpc(
     'get_payees_with_stats',
-    { p_household_id: household.id }
+    { p_household_id: household.id, p_scope: scope }
   )
 
   const allPayees = ((statsData ?? []) as PayeeStatsRow[])

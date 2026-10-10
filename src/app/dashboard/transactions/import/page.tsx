@@ -81,6 +81,7 @@ export default async function CsvImportPage({ searchParams }: ImportPageProps) {
     redirect('/onboarding')
   }
 
+  // HH-2: scope all — the import's target-account picker.
   const { data: accounts, error: accountsError } = await supabase
     .from('accounts')
     .select('id, name, currency_code, institution_name')
@@ -138,6 +139,10 @@ export default async function CsvImportPage({ searchParams }: ImportPageProps) {
     .order('name', { ascending: true })
 
   // BR-024: recent import batches (for the "Import history" / revert section).
+  // HH-2: scope all on purpose — this lists what the user can revert, and
+  // Imports is not a scoped screen (SCP-3). A batch with no target account is
+  // private to its uploader even when they own no private account (HH-1), so a
+  // household-scoped read would hide it, and its Revert, from them.
   const { data: batchRows } = await supabase
     .from('import_batches')
     .select(

@@ -4,6 +4,8 @@ import { Plus } from 'lucide-react'
 import { InstallmentForm } from './installment-form'
 import { InstallmentPlanRow, type InstallmentPlanVM } from './installment-plan-row'
 import { createClient } from '@/lib/supabase/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
+import { scopeByOwner } from '@/lib/privacy/scope'
 import { buttonVariants } from '@/components/ui/button'
 import { Callout } from '@/components/callout'
 import { EmptyState } from '@/components/empty-state'
@@ -74,6 +76,8 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
   }
 
   const householdId = profile.default_household_id as string
+  // HH-2: started now so it overlaps the household read below.
+  const privacyPromise = getPrivacyScope(householdId)
 
   const { data: household } = await supabase
     .from('households')
@@ -87,19 +91,24 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
 
   const baseCurrency = household.base_currency as string
 
+  const privacy = await privacyPromise
   const [
     { data: planRows, error: plansError },
     { data: accountRows },
     { data: categoryRows },
     { data: payeeRows },
   ] = await Promise.all([
-    supabase
-      .from('installment_plans')
-      .select(
-        'id, account_id, category_id, description, total_amount, currency_code, installment_count, start_date, status'
-      )
-      .eq('household_id', householdId)
-      .order('created_at', { ascending: false }),
+    scopeByOwner(
+      supabase
+        .from('installment_plans')
+        .select(
+          'id, account_id, category_id, description, total_amount, currency_code, installment_count, start_date, status'
+        )
+        .eq('household_id', householdId),
+      privacy.scope,
+      privacy.userId
+    ).order('created_at', { ascending: false }),
+    // HH-2: scope all — a form picker (and the names it lends the list).
     supabase
       .from('accounts')
       .select('id, name, currency_code, institution_name, is_archived')
@@ -112,6 +121,7 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
       .eq('household_id', householdId)
       .is('deleted_at', null)
       .order('name', { ascending: true }),
+    // HH-2: scope all — the form's payee picker.
     supabase
       .from('payees')
       .select('id, name')
@@ -139,6 +149,7 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
 
   // Progress per plan comes from the installments themselves, so a voided
   // installment (an early payoff) stops counting without any extra bookkeeping.
+  // HH-2: keyed by the (scoped) plans above, so no further scope applies.
   let installments: InstallmentTransaction[] = []
   if (plans.length) {
     const { data: installmentRows } = await supabase

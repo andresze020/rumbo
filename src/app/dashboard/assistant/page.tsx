@@ -33,6 +33,8 @@ export default async function AssistantPage({ searchParams }: AssistantPageProps
     .single()
   if (householdError || !household) redirect('/onboarding')
 
+  // HH-2: scope all — the assistant's transaction-draft pickers (accounts,
+  // payees): any account the user may write to.
   const { data: accountRows } = await supabase
     .from('accounts')
     .select('id, name, currency_code, institution_name, account_type, icon')

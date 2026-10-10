@@ -31,6 +31,8 @@ import {
   getTransferExpenseAccounts,
   type ReportFilters as ReportFilterValues,
 } from '@/lib/analysis/report-query'
+import { getPrivacyScope } from '@/lib/privacy/server'
+import { scopeByOwner } from '@/lib/privacy/scope'
 import { getRequestToday } from '@/lib/periods/server'
 
 type ReportsPageProps = {
@@ -162,14 +164,19 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
   const currency = ctx.household.base_currency
   const categoryLookup = await getCategoryLookup(ctx)
+  const { scope } = await getPrivacyScope(ctx.household.id)
 
   const [{ data: accountRows }, { data: tagRows }] = await Promise.all([
-    ctx.supabase
-      .from('accounts')
-      .select('id, name, institution_name, currency_code, is_archived')
-      .eq('household_id', ctx.household.id)
-      .is('deleted_at', null)
-      .order('name', { ascending: true }),
+    // HH-2: the account filter offers the accounts the report covers.
+    scopeByOwner(
+      ctx.supabase
+        .from('accounts')
+        .select('id, name, institution_name, currency_code, is_archived')
+        .eq('household_id', ctx.household.id)
+        .is('deleted_at', null),
+      scope,
+      ctx.userId
+    ).order('name', { ascending: true }),
     ctx.supabase
       .from('tags')
       .select('id, name')
@@ -188,10 +195,11 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   }
   // BR-039: accounts opted into "transfers in count as expense". Reporting only
   // — the ledger, balances and budgets are untouched by this.
-  const transferExpenseAccounts = await getTransferExpenseAccounts(ctx)
+  const transferExpenseAccounts = await getTransferExpenseAccounts(ctx, scope)
   const report = await getReportData(
     ctx,
     filters,
+    scope,
     categoryLookup,
     transferExpenseAccounts
   )

@@ -5,6 +5,8 @@ import { formatMonthLabel } from '@/lib/format'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { localeToBcp47 } from '@/lib/format'
 import { parseMonthStartDay } from '@/lib/periods/month'
+import type { PrivacyScope } from '@/lib/privacy/scope'
+import { getPrivacyScope } from '@/lib/privacy/server'
 
 /**
  * Shared server-side data helpers for the analysis & planning screens
@@ -43,6 +45,9 @@ export async function getHousehold(): Promise<HouseholdContext> {
     .eq('id', user.id)
     .maybeSingle()
   if (!profile?.default_household_id) redirect('/onboarding')
+  // HH-2: warm the request's privacy scope (memoized per request) so it
+  // resolves while the household is read; the pages await the same promise.
+  void getPrivacyScope(profile.default_household_id)
 
   const { data: household } = await supabase
     .from('households')
@@ -152,10 +157,12 @@ type MonthlyDashboardSummaryRow = {
 /**
  * Income / expenses / savings / savings-rate for each of `months`, in base
  * currency. One `get_monthly_dashboard_summary` call per month, run together.
+ * `scope` (HH-2) picks the shared side, the caller's private side, or both.
  */
 export async function getMonthlySeries(
   ctx: HouseholdContext,
   months: string[],
+  scope: PrivacyScope,
   locale: Locale = 'en'
 ): Promise<MonthlyPoint[]> {
   const results = await Promise.all(
@@ -163,6 +170,7 @@ export async function getMonthlySeries(
       ctx.supabase.rpc('get_monthly_dashboard_summary', {
         p_household_id: ctx.household.id,
         p_month: monthStartDate(m),
+        p_scope: scope,
       })
     )
   )
@@ -233,11 +241,13 @@ function categoryPath(
 export async function getExpenseCategories(
   ctx: HouseholdContext,
   month: string,
+  scope: PrivacyScope,
   byId: Map<string, CategoryLookup>
 ): Promise<CategorySlice[]> {
   const { data } = await ctx.supabase.rpc('get_monthly_expenses_by_category', {
     p_household_id: ctx.household.id,
     p_month: monthStartDate(month),
+    p_scope: scope,
   })
   return ((data ?? []) as MonthlyExpenseCategoryRow[])
     .map((row) => ({

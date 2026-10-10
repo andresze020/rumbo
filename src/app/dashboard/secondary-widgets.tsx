@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { AlertTriangle, ChevronRight, Layers, PiggyBank, Repeat, TrendingDown } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
+import { scopeByOwner } from '@/lib/privacy/scope'
 import { Callout } from '@/components/callout'
 import { InsightCard } from '@/components/insight-card'
 import { Money } from '@/components/dashboard/money'
@@ -141,6 +143,8 @@ export async function DashboardSecondaryWidgets({
   const supabase = await createClient()
   const selectedMonthDate = `${selectedMonth}-01`
   const today = await getRequestToday()
+  // HH-2: the page's scope (memoized for this request).
+  const { scope, userId } = await getPrivacyScope(householdId)
 
   const [
     { data: expenseCategoryRows, error: expenseCategoriesError },
@@ -152,29 +156,39 @@ export async function DashboardSecondaryWidgets({
     supabase.rpc('get_monthly_expenses_by_category', {
       p_household_id: householdId,
       p_month: selectedMonthDate,
+      p_scope: scope,
     }),
     supabase
       .from('categories')
       .select('id, name, parent_category_id, is_archived')
       .eq('household_id', householdId)
       .is('deleted_at', null),
-    supabase
-      .from('recurring_transactions')
-      .select('id, name, transaction_type, amount, currency_code, next_run_date, auto_post')
-      .eq('household_id', householdId)
-      .eq('is_active', true)
-      .not('next_run_date', 'is', null)
+    scopeByOwner(
+      supabase
+        .from('recurring_transactions')
+        .select('id, name, transaction_type, amount, currency_code, next_run_date, auto_post')
+        .eq('household_id', householdId)
+        .eq('is_active', true)
+        .not('next_run_date', 'is', null),
+      scope,
+      userId
+    )
       .order('next_run_date', { ascending: true })
       .limit(4),
-    supabase
-      .from('debts')
-      .select('account_id, name, status, original_principal, minimum_payment')
-      .eq('household_id', householdId)
-      .is('deleted_at', null),
-    supabase
-      .from('goals')
-      .select('id, name, target_amount, current_amount, status')
-      .eq('household_id', householdId)
+    scopeByOwner(
+      supabase
+        .from('debts')
+        .select('account_id, name, status, original_principal, minimum_payment')
+        .eq('household_id', householdId)
+        .is('deleted_at', null),
+      scope,
+      userId
+    ),
+    scopeByOwner(
+      supabase.from('goals').select('id, name, target_amount, current_amount, status').eq('household_id', householdId),
+      scope,
+      userId
+    )
       .order('created_at', { ascending: false })
       .limit(3),
   ])

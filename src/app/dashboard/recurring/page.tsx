@@ -5,6 +5,8 @@ import { RecurringForm } from './recurring-form'
 import { RecurringRow, type RecurringRowVM } from './recurring-row'
 import { PostForm } from './post-form'
 import { createClient } from '@/lib/supabase/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
+import { scopeByOwner } from '@/lib/privacy/scope'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { FormDialog } from '@/components/form-dialog'
@@ -112,6 +114,8 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
     .eq('id', user.id)
     .maybeSingle()
   if (!profile?.default_household_id) redirect('/onboarding')
+  // HH-2: started now so it overlaps the household read below.
+  const privacyPromise = getPrivacyScope(profile.default_household_id)
 
   const { data: household, error: householdError } = await supabase
     .from('households')
@@ -122,19 +126,24 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
 
   const baseCurrency = household.base_currency as string
 
+  const { scope, userId } = await privacyPromise
   const [
     { data: recurring, error: recurringError },
     { data: accounts },
     { data: categories },
     { data: payees },
   ] = await Promise.all([
-    supabase
-      .from('recurring_transactions')
-      .select(
-        'id, name, transaction_type, account_id, to_account_id, category_id, payee_id, amount, currency_code, frequency, start_date, end_date, next_run_date, is_active, auto_post, last_error, last_error_at'
-      )
-      .eq('household_id', household.id)
-      .order('next_run_date', { ascending: true, nullsFirst: false }),
+    scopeByOwner(
+      supabase
+        .from('recurring_transactions')
+        .select(
+          'id, name, transaction_type, account_id, to_account_id, category_id, payee_id, amount, currency_code, frequency, start_date, end_date, next_run_date, is_active, auto_post, last_error, last_error_at'
+        )
+        .eq('household_id', household.id),
+      scope,
+      userId
+    ).order('next_run_date', { ascending: true, nullsFirst: false }),
+    // HH-2: scope all — a form picker (and the names it lends the list).
     supabase
       .from('accounts')
       .select('id, name, currency_code, institution_name, is_archived')
@@ -150,6 +159,7 @@ export default async function RecurringPage({ searchParams }: RecurringPageProps
       .order('category_type', { ascending: true })
       .order('sort_order', { ascending: true, nullsFirst: false })
       .order('name', { ascending: true }),
+    // HH-2: scope all — the form's payee picker.
     supabase
       .from('payees')
       .select('id, name')

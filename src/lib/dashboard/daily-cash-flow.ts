@@ -1,6 +1,8 @@
 import 'server-only'
 import type { createClient } from '@/lib/supabase/server'
 import type { DailyAmounts } from './spending-pace'
+import { scopeByOwner } from '@/lib/privacy/scope'
+import type { RequestPrivacyScope } from '@/lib/privacy/server'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 
@@ -30,7 +32,8 @@ const PAGE = 1000
  * - posted, not soft-deleted transactions, by `transaction_date`;
  * - the category is not deleted and not `exclude_from_reports`, and neither
  *   is its live parent (a deleted parent does not exclude, as in the RPC's
- *   left join).
+ *   left join);
+ * - the same privacy scope (HH-2), on the allocation's own owner.
  *
  * Read-only, under the user's session (RLS applies).
  */
@@ -38,25 +41,30 @@ export async function getDailyCashFlow(
   supabase: SupabaseServerClient,
   householdId: string,
   from: string,
-  to: string
+  to: string,
+  privacy: RequestPrivacyScope
 ): Promise<{ income: DailyAmounts; expenses: DailyAmounts; error: boolean }> {
   const income: DailyAmounts = new Map()
   const expenses: DailyAmounts = new Map()
   for (let offset = 0; ; offset += PAGE) {
-    const { data, error } = await supabase
-      .from('transaction_allocations')
-      .select(
-        'allocation_type, amount_base_currency, transactions!inner(transaction_date), categories!inner(parent:parent_category_id(exclude_from_reports, deleted_at))'
-      )
-      .eq('household_id', householdId)
-      .in('allocation_type', ['income', 'expense'])
-      .eq('transactions.household_id', householdId)
-      .eq('transactions.status', 'posted')
-      .is('transactions.deleted_at', null)
-      .gte('transactions.transaction_date', from)
-      .lte('transactions.transaction_date', to)
-      .is('categories.deleted_at', null)
-      .eq('categories.exclude_from_reports', false)
+    const { data, error } = await scopeByOwner(
+      supabase
+        .from('transaction_allocations')
+        .select(
+          'allocation_type, amount_base_currency, transactions!inner(transaction_date), categories!inner(parent:parent_category_id(exclude_from_reports, deleted_at))'
+        )
+        .eq('household_id', householdId)
+        .in('allocation_type', ['income', 'expense'])
+        .eq('transactions.household_id', householdId)
+        .eq('transactions.status', 'posted')
+        .is('transactions.deleted_at', null)
+        .gte('transactions.transaction_date', from)
+        .lte('transactions.transaction_date', to)
+        .is('categories.deleted_at', null)
+        .eq('categories.exclude_from_reports', false),
+      privacy.scope,
+      privacy.userId
+    )
       .order('id')
       .range(offset, offset + PAGE - 1)
     if (error) return { income: new Map(), expenses: new Map(), error: true }

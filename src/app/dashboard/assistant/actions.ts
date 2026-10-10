@@ -8,6 +8,7 @@ import { ASSISTANT_TOOLS, executeAssistantTool } from '@/lib/ai/tools'
 import { buildAnalysisSystemPrompt, buildTransactionDraftSystemPrompt } from '@/lib/ai/prompts'
 import type { TransactionFormAccount, TransactionFormCategory } from '@/app/dashboard/transactions/transaction-form'
 import { getRequestToday } from '@/lib/periods/server'
+import { getPrivacyScope } from '@/lib/privacy/server'
 
 const MAX_TOOL_ROUNDS = 6
 const MAX_HISTORY_MESSAGES = 20
@@ -117,6 +118,8 @@ export async function getAssistantContextAction(): Promise<
     .maybeSingle()
   if (!household) return { error: 'Could not load household.' }
 
+  // HH-2: scope all — the drafted transaction's account and payee pickers
+  // (any account the user may write to).
   const { data: accounts } = await supabase
     .from('accounts')
     .select('id, name, currency_code, institution_name')
@@ -159,6 +162,8 @@ export async function sendAssistantMessageAction(
   const resolved = await resolveHouseholdContext()
   if (!resolved.ok) return { error: resolved.error }
   const { supabase, context } = resolved
+  // HH-2 (S21): the tools read through the user's session, in the request's scope.
+  const privacy = await getPrivacyScope(context.householdId)
 
   const messages: Anthropic.MessageParam[] = recentHistory.map((message) => ({
     role: message.role,
@@ -205,6 +210,7 @@ export async function sendAssistantMessageAction(
           const result = await executeAssistantTool(
             supabase,
             context.householdId,
+            privacy,
             toolUse.name,
             (toolUse.input ?? {}) as Record<string, unknown>
           )

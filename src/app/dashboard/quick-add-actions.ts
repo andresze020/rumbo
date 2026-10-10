@@ -89,6 +89,7 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
         .select('base_currency')
         .eq('id', householdId)
         .single(),
+      // HH-2: scope all — the form's pickers (any account the user may write to).
       supabase
         .from('accounts')
         .select('id, name, currency_code, institution_name, account_type, icon, color')
