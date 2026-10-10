@@ -26,10 +26,13 @@ export type InviteReviewAccount = { id: string; name: string; isPrivate: boolean
  *    this component's state; closing the dialog drops it.
  */
 export function InviteMemberForm({
+  householdId,
   roles,
   review,
   closeHref,
 }: {
+  /** The household this dialog was rendered for; the invitation targets it. */
+  householdId: string
   roles: InvitationRole[]
   /** null when no review is needed. */
   review: InviteReviewAccount[] | null
@@ -139,6 +142,7 @@ export function InviteMemberForm({
   const errorCode = state.status === 'error' ? state.code : null
   return (
     <form action={formAction} className="space-y-4">
+      <input type="hidden" name="household_id" value={householdId} />
       {errorCode ? <Callout variant="error">{t(`invitations.errors.${errorCode}`)}</Callout> : null}
       <div className="space-y-1.5">
         <Label htmlFor="invite_email">{t('invitations.settings.email')}</Label>

@@ -71,6 +71,7 @@ begin
   foreach fn in array array[
     'public.hh_invitation_token_hash(text)',
     'public.hh_new_invitation_token()',
+    'public.hh_household_sharing_enabled()',
     'public.hh_revoke_invitations_of_former_admin()'
   ] loop
     if has_function_privilege('authenticated', fn, 'execute') or has_function_privilege('anon', fn, 'execute') then
@@ -84,6 +85,8 @@ end $$;
 -- check: HH-4 the token is 43 base64url characters, stored only as its SHA-256, valid 7 days
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -125,6 +128,8 @@ rollback;
 -- check: HH-4 a member, a viewer or a non-member cannot create an invitation or list the pending ones
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -170,6 +175,8 @@ rollback;
 -- check: HH-4 only the owner invites an admin, nobody invites an owner, nobody invites themselves
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -231,6 +238,8 @@ rollback;
 -- check: HH-4 a different account cannot preview details, accept or decline (wrong email)
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -290,6 +299,8 @@ rollback;
 -- check: HH-4 an unverified address can neither see the invitation nor accept it
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -330,6 +341,8 @@ rollback;
 -- check: HH-4 an expired, a revoked or a replaced invitation is dead (one neutral answer)
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -399,6 +412,8 @@ rollback;
 -- check: HH-4 an invitation is single use, and accepting it joins with its role and lands in the household
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -465,6 +480,8 @@ rollback;
 -- check: HH-4 someone who already has a household keeps it as their active one (INV-9)
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -499,6 +516,8 @@ rollback;
 -- check: HH-4 accepting again reactivates the same membership row (S25)
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -537,6 +556,8 @@ rollback;
 -- check: HH-4 accepting is a no-op for someone already active (S13)
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -573,6 +594,8 @@ rollback;
 -- check: HH-4 declining ends the invitation and only the invited address can do it
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -617,6 +640,8 @@ rollback;
 -- check: HH-4 caps — 10 pending invitations, 20 created per day
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -662,6 +687,8 @@ rollback;
 -- check: HH-4 caps — 6 active members (invite and accept both refuse the 7th)
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -720,6 +747,8 @@ rollback;
 -- check: HH-4 demoting or removing an admin revokes the invitations they created
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   hh constant uuid := '__HOUSEHOLD_ID__';
@@ -774,6 +803,8 @@ rollback;
 -- check: HH-4 an account cannot be made private while an invitation is pending (D6)
 begin;
 reset role;
+-- On for the probe (the live project ships it off); rolled back with it.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 do $$
 declare
   v_owner uuid := auth.uid();
@@ -810,3 +841,89 @@ begin
   perform public.set_account_private(v_account, true);
 end $$;
 rollback;
+
+-- ── 8. The database-side switch ───────────────────────────────────────────
+
+-- check: HH-4 with the database switch off, no invitation is created, previewed, accepted or declined
+begin;
+reset role;
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
+do $$
+declare
+  hh constant uuid := '__HOUSEHOLD_ID__';
+  v_owner uuid := auth.uid();
+  v_invitee uuid := gen_random_uuid();
+  v_email text;
+  v_token text;
+begin
+  update public.household_invitations set revoked_at = coalesce(revoked_at, now())
+  where household_id = hh and accepted_at is null;
+  update public.household_invitations set created_at = created_at - interval '2 days' where household_id = hh;
+
+  v_email := 'hh4-switch-' || v_invitee || '@example.test';
+  insert into auth.users (id, email, email_confirmed_at) values (v_invitee, v_email, now());
+  v_token := public.create_household_invitation(hh, v_email, 'member');
+
+  update public.app_feature_flags set enabled = false where name = 'household_sharing';
+
+  begin
+    perform public.create_household_invitation(hh, 'hh4-switch-off@example.test', 'member');
+    raise exception 'LEAK: an invitation was created with the switch off';
+  exception
+    when others then
+      if sqlerrm <> 'Household sharing is not enabled' then
+        raise exception 'create: got % (%)', sqlstate, sqlerrm;
+      end if;
+  end;
+
+  -- Cleanup still works: the owner lists and can revoke what is pending.
+  if not exists (select 1 from public.list_household_invitations(hh) i where i.email = v_email) then
+    raise exception 'list should still work with the switch off';
+  end if;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_invitee, 'role', 'authenticated')::text, true);
+  if public.get_household_invitation_preview(v_token) <> '{"status": "unavailable"}'::jsonb then
+    raise exception 'LEAK: a link previewed with the switch off';
+  end if;
+  begin
+    perform public.accept_household_invitation(v_token);
+    raise exception 'LEAK: an invitation was accepted with the switch off';
+  exception
+    when others then
+      if sqlerrm <> 'This invitation is no longer valid' then
+        raise exception 'accept: got % (%)', sqlstate, sqlerrm;
+      end if;
+  end;
+  begin
+    perform public.decline_household_invitation(v_token);
+    raise exception 'LEAK: an invitation was declined with the switch off';
+  exception
+    when others then
+      if sqlerrm <> 'This invitation is no longer valid' then
+        raise exception 'decline: got % (%)', sqlstate, sqlerrm;
+      end if;
+  end;
+  if exists (select 1 from public.household_members m where m.household_id = hh and m.user_id = v_invitee) then
+    raise exception 'LEAK: a membership row appeared with the switch off';
+  end if;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_owner, 'role', 'authenticated')::text, true);
+  perform public.revoke_household_invitation(
+    (select i.id from public.household_invitations i
+     where i.token_hash = encode(extensions.digest(v_token, 'sha256'), 'hex')));
+end $$;
+rollback;
+
+-- check: HH-4 no client can read or change the feature switches
+do $$
+begin
+  begin
+    update public.app_feature_flags set enabled = true where name = 'household_sharing';
+  exception
+    when insufficient_privilege then
+      return;
+    when others then
+      raise exception 'expected 42501, got % (%)', sqlstate, sqlerrm;
+  end;
+  raise exception 'LEAK: a client changed app_feature_flags';
+end $$;

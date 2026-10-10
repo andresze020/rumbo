@@ -408,6 +408,7 @@ export default async function SettingsPage({ searchParams }: Props) {
       {/* ── Invitations (HH-4) ─────────────────────────────────────── */}
       {inviteRoles.length > 0 && callerRole ? (
         <HouseholdInvitationsSection
+          householdId={householdId}
           locale={locale}
           callerRole={callerRole}
           roles={inviteRoles}

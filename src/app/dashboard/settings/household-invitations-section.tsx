@@ -28,6 +28,7 @@ const SETTINGS_PATH = '/dashboard/settings'
  * from list_household_invitations; the invite dialog opens on `?invite=1`.
  */
 export function HouseholdInvitationsSection({
+  householdId,
   locale,
   callerRole,
   roles,
@@ -37,6 +38,7 @@ export function HouseholdInvitationsSection({
   revoked,
   errorCode,
 }: {
+  householdId: string
   locale: Locale
   callerRole: string
   roles: InvitationRole[]
@@ -120,7 +122,7 @@ export function HouseholdInvitationsSection({
           description={t('invitations.settings.dialogDescription')}
           cancelHref={closeHref}
         >
-          <InviteMemberForm roles={roles} review={review} closeHref={closeHref} />
+          <InviteMemberForm householdId={householdId} roles={roles} review={review} closeHref={closeHref} />
         </FormDialog>
       ) : null}
     </Card>

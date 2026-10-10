@@ -384,6 +384,9 @@ commit;
 
 alter table public.households alter column id set default gen_random_uuid();
 
+-- HH-4's database switch ships off; the fixtures (and tests) run with it on.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
+
 -- Second member, the way the app adds one (HH-4): A1 invites A2's address as a
 -- member, A2 accepts. Accepting also makes A their active household (INV-9: they
 -- had none). The raw token lives only in this block's variable.

@@ -30,7 +30,53 @@
 --
 -- D6, second half: set_account_private now also refuses while an invitation
 -- to the household is pending (HH-1 left that clause for this phase).
+--
+-- Database-side switch: app_feature_flags.household_sharing, OFF as shipped.
+-- While it is off, create / preview / accept / decline refuse whatever calls
+-- them (the app's RUMBO_HOUSEHOLD_SHARING only hides the app's paths); list
+-- and revoke keep working so pending links can still be cleaned up. Turning
+-- either switch off stops invitations.
 -- ============================================================
+
+-- ------------------------------------------------------------
+-- 0. The database-side switch
+-- ------------------------------------------------------------
+create table public.app_feature_flags (
+  name text primary key,
+  enabled boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
+comment on table public.app_feature_flags is
+  'Database-side feature switches, read only by SECURITY DEFINER functions. No client access; '
+  'changed by the operator in the SQL editor.';
+
+alter table public.app_feature_flags enable row level security;
+revoke all on table public.app_feature_flags from public, anon, authenticated;
+
+create policy "app_feature_flags_no_client_access"
+on public.app_feature_flags
+for all
+to authenticated
+using (false)
+with check (false);
+
+insert into public.app_feature_flags (name, enabled) values ('household_sharing', false);
+
+create or replace function public.hh_household_sharing_enabled()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (select f.enabled from public.app_feature_flags f where f.name = 'household_sharing'),
+    false
+  )
+$$;
+
+revoke all on function public.hh_household_sharing_enabled() from public, anon, authenticated;
 
 -- ------------------------------------------------------------
 -- 1. Table
@@ -140,6 +186,10 @@ declare
 begin
   if v_user is null then
     raise exception 'Not authorized';
+  end if;
+
+  if not public.hh_household_sharing_enabled() then
+    raise exception 'Household sharing is not enabled';
   end if;
 
   select m.role into v_caller_role
@@ -347,7 +397,9 @@ begin
     raise exception 'Not authorized';
   end if;
 
-  if p_token is null or p_token !~ '^[A-Za-z0-9_-]{43}$' then
+  -- Switched off: every link reads as the neutral dead end.
+  if not public.hh_household_sharing_enabled()
+    or p_token is null or p_token !~ '^[A-Za-z0-9_-]{43}$' then
     return jsonb_build_object('status', 'unavailable');
   end if;
 
@@ -435,7 +487,8 @@ begin
     raise exception 'Not authorized';
   end if;
 
-  if p_token is null or p_token !~ '^[A-Za-z0-9_-]{43}$' then
+  if not public.hh_household_sharing_enabled()
+    or p_token is null or p_token !~ '^[A-Za-z0-9_-]{43}$' then
     raise exception 'This invitation is no longer valid';
   end if;
 
@@ -569,7 +622,8 @@ begin
     raise exception 'Not authorized';
   end if;
 
-  if p_token is null or p_token !~ '^[A-Za-z0-9_-]{43}$' then
+  if not public.hh_household_sharing_enabled()
+    or p_token is null or p_token !~ '^[A-Za-z0-9_-]{43}$' then
     raise exception 'This invitation is no longer valid';
   end if;
 

@@ -128,6 +128,7 @@ export type InvitationRefusal =
 
 const REFUSALS: Record<string, InvitationRefusal> = {
   'Not authorized to invite to this household': 'not_authorized',
+  'Household sharing is not enabled': 'not_authorized',
   'Only the owner can invite an admin': 'only_owner_invites_admin',
   'Only the owner can revoke an admin invitation': 'only_owner_invites_admin',
   'You cannot invite your own email address': 'own_email',
