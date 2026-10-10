@@ -351,3 +351,31 @@ begin
               r.card_id, r.statement_balance, r.paid_since_close, r.payable, r.outstanding, got);
   end loop;
 end $$;
+
+-- HH-4: A2 joined through an invitation, not a direct insert — so the
+-- invitation tests start from one accepted invitation in A and one revoked in
+-- B (nothing pending anywhere), and the accept wrote its audit event.
+-- check: HH-4 A2 joined household A by accepting A1's invitation
+do $$
+declare
+  a constant uuid := '__HOUSEHOLD_ID__';
+  b constant uuid := '10000000-0000-4000-a000-00000000000b';
+begin
+  assert (select count(*) from public.household_invitations
+          where household_id = a and email = 'fixture-a2@example.test' and role = 'member'
+            and invited_by = '00000000-0000-4000-a000-0000000000a1'
+            and accepted_by = '00000000-0000-4000-a000-0000000000a2'
+            and accepted_at is not null and revoked_at is null) = 1,
+    'A: expected one accepted invitation for A2';
+  assert (select count(*) from public.household_invitations
+          where household_id = b and revoked_by = '00000000-0000-4000-a000-0000000000b1'
+            and revoked_at is not null and accepted_at is null) = 1,
+    'B: expected one invitation, revoked by B1';
+  assert (select count(*) from public.household_audit_log
+          where household_id = a and action = 'invitation_accepted'
+            and actor_id = '00000000-0000-4000-a000-0000000000a2') = 1,
+    'A: expected one invitation_accepted event by A2';
+  assert (select default_household_id from public.profiles
+          where id = '00000000-0000-4000-a000-0000000000a2') = a,
+    'A2: accepting should have made A the active household';
+end $$;

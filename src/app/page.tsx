@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { readInviteReturnPath } from '@/lib/households/invite-cookie'
 
 export default async function HomePage() {
   const supabase = await createClient()
@@ -10,6 +11,12 @@ export default async function HomePage() {
 
   if (!user) {
     redirect('/login')
+  }
+
+  // HH-4 (S14): back from email confirmation with an invitation pending.
+  const invitePath = await readInviteReturnPath()
+  if (invitePath) {
+    redirect(invitePath)
   }
 
   const { data: profile, error } = await supabase

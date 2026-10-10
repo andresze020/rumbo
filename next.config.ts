@@ -18,6 +18,19 @@ const nextConfig: NextConfig = {
       static: 30,
     },
   },
+  // HH-4 (S15): an invite link carries its token in the path, so the page
+  // never hands its URL on as a referrer and never gets indexed.
+  async headers() {
+    return [
+      {
+        source: "/invite/:token*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -18,6 +18,8 @@ const USER_FACING_REFUSALS = new Set([
   'Not authorized to change this account',
   'This account is already private',
   'An account can only be made private while you are the only member of the household',
+  // HH-4: D6's second half.
+  'An account cannot be made private while an invitation to this household is pending. Revoke it first',
   "A shared card is paid from this account. Change that card's payment account first",
   'You already have a private account with this name. Rename one first',
   'You already have a private import preset with the same name as one that uses this account. Rename one first',

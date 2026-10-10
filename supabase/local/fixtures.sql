@@ -39,11 +39,12 @@
 --   A  10000000-0000-4000-a000-00000000000a
 --   B  10000000-0000-4000-a000-00000000000b
 
-insert into auth.users (id, email, raw_user_meta_data) values
-  ('00000000-0000-4000-a000-0000000000a1', 'fixture-a1@example.test', '{"display_name":"Fixture A1"}'),
-  ('00000000-0000-4000-a000-0000000000a2', 'fixture-a2@example.test', '{"display_name":"Fixture A2"}'),
-  ('00000000-0000-4000-a000-0000000000b1', 'fixture-b1@example.test', '{"display_name":"Fixture B1"}'),
-  ('00000000-0000-4000-a000-0000000000ff', 'fixture-outsider@example.test', '{"display_name":"Outsider"}');
+-- Every fixture address is verified (HH-4: S10 accepts only a confirmed one).
+insert into auth.users (id, email, raw_user_meta_data, email_confirmed_at) values
+  ('00000000-0000-4000-a000-0000000000a1', 'fixture-a1@example.test', '{"display_name":"Fixture A1"}', now()),
+  ('00000000-0000-4000-a000-0000000000a2', 'fixture-a2@example.test', '{"display_name":"Fixture A2"}', now()),
+  ('00000000-0000-4000-a000-0000000000b1', 'fixture-b1@example.test', '{"display_name":"Fixture B1"}', now()),
+  ('00000000-0000-4000-a000-0000000000ff', 'fixture-outsider@example.test', '{"display_name":"Outsider"}', now());
 
 -- ── Helpers (local-only schema; SECURITY INVOKER so RLS still applies) ──────
 create schema fixture;
@@ -383,21 +384,29 @@ commit;
 
 alter table public.households alter column id set default gen_random_uuid();
 
--- Second member. HH-0 SHORTCUT, outside RLS (as the table owner, not as A1):
--- HH-0 removed the owner/admin INSERT policy this row used to go through, and
--- no RPC adds a member until HH-4. Replace this insert with
--- create_household_invitation (as A1) + accept_household_invitation (as A2)
--- when HH-4 lands.
-insert into public.household_members (household_id, user_id, role, status, joined_at)
-values ('10000000-0000-4000-a000-00000000000a', '00000000-0000-4000-a000-0000000000a2', 'member', 'active', now());
+-- HH-4's database switch ships off; the fixtures (and tests) run with it on.
+update public.app_feature_flags set enabled = true where name = 'household_sharing';
 
--- A2's default household (their own profile row; RLS lets a user edit it).
+-- Second member, the way the app adds one (HH-4): A1 invites A2's address as a
+-- member, A2 accepts. Accepting also makes A their active household (INV-9: they
+-- had none). The raw token lives only in this block's variable.
 begin;
 set local role authenticated;
-select set_config('request.jwt.claims',
-  '{"sub":"00000000-0000-4000-a000-0000000000a2","role":"authenticated"}', true);
-update public.profiles set default_household_id = '10000000-0000-4000-a000-00000000000a'
-where id = '00000000-0000-4000-a000-0000000000a2';
+do $$
+declare
+  v_token text;
+begin
+  perform set_config('request.jwt.claims',
+    '{"sub":"00000000-0000-4000-a000-0000000000a1","role":"authenticated"}', true);
+  v_token := public.create_household_invitation(
+    '10000000-0000-4000-a000-00000000000a', 'fixture-a2@example.test', 'member');
+
+  perform set_config('request.jwt.claims',
+    '{"sub":"00000000-0000-4000-a000-0000000000a2","role":"authenticated"}', true);
+  if (public.accept_household_invitation(v_token) ->> 'status') <> 'joined' then
+    raise exception 'fixtures: A2 did not join household A';
+  end if;
+end $$;
 commit;
 
 -- ============================================================
@@ -581,6 +590,24 @@ select set_config('request.jwt.claims',
   '{"sub":"00000000-0000-4000-a000-0000000000a1","role":"authenticated"}', true);
 update public.categories set exclude_from_reports = true
 where household_id = '10000000-0000-4000-a000-00000000000a' and name = 'Fees';
+commit;
+
+-- Household B gets an invitation row too (every household-scoped table has
+-- rows in both households), revoked so B stays a single member with nothing
+-- pending: D6 still lets B1 make an account private.
+begin;
+set local role authenticated;
+do $$
+declare
+  v_id uuid;
+begin
+  perform set_config('request.jwt.claims',
+    '{"sub":"00000000-0000-4000-a000-0000000000b1","role":"authenticated"}', true);
+  perform public.create_household_invitation(
+    '10000000-0000-4000-a000-00000000000b', 'fixture-b-invitee@example.test', 'viewer');
+  select i.id into v_id from public.list_household_invitations('10000000-0000-4000-a000-00000000000b') i;
+  perform public.revoke_household_invitation(v_id);
+end $$;
 commit;
 
 -- ============================================================
