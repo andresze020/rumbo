@@ -23,26 +23,15 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Household sharing built, HH-0…HH-6** (2026-10-08 → 10-11, #113-#118 +
+  HH-6 branch). DB switch `household_sharing` ON; HH-6 migration not applied
+  yet; open: the two-account QA pass
+  ([`docs/alpha/hh-6-household-sharing-qa.md`](docs/alpha/hh-6-household-sharing-qa.md)).
+  See [`docs/features/household-sharing.md`](docs/features/household-sharing.md);
+  full detail in `docs/SPRINT-LOG.md`.
 - **BR-030 / BR-043 audited, two refund bugs fixed** (2026-09-30, #84-#86).
   Both migrations applied; new subagents `verify-runner` and `qa-smoke`. Full
   detail in `docs/SPRINT-LOG.md`.
-- **RUM-010b: the release gate exists** (2026-09-24, PR #79). See
-  `docs/release-checklist.md`; full detail in `docs/SPRINT-LOG.md`.
-- **B-7 fixed, B-8 decided** (2026-09-25). Dashboard month-nav `<Suspense>`
-  fix + BR-040 refunds netting; full detail in `docs/SPRINT-LOG.md`.
-- **RUM-005 closed: 30 s Router Cache** (2026-09-25). Rule: every Server
-  Action that writes (or signs in or out) must call `revalidatePath`; full
-  detail in `docs/SPRINT-LOG.md`.
-- **Dashboard redesign + Transactions first load, then a premium pass**
-  (2026-09-25 → 09-26). See
-  [`docs/features/dashboard-layout.md`](docs/features/dashboard-layout.md);
-  full detail in `docs/SPRINT-LOG.md`.
-- **The Transactions screen was rebuilt as a phone list, and the period got
-  one owner** (2026-09-19 → 09-20, PR #66). Full detail in
-  `docs/SPRINT-LOG.md`.
-- **The category moved to the top of the add-transaction form, and the form
-  now fits one phone screen** (2026-09-15, PR #64). Full detail in
-  `docs/SPRINT-LOG.md`.
 
 > **Historia anterior:** las entradas de sprint previas viven en
 > `docs/SPRINT-LOG.md` (append-only, más reciente arriba). No se resumen aquí:
@@ -97,6 +86,9 @@ The product is household-first. All financial data must belong to a household.
 - month_closures
 - notes (BR-044)
 - installment_plans (BR-035)
+- household_invitations (HH-4)
+- household_audit_log (HH-0)
+- app_feature_flags (HH-4)
 
 `npx supabase migration list --linked` reported 59/59 on 2026-08-21 (58/58 on
 2026-08-12, the day Tier-3 and Tier-4 were merged and pushed, plus
@@ -116,6 +108,9 @@ Applied since RUM-006: RUM-004 RLS (2026-09-24), B-8 (2026-09-25) and
 `20260930130000_br_030_refund_card_cycle.sql` (2026-09-30), both verified in
 `supabase_migrations.schema_migrations`. Run `npm run db:status` for the
 current count.
+75/75 applied on 2026-10-11 (through `20261011120000_hh_005_members.sql`, the
+household-sharing work). `20261011140000_hh_006_rls_initplan.sql` is the 76th
+and **not applied yet** (the user runs `node scripts/db-push.mjs push --apply`).
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
