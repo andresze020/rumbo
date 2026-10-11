@@ -565,11 +565,17 @@ declare
   v_accounts integer;
 begin
   -- Data-modifying CTEs all run, referenced or not, against one snapshot.
+  -- The expired memberships are row-locked: a rejoin (accept_household_
+  -- invitation reactivates the same row) either commits first, and the
+  -- re-check under the lock drops that member, or waits for the purge to
+  -- commit. Without the lock, a rejoin committed mid-purge would lose the
+  -- accounts it had just made visible again.
   with expired as (
     select m.household_id, m.user_id
     from public.household_members m
     where m.status = 'removed'
       and m.removed_at <= now() - interval '30 days'
+    for no key update of m
   ),
   purged_transactions as (
     update public.transactions t
