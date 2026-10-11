@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress. HH-0 … HH-4 merged (#113–#117); HH-5 (members and leaving) in review; HH-6 (release gate) pending. One branch and one PR per phase. Everything user-visible stays behind `RUMBO_HOUSEHOLD_SHARING` (app) and `app_feature_flags.household_sharing` (database, invitations only) until HH-6.
+Built (2026-10-11): HH-0 … HH-5 merged (#113–#118) and applied; HH-6 (release gate) automated checks pass and its migration is applied (76/76); the manual two-account pass (`docs/alpha/hh-6-household-sharing-qa.md`, all rows Untested) is the one open item before the feature is declared done. Database switch `app_feature_flags.household_sharing` is ON in production; so is `RUMBO_HOUSEHOLD_SHARING` in Vercel.
 
 ## 1. Decisions
 

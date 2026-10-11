@@ -15,6 +15,62 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Household sharing: members, invitations and private accounts, HH-0…HH-6 (2026-10-08 → 2026-10-11)
+- Goal: real multi-member households — invitations by single-use link, member
+  management, and per-member private accounts inside the same household. Seven
+  gated phases, one PR each. Spec and decisions:
+  [`docs/features/household-sharing.md`](features/household-sharing.md).
+- Shipped:
+  - **HH-0 (#113):** membership hardening + the co-member test harness.
+  - **HH-1 (#114):** private accounts, DB only — columns, derivation, policies,
+    write guards, account-privacy RPCs.
+  - **HH-2 (#115):** `p_scope` on every reporting RPC and caller, no visible UI.
+  - **HH-3 (#116):** private accounts and scope in the UI.
+  - **HH-4 (#117):** household invitations (single-use link, bound to an email).
+    Gated by the database switch `app_feature_flags.household_sharing`.
+  - **HH-5 (#118):** members and leaving. Decisions worth keeping: member RPCs
+    are **not** gated by the database switch; an ownership transfer keeps the
+    old owner as admin and revokes the admin invitations they issued; the purge
+    of a departed member (`purge_departed_private_accounts`, pg_cron job
+    `purge-departed-private-accounts`, daily 06:20 UTC, job id 3, next to
+    `recurring-autopost` at 06:00) soft-deletes their private accounts AND
+    private transactions, never mixed transfers, and writes no audit event
+    (D2); it row-locks expired memberships against a concurrent rejoin (Codex
+    finding); a BEFORE INSERT guard on `household_invitations` closes an HH-4
+    race; "Added by" is shown only on shared transactions.
+  - **HH-6 (release gate, this branch):** `20261011140000_hh_006_rls_initplan.sql`
+    rewrites 8 older policies (profiles x3, budgets/budget_lines insert,
+    exchange_rates insert/update, month_closures insert) to
+    `(select auth.uid())` with the same predicates, clearing the performance
+    advisor's `auth_rls_initplan` warnings. Plus the two-account QA checklist,
+    [`docs/alpha/hh-6-household-sharing-qa.md`](alpha/hh-6-household-sharing-qa.md).
+- Gate results (2026-10-11): CI green on main; `npm run db:test` against the
+  live household 110 passed, 0 failed (the 3 `run-as=co-member` files were
+  skipped: they need two real members); security advisor has no
+  anon-executable definer function; lint 0029 (21 definer RPCs callable by
+  `authenticated`) accepted by design; performance advisor INFO items
+  (unindexed FKs on audit columns, unused indexes) accepted. Leaked-password
+  protection (an Auth setting) recommended to the user.
+- Migrations added: the ten `*_hh_00*` files from
+  `20261008120000_hh_000_membership_hardening.sql` to
+  `20261011140000_hh_006_rls_initplan.sql`. All applied to production (76/76,
+  verified 2026-10-11); after HH-6's, the performance advisor shows no
+  `auth_rls_initplan` warning.
+- Tables changed: `household_invitations`, `household_audit_log` and
+  `app_feature_flags` added; `household_members` gains `removed_at` /
+  `removed_by` (HH-0); `private_owner_id` added to `accounts`,
+  `transactions` (plus `visibility`), `transaction_entries`,
+  `transaction_allocations`, `transaction_tags`, `payees`, `debts`,
+  `installment_plans`, `goals`, `recurring_transactions`,
+  `recurring_autopost_log`, `import_batches`, `import_rows` and
+  `csv_import_presets` (HH-1); 8 RLS policies restated (HH-6).
+- Follow-ups / known gaps: (1) the manual two-account pass in
+  `hh-6-household-sharing-qa.md` — every row is Untested; it is the one open
+  item before the feature is declared done. (2) Both switches are ON in
+  production: the database switch `household_sharing` since 2026-10-11 13:01
+  UTC, and `RUMBO_HOUSEHOLD_SHARING` in Vercel. (3) Enable leaked-password
+  protection in Supabase Auth.
+
 ## BR-030 / BR-043 desk audit: two refund bugs fixed, QA subagents added (2026-09-30)
 - Goal: desk audit of BR-030 (card statement cycle) and BR-043 (budget
   payment split), the two Tier-3/4 rows that most needed a human pass (see
