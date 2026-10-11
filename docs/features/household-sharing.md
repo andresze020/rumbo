@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned. Phases HH-0 … HH-6, one branch and one PR each. Update this line as phases land.
+In progress. HH-0 … HH-4 merged (#113–#117); HH-5 (members and leaving) in review; HH-6 (release gate) pending. One branch and one PR per phase. Everything user-visible stays behind `RUMBO_HOUSEHOLD_SHARING` (app) and `app_feature_flags.household_sharing` (database, invitations only) until HH-6.
 
 ## 1. Decisions
 
@@ -215,6 +215,7 @@ All new definer functions: fixed `search_path`, auth check first, revoke from pu
 
 - Member RPCs; Settings > Members; MEM-1…MEM-7; LIF-1…LIF-4; `export_my_private_data`; a pg_cron step that soft-deletes private accounts of members removed more than 30 days ago (LIF-3).
 - `supabase/tests/hh_005_roles.sql`: the whole section-2 matrix, S24–S26.
+- As built: the member RPCs are not gated by the database switch (like HH-4's list and revoke, removing someone or leaving must work with sharing off); `transfer_household_ownership` keeps the old owner as admin and revokes their pending admin invitations (INV-1); `export_my_private_data` also serves active members (LIF-1) and returns one row per entry of the caller's own private accounts; the LIF-3 purge (`purge_departed_private_accounts`) is scheduled by hand with `cron.schedule` (snippet at the bottom of `20261011120000_hh_005_members.sql`), like `run_recurring_autopost`. Former households show on Settings and, for someone with no household left, on onboarding.
 
 ### HH-6 Release gate
 

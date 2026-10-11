@@ -108,6 +108,8 @@ export type TransactionListRow = {
   timeFormatted: string | null
   notes: string | null
   voidReason: string | null
+  /** HH-5 (MEM-5): who added it, once the household has had two members. */
+  addedBy: string | null
   currencyCode: string | null
   amountFormatted: string | null
   transferCostFormatted: string | null
@@ -690,6 +692,7 @@ function DisplayRow({
   onEdit: () => void
 }) {
   const ui = useUiTranslation()
+  const { t } = useLanguage()
   const { openDialog } = useTransactionDialog()
   const longPress = useLongPress(onLongPress)
   const showCheckbox = !row.isReadOnly && (selectionMode || selected)
@@ -946,6 +949,10 @@ function DisplayRow({
 
               {showPayee ? (
                 <DetailRow label={ui('Payee')}>{row.merchantName}</DetailRow>
+              ) : null}
+
+              {row.addedBy ? (
+                <DetailRow label={t('members.addedBy')}>{row.addedBy}</DetailRow>
               ) : null}
 
               {/* Cross-currency transfers carry their cost (FX spread + fee) as
