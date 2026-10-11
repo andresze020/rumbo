@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  inviteReturnPathFromNext,
   invitableRoles,
   invitationRefusal,
   invitePath,
@@ -110,5 +111,22 @@ describe('invitationRefusal', () => {
     expect(isInvitationRefusal('pending_cap')).toBe(true)
     expect(isInvitationRefusal('generic')).toBe(true)
     expect(isInvitationRefusal('<script>')).toBe(false)
+  })
+})
+
+describe('inviteReturnPathFromNext (HH-7)', () => {
+  it('keeps only the invite path of a full URL or a path', () => {
+    expect(inviteReturnPathFromNext('https://app.example/invite/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')).toBe('/invite/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+    expect(inviteReturnPathFromNext('/invite/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')).toBe('/invite/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+    // Another site's URL keeps only its path: never a redirect off the app.
+    expect(inviteReturnPathFromNext('https://evil.example/invite/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')).toBe('/invite/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+  })
+
+  it('refuses anything that is not an invite path', () => {
+    expect(inviteReturnPathFromNext('https://app.example/')).toBeNull()
+    expect(inviteReturnPathFromNext('/dashboard')).toBeNull()
+    expect(inviteReturnPathFromNext('//evil.example/x')).toBeNull()
+    expect(inviteReturnPathFromNext('/invite/short')).toBeNull()
+    expect(inviteReturnPathFromNext(null)).toBeNull()
   })
 })

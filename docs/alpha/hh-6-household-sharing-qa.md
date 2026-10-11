@@ -50,7 +50,8 @@
 | INV-3 | A's first invite opens a review step listing every account as Shared / Only me, with "will see N accounts". N = shared accounts only. | Untested | |
 | INV-1 | A (owner) is offered Admin / Member / Viewer. Later, as admin, B is offered only Member / Viewer. | Untested | |
 | INV-2 | The link is shown once with Copy and Share. Inviting the same email again revokes the first link (old link → dead-end page). | Untested | |
-| INV-4 | Settings › Invitations lists the pending invite (email, role, expiry) and Revoke works. | Untested | |
+| INV-4 | Household › Invitations lists the pending invite (email, role, expiry) and Revoke works. | Untested | |
+| HH-7 email | Creating the invite says the email went out, and B receives it (needs custom SMTP in Supabase). Its link, opened on another device, creates B's account already confirmed, signs B in and lands on the invitation. | Untested | |
 | INV-5 | B opens the link signed out → sign up → confirm email → lands back on the invitation, not on create-your-household. | Untested | |
 | INV-6 | Signed in as B: household name, inviter (with email), role and shared-account count. Nothing happens until Accept. | Untested | |
 | INV-7 | The link opened by a third account (or A) shows only "sent to a different email address", no household detail. | Untested | |
@@ -61,7 +62,7 @@
 
 | ID | Check | Result | Evidence |
 |---|---|---|---|
-| MEM-1 | Settings › Members shows name, role, joined date and "You". A (owner) sees B's email. B (member) does **not** see A's email. | Untested | |
+| MEM-1 | Household › Members shows name, role, joined date and "You". A (owner) sees B's email. B (member) does **not** see A's email. | Untested | |
 | MEM-2 | A changes B member → viewer → member (confirm dialog each time). B's screens follow on the next page load (viewer: no write buttons). | Untested | |
 | MEM-5 | A transaction B adds on the shared account shows "Added by B" in its details for A. A's mixed transfer shows no "Added by" for B. | Untested | |
 | MEM-6 | A sees Recent activity: invited, joined, role changes. B (member) does not see it. | Untested | |
@@ -94,7 +95,7 @@
 | MEM-3 / S26 | A (owner) has no Leave button, only the "make someone else owner first" note. | Untested | |
 | LIF-1 | B creates a private account with one expense, opens Leave: the dialog offers the private-data CSV, and the CSV holds only B's private rows. | Untested | |
 | MEM-4 / MEM-7 | B leaves: B lands in onboarding (no other household) without an error page; A's Members list no longer shows B. | Untested | |
-| LIF-2 | B's onboarding (and Settings, once B has a household) shows Former households › `HH-6 QA` with a working CSV download. | Untested | |
+| LIF-2 | B's onboarding (and Household, once B has a household) shows Former households › `HH-6 QA` with a working CSV download. | Untested | |
 | LIF-4 | The shared transaction B added is still there for A, showing "Former member (B)". | Untested | |
 | S25 | A invites B again; B accepts and their private account is visible to B again (rejoined inside 30 days). | Untested | |
 | MEM-2 | A removes B (confirm dialog). B loses access on the next page load. | Untested | |

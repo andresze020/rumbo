@@ -90,10 +90,15 @@ export async function updateEmailAction(formData: FormData) {
   redirect('/dashboard/settings?saved=email')
 }
 
+/** HH-7: the household details live on /dashboard/household now. */
+function redirectWithHouseholdError(message: string): never {
+  redirect(`/dashboard/household?error=${encodeURIComponent(message)}`)
+}
+
 export async function updateHouseholdAction(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim()
 
-  if (!name) redirectWithError('Household name is required.')
+  if (!name) redirectWithHouseholdError('Household name is required.')
 
   // base_currency is immutable after household creation: every stored
   // amount_base_currency is frozen at the FX rate used when it was written,
@@ -109,7 +114,7 @@ export async function updateHouseholdAction(formData: FormData) {
     monthStartDayRaw !== '' &&
     (!Number.isInteger(monthStartDay) || monthStartDay < 1 || monthStartDay > 31)
   ) {
-    redirectWithError('The month start day must be a day of the month, 1 to 31.')
+    redirectWithHouseholdError('The month start day must be a day of the month, 1 to 31.')
   }
 
   const { supabase, householdId } = await getAuthContext()
@@ -122,14 +127,14 @@ export async function updateHouseholdAction(formData: FormData) {
     })
     .eq('id', householdId)
 
-  if (error) redirectWithError('Could not update household. Please try again.')
+  if (error) redirectWithHouseholdError('Could not update household. Please try again.')
 
   // BR-036: Reports is the only screen that honours it in slice 1.
   revalidatePath('/dashboard/reports')
 
   revalidatePath('/dashboard')
-  revalidatePath('/dashboard/settings')
-  redirect('/dashboard/settings?saved=household')
+  revalidatePath('/dashboard/household')
+  redirect('/dashboard/household?saved=household')
 }
 
 /**

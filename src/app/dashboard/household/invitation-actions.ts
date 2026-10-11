@@ -9,12 +9,13 @@ import {
   isInvitationRole,
   type InvitationRefusal,
 } from '@/lib/households/invitations'
+import { sendInvitationEmail } from '@/lib/households/invite-email'
 
 export type CreateInvitationState =
   | { status: 'idle' }
   | { status: 'error'; code: InvitationRefusal }
   // The raw token, handed to the inviter once (INV-2) and never stored by the app.
-  | { status: 'created'; token: string; email: string }
+  | { status: 'created'; token: string; email: string; emailSent: boolean }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -60,13 +61,18 @@ export async function createInvitationAction(
   if (error || typeof data !== 'string') {
     return { status: 'error', code: invitationRefusal(error?.message) }
   }
-  return { status: 'created', token: data, email: email.toLowerCase() }
+  // HH-7: the invited address gets an email with a sign-in link that lands on
+  // the invitation. A mail failure never fails the invitation: the page still
+  // shows the link to share by hand, and says the email did not go out.
+  const invitedEmail = email.toLowerCase()
+  const emailSent = await sendInvitationEmail(invitedEmail, data)
+  return { status: 'created', token: data, email: invitedEmail, emailSent }
 }
 
 /** HH-4 (INV-4): revoke a pending invitation; its link stops working at once. */
 export async function revokeInvitationAction(formData: FormData) {
   const invitationId = String(formData.get('invitation_id') ?? '').trim()
-  if (!isHouseholdSharingEnabled() || !invitationId) redirect('/dashboard/settings#invitations')
+  if (!isHouseholdSharingEnabled() || !invitationId) redirect('/dashboard/household#invitations')
 
   // The RPC resolves the invitation's own household and checks the caller there.
   const supabase = await signedInClient()
@@ -74,7 +80,7 @@ export async function revokeInvitationAction(formData: FormData) {
   revalidatePath('/dashboard', 'layout')
 
   if (error) {
-    redirect(`/dashboard/settings?invitationError=${invitationRefusal(error.message)}#invitations`)
+    redirect(`/dashboard/household?invitationError=${invitationRefusal(error.message)}#invitations`)
   }
-  redirect('/dashboard/settings?invitationRevoked=1#invitations')
+  redirect('/dashboard/household?invitationRevoked=1#invitations')
 }

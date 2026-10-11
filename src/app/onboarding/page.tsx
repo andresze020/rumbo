@@ -8,7 +8,7 @@ import { isHouseholdSharingEnabled } from '@/lib/households/sharing-flag'
 import {
   FormerHouseholdsSection,
   parseFormerHouseholds,
-} from '@/app/dashboard/settings/former-households-section'
+} from '@/app/dashboard/household/former-households-section'
 import {
   Card,
   CardContent,

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { isHouseholdSharingEnabled } from '@/lib/households/sharing-flag'
 import { clearInviteReturnCookie, setInviteReturnCookie } from '@/lib/households/invite-cookie'
 import { invitationRefusal, invitePath, isInvitationToken } from '@/lib/households/invitations'
+import { sendInvitationEmail } from '@/lib/households/invite-email'
 
 /**
  * HH-4: the invite page's buttons. Every one is a POST (S11): opening the link
@@ -32,6 +33,24 @@ export async function continueToSignInAction(formData: FormData) {
   const token = tokenFrom(formData)
   await setInviteReturnCookie(token)
   redirect(formData.get('mode') === 'signup' ? '/login?mode=signup' : '/login')
+}
+
+/**
+ * HH-7: the invitation email's sign-in link expired (Supabase caps it at a
+ * day; the invitation lasts 7) or was lost. Email a fresh one to the address
+ * typed here. Never creates an account (the invitation email already did),
+ * and answers the same whether or not anything was sent (S12).
+ */
+export async function emailInviteSignInLinkAction(formData: FormData) {
+  const token = tokenFrom(formData)
+  const email = String(formData.get('email') ?? '').trim().toLowerCase()
+  if (email.length >= 3 && email.length <= 320 && email.includes('@')) {
+    await sendInvitationEmail(email, token, { createUser: false })
+  }
+  // Same device: the return cookie brings them back here after signing in too.
+  await setInviteReturnCookie(token)
+  revalidatePath(invitePath(token))
+  redirect(`${invitePath(token)}?link=sent`)
 }
 
 /** INV-7: signed in with the wrong address → sign out, keep the link, sign in again. */
@@ -62,7 +81,7 @@ export async function acceptInvitationAction(formData: FormData) {
   // INV-9: no household before → they land in this one. Had one → they keep
   // it, and Settings offers the switch.
   if (result.status === 'joined' && result.switched === false && result.household_id) {
-    redirect(`/dashboard/settings?joined=${encodeURIComponent(result.household_id)}`)
+    redirect(`/dashboard/household?joined=${encodeURIComponent(result.household_id)}`)
   }
   redirect('/dashboard')
 }

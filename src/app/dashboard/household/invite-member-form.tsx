@@ -17,13 +17,14 @@ import { createInvitationAction, type CreateInvitationState } from './invitation
 export type InviteReviewAccount = { id: string; name: string; isPrivate: boolean }
 
 /**
- * HH-4 invite dialog, three steps:
+ * HH-4 invite form, three steps (HH-7: on its own page, /dashboard/household/invite):
  * 1. INV-3 review — only while the household has a single member and nothing
  *    pending: every account with Shared / Only me, and how many the invited
  *    person will see with their full history.
  * 2. Email and role (INV-1: the roles this caller may give).
  * 3. The link, shown once (INV-2), with Copy and Web Share. It exists only in
- *    this component's state; closing the dialog drops it.
+ *    this component's state; leaving the page drops it. HH-7: the invited
+ *    address is also emailed a sign-in link; the step says whether it went.
  */
 export function InviteMemberForm({
   householdId,
@@ -31,7 +32,7 @@ export function InviteMemberForm({
   review,
   closeHref,
 }: {
-  /** The household this dialog was rendered for; the invitation targets it. */
+  /** The household this page was rendered for; the invitation targets it. */
   householdId: string
   roles: InvitationRole[]
   /** null when no review is needed. */
@@ -101,6 +102,11 @@ export function InviteMemberForm({
             {t('invitations.settings.linkDescription', { email: state.email })}
           </p>
         </div>
+        <Callout variant={state.emailSent ? 'success' : 'warning'}>
+          {state.emailSent
+            ? t('invitations.page.emailSent', { email: state.email })
+            : t('invitations.page.emailNotSent', { email: state.email })}
+        </Callout>
         <Input readOnly value={link} onFocus={(event) => event.currentTarget.select()} className="font-mono text-xs" />
         <div className="grid gap-2 sm:flex">
           <Button

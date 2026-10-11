@@ -157,7 +157,7 @@ export function isMemberRefusal(value: unknown): value is MemberRefusal {
 
 /** The private-data CSV of one household (LIF-1, LIF-2). */
 export function privateExportHref(householdId: string): string {
-  return `/dashboard/settings/private-export?household=${encodeURIComponent(householdId)}`
+  return `/dashboard/household/private-export?household=${encodeURIComponent(householdId)}`
 }
 
 /** The success flags Settings shows after a member action (`?memberSaved=`). */

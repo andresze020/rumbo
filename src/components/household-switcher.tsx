@@ -122,7 +122,7 @@ export function HouseholdSwitcher({
                 its month start day all live in Settings; this is the way there
                 that does not hijack the name itself. */}
             <Link
-              href="/dashboard/settings#household"
+              href="/dashboard/household"
               onClick={() => setOpen(false)}
               className="flex min-h-13 w-full items-center gap-3 rounded-xl border border-dashed px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
             >

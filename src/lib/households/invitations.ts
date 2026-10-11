@@ -34,6 +34,21 @@ export function parseInviteReturnPath(value: string | null | undefined): string 
   return typeof value === 'string' && INVITE_PATH_PATTERN.test(value) ? value : null
 }
 
+/**
+ * HH-7: the invite path inside /auth/confirm's `next`, which is either a full
+ * URL (the email template passes {{ .RedirectTo }}) or a path. Only the path
+ * counts, and only when it is an invite path, so `next` can never send anyone
+ * to another site or another page.
+ */
+export function inviteReturnPathFromNext(next: string | null | undefined): string | null {
+  if (!next) return null
+  try {
+    return parseInviteReturnPath(new URL(next, 'https://placeholder.invalid').pathname)
+  } catch {
+    return null
+  }
+}
+
 export const INVITATION_ROLES = ['admin', 'member', 'viewer'] as const
 export type InvitationRole = (typeof INVITATION_ROLES)[number]
 
