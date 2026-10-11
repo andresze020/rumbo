@@ -3,7 +3,7 @@ import { Download } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
-import { SubmitButton } from '@/components/submit-button'
+import { ConfirmActionButton } from '@/components/confirm-action-button'
 import { getLocale } from '@/lib/i18n/server'
 import { translate } from '@/lib/i18n/translate'
 import { canLeave, privateExportHref } from '@/lib/households/members'
@@ -14,8 +14,8 @@ import { countOwnPrivateAccounts, loadHouseholdBase } from '../data'
 
 /**
  * HH-7: leaving is a page of its own (MEM-3). It says what happens, offers the
- * private-data CSV first (LIF-1), and this page is the confirmation: the
- * button submits. The owner never gets here (S26: transfer first).
+ * private-data CSV first (LIF-1), and the button still confirms in an alert
+ * dialog. The owner never gets here (S26: transfer first).
  */
 export default async function LeaveHouseholdPage() {
   const locale = await getLocale()
@@ -59,12 +59,17 @@ export default async function LeaveHouseholdPage() {
           <CardDescription>{t('members.leave.confirmDescription', { household: householdName })}</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={leaveHouseholdAction}>
-            <input type="hidden" name="household_id" value={householdId} />
-            <SubmitButton type="submit" variant="destructive" size="sm" pendingText={t('members.actions.leaving')}>
-              {t('members.actions.leave')}
-            </SubmitButton>
-          </form>
+          <ConfirmActionButton
+            action={leaveHouseholdAction}
+            hiddenFields={{ household_id: householdId }}
+            triggerVariant="destructive"
+            triggerLabel={t('members.actions.leave')}
+            pendingLabel={t('members.actions.leaving')}
+            title={t('members.actions.leaveTitle', { household: householdName })}
+            description={t('members.leave.confirmDescription', { household: householdName })}
+            cancelLabel={t('common.cancel')}
+            confirmLabel={t('members.actions.leave')}
+          />
         </CardContent>
       </Card>
     </div>

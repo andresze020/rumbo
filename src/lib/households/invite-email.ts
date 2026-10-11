@@ -8,7 +8,9 @@ import { invitePath } from './invitations'
  *
  * Supabase Auth sends it (signInWithOtp): for an address with no account it
  * creates one and the email confirms it; for an existing one it signs them in.
- * Either way the link goes through /auth/confirm and then to /invite/<token>,
+ * Either way the link goes through /auth/confirm (a page whose
+ * button does the verifying, so mail scanners cannot use the link up) and
+ * then to /invite/<token>,
  * where they still have to press Accept (S3, S11). No service-role key: the
  * publishable key is all signInWithOtp needs.
  *
@@ -18,10 +20,18 @@ import { invitePath } from './invitations'
  * (docs/features/household-sharing.md, HH-7), and Auth needs custom SMTP to
  * reach anyone outside the project's team.
  *
+ * `createUser: false` is the invite page's "email me a new link": the
+ * invitation email already created the account, so a re-send never creates
+ * one for an address typed by whoever holds the link.
+ *
  * Returns whether Supabase accepted the email; the caller still shows the link
  * either way, so a mail problem never blocks an invitation.
  */
-export async function sendInvitationEmail(email: string, token: string): Promise<boolean> {
+export async function sendInvitationEmail(
+  email: string,
+  token: string,
+  { createUser = true }: { createUser?: boolean } = {}
+): Promise<boolean> {
   const origin = await requestOrigin()
   if (!origin) return false
 
@@ -34,7 +44,7 @@ export async function sendInvitationEmail(email: string, token: string): Promise
   try {
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true, emailRedirectTo: `${origin}${invitePath(token)}` },
+      options: { shouldCreateUser: createUser, emailRedirectTo: `${origin}${invitePath(token)}` },
     })
     return !error
   } catch {

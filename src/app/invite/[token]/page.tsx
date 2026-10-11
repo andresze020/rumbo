@@ -3,6 +3,8 @@ import type { Metadata } from 'next'
 import { MailCheck, Users, Wallet } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Callout } from '@/components/callout'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { SubmitButton } from '@/components/submit-button'
 import { ConfirmActionButton } from '@/components/confirm-action-button'
 import { createClient } from '@/lib/supabase/server'
@@ -23,6 +25,7 @@ import {
   declineInvitationAction,
   leaveInvitationAction,
   switchAccountForInviteAction,
+  emailInviteSignInLinkAction,
 } from './actions'
 
 // S15: the link never travels on as a referrer, and the page stays out of
@@ -35,7 +38,7 @@ export const metadata: Metadata = {
 
 type InvitePageProps = {
   params: Promise<{ token: string }>
-  searchParams: Promise<{ error?: string | string[]; declined?: string | string[] }>
+  searchParams: Promise<{ error?: string | string[]; declined?: string | string[]; link?: string | string[] }>
 }
 
 /**
@@ -68,6 +71,9 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
   }
 
   const user = await getRequestUser()
+  // HH-7: the outcome of the "email me a sign-in link" form, or an expired link.
+  const linkExpired = query.link === 'expired'
+  const linkSent = query.link === 'sent'
 
   // INV-5: signed out. Nothing about the household is shown; the buttons set
   // the return cookie (S14) and go to sign in / sign up.
@@ -96,6 +102,21 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
           </form>
         </div>
         <p className="text-xs text-muted-foreground">{t('invitations.signedOut.confirmHint')}</p>
+        {/* HH-7: a fresh sign-in link when the emailed one expired or was lost. */}
+        <form action={emailInviteSignInLinkAction} className="space-y-2 border-t pt-4">
+          <input type="hidden" name="token" value={token} />
+          {linkExpired ? (
+            <Callout variant="warning">{t('invitations.signedOut.linkExpired')}</Callout>
+          ) : null}
+          {linkSent ? (
+            <Callout variant="success">{t('invitations.signedOut.linkSent')}</Callout>
+          ) : null}
+          <Label htmlFor="invite_link_email">{t('invitations.signedOut.emailLinkLabel')}</Label>
+          <Input id="invite_link_email" name="email" type="email" autoComplete="email" inputMode="email" required maxLength={320} />
+          <SubmitButton type="submit" variant="outline" className="w-full" pendingText={t('invitations.signedOut.emailLinkSending')}>
+            {t('invitations.signedOut.emailLinkButton')}
+          </SubmitButton>
+        </form>
       </InviteShell>
     )
   }
