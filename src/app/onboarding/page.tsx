@@ -3,6 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import { getHouseholdContext } from '@/lib/households/server'
 import { WelcomeButton } from './welcome-button'
 import { RecoverActiveHousehold } from './recover-active-household'
+import { getLocale } from '@/lib/i18n/server'
+import { isHouseholdSharingEnabled } from '@/lib/households/sharing-flag'
+import {
+  FormerHouseholdsSection,
+  parseFormerHouseholds,
+} from '@/app/dashboard/settings/former-households-section'
 import {
   Card,
   CardContent,
@@ -59,8 +65,15 @@ export default async function OnboardingWelcomePage() {
     }
   }
 
+  // HH-5 (LIF-2): someone removed from their only household lands here; for 30
+  // days they can still download their private data from it.
+  const formerHouseholds = isHouseholdSharingEnabled()
+    ? parseFormerHouseholds((await supabase.rpc('get_my_former_households')).data)
+    : []
+  const locale = await getLocale()
+
   const welcome = (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/8 via-background to-background p-4 sm:p-6">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gradient-to-br from-primary/8 via-background to-background p-4 sm:p-6">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <h1 className="text-3xl font-bold tracking-tight">Rumbo</h1>
@@ -84,6 +97,11 @@ export default async function OnboardingWelcomePage() {
           <WelcomeButton />
         </CardContent>
       </Card>
+      {formerHouseholds.length > 0 ? (
+        <div className="w-full max-w-md">
+          <FormerHouseholdsSection locale={locale} households={formerHouseholds} />
+        </div>
+      ) : null}
     </main>
   )
 

@@ -61,6 +61,8 @@ import {
   localeToBcp47,
 } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { isHouseholdSharingEnabled } from '@/lib/households/sharing-flag'
+import { parseHouseholdMembers, transactionAuthors } from '@/lib/households/members'
 
 type TransactionsPageProps = {
   searchParams: Promise<{
@@ -843,6 +845,9 @@ export default async function TransactionsPage({
   // If that read fails, fail closed: any movement with a leg missing is then
   // treated as someone else's (the database refuses their writes anyway).
   let mixedLookupFailed = false
+  // HH-5 (MEM-5): who added each listed transaction, in a household that has
+  // ever had two members; empty otherwise, and with sharing off.
+  const addedByTransaction = new Map<string, string>()
 
   // Everything the loaded page of transactions needs, in one round trip. The
   // account and category names used to be two more sequential queries; both
@@ -855,6 +860,7 @@ export default async function TransactionsPage({
       { data: entries, error: entriesError },
       { data: allocations, error: allocationsError },
       { data: mixedRows, error: mixedError },
+      { data: memberRows },
     ] = await Promise.all([
       supabase
         .from('transaction_tags')
@@ -871,17 +877,39 @@ export default async function TransactionsPage({
         .select('transaction_id, category_id, amount_base_currency')
         .eq('household_id', household.id)
         .in('transaction_id', transactionIds),
+      // Visibility for PRV-4 and the author for MEM-5, one read of the page.
       supabase
         .from('transactions')
-        .select('id, private_owner_id')
+        .select('id, private_owner_id, visibility, created_by')
         .eq('household_id', household.id)
-        .eq('visibility', 'mixed')
         .in('id', transactionIds),
+      isHouseholdSharingEnabled()
+        ? supabase.rpc('get_household_members', { p_household_id: household.id })
+        : Promise.resolve({ data: null }),
     ])
 
     mixedLookupFailed = Boolean(mixedError)
-    for (const row of (mixedRows ?? []) as { id: string; private_owner_id: string | null }[]) {
-      if (row.private_owner_id !== userId) othersMixedTransactionIds.add(row.id)
+    const authors = transactionAuthors(parseHouseholdMembers(memberRows))
+    for (const row of (mixedRows ?? []) as {
+      id: string
+      private_owner_id: string | null
+      visibility: string
+      created_by: string
+    }[]) {
+      if (row.visibility === 'mixed' && row.private_owner_id !== userId) othersMixedTransactionIds.add(row.id)
+      // MEM-5 names the author of a SHARED transaction only: on someone
+      // else's mixed transfer it would say whose the hidden private side is.
+      const author = row.visibility === 'shared' ? authors.get(row.created_by) : undefined
+      if (author) {
+        addedByTransaction.set(
+          row.id,
+          author.isFormer
+            ? author.name
+              ? translate(locale, 'members.formerMember', { name: author.name })
+              : translate(locale, 'members.formerMemberUnnamed')
+            : author.name ?? translate(locale, 'members.settings.unnamed')
+        )
+      }
     }
 
     for (const link of tagLinks ?? []) {
@@ -1370,6 +1398,7 @@ export default async function TransactionsPage({
       timeFormatted: formatIsoTime(row.transaction.transaction_time, locale),
       notes: row.transaction.notes,
       voidReason: row.transaction.void_reason,
+      addedBy: addedByTransaction.get(row.transaction.id) ?? null,
       currencyCode: row.amountEntry?.currency_code ?? null,
       amountFormatted:
         row.amountEntry && row.displayAmount !== undefined

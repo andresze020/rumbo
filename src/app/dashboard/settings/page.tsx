@@ -38,6 +38,15 @@ import {
 } from '@/lib/households/invitations'
 import { switchHouseholdAction } from '../household-actions'
 import { HouseholdInvitationsSection, type PendingInvitation } from './household-invitations-section'
+import {
+  isMemberRefusal,
+  isMemberRole,
+  isMemberSaved,
+  parseHouseholdMembers,
+  type HouseholdMember,
+} from '@/lib/households/members'
+import { HouseholdMembersSection, type AuditEvent } from './household-members-section'
+import { FormerHouseholdsSection, parseFormerHouseholds, type FormerHousehold } from './former-households-section'
 
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -212,6 +221,48 @@ export default async function SettingsPage({ searchParams }: Props) {
         (row) => ({ id: row.id, name: row.name, isPrivate: row.private_owner_id !== null })
       )
     }
+  }
+
+  // ── HH-5: members (MEM-1…MEM-6), leaving (LIF-1) and former households (LIF-2) ──
+  const memberRole = isMemberRole(callerRole) ? callerRole : null
+  const ownPrivateAccountIds = await getOwnPrivateAccountIds(householdId)
+  let members: HouseholdMember[] = []
+  let activity: AuditEvent[] | null = null
+  let formerHouseholds: FormerHousehold[] = []
+  if (sharingEnabled) {
+    const canSeeActivity = memberRole === 'owner' || memberRole === 'admin'
+    const [{ data: memberRows }, { data: auditRows }, { data: formerRows }] = await Promise.all([
+      supabase.rpc('get_household_members', { p_household_id: householdId }),
+      // RLS: owner/admin only (household_audit_log_select_admin).
+      canSeeActivity
+        ? supabase
+            .from('household_audit_log')
+            .select('id, actor_id, target_user_id, action, metadata, created_at')
+            .eq('household_id', householdId)
+            .order('created_at', { ascending: false })
+            .limit(50)
+        : Promise.resolve({ data: null }),
+      supabase.rpc('get_my_former_households'),
+    ])
+    members = parseHouseholdMembers(memberRows)
+    if (canSeeActivity) {
+      activity = ((auditRows ?? []) as {
+        id: string
+        actor_id: string | null
+        target_user_id: string | null
+        action: string
+        metadata: Record<string, unknown> | null
+        created_at: string
+      }[]).map((row) => ({
+        id: row.id,
+        actorId: row.actor_id,
+        targetUserId: row.target_user_id,
+        action: row.action,
+        role: typeof row.metadata?.role === 'string' ? row.metadata.role : null,
+        createdAt: row.created_at,
+      }))
+    }
+    formerHouseholds = parseFormerHouseholds(formerRows)
   }
 
   return (
@@ -405,6 +456,22 @@ export default async function SettingsPage({ searchParams }: Props) {
         </CardContent>
       </Card>
 
+      {/* ── Members (HH-5) ──────────────────────────────────────────── */}
+      {sharingEnabled && members.length > 0 ? (
+        <HouseholdMembersSection
+          householdId={householdId}
+          householdName={household?.name ?? ''}
+          locale={locale}
+          callerId={user.id}
+          callerRole={memberRole}
+          members={members}
+          ownPrivateAccounts={ownPrivateAccountIds.size}
+          activity={activity}
+          saved={isMemberSaved(sp.memberSaved) ? sp.memberSaved : null}
+          errorCode={isMemberRefusal(sp.memberError) ? sp.memberError : null}
+        />
+      ) : null}
+
       {/* ── Invitations (HH-4) ─────────────────────────────────────── */}
       {inviteRoles.length > 0 && callerRole ? (
         <HouseholdInvitationsSection
@@ -420,12 +487,15 @@ export default async function SettingsPage({ searchParams }: Props) {
         />
       ) : null}
 
+      {/* ── Former households (HH-5, LIF-2) ─────────────────────────── */}
+      <FormerHouseholdsSection locale={locale} households={formerHouseholds} />
+
       {/* ── Preferences (BR-032 + BR-038) ───────────────────────────── */}
       <PreferencesSection
         preferences={preferences}
         accounts={markPrivateAccounts(
           (accountRows ?? []) as { id: string; name: string }[],
-          await getOwnPrivateAccountIds(profile.default_household_id)
+          ownPrivateAccountIds
         )}
       />
 
