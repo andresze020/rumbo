@@ -182,7 +182,6 @@ export const AUDIT_ACTIONS = [
   'member_removed',
   'member_left',
   'ownership_transferred',
-  'private_data_expired',
   'account_shared',
 ] as const
 export type AuditAction = (typeof AUDIT_ACTIONS)[number]

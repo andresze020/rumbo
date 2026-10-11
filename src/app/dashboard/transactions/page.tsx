@@ -897,7 +897,9 @@ export default async function TransactionsPage({
       created_by: string
     }[]) {
       if (row.visibility === 'mixed' && row.private_owner_id !== userId) othersMixedTransactionIds.add(row.id)
-      const author = authors.get(row.created_by)
+      // MEM-5 names the author of a SHARED transaction only: on someone
+      // else's mixed transfer it would say whose the hidden private side is.
+      const author = row.visibility === 'shared' ? authors.get(row.created_by) : undefined
       if (author) {
         addedByTransaction.set(
           row.id,

@@ -31,20 +31,34 @@
 -- can export their own private data from that household
 -- (export_my_private_data; get_my_former_households lists where they still
 -- can). After 30 days purge_departed_private_accounts soft-deletes those
--- private accounts. Rejoining inside the window needs nothing: the accounts
--- were never touched and become visible again with the active membership.
+-- private accounts and their private transactions. Rejoining inside the
+-- window needs nothing: the accounts were never touched and become visible
+-- again with the active membership.
 --
 -- The database-side switch (app_feature_flags.household_sharing) does NOT
 -- gate these functions, like HH-4's list and revoke: with sharing turned off a
--- household must still be able to remove a member or let one leave.
+-- household must still be able to remove a member or let one leave. (The app
+-- hides its screens behind RUMBO_HOUSEHOLD_SHARING; that is the app's choice,
+-- not a database rule.)
+--
+-- Invitations: a guard on household_invitations INSERT re-checks, at insert
+-- time, that the inviter is still an active owner (or an admin, for a
+-- non-admin invitation). create_household_invitation (HH-4) reads the
+-- caller's role before it takes the household lock, so without the guard an
+-- admin removed while their create waited on that lock could still insert a
+-- link.
 --
 -- Every function: SECURITY DEFINER, fixed search_path, auth check first,
--- revoked from public and anon. The member functions lock the household row
--- (NO KEY UPDATE, the same lock and order as the invitation functions), so two
--- concurrent membership changes in one household run one after the other and
--- each sees the other's result.
+-- revoked from public and anon. The member functions first check that the
+-- caller is an active member (so nobody else can take the lock), then lock
+-- the household row (NO KEY UPDATE, the same lock and order as the invitation
+-- functions) and only then read the roles they decide on, so two concurrent
+-- membership changes in one household run one after the other and each sees
+-- the other's result.
 --
--- PRIVACY: audit metadata never carries a private account's name or id.
+-- PRIVACY (D2): nothing here writes an audit event that exists only because
+-- someone had private accounts, and no audit metadata carries a private
+-- account's name, id or count.
 --
 -- New functions, new names: there is no previous signature to DROP.
 -- ============================================================
@@ -126,8 +140,13 @@ begin
     raise exception 'Not authorized';
   end if;
 
+  if not public.is_household_admin(p_household_id) then
+    raise exception 'Not authorized to manage this household''s members';
+  end if;
+
   perform 1 from public.households h where h.id = p_household_id for no key update;
 
+  -- Re-read under the lock: a concurrent change may have just demoted us.
   select m.role into v_caller_role
   from public.household_members m
   where m.household_id = p_household_id and m.user_id = v_user and m.status = 'active';
@@ -207,8 +226,13 @@ begin
     raise exception 'Not authorized';
   end if;
 
+  if not public.is_household_admin(p_household_id) then
+    raise exception 'Not authorized to manage this household''s members';
+  end if;
+
   perform 1 from public.households h where h.id = p_household_id for no key update;
 
+  -- Re-read under the lock: a concurrent change may have just demoted us.
   select m.role into v_caller_role
   from public.household_members m
   where m.household_id = p_household_id and m.user_id = v_user and m.status = 'active';
@@ -261,8 +285,13 @@ begin
     raise exception 'Not authorized';
   end if;
 
+  if not public.is_household_member(p_household_id) then
+    raise exception 'You are not a member of this household';
+  end if;
+
   perform 1 from public.households h where h.id = p_household_id for no key update;
 
+  -- Re-read under the lock: a concurrent change may have just removed us.
   select m.role into v_role
   from public.household_members m
   where m.household_id = p_household_id and m.user_id = v_user and m.status = 'active';
@@ -309,8 +338,13 @@ begin
     raise exception 'Not authorized';
   end if;
 
+  if not public.has_household_role(p_household_id, array['owner']) then
+    raise exception 'Only the owner can transfer ownership';
+  end if;
+
   perform 1 from public.households h where h.id = p_household_id for no key update;
 
+  -- Re-read under the lock: only one transfer can win.
   select m.role into v_caller_role
   from public.household_members m
   where m.household_id = p_household_id and m.user_id = v_user and m.status = 'active';
@@ -421,9 +455,9 @@ grant execute on function public.get_my_former_households() to authenticated;
 -- 7. export_my_private_data (LIF-1, LIF-2)
 -- ------------------------------------------------------------
 -- One row per ledger entry on the caller's own private accounts in one
--- household: every movement (opening balances included), so the rows of an
--- account add up to its balance. Voided and deleted transactions are left
--- out, as on the transactions screen.
+-- household: every movement, opening balances included. Voided and deleted
+-- transactions are left out, as on the transactions screen; pending ones are
+-- in, with their status in the status column.
 --
 -- Callable by an active member (LIF-1: export before leaving) and by someone
 -- whose membership ended less than 30 days ago (LIF-2). Rows are filtered on
@@ -507,12 +541,19 @@ grant execute on function public.export_my_private_data(uuid) to authenticated;
 -- ------------------------------------------------------------
 -- 8. purge_departed_private_accounts (LIF-3) — for pg_cron only
 -- ------------------------------------------------------------
--- Soft-deletes (deleted_at, deleted_by = the departed owner) the private
--- accounts of people whose membership ended 30 days ago or more. Nothing is
--- physically deleted; the ledger rows stay. Returns how many accounts it
--- soft-deleted. One audit event per person and household, with a count and no
--- account names. Not executable by any client; schedule it with pg_cron (see
--- the manual snippet at the bottom).
+-- For everyone whose membership ended 30 days ago or more, soft-deletes
+-- (deleted_at, deleted_by = the departed owner) their private accounts in
+-- that household and their private transactions there, so a later rejoin
+-- does not bring back figures (scope mine/all reads allocations, not
+-- accounts) that no account explains. Mixed transfers stay: their shared leg
+-- is part of a shared account's balance. Nothing is physically deleted.
+--
+-- Returns how many accounts it soft-deleted. No audit event (D2): an event
+-- that exists only because someone had private accounts would tell the
+-- owner/admin who read the trail that they had them.
+--
+-- Not executable by any client; schedule it with pg_cron (see the manual
+-- snippet at the bottom).
 create or replace function public.purge_departed_private_accounts()
 returns integer
 language plpgsql
@@ -521,41 +562,77 @@ security definer
 set search_path = public
 as $$
 declare
-  v_total integer := 0;
-  v_row record;
+  v_accounts integer;
 begin
-  for v_row in
-    with expired as (
-      select m.household_id, m.user_id
-      from public.household_members m
-      where m.status = 'removed'
-        and m.removed_at <= now() - interval '30 days'
-    ),
-    purged as (
-      update public.accounts a
-      set deleted_at = now(),
-          deleted_by = a.private_owner_id
-      from expired x
-      where a.household_id = x.household_id
-        and a.private_owner_id = x.user_id
-        and a.deleted_at is null
-      returning a.household_id, a.private_owner_id
-    )
-    select pu.household_id, pu.private_owner_id as user_id, count(*)::integer as accounts
-    from purged pu
-    group by pu.household_id, pu.private_owner_id
-  loop
-    insert into public.household_audit_log (household_id, actor_id, action, target_user_id, metadata)
-    values (v_row.household_id, null, 'private_data_expired', v_row.user_id,
-            jsonb_build_object('accounts', v_row.accounts));
-    v_total := v_total + v_row.accounts;
-  end loop;
+  -- Data-modifying CTEs all run, referenced or not, against one snapshot.
+  with expired as (
+    select m.household_id, m.user_id
+    from public.household_members m
+    where m.status = 'removed'
+      and m.removed_at <= now() - interval '30 days'
+  ),
+  purged_transactions as (
+    update public.transactions t
+    set deleted_at = now(),
+        deleted_by = t.private_owner_id
+    from expired x
+    where t.household_id = x.household_id
+      and t.private_owner_id = x.user_id
+      and t.visibility = 'private'
+      and t.deleted_at is null
+    returning t.id
+  ),
+  purged_accounts as (
+    update public.accounts a
+    set deleted_at = now(),
+        deleted_by = a.private_owner_id
+    from expired x
+    where a.household_id = x.household_id
+      and a.private_owner_id = x.user_id
+      and a.deleted_at is null
+    returning a.id
+  )
+  select count(*)::integer into v_accounts from purged_accounts;
 
-  return v_total;
+  return v_accounts;
 end;
 $$;
 
 revoke all on function public.purge_departed_private_accounts() from public, anon, authenticated;
+
+-- ------------------------------------------------------------
+-- 9. household_invitations: the inviter must still be allowed, at insert time
+-- ------------------------------------------------------------
+-- Closes the race described in the header: create_household_invitation reads
+-- the caller's role before its household lock, so a create that waited on a
+-- removal (or a demotion) would otherwise insert with the role it read
+-- before. This trigger reads the committed state at the INSERT itself. Same
+-- sentence as create's own check, so the app maps it the same way.
+create or replace function public.hh_invitation_inviter_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from public.household_members m
+    where m.household_id = new.household_id
+      and m.user_id = new.invited_by
+      and m.status = 'active'
+      and (m.role = 'owner' or (m.role = 'admin' and new.role <> 'admin'))
+  ) then
+    raise exception 'Not authorized to invite to this household';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.hh_invitation_inviter_guard() from public, anon, authenticated;
+
+create trigger trg_household_invitations_inviter_guard
+before insert on public.household_invitations
+for each row execute function public.hh_invitation_inviter_guard();
 
 -- ============================================================
 -- Scheduling (MANUAL — pg_cron, like run_recurring_autopost)
@@ -575,6 +652,8 @@ revoke all on function public.purge_departed_private_accounts() from public, ano
 -- Rollback (manual; run top to bottom)
 -- ------------------------------------------------------------
 -- -- select cron.unschedule('purge-departed-private-accounts');
+-- -- drop trigger if exists trg_household_invitations_inviter_guard on public.household_invitations;
+-- -- drop function if exists public.hh_invitation_inviter_guard();
 -- -- drop function if exists public.purge_departed_private_accounts();
 -- -- drop function if exists public.export_my_private_data(uuid);
 -- -- drop function if exists public.get_my_former_households();

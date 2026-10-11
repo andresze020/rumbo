@@ -41,12 +41,32 @@ begin
 
   foreach fn in array array[
     'public.hh_end_membership(uuid, uuid, uuid, text)',
-    'public.purge_departed_private_accounts()'
+    'public.purge_departed_private_accounts()',
+    'public.hh_invitation_inviter_guard()'
   ] loop
     if has_function_privilege('authenticated', fn, 'execute') or has_function_privilege('anon', fn, 'execute') then
       raise exception 'LEAK: internal % is executable by a client', fn;
     end if;
   end loop;
+
+  -- Every new definer function pins its search_path.
+  if exists (
+    select 1 from pg_proc p
+    where p.oid in (
+      'public.set_household_member_role(uuid, uuid, text)'::regprocedure,
+      'public.remove_household_member(uuid, uuid)'::regprocedure,
+      'public.leave_household(uuid)'::regprocedure,
+      'public.transfer_household_ownership(uuid, uuid)'::regprocedure,
+      'public.get_my_former_households()'::regprocedure,
+      'public.export_my_private_data(uuid)'::regprocedure,
+      'public.hh_end_membership(uuid, uuid, uuid, text)'::regprocedure,
+      'public.purge_departed_private_accounts()'::regprocedure,
+      'public.hh_invitation_inviter_guard()'::regprocedure
+    )
+      and (not p.prosecdef or not coalesce(p.proconfig, '{}') @> array['search_path=public'])
+  ) then
+    raise exception 'an HH-5 function is not SECURITY DEFINER with search_path=public';
+  end if;
 
   -- The two reads must not write (they are called while rendering pages).
   if exists (
@@ -63,6 +83,8 @@ end $$;
 -- check: HH-5 role changes follow the section-2 matrix (owner: anyone else; admin: member <-> viewer; nobody else)
 begin;
 reset role;
+-- The member functions do not depend on the database switch: off here.
+update public.app_feature_flags set enabled = false where name = 'household_sharing';
 create function pg_temp.hh5_user(p_label text) returns uuid language plpgsql as $f$
 declare v uuid := gen_random_uuid();
 begin
@@ -171,6 +193,8 @@ rollback;
 -- check: HH-5 removal follows the section-2 matrix, is a status change and moves the default household (S24, S26)
 begin;
 reset role;
+-- The member functions do not depend on the database switch: off here.
+update public.app_feature_flags set enabled = false where name = 'household_sharing';
 create function pg_temp.hh5_user(p_label text) returns uuid language plpgsql as $f$
 declare v uuid := gen_random_uuid();
 begin
@@ -211,8 +235,23 @@ declare
   v_member2 uuid;
   v_viewer uuid;
   v_other uuid;
+  v_invite_email text := 'hh5-by-admin-' || gen_random_uuid() || '@example.test';
+  g constant text := 'insert into public.household_invitations (household_id, email, role, token_hash, invited_by, expires_at) '
+    'values (%L, %L, %L, md5(random()::text) || md5(random()::text), %L, now() + interval ''7 days'')';
 begin
+  update public.household_invitations set revoked_at = coalesce(revoked_at, now())
+  where household_id = hh and accepted_at is null;
+
   v_admin := pg_temp.hh5_join(hh, 'admin');
+
+  -- S13 end to end: v_admin's pending link must die with their removal.
+  -- Created before the others join, under the 6-member cap.
+  update public.app_feature_flags set enabled = true where name = 'household_sharing';
+  perform pg_temp.hh5_as(v_admin);
+  perform public.create_household_invitation(hh, v_invite_email, 'member');
+  update public.app_feature_flags set enabled = false where name = 'household_sharing';
+  perform pg_temp.hh5_as(v_owner);
+
   v_admin2 := pg_temp.hh5_join(hh, 'admin');
   v_member := pg_temp.hh5_join(hh, 'member');
   v_member2 := pg_temp.hh5_join(hh, 'member');
@@ -277,6 +316,20 @@ begin
     raise exception 'expected one member_removed audit event per removal';
   end if;
 
+  -- S13 through remove_household_member: the removed admin's link is revoked.
+  if not exists (select 1 from public.household_invitations i
+                 where i.household_id = hh and i.email = v_invite_email and i.revoked_at is not null) then
+    raise exception 'the removed admin''s pending invitation is still live (S13)';
+  end if;
+
+  -- The insert guard: a removed admin can never be an inviter, an admin
+  -- never for an admin link, whatever path reaches the table.
+  perform pg_temp.hh5_refused(format(g, hh, 'hh5-g1-' || gen_random_uuid() || '@example.test', 'member', v_admin),
+    'Not authorized to invite to this household');
+  perform pg_temp.hh5_refused(format(g, hh, 'hh5-g2-' || gen_random_uuid() || '@example.test', 'admin', v_admin2),
+    'Not authorized to invite to this household');
+  execute format(g, hh, 'hh5-g3-' || gen_random_uuid() || '@example.test', 'member', v_admin2);
+
   -- The owner is untouched (S26).
   if (select array_agg(m.user_id) from public.household_members m
       where m.household_id = hh and m.role = 'owner' and m.status = 'active') <> array[v_owner] then
@@ -307,6 +360,8 @@ rollback;
 -- check: HH-5 anyone but the owner can leave; leaving is a status change (MEM-3, S24, S26)
 begin;
 reset role;
+-- The member functions do not depend on the database switch: off here.
+update public.app_feature_flags set enabled = false where name = 'household_sharing';
 create function pg_temp.hh5_user(p_label text) returns uuid language plpgsql as $f$
 declare v uuid := gen_random_uuid();
 begin
@@ -538,6 +593,7 @@ declare
   v_member uuid;
   v_member_account uuid := gen_random_uuid();
   v_owner_account uuid := gen_random_uuid();
+  v_shared_account uuid := gen_random_uuid();
   v_currency text := (select h.base_currency from public.households h where h.id = hh);
   v_category uuid;
   v_rows int;
@@ -558,12 +614,15 @@ begin
      opening_balance_date, include_in_net_worth, private_owner_id, created_by)
   values
     (v_member_account, hh, 'HH-5 member private', 'checking', 'asset', v_currency, date '2025-01-01', true, v_member, v_member),
-    (v_owner_account, hh, 'HH-5 owner private', 'checking', 'asset', v_currency, date '2025-01-01', true, v_owner, v_owner);
+    (v_owner_account, hh, 'HH-5 owner private', 'checking', 'asset', v_currency, date '2025-01-01', true, v_owner, v_owner),
+    (v_shared_account, hh, 'HH-5 shared', 'checking', 'asset', v_currency, date '2025-01-01', true, null, v_owner);
 
   perform pg_temp.hh5_as(v_member);
   perform public.create_opening_balance(hh, v_member_account, 1000, date '2025-01-01', 1, 'hh5');
   perform public.create_manual_transaction(hh, 'expense', date '2025-02-01', v_member_account, v_category, 40,
     'HH-5 private lunch', null, null, 'posted', 1, 'HH-5 private cafe');
+  -- A mixed transfer: only its private leg is the member's.
+  perform public.create_transfer_transaction(hh, v_member_account, v_shared_account, 100, date '2025-03-01', 'HH-5 to shared');
   perform pg_temp.hh5_as(v_owner);
   perform public.create_opening_balance(hh, v_owner_account, 500, date '2025-01-01', 1, 'hh5');
 
@@ -572,8 +631,8 @@ begin
   select count(*), sum(x.amount), array_agg(distinct x.account_name)
   into v_rows, v_sum, v_names
   from public.export_my_private_data(hh) x;
-  if v_rows <> 2 or v_sum <> 960 or v_names <> array['HH-5 member private'] then
-    raise exception 'member export: % rows, sum %, accounts % (expected 2 rows, 960, only their account)', v_rows, v_sum, v_names;
+  if v_rows <> 3 or v_sum <> 860 or v_names <> array['HH-5 member private'] then
+    raise exception 'member export: % rows, sum %, accounts % (expected 3 rows, 860, only their account)', v_rows, v_sum, v_names;
   end if;
   if not exists (
     select 1 from public.export_my_private_data(hh) x
@@ -600,8 +659,11 @@ begin
     or v_former.export_until <> v_former.removed_at + interval '30 days' then
     raise exception 'former households: %', v_former;
   end if;
-  if (select count(*) from public.export_my_private_data(hh)) <> 2 then
+  if (select count(*) from public.export_my_private_data(hh)) <> 3 then
     raise exception 'a former member inside the window lost their export';
+  end if;
+  if exists (select 1 from public.get_my_former_households() f where f.household_id <> hh) then
+    raise exception 'former households lists a household this member never left';
   end if;
 
   update public.household_members set removed_at = now() - interval '31 days'
@@ -646,9 +708,13 @@ declare
   v_gone_account uuid := gen_random_uuid();
   v_recent_account uuid := gen_random_uuid();
   v_owner_account uuid := gen_random_uuid();
+  v_shared_account uuid := gen_random_uuid();
   v_currency text := (select h.base_currency from public.households h where h.id = hh);
   v_shared_deleted int;
   v_token text;
+  v_private_tx uuid;
+  v_mixed_tx uuid;
+  v_shared_balance numeric;
 begin
   update public.household_invitations set revoked_at = coalesce(revoked_at, now())
   where household_id = hh and accepted_at is null;
@@ -661,9 +727,12 @@ begin
   values
     (v_gone_account, hh, 'HH-5 gone private', 'checking', 'asset', v_currency, date '2025-01-01', true, v_gone, v_gone),
     (v_recent_account, hh, 'HH-5 recent private', 'checking', 'asset', v_currency, date '2025-01-01', true, v_recent, v_recent),
-    (v_owner_account, hh, 'HH-5 owner private', 'checking', 'asset', v_currency, date '2025-01-01', true, v_owner, v_owner);
+    (v_owner_account, hh, 'HH-5 owner private', 'checking', 'asset', v_currency, date '2025-01-01', true, v_owner, v_owner),
+    (v_shared_account, hh, 'HH-5 shared', 'checking', 'asset', v_currency, date '2025-01-01', true, null, v_owner);
 
   perform pg_temp.hh5_as(v_gone);
+  v_private_tx := public.create_opening_balance(hh, v_gone_account, 700, date '2025-01-01', 1, 'hh5');
+  v_mixed_tx := public.create_transfer_transaction(hh, v_gone_account, v_shared_account, 200, date '2025-02-01', 'HH-5 gone to shared');
   perform public.leave_household(hh);
   perform pg_temp.hh5_as(v_recent);
   perform public.leave_household(hh);
@@ -672,6 +741,14 @@ begin
 
   v_shared_deleted := (select count(*) from public.accounts a
                        where a.household_id = hh and a.private_owner_id is null and a.deleted_at is not null);
+  v_shared_balance := (
+    select sum(e.amount_account_currency) from public.transaction_entries e
+    join public.transactions t on t.id = e.transaction_id
+    where e.account_id = v_shared_account and t.deleted_at is null and t.voided_at is null
+  );
+  if v_shared_balance is distinct from 200 then
+    raise exception 'setup: the shared account should hold the 200 moved in, holds %', v_shared_balance;
+  end if;
 
   if public.purge_departed_private_accounts() < 1 then
     raise exception 'the purge soft-deleted nothing';
@@ -689,10 +766,25 @@ begin
       where a.household_id = hh and a.private_owner_id is null and a.deleted_at is not null) <> v_shared_deleted then
     raise exception 'the purge touched a shared account';
   end if;
-  if (select array_agg(l.metadata) from public.household_audit_log l
-      where l.household_id = hh and l.action = 'private_data_expired' and l.target_user_id = v_gone)
-     <> array['{"accounts": 1}'::jsonb] then
-    raise exception 'expected one private_data_expired event carrying only the count';
+  -- Their private transactions go with the accounts; the mixed transfer
+  -- stays, and so does the shared account's balance.
+  if not exists (select 1 from public.transactions t
+                 where t.id = v_private_tx and t.deleted_at is not null and t.deleted_by = v_gone) then
+    raise exception 'the departed member''s private transaction was not soft-deleted';
+  end if;
+  if exists (select 1 from public.transactions t where t.id = v_mixed_tx and t.deleted_at is not null) then
+    raise exception 'the purge soft-deleted a mixed transfer (its shared leg is a shared balance)';
+  end if;
+  if (select sum(e.amount_account_currency) from public.transaction_entries e
+      join public.transactions t on t.id = e.transaction_id
+      where e.account_id = v_shared_account and t.deleted_at is null and t.voided_at is null) is distinct from 200 then
+    raise exception 'the purge changed a shared account''s balance';
+  end if;
+
+  -- D2: the trail says they left, and nothing about private accounts.
+  if exists (select 1 from public.household_audit_log l
+             where l.household_id = hh and l.target_user_id = v_gone and l.action <> 'member_left') then
+    raise exception 'LEAK: the audit trail records something about a departed member''s private data';
   end if;
 
   -- Idempotent: a second run finds nothing left to do.
