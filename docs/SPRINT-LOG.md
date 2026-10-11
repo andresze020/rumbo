@@ -53,10 +53,9 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
   protection (an Auth setting) recommended to the user.
 - Migrations added: the ten `*_hh_00*` files from
   `20261008120000_hh_000_membership_hardening.sql` to
-  `20261011140000_hh_006_rls_initplan.sql`. All applied to production through
-  `20261011120000_hh_005_members.sql` (75/75, verified 2026-10-11). **HH-6's
-  migration is NOT applied yet**; the user applies it with
-  `node scripts/db-push.mjs push --apply`.
+  `20261011140000_hh_006_rls_initplan.sql`. All applied to production (76/76,
+  verified 2026-10-11); after HH-6's, the performance advisor shows no
+  `auth_rls_initplan` warning.
 - Tables changed: `household_invitations`, `household_audit_log` and
   `app_feature_flags` added; `household_members` gains `removed_at` /
   `removed_by` (HH-0); `private_owner_id` added to `accounts`,
@@ -67,11 +66,10 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
   `csv_import_presets` (HH-1); 8 RLS policies restated (HH-6).
 - Follow-ups / known gaps: (1) the manual two-account pass in
   `hh-6-household-sharing-qa.md` — every row is Untested; it is the one open
-  item before the feature is declared done. (2) Apply the HH-6 migration.
-  (3) The database switch `household_sharing` is ON in production since
-  2026-10-11 13:01 UTC; the app switch `RUMBO_HOUSEHOLD_SHARING` is set by the
-  user in Vercel (their side, pending). (4) Enable leaked-password protection
-  in Supabase Auth.
+  item before the feature is declared done. (2) Both switches are ON in
+  production: the database switch `household_sharing` since 2026-10-11 13:01
+  UTC, and `RUMBO_HOUSEHOLD_SHARING` in Vercel. (3) Enable leaked-password
+  protection in Supabase Auth.
 
 ## BR-030 / BR-043 desk audit: two refund bugs fixed, QA subagents added (2026-09-30)
 - Goal: desk audit of BR-030 (card statement cycle) and BR-043 (budget

@@ -2,7 +2,7 @@
 
 ## Status
 
-Built (2026-10-11): HH-0 … HH-5 merged (#113–#118) and applied; HH-6 (release gate) automated checks pass, its migration `20261011140000_hh_006_rls_initplan.sql` is not applied yet, and the manual two-account pass (`docs/alpha/hh-6-household-sharing-qa.md`, all rows Untested) is the one open item before the feature is declared done. Database switch `app_feature_flags.household_sharing` is ON in production; the app switch `RUMBO_HOUSEHOLD_SHARING` is set by the user in Vercel (pending).
+Built (2026-10-11): HH-0 … HH-5 merged (#113–#118) and applied; HH-6 (release gate) automated checks pass and its migration is applied (76/76); the manual two-account pass (`docs/alpha/hh-6-household-sharing-qa.md`, all rows Untested) is the one open item before the feature is declared done. Database switch `app_feature_flags.household_sharing` is ON in production; so is `RUMBO_HOUSEHOLD_SHARING` in Vercel.
 
 ## 1. Decisions
 

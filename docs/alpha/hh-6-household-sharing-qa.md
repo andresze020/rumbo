@@ -114,7 +114,7 @@
 | CI on `main` (lint, types, unit, i18n, build, ledger invariants on fixtures) | Passed (PR #118) |
 | `npm run db:test` on the live household (2026-10-11) | 110 passed, 0 failed. The three `run-as=co-member` files were skipped: they need two real members. They run in the pass above, before B leaves, with the full command: `--household` (required: there is more than one household), `--user` (membership-gated RPCs fail as `postgres` without it), `--co-member` and `--subject`. |
 | Supabase security advisor | No anon-executable SECURITY DEFINER function (S8). Accepted: lint 0029 lists the 21 definer RPCs signed-in users call by design; each checks the caller first. Open: leaked-password protection (Auth setting). |
-| Supabase performance advisor | The 8 `auth_rls_initplan` warnings are fixed by `20261011140000_hh_006_rls_initplan.sql`. Accepted as INFO: unindexed foreign keys on actor/audit columns and unused indexes. |
+| Supabase performance advisor | The 8 `auth_rls_initplan` warnings are fixed by `20261011140000_hh_006_rls_initplan.sql` (applied 2026-10-11; the advisor no longer reports them). Accepted as INFO: unindexed foreign keys on actor/audit columns and unused indexes. |
 
 ## Covered by automation
 

@@ -24,8 +24,8 @@ The product is household-first. All financial data must belong to a household.
 ## Current status
 
 - **Household sharing built, HH-0…HH-6** (2026-10-08 → 10-11, #113-#118 +
-  HH-6 branch). DB switch `household_sharing` ON; HH-6 migration not applied
-  yet; open: the two-account QA pass
+  HH-6 branch). All migrations applied; DB switch `household_sharing` and
+  Vercel `RUMBO_HOUSEHOLD_SHARING` ON; open: the two-account QA pass
   ([`docs/alpha/hh-6-household-sharing-qa.md`](docs/alpha/hh-6-household-sharing-qa.md)).
   See [`docs/features/household-sharing.md`](docs/features/household-sharing.md);
   full detail in `docs/SPRINT-LOG.md`.
@@ -108,9 +108,8 @@ Applied since RUM-006: RUM-004 RLS (2026-09-24), B-8 (2026-09-25) and
 `20260930130000_br_030_refund_card_cycle.sql` (2026-09-30), both verified in
 `supabase_migrations.schema_migrations`. Run `npm run db:status` for the
 current count.
-75/75 applied on 2026-10-11 (through `20261011120000_hh_005_members.sql`, the
-household-sharing work). `20261011140000_hh_006_rls_initplan.sql` is the 76th
-and **not applied yet** (the user runs `node scripts/db-push.mjs push --apply`).
+76/76 applied on 2026-10-11 (through `20261011140000_hh_006_rls_initplan.sql`,
+the end of the household-sharing work), checked with `npm run db:status`.
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
