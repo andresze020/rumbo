@@ -760,6 +760,12 @@ export const en = {
       joined: 'You joined {household}.',
       switchTo: 'Switch to {household}',
     },
+    page: {
+      title: 'Invite someone',
+      description: 'We email them a link to create their account and join. You can also share the link yourself.',
+      emailSent: 'We emailed {email} a link to join. It works for 7 days.',
+      emailNotSent: 'We couldn’t email {email}. Share the link below with them yourself.',
+    },
   },
   members: {
     addedBy: 'Added by',
@@ -853,6 +859,26 @@ export const en = {
       accounts: '{count} private accounts',
       until: 'Available until {date}',
       download: 'Download CSV',
+    },
+    household: {
+      title: 'Household',
+      description: 'Your household’s details, the people in it and their invitations.',
+      back: 'Household',
+      settingsCardTitle: 'Household',
+      settingsCardDescription: 'The household name, month start, members and invitations have their own section now.',
+      settingsCardLink: 'Open Household',
+    },
+    member: {
+      roleTitle: 'Role',
+      roleDescription: '{name} is {role}. Choose a new role.',
+      ownershipTitle: 'Ownership',
+      removeTitle: 'Remove from household',
+      noActions: 'You can’t change this member’s role or access.',
+      selfNoActions: 'This is you. To leave the household, go back and choose Leave household.',
+    },
+    leave: {
+      privateTitle: 'Your private accounts',
+      confirmDescription: 'You will stop seeing {household} right away. Only another invitation can bring you back.',
     },
   },
 } as const
@@ -1612,6 +1638,12 @@ export const es: DeepStringify<typeof en> = {
       joined: 'Te uniste a {household}.',
       switchTo: 'Cambiar a {household}',
     },
+    page: {
+      title: 'Invitar a alguien',
+      description: 'Le enviamos por correo un enlace para crear su cuenta y unirse. También puedes compartir el enlace por tu cuenta.',
+      emailSent: 'Enviamos a {email} un enlace para unirse. Funciona durante 7 días.',
+      emailNotSent: 'No pudimos enviar el correo a {email}. Comparte con esa persona el enlace de abajo.',
+    },
   },
   members: {
     addedBy: 'Agregado por',
@@ -1705,6 +1737,26 @@ export const es: DeepStringify<typeof en> = {
       accounts: '{count} cuentas privadas',
       until: 'Disponible hasta el {date}',
       download: 'Descargar CSV',
+    },
+    household: {
+      title: 'Hogar',
+      description: 'Los datos de tu hogar, las personas que lo integran y sus invitaciones.',
+      back: 'Hogar',
+      settingsCardTitle: 'Hogar',
+      settingsCardDescription: 'El nombre del hogar, el inicio de mes, los miembros y las invitaciones ahora tienen su propia sección.',
+      settingsCardLink: 'Abrir Hogar',
+    },
+    member: {
+      roleTitle: 'Rol',
+      roleDescription: '{name} es {role}. Elige un nuevo rol.',
+      ownershipTitle: 'Propiedad',
+      removeTitle: 'Quitar del hogar',
+      noActions: 'No puedes cambiar el rol ni el acceso de este miembro.',
+      selfNoActions: 'Eres tú. Para salir del hogar, vuelve atrás y elige Salir del hogar.',
+    },
+    leave: {
+      privateTitle: 'Tus cuentas privadas',
+      confirmDescription: 'Dejarás de ver {household} de inmediato. Solo otra invitación podrá traerte de vuelta.',
     },
   },
 } as const
@@ -2464,6 +2516,12 @@ export const fr: DeepStringify<typeof en> = {
       joined: 'Vous avez rejoint {household}.',
       switchTo: 'Basculer vers {household}',
     },
+    page: {
+      title: 'Inviter quelqu’un',
+      description: 'Nous lui envoyons par courriel un lien pour créer son compte et rejoindre le foyer. Vous pouvez aussi partager le lien vous-même.',
+      emailSent: 'Nous avons envoyé un lien d’invitation à {email}. Il fonctionne pendant 7 jours.',
+      emailNotSent: 'Nous n’avons pas pu envoyer de courriel à {email}. Partagez vous-même le lien ci-dessous.',
+    },
   },
   members: {
     addedBy: 'Ajouté par',
@@ -2557,6 +2615,26 @@ export const fr: DeepStringify<typeof en> = {
       accounts: '{count} comptes privés',
       until: 'Disponible jusqu’au {date}',
       download: 'Télécharger le CSV',
+    },
+    household: {
+      title: 'Foyer',
+      description: 'Les informations de votre foyer, les personnes qui en font partie et leurs invitations.',
+      back: 'Foyer',
+      settingsCardTitle: 'Foyer',
+      settingsCardDescription: 'Le nom du foyer, le début du mois, les membres et les invitations ont désormais leur propre section.',
+      settingsCardLink: 'Ouvrir Foyer',
+    },
+    member: {
+      roleTitle: 'Rôle',
+      roleDescription: '{name} est {role}. Choisissez un nouveau rôle.',
+      ownershipTitle: 'Propriété',
+      removeTitle: 'Retirer du foyer',
+      noActions: 'Vous ne pouvez pas modifier le rôle ni l’accès de ce membre.',
+      selfNoActions: 'C’est vous. Pour quitter le foyer, revenez en arrière et choisissez Quitter le foyer.',
+    },
+    leave: {
+      privateTitle: 'Vos comptes privés',
+      confirmDescription: 'Vous cesserez de voir {household} immédiatement. Seule une autre invitation pourra vous y ramener.',
     },
   },
 } as const

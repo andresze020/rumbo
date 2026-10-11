@@ -62,7 +62,7 @@ export async function acceptInvitationAction(formData: FormData) {
   // INV-9: no household before → they land in this one. Had one → they keep
   // it, and Settings offers the switch.
   if (result.status === 'joined' && result.switched === false && result.household_id) {
-    redirect(`/dashboard/settings?joined=${encodeURIComponent(result.household_id)}`)
+    redirect(`/dashboard/household?joined=${encodeURIComponent(result.household_id)}`)
   }
   redirect('/dashboard')
 }

@@ -231,11 +231,18 @@ export const navGroups: NavGroup[] = [
     titleKey: 'nav.groupSettings',
     items: [
       {
+        href: '/dashboard/household',
+        labelKey: 'nav.household',
+        icon: Users,
+        phase: 'alpha',
+        hint: 'Household details, members and invitations',
+      },
+      {
         href: '/dashboard/settings',
         labelKey: 'nav.settings',
         icon: Settings,
         phase: 'alpha',
-        hint: 'Preferences and household settings',
+        hint: 'Your profile and preferences',
       },
       { href: '/dashboard/export', labelKey: 'nav.export', icon: Download, phase: 'alpha' },
       {
@@ -245,13 +252,7 @@ export const navGroups: NavGroup[] = [
         phase: 'alpha',
         hint: 'How the app works, and answers to the usual questions',
       },
-      {
-        href: '/dashboard/coming-soon/household',
-        labelKey: 'nav.household',
-        icon: Users,
-        phase: 'soon',
-        descriptionKey: 'comingSoon.descriptions.household',
-      },
+
       {
         href: '/dashboard/coming-soon/privacy',
         labelKey: 'nav.privacy',

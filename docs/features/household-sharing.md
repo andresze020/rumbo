@@ -9,7 +9,7 @@ Built (2026-10-11): HH-0 … HH-5 merged (#113–#118) and applied; HH-6 (releas
 - **D1** One household holds shared AND private accounts. An account is shared (`private_owner_id` is null) or private to exactly one member.
 - **D2** Other members see NOTHING of a private account: not its existence, name, balance or transactions. No override for owner or admin.
 - **D3** Household numbers (budgets, month close, anything in scope "household") use shared data only and are identical for every member. A scope switch (household | mine | all) shows the private side to its owner.
-- **D4** Invitations are a single-use link bound to one email, shared by hand. No email provider. No service-role key.
+- **D4** Invitations are a single-use link bound to one email. HH-7: the invited address is also emailed a sign-in link through Supabase Auth (custom SMTP), which creates the account and lands on the invitation; the link can still be shared by hand. No service-role key.
 - **D5** Any editor (owner, admin, member) may create private accounts for themselves. Shared accounts stay owner/admin only.
 - **D6** shared -> private is allowed only while the household has exactly one active member and no pending invitation. private -> shared is allowed to the account's owner only, behind a confirmation; with more than one member it is irreversible.
 - **D7** Categories, tags, notes, categorization rules, exchange rates and budgets stay household-shared. Payees get privacy.
@@ -220,6 +220,14 @@ All new definer functions: fixed `search_path`, auth check first, revoke from pu
 ### HH-6 Release gate
 
 - Two real accounts on a Vercel preview through every INV/MEM/PRV/SCP/LIF requirement; security and performance advisors clean; `docs/release-checklist.md` run; sprint-closer updates `AGENTS.md` (1–2 lines), `docs/SPRINT-LOG.md`, `docs/pending-work.md`; this file's Status updated.
+
+### HH-7 Household section and invitation email (after the gate)
+
+- Everything about the household moves out of Settings into `/dashboard/household` (the "Household" menu entry): details (name, base currency, month start), members, invitations, recent activity, former households. Inviting (`/invite`), a member (`/members/<id>`) and leaving (`/leave`) are full pages, not dialogs; confirmations stay alert dialogs. Settings keeps a link card; the app-bar household selector links to the section.
+- Invitation email: `create_household_invitation` is unchanged. After it returns the token, the server action calls `signInWithOtp(email, shouldCreateUser, emailRedirectTo = <origin>/invite/<token>)` from a stateless client with the publishable key. A new address gets an account created and confirmed by the email; an existing one is signed in. Either way the person still has to press Accept (S3, S11). A failed email never fails the invitation: the page says so and the link is still shown.
+- `/auth/confirm` verifies the email's token hash (`verifyOtp`), so the link works on any device, and only ever forwards to an invite path taken from `next` (`inviteReturnPathFromNext`), else the invite cookie (S14), else `/dashboard` or `/onboarding`.
+- Supabase setup (manual, the user's): (1) custom SMTP under Authentication › Emails › SMTP Settings — the built-in sender only reaches the project's team, 2 emails an hour; (2) the "Confirm signup" and "Magic Link" templates link to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next={{ .RedirectTo }}`; (3) Site URL set to the production domain people use.
+- Accepted: the email is Supabase's sign-in email (the template can be reworded), not one naming the household; an owner/admin can make Rumbo email any address, bounded by the invitation caps (INV-10) and Supabase's email rate limit.
 
 ## 8. Open decisions (defaults in force until changed)
 

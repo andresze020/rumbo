@@ -2,56 +2,31 @@ import Link from 'next/link'
 import { UserPlus } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
-import { Callout } from '@/components/callout'
-import { FormDialog } from '@/components/form-dialog'
 import { ConfirmActionButton } from '@/components/confirm-action-button'
 import { translate } from '@/lib/i18n/translate'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { localeToBcp47 } from '@/lib/format'
-import type { InvitationRefusal, InvitationRole } from '@/lib/households/invitations'
 import { revokeInvitationAction } from './invitation-actions'
-import { InviteMemberForm, type InviteReviewAccount } from './invite-member-form'
-
-export type PendingInvitation = {
-  id: string
-  email: string
-  role: InvitationRole
-  invitedByName: string | null
-  expiresAt: string
-}
-
-const SETTINGS_PATH = '/dashboard/settings'
+import type { PendingInvitation } from './data'
+import { HOUSEHOLD_PATH } from './members-card'
 
 /**
- * HH-4 Settings › Invitations (INV-1…INV-4), owner/admin only and only with
- * RUMBO_HOUSEHOLD_SHARING on (the page decides both). The pending list comes
- * from list_household_invitations; the invite dialog opens on `?invite=1`.
+ * Household › Invitations (INV-1…INV-4), owner/admin only and only with
+ * RUMBO_HOUSEHOLD_SHARING on (the page decides both). Inviting opens its own
+ * page, /dashboard/household/invite; the pending list comes from
+ * list_household_invitations.
  */
 export function HouseholdInvitationsSection({
-  householdId,
   locale,
   callerRole,
-  roles,
   invitations,
-  review,
-  dialogOpen,
-  revoked,
-  errorCode,
 }: {
-  householdId: string
   locale: Locale
   callerRole: string
-  roles: InvitationRole[]
   invitations: PendingInvitation[]
-  /** INV-3: the accounts to review before the first link, or null. */
-  review: InviteReviewAccount[] | null
-  dialogOpen: boolean
-  revoked: boolean
-  errorCode: InvitationRefusal | null
 }) {
   const t = (key: Parameters<typeof translate>[1], vars?: Record<string, string | number>) => translate(locale, key, vars)
   const dateFormat = new Intl.DateTimeFormat(localeToBcp47(locale), { dateStyle: 'medium' })
-  const closeHref = `${SETTINGS_PATH}#invitations`
   // Only the owner revokes an admin invitation (INV-1).
   const rows = invitations.map((invitation) => ({
     ...invitation,
@@ -65,12 +40,8 @@ export function HouseholdInvitationsSection({
         <CardDescription>{t('invitations.settings.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {revoked ? <Callout variant="success">{t('invitations.settings.revoked')}</Callout> : null}
-        {errorCode ? <Callout variant="error">{t(`invitations.errors.${errorCode}`)}</Callout> : null}
-
         <Link
-          href={`${SETTINGS_PATH}?invite=1#invitations`}
-          scroll={false}
+          href={`${HOUSEHOLD_PATH}/invite`}
           className={buttonVariants({ size: 'sm', className: 'gap-1.5' })}
         >
           <UserPlus aria-hidden="true" />
@@ -115,16 +86,6 @@ export function HouseholdInvitationsSection({
           )}
         </div>
       </CardContent>
-
-      {dialogOpen ? (
-        <FormDialog
-          title={t('invitations.settings.dialogTitle')}
-          description={t('invitations.settings.dialogDescription')}
-          cancelHref={closeHref}
-        >
-          <InviteMemberForm householdId={householdId} roles={roles} review={review} closeHref={closeHref} />
-        </FormDialog>
-      ) : null}
     </Card>
   )
 }
