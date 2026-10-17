@@ -69,6 +69,10 @@
 > The same day, §4.4 was updated for the BR-030 / BR-043 desk audit (#84–#86):
 > two refund bugs were reproduced in production (rolled-back transactions) and
 > fixed by migrations applied 2026-09-30. See `docs/SPRINT-LOG.md`.
+
+> **Touched 2026-10-17** to index the proposed transaction-entry sprint based
+> on the two 2026-10-14 AndroMoney/Rumbo recordings. Additive only; this is
+> not a full audit of the remaining rows.
 >
 > Everything shipped is recorded in `AGENTS.md` → Current status and
 > [SPRINT-LOG.md](./SPRINT-LOG.md); this file only lists what is **not** done.
@@ -106,6 +110,7 @@ decision first.
 | ID | Priority | Area | One-line | Doc |
 |---|---:|---|---|---|
 | BF-022 | P3 | Transactions | Reconciliation flow — mark transactions "cleared" against a bank statement. Needs a schema migration (`reconciled_at`). Deferred to Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
+| Ingreso de transacciones Premium | P0–P1 | Transactions / captura | Propuesta 2026-10-17 basada en dos grabaciones: reducir la espera del formulario, aclarar «Add Next», mejorar el acceso a categorías/fechas/tags y medir el flujo en una sesión controlada. Sin cambio de esquema previsto. | [alpha/sprint-transaction-entry-premium.md](./alpha/sprint-transaction-entry-premium.md) |
 | Tap payment capture | — | Capture / automation | Design only, **no code**. A tap cannot be detected by the PWA on any platform; detection has to come from the phone's automation layer posting to an ingest endpoint that stages captures in a `capture_inbox` and auto-posts only above a confidence threshold. | [features/tap-payment-capture.md](./features/tap-payment-capture.md) |
 | MQ-001…MQ-020 | P0–P3 | Recorrido móvil (global) | **Abierto 2026-09-30.** 20 tickets de una grabación móvil de ~4 min: "hoy"/mes actual calculados en UTC (P0), shell que se desplaza, empty state de Transactions que parpadea, botón del asistente encima del contenido, deltas de mes en curso engañosos, resumen de Goals sin metas en otra moneda (P1), más fricción de UX/performance (P2–P3). Cada ticket trae evidencia, `archivo:línea` y criterio de aceptación. | [mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md) |
 | ~~RUM-001…RUM-010b~~ | — | Performance / integridad financiera | **✅ Terminado 2026-09-25 (11/11, último: RUM-005 en #81).** Backlog de 11 tickets: reconciliar net worth, instrumentar el baseline, descomponer la carga del Dashboard (8 `await` secuenciales), reducir llamadas repetidas de balances, cache/loading, y montar el primer runner de tests de JS/TS del repo. Prioridades y prompts por ticket en el doc. | [performance-ux-backlog.md](./performance-ux-backlog.md) · [estado](./performance-ux-execution-status.md) |
