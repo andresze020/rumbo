@@ -32,6 +32,7 @@ import {
   isEntryTimingEnabled,
   recordEntrySample,
   setEntryTimingEnabled,
+  type EntryEvent,
   type EntryVariant,
 } from '@/lib/perf/entry-timing'
 import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
@@ -233,6 +234,27 @@ function readAddNextDefaults(searchParams: URLSearchParams): AddNextDefaults | n
  * through so the router's entry, and `useBackDismiss`'s overlay marker on it,
  * survive.
  */
+/**
+ * Writes one entry-timing sample once the browser has painted (two frames).
+ *
+ * Deliberately not cancelled by the effect that schedules it. Landing a save
+ * re-renders the provider straight away — the toast strips `created=1` from
+ * the URL in the very next frame — and an effect cleanup that cancelled the
+ * pending frame threw every `save` sample away (first device run, 2026-10-22:
+ * only `open.cold` was ever recorded). The timer was already taken off its
+ * ref, so letting the frame run cannot record a sample twice.
+ */
+function recordAfterPaint(
+  event: EntryEvent,
+  timer: { start: number; variant: EntryVariant }
+) {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() =>
+      recordEntrySample(event, timer.variant, performance.now() - timer.start)
+    )
+  })
+}
+
 export function replaceUrlInPlace(href: string) {
   window.history.replaceState(window.history.state, '', href)
 }
@@ -658,23 +680,14 @@ export function TransactionDialogProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.get('entry_timing')])
 
-  // open: the form is on screen. Two frames, so the sample ends after the
-  // browser has painted it, not when React committed it.
+  // open: the form is on screen. Recorded after the next paint (two frames),
+  // not when React committed it.
   const formOnScreen = open && !!usableFormData && !awaitingSeededAccount
   useEffect(() => {
     if (!formOnScreen || !openTimer.current) return
     const timer = openTimer.current
     openTimer.current = null
-    let second = 0
-    const first = window.requestAnimationFrame(() => {
-      second = window.requestAnimationFrame(() =>
-        recordEntrySample('open', timer.variant, performance.now() - timer.start)
-      )
-    })
-    return () => {
-      window.cancelAnimationFrame(first)
-      window.cancelAnimationFrame(second)
-    }
+    recordAfterPaint('open', timer)
   }, [formOnScreen, formKey])
 
   // save: the redirect has landed (`created=1`), with the next draft up when
@@ -685,16 +698,7 @@ export function TransactionDialogProvider({
     const timer = saveTimer.current
     saveTimer.current = null
     if (performance.now() - timer.start > 30_000) return
-    let second = 0
-    const first = window.requestAnimationFrame(() => {
-      second = window.requestAnimationFrame(() =>
-        recordEntrySample('save', timer.variant, performance.now() - timer.start)
-      )
-    })
-    return () => {
-      window.cancelAnimationFrame(first)
-      window.cancelAnimationFrame(second)
-    }
+    recordAfterPaint('save', timer)
     // `searchParams`, not just `created`: a screen that never strips
     // `created=1` would otherwise hide the second save's landing.
   }, [created, searchParams])
