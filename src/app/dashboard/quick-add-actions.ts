@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getUiPreferences } from '@/lib/preferences/server'
+import { getRequestProfile } from '@/lib/supabase/request'
 import { markPrivateAccounts } from '@/lib/privacy/account-label'
 import {
   loadCategoryEntryMemory,
@@ -78,24 +79,25 @@ export type QuickAddFormData = {
 
 export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return null
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('default_household_id')
-      .eq('id', user.id)
-      .maybeSingle()
-
+    // One user lookup and one profile read, shared by everything below
+    // through the request cache. This used to be four sequential round trips
+    // before the lists started: `auth.getUser()` + `profiles` here, then the
+    // same two again inside `getUiPreferences()`.
+    const profile = await getRequestProfile()
     if (!profile?.default_household_id) return null
 
     const householdId = profile.default_household_id
-    const preferences = await getUiPreferences()
+    const [supabase, preferences] = await Promise.all([createClient(), getUiPreferences()])
 
-    const [householdResult, accountsResult, categoriesResult, payeesResult, tagsResult, currenciesResult] = await Promise.all([
+    const [
+      householdResult,
+      accountsResult,
+      categoriesResult,
+      payeesResult,
+      tagsResult,
+      currenciesResult,
+      categoryMemory,
+    ] = await Promise.all([
       supabase
         .from('households')
         .select('base_currency')
@@ -135,13 +137,13 @@ export async function getQuickAddFormData(): Promise<QuickAddFormData | null> {
         .select('code')
         .eq('is_active', true)
         .order('code', { ascending: true }),
+      // Only fetched when the user has actually turned the autofill on, so the
+      // default install pays nothing for a feature it is not using. In the
+      // batch rather than after it: it needs nothing the batch returns.
+      preferences.quickEntry.autofillFromLastInCategory
+        ? loadCategoryEntryMemory(supabase, householdId)
+        : Promise.resolve<CategoryEntryMemory>({}),
     ])
-
-    // Only fetched when the user has actually turned the autofill on, so the
-    // default install pays nothing for a feature it is not using.
-    const categoryMemory = preferences.quickEntry.autofillFromLastInCategory
-      ? await loadCategoryEntryMemory(supabase, householdId)
-      : {}
 
     return {
       householdId,
