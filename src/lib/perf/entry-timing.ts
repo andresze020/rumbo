@@ -25,6 +25,9 @@ import { percentile } from './stats'
 export const ENTRY_TIMING_FLAG_KEY = 'rumbo:entry-timing'
 export const ENTRY_TIMING_SAMPLES_KEY = 'rumbo:entry-timing-samples'
 export const MAX_SAMPLES = 200
+export const ENTRY_TIMING_PENDING_SAVE_KEY = 'rumbo:entry-timing-pending-save'
+/** A save that has not landed after this long never will (validation error, abandoned). */
+export const MAX_SAVE_MS = 30_000
 
 export type EntryEvent = 'open' | 'save'
 export type EntryVariant = 'cold' | 'warm' | 'next' | 'close'
@@ -118,6 +121,29 @@ export function appendEntrySample(
   return [...samples, sample].slice(-MAX_SAMPLES)
 }
 
+export type PendingSave = { variant: 'next' | 'close'; startedAt: number }
+
+/**
+ * Reads the pending-save marker: the submit's wall-clock start and variant.
+ * Null when absent, malformed, from the future, or older than `MAX_SAVE_MS`.
+ * Never throws.
+ */
+export function parsePendingSave(raw: string | null, now: number): PendingSave | null {
+  if (!raw) return null
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (!value || typeof value !== 'object') return null
+    const { variant, startedAt } = value as Record<string, unknown>
+    if (variant !== 'next' && variant !== 'close') return null
+    if (typeof startedAt !== 'number' || !Number.isFinite(startedAt)) return null
+    const age = now - startedAt
+    if (age < 0 || age > MAX_SAVE_MS) return null
+    return { variant, startedAt }
+  } catch {
+    return null
+  }
+}
+
 // ── Browser side ────────────────────────────────────────────────────────────
 
 function storage(kind: 'local' | 'session'): Storage | null {
@@ -172,4 +198,36 @@ export function recordEntrySample(event: EntryEvent, variant: EntryVariant, ms: 
   } catch {
     // Storage full: drop the sample rather than disturb the form.
   }
+}
+
+/**
+ * Starts the save timer at submit. Kept in `sessionStorage`, not in component
+ * state: the first device runs recorded no save at all, because whatever held
+ * the start in memory did not survive the redirect that lands the save. A
+ * marker in the tab's storage survives a remount and even a reload.
+ */
+export function markSaveStart(variant: 'next' | 'close') {
+  if (!isEntryTimingEnabled()) return
+  try {
+    storage('session')?.setItem(
+      ENTRY_TIMING_PENDING_SAVE_KEY,
+      JSON.stringify({ variant, startedAt: Date.now() } satisfies PendingSave)
+    )
+  } catch {
+    // Storage blocked: this save simply goes unmeasured.
+  }
+}
+
+/** Ends the save timer, if one is pending, and records the sample. */
+export function finishPendingSave() {
+  const session = storage('session')
+  if (!session) return
+  let pending: PendingSave | null = null
+  try {
+    pending = parsePendingSave(session.getItem(ENTRY_TIMING_PENDING_SAVE_KEY), Date.now())
+    session.removeItem(ENTRY_TIMING_PENDING_SAVE_KEY)
+  } catch {
+    return
+  }
+  if (pending) recordEntrySample('save', pending.variant, Date.now() - pending.startedAt)
 }

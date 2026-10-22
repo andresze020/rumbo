@@ -4,6 +4,8 @@ import {
   appendEntrySample,
   formatEntryRowFigures,
   formatEntrySummary,
+  MAX_SAVE_MS,
+  parsePendingSave,
   parseEntrySamples,
   summarizeEntrySamples,
   type EntrySample,
@@ -80,5 +82,23 @@ describe('formatEntryRowFigures', () => {
     expect(
       formatEntryRowFigures({ event: 'save', variant: 'next', n: 2, p50: 800, p75: 950 })
     ).toBe('n=2 · p50 800 ms · p75 950 ms')
+  })
+})
+
+describe('parsePendingSave', () => {
+  const now = 1_000_000
+  it('reads a recent marker', () => {
+    expect(parsePendingSave(JSON.stringify({ variant: 'next', startedAt: now - 800 }), now)).toEqual({
+      variant: 'next',
+      startedAt: now - 800,
+    })
+  })
+
+  it('drops stale, future, malformed or foreign markers', () => {
+    expect(parsePendingSave(JSON.stringify({ variant: 'close', startedAt: now - MAX_SAVE_MS - 1 }), now)).toBeNull()
+    expect(parsePendingSave(JSON.stringify({ variant: 'close', startedAt: now + 5 }), now)).toBeNull()
+    expect(parsePendingSave(JSON.stringify({ variant: 'warm', startedAt: now }), now)).toBeNull()
+    expect(parsePendingSave('{', now)).toBeNull()
+    expect(parsePendingSave(null, now)).toBeNull()
   })
 })

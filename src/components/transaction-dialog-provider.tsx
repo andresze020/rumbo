@@ -31,10 +31,10 @@ import { useToast } from '@/components/toast-provider'
 import { TRANSACTION_CREATED_PARAM } from '@/lib/transactions/landing-flags'
 import { EntryTimingReadout } from '@/components/entry-timing-readout'
 import {
+  finishPendingSave,
   isEntryTimingEnabled,
   recordEntrySample,
   setEntryTimingEnabled,
-  type EntryEvent,
   type EntryVariant,
 } from '@/lib/perf/entry-timing'
 import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
@@ -225,24 +225,16 @@ function readAddNextDefaults(searchParams: URLSearchParams): AddNextDefaults | n
 }
 
 /**
- * Writes one entry-timing sample once the browser has painted (two frames).
+ * Runs `fn` once the browser has painted (two frames) — used to end the
+ * entry-timing samples on what the user actually sees.
  *
- * Deliberately not cancelled by the effect that schedules it. Landing a save
- * re-renders the provider straight away — the toast strips `txn_created` from
- * the URL in the very next frame — and an effect cleanup that cancelled the
- * pending frame threw every `save` sample away (first device run, 2026-10-22:
- * only `open.cold` was ever recorded). The timer was already taken off its
- * ref, so letting the frame run cannot record a sample twice.
+ * Deliberately not cancelled by the effect that schedules it: landing a save
+ * re-renders the provider straight away, and an effect cleanup that cancelled
+ * the pending frame threw samples away (first device run, 2026-10-22). Each
+ * caller consumes its timer before scheduling, so nothing records twice.
  */
-function recordAfterPaint(
-  event: EntryEvent,
-  timer: { start: number; variant: EntryVariant }
-) {
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() =>
-      recordEntrySample(event, timer.variant, performance.now() - timer.start)
-    )
-  })
+function afterPaint(fn: () => void) {
+  window.requestAnimationFrame(() => window.requestAnimationFrame(fn))
 }
 
 /**
@@ -365,7 +357,6 @@ export function TransactionDialogProvider({
   // Only a start time and a variant are held — never anything about the entry.
   const [entryTimingOn, setEntryTimingOn] = useState(false)
   const openTimer = useRef<{ start: number; variant: EntryVariant } | null>(null)
-  const saveTimer = useRef<{ start: number; variant: EntryVariant } | null>(null)
 
   const returnTo = useMemo(
     () => buildReturnTo(pathname, new URLSearchParams(searchParams.toString())),
@@ -716,18 +707,18 @@ export function TransactionDialogProvider({
     if (!formOnScreen || !openTimer.current) return
     const timer = openTimer.current
     openTimer.current = null
-    recordAfterPaint('open', timer)
+    afterPaint(() =>
+      recordEntrySample('open', timer.variant, performance.now() - timer.start)
+    )
   }, [formOnScreen, formKey])
 
   // save: the redirect has landed (`txn_created`), with the next draft up when
-  // it was "Save & Add Next". A submit that never lands (a validation error)
-  // leaves a stale timer; anything older than 30 s is dropped, not recorded.
+  // it was "Save & Add Next". The start was stamped by the form at submit, in
+  // the tab's storage (`markSaveStart`), so it survives whatever the redirect
+  // does to this component.
   useEffect(() => {
-    if (!txnCreated || !saveTimer.current) return
-    const timer = saveTimer.current
-    saveTimer.current = null
-    if (performance.now() - timer.start > 30_000) return
-    recordAfterPaint('save', timer)
+    if (!txnCreated) return
+    afterPaint(finishPendingSave)
   }, [txnCreated])
 
   // Back dismisses the entry sheet instead of leaving the screen behind it.
@@ -824,19 +815,6 @@ export function TransactionDialogProvider({
                 Create an account first before adding transactions.
               </p>
             ) : (
-              <div
-                className="contents"
-                // Starts the T4 save timer. Capture phase, so it runs before the
-                // form's own submit handling; `submitter` tells "Save & Add
-                // Next" (name="add_next") from a plain create.
-                onSubmitCapture={(event) => {
-                  const submitter = (event.nativeEvent as SubmitEvent).submitter
-                  saveTimer.current = {
-                    start: performance.now(),
-                    variant: submitter?.getAttribute('name') === 'add_next' ? 'next' : 'close',
-                  }
-                }}
-              >
               <TransactionForm
                 key={formKey}
                 accounts={usableFormData.accounts}
@@ -869,7 +847,6 @@ export function TransactionDialogProvider({
                 returnTo={returnTo}
                 onCancel={closeDialog}
               />
-              </div>
             )
           ) : null}
         </DialogContent>

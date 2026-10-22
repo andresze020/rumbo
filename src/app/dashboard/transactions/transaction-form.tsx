@@ -43,6 +43,7 @@ import {
   rankByUsage,
   recordUsage,
 } from '@/lib/quick-entry/usage-ranking'
+import { markSaveStart } from '@/lib/perf/entry-timing'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
 import { AdvancedFields } from '@/components/advanced-fields'
 import { AmountInput } from '@/components/amount-input'
@@ -2466,7 +2467,15 @@ export function TransactionForm({
   return (
     <form
       action={submitAction}
-      onSubmit={rememberEntryUsage}
+      onSubmit={(event) => {
+        // T4 entry timing (a no-op unless `?entry_timing=on`): the submitter
+        // tells "Save & Add Next" (name="add_next") from a plain create.
+        if (!isEdit) {
+          const submitter = (event.nativeEvent as SubmitEvent).submitter
+          markSaveStart(submitter?.getAttribute('name') === 'add_next' ? 'next' : 'close')
+        }
+        rememberEntryUsage()
+      }}
       className="space-y-3 max-sm:flex max-sm:min-h-full max-sm:flex-1 max-sm:flex-col"
     >
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
