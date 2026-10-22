@@ -530,6 +530,27 @@ la comparación honesta es: medir esta rama en preview, y comparar contra la
 misma rama con los cambios de rendimiento revertidos si hace falta aislar
 cuánto aportó cada uno.
 
+### Tercera ronda en dispositivo (2026-10-22) — hallazgos y arreglos
+
+Reportados por el usuario en Brave/Android con su cuenta real, y reproducidos
+antes de tocar código con una réplica local: la app real contra un Supabase
+falso (auth + PostgREST + RPC con latencia simulada) y Playwright en viewport
+de teléfono. Los números de abajo son de esa réplica.
+
+| Síntoma | Causa | Arreglo | Verificado |
+|---|---|---|---|
+| Después de abrir Tags, un espacio abajo en ese y los demás selectores, con los botones del formulario asomando | Los selectores se posicionan contra el diálogo (su `translate` lo hace bloque contenedor de `fixed`), y el diálogo era el que hacía scroll: el selector quedaba corrido hacia arriba lo mismo que se había bajado el formulario (88 px reproducidos) | El scroll pasa a un contenedor interior; el diálogo no hace scroll en móvil | Con el formulario bajado 100 px, el selector cubre 0→640 de 640 |
+| «Agregar otra» → «falta el monto» → el formulario se cerró | Un toque extra sobre el borrador nuevo (monto vacío) dispara la validación nativa, que enfoca el monto y abre el teclado. En Brave el diálogo subía de más (su cálculo contaba la barra inferior que el teclado esconde) y dejaba una franja de fondo entre el formulario y el teclado: el siguiente toque caía ahí y cerraba el diálogo | (1) En móvil, tocar fuera ya no cierra (`disablePointerDismissal`); X, Escape y Atrás sí. (2) El diálogo sube con la medición de `ViewportPin` (`.entry-sheet`), la de los otros formularios, que ya excluía iOS | Teclado simulado con 60 px de desfase tipo Brave: borde del diálogo = tope del teclado, sin franja |
+| La racha no daba señal de guardado | El aviso «Transacción creada» queda detrás de la hoja a pantalla completa | «✓ Transacción creada ×N» dentro del diálogo, junto a la X (`role="status"`); el aviso global sale al cerrar | ×2 tras dos «Agregar otra» |
+| `save.next` p75 de 2 s | Tras cada «Agregar otra» se recargaban las listas del formulario; las Server Actions van de a una, así que la recarga se ponía delante del siguiente guardado (+~200 ms) | Recargar solo si el guardado trajo algo nuevo (`nextDraftNeedsFreshLists`) | Guardados seguidos 862/1083/1075 ms → 811/830/811 ms; 0 recargas en una racha |
+| Atrás no hacía nada la primera vez tras cerrar una racha | El refresco de la página (la revalidación del guardado) reescribe el estado de la entrada de historial y borra la marca del diálogo; al cerrar, la entrada no se reclamaba | `useBackDismiss` reconoce su entrada sin marca en la misma URL | Tras racha + X, un Atrás sale de la pantalla |
+| El borrador siguiente abría a media altura | El contenedor de scroll sobrevive al formulario remontado | Volver arriba al preparar el borrador siguiente | 156 px → 0, monto visible |
+| «Flick» al saltar a Descripción | Varias cosas en ~300 ms: cierra el selector, se expande la fila, sube el teclado, el diálogo se elevaba de más y había un scroll extra | Sin la sobre-elevación queda un ajuste suave (~60 ms) y un scroll suave | Solo en simulación; **confirmar en el teléfono** |
+
+Se descartaron con la réplica: el doble toque (una sola escritura), Enter
+enviando el formulario (Enter avanza al siguiente campo) y una redirección de
+la página de atrás durante el refresco.
+
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 
 | # | Caso | Qué confirmar | Resultado |
@@ -549,4 +570,7 @@ cuánto aportó cada uno.
 | 11b | Guardar desde Accounts, Payees o el Dashboard | Sale «Transacción creada.» una vez; nunca «Cuenta creada.» u otro aviso ajeno | |
 | 11c | Error de validación (p. ej. monto 0 forzado, o frecuencia siendo miembro sin permiso) | El mensaje sale dentro del formulario y el borrador queda intacto; no te saca de la pantalla | |
 | 11d | Guardar desde Budgets o Reports | La pantalla de atrás se actualiza sola tras el aviso | |
+| 11e | Bajar hasta Tags, abrirlo, cerrarlo y abrir Cuenta | Los dos selectores cubren la pantalla entera; no asoman los botones del formulario | |
+| 11f | Con el teclado abierto en el monto o la descripción | El formulario queda pegado al teclado, sin franja de fondo; tocar cerca del teclado no cierra el formulario | |
+| 11g | Racha de 3 «Agregar otra» y luego X, y luego Atrás | Arriba se ve «✓ Transacción creada ×3»; un solo Atrás sale de la pantalla | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |

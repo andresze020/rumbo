@@ -116,6 +116,7 @@ export function useBackDismiss(open: boolean, onDismiss: () => boolean | void) {
     overlayStack.push(entry)
     startListening()
     window.history.pushState({ ...routerState, __overlay: token }, '')
+    const pushedHref = window.location.href
 
     return () => {
       const index = overlayStack.indexOf(entry)
@@ -134,7 +135,19 @@ export function useBackDismiss(open: boolean, onDismiss: () => boolean | void) {
       // while it is still the current one. A navigation (a server action
       // redirect, "Apply filters") replaces it, and going back then would undo
       // that navigation instead.
-      if (window.history.state?.__overlay !== token) return
+      //
+      // A marker can also vanish *without* a navigation: a Server Action that
+      // revalidates refreshes the page in place, and the router rewrites the
+      // current entry's state with its own, dropping ours. The entry dialog
+      // stays open through a whole "Save & Add Next" batch, so this is the
+      // normal case there — and skipping the cleanup left a dead entry that
+      // made the next Back press do nothing. No marker at all, on the very URL
+      // it was pushed at, is still this overlay's entry.
+      const state = window.history.state
+      const stillOurs =
+        state?.__overlay === token ||
+        (state?.__overlay === undefined && window.location.href === pushedHref)
+      if (!stillOurs) return
 
       // Only count the pop when a listener is left to receive it — with the
       // stack empty it was just detached, and the count would go stale.

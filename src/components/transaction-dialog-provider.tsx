@@ -26,7 +26,7 @@ import {
   getQuickAddFormData,
   type QuickAddFormData,
 } from '@/app/dashboard/quick-add-actions'
-import { X } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { useBackDismiss } from '@/lib/use-back-dismiss'
@@ -41,6 +41,8 @@ import {
   type EntryVariant,
 } from '@/lib/perf/entry-timing'
 import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
+import { useIsMobile } from '@/lib/use-is-mobile'
+import { nextDraftNeedsFreshLists } from '@/lib/quick-entry/next-draft'
 import { todayIsoDateLocal } from '@/lib/format'
 
 type TransactionType = 'income' | 'expense'
@@ -330,6 +332,14 @@ export function TransactionDialogProvider({
   const ui = useUiTranslation()
   const keyboardInset = useSoftKeyboardInset()
   useKeepFocusedFieldVisible(keyboardInset > 0)
+  const isMobile = useIsMobile()
+  // Entries saved with "Save & Add Next" since this dialog opened. Shown in
+  // the dialog itself: on a phone the full-screen sheet covers the toast stack,
+  // so a batch had no visible confirmation at all — the next draft simply
+  // appeared, looking like the last one minus its amount.
+  const [savedInBatch, setSavedInBatch] = useState(0)
+  // The form's scroller (the wrapper on a phone, the sheet itself on desktop).
+  const scrollerRef = useRef<HTMLDivElement>(null)
 
   // Read pending "Save and Add Next" defaults straight from the URL on first
   // render so a freshly mounted provider (e.g. after a server-action redirect
@@ -621,6 +631,7 @@ export function TransactionDialogProvider({
       start: performance.now(),
       variant: formDataRef.current?.householdId === householdId ? 'warm' : 'cold',
     }
+    setSavedInBatch(0)
     setTriggerAccountId(options?.accountId)
     setTriggerType(options?.type)
     setSharedDescription(options?.description)
@@ -683,6 +694,7 @@ export function TransactionDialogProvider({
 
   function closeDialog() {
     setOpen(false)
+    setSavedInBatch(0)
     clearPrefills()
   }
 
@@ -693,10 +705,10 @@ export function TransactionDialogProvider({
    * it: the toast and the next draft come first.
    */
   function handleSaved({ addNext, next, warning }: TransactionSavedOutcome) {
-    toast({ message: warning ? ui(warning) : t('transactionsList.toastCreated') })
     afterPaint(finishPendingSave)
 
     if (addNext && next) {
+      setSavedInBatch((count) => count + 1)
       // Same carry-over as the redirect path's `next_*` params: date, type,
       // account, status, category, payee and tags. Never the amount,
       // description or notes — and not a Copy's or a share's either.
@@ -712,12 +724,23 @@ export function TransactionDialogProvider({
       setCopyDefaults(undefined)
       setSharedDescription(undefined)
       setFormKey((key) => key + 1)
-      // A payee or tag created by the entry just saved belongs in the next
-      // draft's pickers; refreshed underneath, the draft is already up.
-      void refreshFormData()
+      // The next entry starts where the last one did: at the amount, with the
+      // confirmation above it. The scroller outlives the remounted form, so
+      // without this a long form opened the next draft still scrolled down
+      // to the buttons — amount off-screen on a small phone and on desktop.
+      window.requestAnimationFrame(() => {
+        const scroller = scrollerRef.current
+        scroller?.scrollTo({ top: 0 })
+        scroller?.closest<HTMLElement>('[data-slot="dialog-content"]')?.scrollTo({ top: 0 })
+      })
+      // Only when the entry brought something the pickers do not have yet (a
+      // new payee, a tag made on the spot): see `nextDraftNeedsFreshLists`.
+      if (nextDraftNeedsFreshLists(formDataRef.current, next)) void refreshFormData()
       return
     }
 
+    // The sheet is about to close, so the toast stack is visible again.
+    toast({ message: warning ? ui(warning) : t('transactionsList.toastCreated') })
     closeDialog()
   }
 
@@ -775,21 +798,22 @@ export function TransactionDialogProvider({
         open={open}
         onOpenChange={(value) => {
           setOpen(value)
-          if (!value) clearPrefills()
+          if (!value) {
+            setSavedInBatch(0)
+            clearPrefills()
+          }
         }}
+        // On a phone the sheet is the whole screen, so the only "outside" left
+        // is whatever sliver of backdrop the browser's keyboard geometry
+        // exposes — and one tap there threw a half-typed entry away (device
+        // run, 2026-10-22). The X, Escape and Back still close it.
+        disablePointerDismissal={isMobile}
       >
         <DialogContent
           // Own close button: the built-in one is absolutely positioned in the
           // corner, where on a phone it lands on top of the type selector's
           // "Transfer". Ours gets its own row instead (see below).
           showCloseButton={false}
-          // Lift the mobile bottom sheet above the on-screen keyboard so its
-          // footer buttons stay reachable; no-op on desktop (inset is 0).
-          style={
-            keyboardInset
-              ? { bottom: keyboardInset, maxHeight: `calc(100dvh - ${keyboardInset}px - 0.5rem)` }
-              : undefined
-          }
           className={
             // Centered dialog on desktop; a full screen on mobile. It used to be
             // a 92dvh bottom sheet, which left a strip of dashboard above it and
@@ -798,6 +822,19 @@ export function TransactionDialogProvider({
             // gets the whole screen: `h-dvh`, square corners, and the actions
             // pushed to the bottom edge by the spacer inside the form.
             'max-h-[90dvh] overflow-y-auto sm:max-w-xl ' +
+            // `entry-sheet`: lifted above the keyboard by `ViewportPin`'s
+            // measurement (globals.css), the one the other form sheets use. It
+            // used to be lifted here by `innerHeight - visualViewport.height`,
+            // which in Brave counts the bottom toolbar the keyboard has hidden:
+            // the sheet rose a toolbar too high and left a strip of backdrop
+            // between the form and the keyboard (device run, 2026-10-22).
+            //
+            // `overflow-hidden` on mobile: the sheet itself must not scroll —
+            // the wrapper below does. The picker sheets are positioned against
+            // this box (see `SelectorSheet`), and while it was the scroller
+            // they were shifted up by however far the form had been scrolled,
+            // leaving the form's buttons showing under every picker.
+            'entry-sheet max-sm:overflow-hidden ' +
             // Flex column on mobile so the form can claim the leftover height
             // and pin its actions to the bottom edge; the desktop grid is
             // untouched.
@@ -816,7 +853,24 @@ export function TransactionDialogProvider({
               positioned it sat on top of the type selector and clipped
               "Transfer". On desktop it goes back to the corner, where there is
               a title bar to sit beside and nothing to collide with. */}
-          <div className="flex shrink-0 justify-end sm:absolute sm:top-2 sm:right-2 sm:z-10">
+          <div className="flex shrink-0 items-center justify-end gap-3 sm:absolute sm:top-2 sm:right-2 sm:z-10">
+            {/* The batch's running confirmation, beside the X so it costs no
+                height. Always mounted, so a screen reader hears each change. */}
+            <p
+              role="status"
+              aria-live="polite"
+              className="mr-auto flex min-w-0 items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400"
+            >
+              {savedInBatch > 0 ? (
+                <>
+                  <Check className="size-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{t('transactionsList.toastCreated')}</span>
+                  {savedInBatch > 1 ? (
+                    <span className="shrink-0 tabular-nums text-muted-foreground">×{savedInBatch}</span>
+                  ) : null}
+                </>
+              ) : null}
+            </p>
             <button
               type="button"
               onClick={closeDialog}
@@ -839,6 +893,12 @@ export function TransactionDialogProvider({
             </DialogDescription>
           </DialogHeader>
 
+          {/* The scroller on mobile (see `overflow-hidden` above). Edge to edge,
+              so focus rings and the sticky action bar are not clipped. */}
+          <div
+            ref={scrollerRef}
+            className="max-sm:-mx-4 max-sm:flex max-sm:min-h-0 max-sm:flex-1 max-sm:flex-col max-sm:overflow-y-auto max-sm:overscroll-contain max-sm:px-4"
+          >
           {/* Only the very first open waits: later ones render the last data
               while it revalidates (MQ-009, `refreshFormData`). */}
           {(loading && !usableFormData) || awaitingSeededAccount ? (
@@ -888,6 +948,7 @@ export function TransactionDialogProvider({
               />
             )
           ) : null}
+          </div>
         </DialogContent>
       </Dialog>
       {/* Never over the form: it covered the form's own controls. */}
