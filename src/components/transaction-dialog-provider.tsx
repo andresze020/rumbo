@@ -93,14 +93,25 @@ function todayIsoDate() {
 
 /**
  * Scroll whatever field is being typed into back into view once the keyboard
- * is up.
+ * is up — by scrolling the form's own scroller, and nothing else.
  *
  * Lifting the sheet above the keyboard leaves very little sheet, and the
  * browser's own "scroll the focused input into view" runs before the sheet has
  * been resized and lands in the wrong place, so redo it against the final
  * geometry.
+ *
+ * Not `scrollIntoView`. That scrolls every scrollable ancestor *and the visual
+ * viewport*, and near the end of the form — Description, Notes — the scroller
+ * runs out of room before the field reaches the top, so the browser panned
+ * the whole screen instead: the sheet's top row (the X, the batch
+ * confirmation) left the screen and everything jumped (device run,
+ * 2026-10-22). Only the scroller moves now; if it cannot bring the field all
+ * the way up, the field simply sits lower.
  */
-function useKeepFocusedFieldVisible(keyboardOpen: boolean) {
+function useKeepFocusedFieldVisible(
+  keyboardOpen: boolean,
+  scrollerRef: { current: HTMLDivElement | null }
+) {
   useEffect(() => {
     if (!keyboardOpen) return
 
@@ -108,22 +119,35 @@ function useKeepFocusedFieldVisible(keyboardOpen: boolean) {
       const active = document.activeElement
       if (!(active instanceof HTMLElement)) return
       if (!active.matches('input, select, textarea')) return
+      const scroller = scrollerRef.current
+      if (!scroller || !scroller.contains(active)) return
+      // A picker sheet's search field lives inside the form's DOM but on its
+      // own full-screen layer; it is never the form's to scroll.
+      if (active.closest('[role="dialog"]') !== scroller.closest('[role="dialog"]')) return
+
+      // What is actually on screen of the scroller: its own box, cut by the
+      // visual viewport (iOS does not lift the sheet; the keyboard covers it).
+      const box = scroller.getBoundingClientRect()
+      const vv = window.visualViewport
+      const visibleTop = Math.max(box.top, vv ? vv.offsetTop : 0)
+      const visibleBottom = Math.min(
+        box.bottom,
+        vv ? vv.offsetTop + vv.height : window.innerHeight
+      )
+      const rect = active.getBoundingClientRect()
 
       // Only when the field is actually out of the way. Scrolling a field that
       // is already on screen is what made a deliberate scroll snap back: the
       // user drags, this fires, and the page yanks itself home.
-      const rect = active.getBoundingClientRect()
-      const visibleBottom = window.visualViewport
-        ? window.visualViewport.height
-        : window.innerHeight
-      if (rect.top >= 0 && rect.bottom <= visibleBottom) return
+      if (rect.top >= visibleTop && rect.bottom <= visibleBottom) return
 
-      // Top, not centre. Centring was there to keep the field clear of the
-      // sticky action bar, which now hides itself while the keyboard is up —
-      // and centring spent the whole sheet on the one field you are already
-      // looking at. Anchoring it to the top spends the rest on the fields that
-      // come *after* it, which is what you need to see next.
-      active.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      // Top, not centre: the rest of the little sheet that is left goes to the
+      // fields that come *after* this one, which is what you need to see next.
+      const margin = 12
+      scroller.scrollTo({
+        top: Math.max(0, scroller.scrollTop + rect.top - visibleTop - margin),
+        behavior: 'smooth',
+      })
     }
 
     // The sheet resizes a frame or two behind the keyboard animation; wait for
@@ -142,8 +166,9 @@ function useKeepFocusedFieldVisible(keyboardOpen: boolean) {
     // `window.innerHeight` and so the measured inset — and keying this effect
     // on that number meant every one of those wobbles re-ran it and dragged the
     // page back to the focused field mid-scroll. Only opening the keyboard
-    // should reveal anything; the guard above handles the rest.
-  }, [keyboardOpen])
+    // should reveal anything; the guard above handles the rest. (The ref is
+    // stable.)
+  }, [keyboardOpen, scrollerRef])
 }
 
 /**
@@ -331,15 +356,15 @@ export function TransactionDialogProvider({
   const { t } = useLanguage()
   const ui = useUiTranslation()
   const keyboardInset = useSoftKeyboardInset()
-  useKeepFocusedFieldVisible(keyboardInset > 0)
+  // The form's scroller (the wrapper on a phone, the sheet itself on desktop).
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  useKeepFocusedFieldVisible(keyboardInset > 0, scrollerRef)
   const isMobile = useIsMobile()
   // Entries saved with "Save & Add Next" since this dialog opened. Shown in
   // the dialog itself: on a phone the full-screen sheet covers the toast stack,
   // so a batch had no visible confirmation at all — the next draft simply
   // appeared, looking like the last one minus its amount.
   const [savedInBatch, setSavedInBatch] = useState(0)
-  // The form's scroller (the wrapper on a phone, the sheet itself on desktop).
-  const scrollerRef = useRef<HTMLDivElement>(null)
 
   // Read pending "Save and Add Next" defaults straight from the URL on first
   // render so a freshly mounted provider (e.g. after a server-action redirect
@@ -855,20 +880,21 @@ export function TransactionDialogProvider({
               a title bar to sit beside and nothing to collide with. */}
           <div className="flex shrink-0 items-center justify-end gap-3 sm:absolute sm:top-2 sm:right-2 sm:z-10">
             {/* The batch's running confirmation, beside the X so it costs no
-                height. Always mounted, so a screen reader hears each change. */}
-            <p
-              role="status"
-              aria-live="polite"
-              className="mr-auto flex min-w-0 items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400"
-            >
+                height. A tinted pill that pops on every save: as plain green
+                text it went unnoticed on the phone (device run, 2026-10-22).
+                Always mounted, so a screen reader hears each change. */}
+            <p role="status" aria-live="polite" className="mr-auto flex min-w-0">
               {savedInBatch > 0 ? (
-                <>
+                <span
+                  key={savedInBatch}
+                  className="flex min-w-0 items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1.5 text-sm font-medium text-emerald-700 duration-300 animate-in fade-in-0 zoom-in-90 dark:text-emerald-300"
+                >
                   <Check className="size-4 shrink-0" aria-hidden="true" />
                   <span className="truncate">{t('transactionsList.toastCreated')}</span>
                   {savedInBatch > 1 ? (
-                    <span className="shrink-0 tabular-nums text-muted-foreground">×{savedInBatch}</span>
+                    <span className="shrink-0 tabular-nums opacity-80">×{savedInBatch}</span>
                   ) : null}
-                </>
+                </span>
               ) : null}
             </p>
             <button

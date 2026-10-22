@@ -551,6 +551,17 @@ Se descartaron con la réplica: el doble toque (una sola escritura), Enter
 enviando el formulario (Enter avanza al siguiente campo) y una redirección de
 la página de atrás durante el refresco.
 
+### Cuarta ronda en dispositivo (2026-10-22)
+
+| Síntoma | Causa | Arreglo | Verificado en la réplica |
+|---|---|---|---|
+| La franja sobre el teclado seguía igual | La hipótesis de la ronda anterior (Brave desfasa `innerHeight`) era falsa: con la medición de `ViewportPin` la franja no cambió, así que Brave reporta un área visible ~50px más baja de lo que muestra, y ningún cálculo encuentra el borde real | Detrás de la hoja de alta, en el teléfono, el fondo es del color de la hoja (`[data-slot=dialog-overlay]:has(~ .entry-sheet)`): la franja queda del mismo color que el formulario | Fondo `--popover`, sin `backdrop-filter` |
+| Formulario lleno sin descripción → Gasto a Ingreso → elegir categoría → salto con teclado a Descripción | El cambio de tipo vacía la categoría; la cadena trataba la nueva elección como avance y saltaba la cuenta y el payee (llenos) hasta Descripción. Su propio comentario decía que corregir un campo no debía arrastrar | Corregir (el campo tenía valor, o el usuario ya lo había elegido en este formulario) solo lleva a un campo **obligatorio** vacío; avanzar sigue igual | Antes: foco en Descripción. Después: sin salto. Primer llenado y Enter en el monto siguen llegando a Descripción; cambiar la categoría en un borrador de «Add next» tampoco salta |
+| Al saltar a Descripción desaparecía la X y el campo quedaba pegado arriba | `scrollIntoView({ block: 'start' })` también hace scroll del contenedor del diálogo (aunque tenga `overflow: hidden`): la fila de la X subía 119px fuera de la pantalla | Se hace scroll solo del contenedor del formulario, calculado a mano | X a 24px del borde (antes −119px); Descripción visible sobre el teclado |
+| No se vio el ×3 | El texto verde sin fondo pasaba desapercibido (y con el arrastre anterior la fila salía de la pantalla) | Píldora verde con un destello en cada guardado | «✓ Transacción creada. ×3» visible a 18px del borde |
+
+Mediciones de la ronda (LTE, n pequeño): `open.cold` 1.798 ms (red móvil + arranque en frío; sobre la meta, en WiFi 615–869 ms), `open.warm` 109–165 ms, `save.next` 762 ms p50 · 958 ms p75 ✅, `save.close` 688 ms ✅.
+
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 
 | # | Caso | Qué confirmar | Resultado |
@@ -573,4 +584,6 @@ la página de atrás durante el refresco.
 | 11e | Bajar hasta Tags, abrirlo, cerrarlo y abrir Cuenta | Los dos selectores cubren la pantalla entera; no asoman los botones del formulario | |
 | 11f | Con el teclado abierto en el monto o la descripción | El formulario queda pegado al teclado, sin franja de fondo; tocar cerca del teclado no cierra el formulario | |
 | 11g | Racha de 3 «Agregar otra» y luego X, y luego Atrás | Arriba se ve «✓ Transacción creada ×3»; un solo Atrás sale de la pantalla | |
+| 11h | Formulario lleno sin descripción → Ingreso → elegir categoría | No salta a Descripción ni abre el teclado | |
+| 11i | Con el teclado abierto | La franja sobre el teclado (si Brave la deja) es del color del formulario, no la página borrosa; la X nunca sale de la pantalla | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |

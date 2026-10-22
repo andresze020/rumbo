@@ -117,6 +117,9 @@ const ENTRY_CHAINS: Record<
   account_first: ['account', 'category', 'payee', 'description', 'tags'],
 }
 
+/** The chain fields an income or expense cannot be saved without. */
+const REQUIRED_CHAIN_FIELDS: ReadonlySet<ChainField> = new Set(['category', 'account'])
+
 export type TransactionFormAccount = {
   id: string
   name: string
@@ -1044,13 +1047,33 @@ export function TransactionForm({
   }
 
   /** Queue the next field for `closePicker` to open once the picker dismisses. */
+  // Chain fields the user has picked at least once in this form.
+  const pickedRef = useRef(new Set<ChainField>())
+
   const advanceAfter = (
     from: ChainField,
     justFilled: Partial<Record<ChainField, boolean>> = {},
     quiet = false
   ) => {
     if (!quickEntry.autoAdvance) return
-    advanceToRef.current = nextInChain(from, justFilled)
+    // Filling a field in is progress; changing one is a correction, and a
+    // correction only ever leads on to a *required* field that is still
+    // empty. Without this, switching Expense → Income (which empties the
+    // category) and picking the new category jumped past the account and
+    // payee already on screen into Description, keyboard and all (device run,
+    // 2026-10-22). A correction is a field that held a value before this pick
+    // (seeded by "Save & Add Next", a Copy, an account card, or the autofill)
+    // or one the user already picked once here — the category above was empty
+    // at that moment, but only because the type switch had just cleared it.
+    // The values are read from this render, before the pick lands.
+    const hadValue = { account: accountId, category: categoryId, payee: payeeName }[
+      from as 'account' | 'category' | 'payee'
+    ]
+    const correcting = Boolean(hadValue) || pickedRef.current.has(from)
+    pickedRef.current.add(from)
+    const next = nextInChain(from, justFilled)
+    advanceToRef.current =
+      correcting && next !== null && !REQUIRED_CHAIN_FIELDS.has(next) ? null : next
     advanceQuietRef.current = quiet
   }
 
