@@ -847,7 +847,8 @@ export function TransactionDialogProvider({
           ) : null}
         </DialogContent>
       </Dialog>
-      {entryTimingOn ? <EntryTimingReadout /> : null}
+      {/* Never over the form: it covered the form's own controls. */}
+      {entryTimingOn && !open ? <EntryTimingReadout /> : null}
     </TransactionDialogContext.Provider>
   )
 }
