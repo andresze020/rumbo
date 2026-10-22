@@ -1,5 +1,9 @@
 # Benchmark Follow-up Issues
 
+> **Archivado 2026-10-22 — BR-001…BR-048 cerrados salvo cuatro slices 2.**
+> Esos slices y cualquier pendiente nuevo viven en
+> [pending-work.md](../pending-work.md).
+
 > Documentation only. Near-term implementation backlog derived from
 > [benchmark-review-monarch-ynab-copilot.md](../benchmark-review-monarch-ynab-copilot.md)
 > (BR-001…BR-029) and

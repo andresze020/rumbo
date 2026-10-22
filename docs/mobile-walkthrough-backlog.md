@@ -1,5 +1,9 @@
 # Rumbo — Backlog del recorrido móvil 2026-09-30
 
+> **Archivado 2026-10-22 — los 20 tickets están cerrados.** Este documento es
+> registro histórico. Lo que sigue abierto (MQ-001-cron) y cualquier
+> pendiente nuevo vive en [pending-work.md](./pending-work.md).
+
 > Documentation only. Backlog ejecutable MQ-001…MQ-020, derivado de una grabación
 > de pantalla de ~4 min (Brave en Android, modo oscuro, household real con
 > 20+ cuentas y años de historial) que recorre Dashboard, Transactions,

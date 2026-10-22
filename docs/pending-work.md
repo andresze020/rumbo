@@ -1,302 +1,214 @@
-# Pending Work
+# Pending Work — backlog consolidado
 
-> Documentation only. Single index of everything still open across the
-> project: feature slices not yet built, the remaining BR/BF backlog, the manual
-> QA gates, and the Open Decisions scattered across individual feature docs. Each
-> row is a pointer to its source of truth, not a duplicate — update the linked doc
-> first, then update this index to match. Kept in sync by the
-> `rumbo-state-sync` skill at sprint close.
+> Documentation only. **El único backlog vivo de Rumbo.** Reúne todo lo que
+> sigue abierto: features sin construir, slices pendientes, gates de QA manual,
+> configuración manual de Supabase/Vercel, decisiones abiertas, ítems
+> diferidos e higiene del repo. Los backlogs por tema
+> ([mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md),
+> [performance-ux-backlog.md](./performance-ux-backlog.md),
+> [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md),
+> [alpha/bug-friction-log.md](./alpha/bug-friction-log.md)) quedan como
+> **registro histórico** de tickets cerrados; un pendiente nuevo se anota
+> aquí, no allí. Cada fila apunta a su doc de detalle cuando existe.
 >
-> **Last refreshed 2026-08-16** against `main` at `92a7be4`. This refresh
-> removed everything the mobile-capture-parity, Tier-3 and Tier-4 sprints closed
-> — the previous version was written on 2026-07-28, before those three merged
-> into `main` on 2026-08-12, and still listed shipped features as open. All 58
-> migrations are applied (`npx supabase migration list --linked` reported 58/58
-> on 2026-08-12); nothing is pending on the database side.
->
-> **Touched 2026-08-21** to add the follow-ups left by the viewport-pinning
-> sprint (§2 zoom decision, §3 two UI rows). That was an additive edit, not a
-> re-audit — the last full pass over every row is still the 2026-08-16 one
-> described above.
->
-> **Touched 2026-08-22** to close the five §3 rows the
-> `fix/mobile-ui-zoom-overlays-and-activity` sprint shipped: modal overlays
-> under zoom, dashboard text truncation, in-app text size, CI on pull
-> requests, and runnable ledger invariants. Additive again, not a re-audit.
->
-> **Touched 2026-09-02** to record what PRs #48–#61 (2026-08-24 → 08-29) left
-> open: the iPhone verification of the app shell (§4.3), the stale PR #54 (§7),
-> and the half-finished rename to Rumbo (§7). Those PRs went onto `main` one at
-> a time without a sprint close, so nothing about them had reached this file.
-> Additive again — the last full pass over every row is still 2026-08-16.
->
-> **Touched 2026-09-03** to drop the two §7 rows that closed: PR #54 (closed as
-> superseded) and the rename, now finished — the ten skills are `rumbo-*` and
-> the live docs say Rumbo. The frozen record keeps the old name on purpose:
-> `docs/design/handoff-2026-06/`, the two benchmark reviews and past
-> `SPRINT-LOG.md` entries describe what was delivered and reviewed under
-> "App Finanzas", so changing their prose would misreport history. Skill
-> *identifiers* were updated even there, since a `rumbo-ledger-rules` path that
-> no longer resolves helps nobody.
->
-> **Touched 2026-09-15** to record what PR #64 (category-first quick entry,
-> per-category autofill, the one-screen mobile form) left open: two things
-> reasoned from the code but not watched fail-then-pass on a device (§4.5),
-> the iPhone SE / 13 mini overflow (§4.5), and two UI ideas raised during
-> testing that were not decided (§5). Additive again — the last full pass over
-> every row is still 2026-08-16.
->
-> **Touched 2026-09-20** to record what PR #66 (Transactions rebuilt as a
-> phone list, the period given one owner, the household moved to the app bar)
-> left open (§4.6). No prior row in this file closed — the redesign did not
-> touch anything already listed here. Additive again — the last full pass over
-> every row is still 2026-08-16.
->
-> **Touched 2026-09-21** to add the RUM-001…RUM-010b performance and
-> financial-trust backlog to §3, with its own status file. That backlog was
-> written from a mobile screen recording and then checked against the code;
-> its §3.4 records which hypotheses survived. Additive again — the last full
-> pass over every row is still 2026-08-16.
->
-> **Touched 2026-09-30** to drop the §7 row about
-> `br_003_006_money_invariants.sql`. It said the `BR-006 official balances…`
-> check failed and was "not investigated"; RUM-010b (#79, 2026-09-24) had
-> already found the cause — the check's own manual-sum query kept the entries
-> of voided transactions through a LEFT JOIN, so the fault was in the test, not
-> in `get_account_balances` — and fixed it (`filter (where t.id is not null)`).
-> Subtractive only; not a re-audit.
->
-> The same day, §4.4 was updated for the BR-030 / BR-043 desk audit (#84–#86):
-> two refund bugs were reproduced in production (rolled-back transactions) and
-> fixed by migrations applied 2026-09-30. See `docs/SPRINT-LOG.md`.
-
-> **Touched 2026-10-17** to index the proposed transaction-entry sprint based
-> on the two 2026-10-14 AndroMoney/Rumbo recordings. Additive only; this is
-> not a full audit of the remaining rows.
->
-> **Touched 2026-10-11** to mark household sharing (HH-0…HH-6) as built in §3,
-> with the manual two-account QA pass as what remains. Additive again; not a re-audit. See `docs/SPRINT-LOG.md`.
->
-> Everything shipped is recorded in `AGENTS.md` → Current status and
-> [SPRINT-LOG.md](./SPRINT-LOG.md); this file only lists what is **not** done.
+> **Re-auditado completo el 2026-10-22** contra `main` en `dd4d3c4`
+> (76 migraciones, 76/76 aplicadas según el cierre de HH-6 del 2026-10-11).
+> Cambios frente a la pasada anterior (2026-08-16 + ediciones aditivas):
+> MQ-001…MQ-020 cerrados (#87–#108); RUM-001…RUM-010b cerrados; HH-7 (#120)
+> añadido con su configuración manual pendiente; el sprint «Ingreso de
+> transacciones Premium» desglosado en T0–T5; el seguimiento de zona horaria
+> del cron (MQ-001) añadido. Lo entregado vive en `AGENTS.md` → Current
+> status y en [SPRINT-LOG.md](./SPRINT-LOG.md). Mantenido por el skill
+> `rumbo-state-sync` al cerrar cada sprint.
 
 ---
 
-## 1. Next slices of features already shipped
+## Resumen rápido
 
-These are all "slice 2" of something live in `main`. Each one was scoped out on
-purpose, not forgotten.
-
-| ID | Area | What is missing | Why it was deferred | Doc |
+| # | Qué | Prioridad | Tipo | Sección |
 |---|---|---|---|---|
-| BR-030 slice 2 | Accounts / credit cards | The **`Pay`** settlement action. The statement cycle itself is live: `accounts.statement_day` / `payment_day` / `billing_account_id` and `get_card_cycle_summaries` returning payable, outstanding, statement balance, paid-since-close and overdue state. | The backlog row prescribed the cycle as slice 1 and the settlement action separately; a payment is a real ledger write and deserves its own slice. | [features/card-statement-cycle.md](./features/card-statement-cycle.md) |
-| BR-036 slice 2 | Periods / budgets | Budgets, month closures and the dashboard still use the **calendar** month, so their figures for the same month name differ from Reports under a custom `month_start_day`. The inconsistency is deliberate and stated on screen. | Slice 1 proved the resolver (`src/lib/periods/month.ts`) on the one screen that already worked from an explicit `date_from`/`date_to` pair, so **no RPC was touched**. Slice 2 has to move the monthly RPCs, which is the high-blast-radius part. | [features/month-start-day.md](./features/month-start-day.md) |
-| BR-031 slice 2 | Multi-currency entry | The **edit** forms (`transaction-edit-form.tsx`, `transfer-edit-form.tsx`) have no FX plumbing at all — no base-currency preview, no paired transfer-amounts card. Only the create form (`transaction-form.tsx`) has them. | Called out as a separate slice when BR-031 shipped. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-042 slice 2 | Reports | **Months-within-a-year** rollup rows. Weeks-within-a-month ship today: `buildSubPeriods` in `lib/analysis/report-query.ts` emits ISO weeks clipped to any 28–31 day span, so they partition the period exactly. | Deliberately deferred when BR-042 shipped. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| 1 | Sprint «Ingreso de transacciones Premium» (T0–T5) | P0–P1 | Código + medición | §1 |
+| 2 | QA manual de household sharing con dos cuentas (HH-6) | Gate | QA manual | §4.1 |
+| 3 | Configuración de Supabase para emails de invitación (HH-7) + leaked-password protection | Gate | Config manual | §3 |
+| 4 | QA en vivo de Tier-3/4 (BR-030, BR-043, BR-037, BR-036, BR-045, BR-031) | Gate | QA manual | §4.5 |
+| 5 | Verificación en iPhone real del app shell y PWA instalada | Gate | QA en dispositivo | §4.3–4.4 |
+| 6 | Regresión: el diálogo «Review transaction» del asistente perdió Cancel | P2 | Código | §1 |
+| 7 | Cron de auto-post por zona horaria del household (MQ-001) | P2 | Código + migración | §1 |
+| 8 | Slices 2: BR-030 Pay, BR-036 RPC mensuales, BR-031 FX en edición, BR-042 meses | P2–P3 | Código | §2 |
+| 9 | BF-022 reconciliación (Beta) · captura por tap (gated) | P3 | Código | §1 |
+| 10 | Decisiones de producto abiertas | — | Decisión | §6 |
 
-## 2. Accepted limitations (documented, not bugs)
+---
 
-These look like gaps but are decisions. Do not "fix" one without reopening the
-decision first.
+## 1. Por construir
 
-| Area | Limitation | Why |
-|---|---|---|
-| Recurring transfers (UC-9) | **Cross-currency recurring transfers cannot auto-post.** The form disables the toggle, the server action refuses it, and the job flags-and-skips. Such a template still posts by hand. | The amount that arrives is a real value only the user knows, and it moves with the rate. Guessing it would fabricate money. |
-| Month closures (BR-021) | Close month is a **soft marker** (`month_closures` + snapshot, reopenable). It does not lock the ledger. | Product decision — a closed month must stay correctable during Alpha. |
-| Transfer-as-expense (BR-039) | Reaches KPIs, trend, week rows and calendar, but never the category breakdown. | The row is emitted from the inflow leg with no allocation, so balances, net worth and budgets stay untouched. Reports and Calendar both say so on screen. |
-| Mobile pinch zoom | **Pinch zoom stays enabled.** The app never sets a `viewport` export, so Next.js' `width=device-width, initial-scale=1` default applies and the page zooms. | Disabling it would not even work consistently: iOS Safari has ignored `user-scalable=no` / `maximum-scale=1` since iOS 10, so iPhones would keep zooming while Android stopped. It is also a WCAG 2.1 SC 1.4.4 failure, and on a screen full of dense figures the pinch is a real reading aid. The reason it used to hurt — losing the header or the tab bar — is gone: the bars are flex rows of a non-scrolling app shell (#61, 2026-08-29), not `fixed` chrome that has to be corrected. |
-| Mobile chrome is not `fixed` | The dashboard top bar and bottom nav are **flex rows of a shell one viewport tall**, not `position: fixed`. `window.scrollY` therefore does nothing in the dashboard. | Three rounds of correcting `fixed` chrome onto the visual viewport failed in three different directions. Full rationale in [features/mobile-app-shell.md](./features/mobile-app-shell.md) — **read it before making either bar `fixed` again**, and route any scroll read/write through `src/lib/app-scroll.ts`. |
-| Installments (BR-035) | The plan holds no money and there is no parent transaction. | That is what makes double-counting impossible by construction; no report or budget had to change. |
-
-## 3. Not started
-
-| ID | Priority | Area | One-line | Doc |
+| ID | Prio | Área | Qué falta | Detalle |
 |---|---:|---|---|---|
-| BF-022 | P3 | Transactions | Reconciliation flow — mark transactions "cleared" against a bank statement. Needs a schema migration (`reconciled_at`). Deferred to Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
-| Ingreso de transacciones Premium | P0–P1 | Transactions / captura | Propuesta 2026-10-17 basada en dos grabaciones: reducir la espera del formulario, aclarar «Add Next», mejorar el acceso a categorías/fechas/tags y medir el flujo en una sesión controlada. Sin cambio de esquema previsto. | [alpha/sprint-transaction-entry-premium.md](./alpha/sprint-transaction-entry-premium.md) |
-| Tap payment capture | — | Capture / automation | Design only, **no code**. A tap cannot be detected by the PWA on any platform; detection has to come from the phone's automation layer posting to an ingest endpoint that stages captures in a `capture_inbox` and auto-posts only above a confidence threshold. | [features/tap-payment-capture.md](./features/tap-payment-capture.md) |
-| MQ-001…MQ-020 | P0–P3 | Recorrido móvil (global) | **Abierto 2026-09-30.** 20 tickets de una grabación móvil de ~4 min: "hoy"/mes actual calculados en UTC (P0), shell que se desplaza, empty state de Transactions que parpadea, botón del asistente encima del contenido, deltas de mes en curso engañosos, resumen de Goals sin metas en otra moneda (P1), más fricción de UX/performance (P2–P3). Cada ticket trae evidencia, `archivo:línea` y criterio de aceptación. | [mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md) |
-| ~~HH-0…HH-6~~ | — | Household sharing | **Built 2026-10-11** (HH-0…HH-5 merged #113–#118 and applied; HH-6 gate automated checks pass). **Still open:** (1) the manual two-account QA pass, [alpha/hh-6-household-sharing-qa.md](./alpha/hh-6-household-sharing-qa.md), all rows Untested — the one item before the feature is declared done; (2) enable leaked-password protection in Supabase Auth. | [features/household-sharing.md](./features/household-sharing.md) |
-| ~~RUM-001…RUM-010b~~ | — | Performance / integridad financiera | **✅ Terminado 2026-09-25 (11/11, último: RUM-005 en #81).** Backlog de 11 tickets: reconciliar net worth, instrumentar el baseline, descomponer la carga del Dashboard (8 `await` secuenciales), reducir llamadas repetidas de balances, cache/loading, y montar el primer runner de tests de JS/TS del repo. Prioridades y prompts por ticket en el doc. | [performance-ux-backlog.md](./performance-ux-backlog.md) · [estado](./performance-ux-execution-status.md) |
+| **TE-T0** | P0 | Captura | Matriz de evidencia y mapa del flujo de alta de transacción (pantallas, toques, esperas) a partir de las grabaciones del 2026-10-14. Sin BD. | [alpha/sprint-transaction-entry-premium.md](./alpha/sprint-transaction-entry-premium.md#t0--matriz-de-evidencia-y-mapa-del-flujo) |
+| **TE-T1** | P1 | Captura | Entrada enfocada y jerarquía visual del formulario (`transaction-form.tsx`, `transaction-dialog-provider.tsx`). | idem, T1 |
+| **TE-T2** | P1 | Captura | Secuencia de teclado y selectores (`quickEntry`, `SelectorSheet`, `PayeePicker`, `AmountInput`). | idem, T2 |
+| **TE-T3** | P1 | Captura | Guardar una secuencia con confianza: aclarar «Save & Add Next». | idem, T3 |
+| **TE-T4** | P1 | Performance | Presupuesto de rendimiento del flujo (apertura fría/caliente y guardado, p50/p75 en build de producción). | idem, T4 |
+| **TE-T5** | P0 | QA | QA de fidelidad financiera y responsive del flujo (ingresos, gastos, transferencias, edición, multimoneda). | idem, T5 |
+| TE-pend | — | Medición | Antes de cerrar el sprint: tiempo activo por alta, lista común de operaciones para comparar con AndroMoney, baseline p50/p75 y ajuste de umbrales si el dispositivo no los permite. | idem, «Pendientes para cerrar implementación» |
+| Asistente-Cancel | P2 | Asistente | Regresión de PR #64: el diálogo «Review transaction» de `assistant-chat.tsx` no usa `useBackDismiss` (Back sale de la página) y `onCancel` solo oculta el link Cancel. Elegir: cablear `useBackDismiss`, o que `TransactionForm` invoque `onCancel` desde un botón visible. Sigue cerrable por X, Escape y backdrop. | [SPRINT-LOG.md](./SPRINT-LOG.md) → «Ask for the category first…» |
+| MQ-001-cron | P2 | Recurrentes | `run_recurring_autopost` corre a las 06:00 UTC con `current_date`. La columna `households.timezone` ya existe (migración `20261001120000_mq_001_household_timezone.sql`) pero nada la lee ni la escribe. Falta: el job postea por household con `(now() at time zone h.timezone)::date` y la app escribe la columna. Hoy no afecta a Toronto/Montréal; sí a zonas UTC-7 o más al oeste. | [mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md#mq-001--today-y-el-mes-actual-se-calculan-en-utc) |
+| BF-022 | P3 | Transacciones | Flujo de reconciliación («cleared» contra extracto). Requiere migración (`reconciled_at`). Diferido a Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
+| Tap capture | — | Captura / automatización | Solo diseño, **sin código**. Gate duro: el spike de Fase 0 debe probar que un tap real emite un evento legible en el teléfono y la tarjeta del usuario. | [features/tap-payment-capture.md](./features/tap-payment-capture.md) · [spike](./alpha/tap-capture-phase-0-spike.md) |
 
-> **Tap capture is gated.** The Phase 0 device spike is a hard gate — no code
-> until a real tap is proven to emit a machine-readable event on the user's own
-> phone and card. The run book is ready to execute:
-> [alpha/tap-capture-phase-0-spike.md](./alpha/tap-capture-phase-0-spike.md).
+## 2. Slices 2 de features ya entregadas
 
-> **El backlog RUM-* tiene su propio ciclo.** Un ticket se trabaja por sesión
-> aislada, con el prompt ya escrito en su sección. El avance no se registra
-> aquí sino en
-> [performance-ux-execution-status.md](./performance-ux-execution-status.md).
-> El backlog está completo: los 11 tickets están cerrados y el gate de release
-> ([`release-checklist.md`](./release-checklist.md)) está aprobado.
+Diferidas a propósito, no olvidadas.
 
-## 4. Manual QA gates (no code required)
+| ID | Área | Qué falta | Por qué se difirió | Detalle |
+|---|---|---|---|---|
+| BR-030 s2 | Tarjetas de crédito | Acción **`Pay`** (liquidación). El ciclo de estado de cuenta ya está vivo (`get_card_cycle_summaries`). | Un pago es una escritura real en el ledger; merece su propio slice. | [features/card-statement-cycle.md](./features/card-statement-cycle.md) |
+| BR-036 s2 | Periodos / presupuestos | Budgets, cierres de mes y Dashboard siguen en mes **calendario**; Reports respeta `month_start_day`. Hay que mover las RPC mensuales (alto radio de impacto). Depende de la decisión de §6. | Slice 1 probó el resolver sin tocar RPC. | [features/month-start-day.md](./features/month-start-day.md) |
+| BR-031 s2 | Multimoneda | Los formularios de **edición** (`transaction-edit-form.tsx`, `transfer-edit-form.tsx`) no tienen FX: ni vista previa en moneda base ni montos pareados. | Separado al entregar BR-031. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
+| BR-042 s2 | Reports | Filas de **meses dentro de un año** (las semanas dentro de un mes ya existen). | Diferido al entregar BR-042. | idem |
 
-The only remaining release gates. Everything here needs a real device, a real
-authenticated session, or a sanitized fixture — none of it can be closed from the
-codebase.
+## 3. Configuración manual (Supabase / Vercel)
 
-### 4.1 PR #37 residuals
+Nada de esto se cierra desde el código; lo hace el usuario en el panel.
 
-Source of truth: [alpha/pr-37-authenticated-qa.md](./alpha/pr-37-authenticated-qa.md).
+| Ítem | Estado | Qué hacer | Detalle |
+|---|---|---|---|
+| Emails de invitación (HH-7, #120) | Sin confirmar | (1) SMTP propio en Authentication › Emails › SMTP Settings (el remitente integrado solo llega al equipo, 2 emails/hora); (2) plantillas «Confirm signup» y «Magic Link» apuntando a `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next={{ .RedirectTo }}`; (3) Site URL = dominio de producción; (4) Email OTP expiration en 24 h. Luego probar una invitación real de punta a punta. | [features/household-sharing.md](./features/household-sharing.md) → HH-7 |
+| Leaked-password protection | Recomendado, no hecho | Activarla en Supabase Auth. | idem |
 
-| Area | State | Exact remaining action |
+## 4. Gates de QA manual
+
+Necesitan dispositivo real, sesión autenticada o fixture saneado.
+
+### 4.1 Household sharing (HH-6)
+
+La única tarea antes de declarar la feature terminada: el pase manual con dos
+cuentas reales en [alpha/hh-6-household-sharing-qa.md](./alpha/hh-6-household-sharing-qa.md)
+(todas las filas *Untested*). Incluye los 3 tests `run-as=co-member` de
+`npm run db:test` que necesitan dos miembros reales, la mitad RLS de BR-044 y,
+tras HH-7, el flujo de invitación por email.
+
+### 4.2 Residuales de PR #37
+
+Fuente: [alpha/pr-37-authenticated-qa.md](./alpha/pr-37-authenticated-qa.md).
+
+| Área | Estado | Acción |
 |---|---|---|
-| CSV categorization rules | Untested | Create one temporary test rule, apply a sanitized CSV fixture, confirm the rule hits in preview, then archive the rule. |
-| CSV import history / revert | Partial | Upload a sanitized fixture and verify active rule application in preview before confirming. |
-| Transfers | Partial | Submit same-currency and cross-currency fixtures, then reconcile both account balances. |
-| Transfer costs | Partial | Verify the spread/fee estimate, same-currency fee, over-cost advisory and saved transaction detail by hand — the automated browser could not drive the account selector. |
+| Reglas de categorización CSV | Untested | Crear una regla temporal, aplicar un CSV saneado, ver que pega en la vista previa, archivar la regla. |
+| Historial / revert de import CSV | Partial | Subir un fixture saneado y verificar la regla activa en la vista previa antes de confirmar. |
+| Transferencias | Partial | Enviar fixtures misma moneda y cruzada; reconciliar ambos saldos. |
+| Costos de transferencia | Partial | Verificar a mano spread/fee, fee misma moneda, aviso de sobrecosto y detalle guardado. |
 
-### 4.2 Installed-PWA verification
+### 4.3 PWA instalada
 
-| Area | State | Exact remaining action |
+| Área | Estado | Acción |
 |---|---|---|
-| Manifest `shortcuts` | Untested | Run the installed-app checklist in [features/pwa.md](./features/pwa.md#installed-app-verification). A normal browser tab is not sufficient evidence. |
-| `share_target` | Untested | Share text + a URL from another installed app and confirm the expense quick-add prefills **without** auto-submitting. |
+| Manifest `shortcuts` | Untested | Checklist de app instalada en [features/pwa.md](./features/pwa.md#installed-app-verification). Una pestaña normal no vale como evidencia. |
+| `share_target` | Untested | Compartir texto + URL desde otra app; el quick-add debe prellenarse **sin** auto-enviar. |
 
-### 4.3 Mobile chrome on a real iPhone
+### 4.4 Chrome móvil en iPhone real
 
-PRs #48–#61 spent six days on mobile chrome that would not hold still, and the
-report that started it came from an iPhone. The fix that shipped (#61, the app
-shell) is verified **only in headless Chromium** — driving the real compiled
-Tailwind and the real class strings, but not on the device that showed the bug.
-No round of this saga has been signed off on real hardware.
-
-| Area | State | Exact remaining action |
-|---|---|---|
-| Top bar + bottom nav, iPhone Safari | Untested on device | Scroll a long transactions list to both ends. The bars must not move at all — not on the rubber-band overscroll at either end, not while the browser toolbar collapses. |
-| Top bar + bottom nav, installed PWA | Untested on device | Same, in the installed app, where there is no browser toolbar to collapse. |
-| Pinch zoom | Untested on device | Zoom in, pan to a corner, open a dialog and a bottom sheet. The overlay must be fully on screen and magnified; the FAB and toasts must stay on the screen edge at their normal size. |
-| Install hint (#60) | Untested on device | On a notched iPhone the bar is ~59px taller than headless. The "Add to Home Screen" card must render fully below it, icon and dismiss button included. |
-
-If any of these still fails, do **not** reach for `position: fixed` plus a
-correction — that is the loop this came out of. See
+El app shell (#61) y el fix de MQ-002 (#90) solo se verificaron en Chromium
+headless. Si algo falla, **no** volver a `position: fixed` + corrección; ver
 [features/mobile-app-shell.md](./features/mobile-app-shell.md).
 
-### 4.4 Tier-3 / Tier-4 real-data QA
-
-No authenticated QA record exists yet for the features merged on 2026-08-12.
-Their migrations are applied, so these are live against real data with no QA
-pass behind them: installments (BR-035), refunds (BR-040), the card statement
-cycle (BR-030), optional time-of-day (BR-045), recurring transfers (UC-9), notes
-(BR-044), the calendar (BR-037), transfer-as-expense (BR-039), the budget
-comparison/payment split (BR-043) and the custom month start day (BR-036).
-
-The checklist —
-[alpha/tier-3-4-authenticated-qa.md](./alpha/tier-3-4-authenticated-qa.md) — has
-one row per feature with the exact invariant that closes it. Record results
-there as a new `## Results — YYYY-MM-DD` section.
-
-**A desk audit on 2026-09-04 shrank this gate.** Every row was read against the
-code first, which found one row stating an invariant the code does not have
-(BR-035 claimed instalments post lazily; they all post at creation) and three
-rows already covered by invariants nobody had cross-linked. Four rows now run
-automatically under `npm run db:test` against real data — BR-040 and BR-039 on
-tests that already existed, BR-035 and UC-9 on two added that day — and BR-044's
-financial half is structural (`public.notes` has no amount column and no foreign
-key into the ledger), so it needs no pass at all.
-
-**A second desk audit on 2026-09-30 covered BR-030 and BR-043.** It found and
-fixed one bug in each, both about refunds: `get_budget_payment_split` sent
-refunds to "other" as a negative amount (BR-043), and
-`get_card_cycle_summaries` let a refund of a post-close purchase shrink
-`payable` (BR-030). Both migrations are applied (2026-09-30) and each now has an
-invariant test under `npm run db:test`
-(`br_043_payment_split_invariants.sql`, `br_030_card_cycle_invariants.sql`),
-plus seeded card-cycle fixtures. Only the on-screen look remains for both.
-
-What is left genuinely needs a human in an authenticated session: the on-screen
-look at **BR-030** and **BR-043** first (audit and fix are done, see above);
-then **BR-037**,
-**BR-036**, **BR-045** and **BR-031**; then the on-screen halves of the
-automated rows. BR-044's RLS half needs a second household member and is better
-folded into a general RLS pass.
-
-### 4.5 Quick-entry transaction form (PR #64, 2026-09-15)
-
-Category-first field order, per-category autofill, and the one-screen mobile
-form (`docs/SPRINT-LOG.md` → "Ask for the category first…") were tested
-through eight rounds on a real Android device. Two things in the final two
-commits were reasoned from the code and pass the validation gate, but were not
-watched fail on the device and then pass there.
-
-| Area | State | Exact remaining action |
+| Área | Estado | Acción |
 |---|---|---|
-| Keyboard-open scroll no longer snapping back | Reasoned from code, not device-tested | Open the add-transaction form on the Android device used for the rest of this sprint, type into a field with the keyboard up, and scroll manually while the browser's URL bar collapses. The page must not jump back to the focused field. |
-| Review-round provenance fixes (re-picking a category, switching transaction type, typing over a seeded field, a tag created mid-tap) | Reasoned from code, not device-tested | Repeat each of the four scenarios in the PR's review-round commit message on the real device and confirm the seeded values behave as described (no stale autofill survives a category change or a type switch; typing or creating inline clears that field's autofill marker; a tag created mid-tap is not lost). |
-| iPhone SE / iPhone 13 mini overflow | Known, not a bug | The one-screen target still overflows by 127px (SE) and 51px (13 mini) per the commits' own Chromium measurements. Hiding Repeat, Notes and Status via the existing BR-032 preferences covers both; no further code is expected unless the user wants the default form fields changed. |
-| The assistant's "Review transaction" dialog lost its Cancel | Regression from PR #64, found in review of the sprint-close PR | Removing Cancel from dialog callers assumed every dialog has Back/Escape/X/backdrop. `assistant-chat.tsx` builds its own `Dialog` and never calls `useBackDismiss`, so Back leaves the page there; it also passes `onCancel`, which since PR #64 only *suppresses* the Cancel link (`transaction-form.tsx` declares the prop and never invokes it). The dialog is still dismissable via its default close X, Escape and the backdrop, so this is a papercut, not a trap. Pick one: wire `useBackDismiss` in `assistant-chat.tsx` and keep Cancel hidden, or make `TransactionForm` actually call `onCancel` from a rendered Cancel button in that caller. |
+| Top bar + bottom nav, Safari | Untested on device | Scroll largo hasta ambos extremos: las barras no se mueven ni con rubber-band ni al colapsar la toolbar. |
+| Top bar + bottom nav, PWA instalada | Untested on device | Igual, en la app instalada. |
+| Pinch zoom | Untested on device | Zoom, pan a una esquina, abrir diálogo y bottom sheet: overlay completo y magnificado; FAB y toasts al borde con tamaño normal. |
+| Install hint (#60) | Untested on device | En iPhone con notch la tarjeta «Add to Home Screen» se ve completa bajo la barra. |
 
-### 4.6 Transactions mobile redesign (PR #66, 2026-09-19 → 09-20)
+### 4.5 Tier-3 / Tier-4 con datos reales
 
-The Transactions screen rebuild, the single-owner period and the app-bar
-household selector (`docs/SPRINT-LOG.md` → "Rebuild the Transactions screen
-for a phone…") were verified with Playwright against a disposable preview
-route seeded with fake data — there were no Supabase credentials in the build
-environment. Nothing here was exercised against live data or a real device.
+Checklist: [alpha/tier-3-4-authenticated-qa.md](./alpha/tier-3-4-authenticated-qa.md)
+(registrar como `## Results — YYYY-MM-DD`). BR-035, BR-039, BR-040 y UC-9 ya
+corren en `npm run db:test`; BR-030 y BR-043 tienen auditoría, fix e
+invariantes. Falta, en orden: el vistazo en pantalla de **BR-030** y
+**BR-043**; luego **BR-037**, **BR-036**, **BR-045** y **BR-031**; luego las
+mitades en pantalla de las filas automatizadas.
 
-| Area | State | Exact remaining action |
+### 4.6 Formulario de quick entry (PR #64)
+
+| Área | Estado | Acción |
 |---|---|---|
-| Household switch | Reasoned from code, not tested live | Switch households from the app-bar selector against a real account with more than one active membership and confirm every dashboard screen re-renders scoped to the new household (`switchHouseholdAction` calls `revalidatePath('/dashboard', 'layout')`). |
-| Period sheet over a payee-/tag-filtered URL | Reasoned from code, not tested live | Open Transactions with a URL that sets only `payee_id` or `tag_id` (no `period`/`month`/`date_from`/`date_to`), open the period sheet, and confirm it reads as "All time" rather than mislabelling the current month while the other filter stays applied. |
-| Long-press to select, on a real touch device | Not tested on hardware | Long-press a transaction row on an actual phone and confirm it enters bulk-selection mode without also triggering a scroll or opening the row. The 8px movement threshold that distinguishes a press from a scroll was tuned by eye in Chromium, not measured on a touchscreen. |
+| Scroll con teclado abierto ya no salta | Razonado, no probado en dispositivo | En Android, escribir con el teclado arriba y hacer scroll mientras colapsa la barra de URL: no debe saltar al campo enfocado. |
+| Fixes de procedencia del autofill (re-elegir categoría, cambiar tipo, escribir sobre un campo sembrado, tag creado a mitad de tap) | Razonado, no probado en dispositivo | Repetir los 4 escenarios del commit de review de #64 en el dispositivo real. |
+| iPhone SE / 13 mini | Conocido, no es bug | Desborda 127 px / 51 px; ocultar Repeat, Notes y Status (preferencias BR-032) lo cubre. Sin código salvo que se quiera cambiar el default. |
 
-## 5. Open decisions across feature docs
+### 4.7 Rediseño móvil de Transactions (PR #66)
 
-| Doc | Question |
+| Área | Estado | Acción |
+|---|---|---|
+| Cambio de household | Razonado, no probado en vivo | Con 2+ membresías (ya posible tras HH-*), cambiar desde la app bar y confirmar que todas las pantallas se re-escopan. |
+| Hoja de periodo con URL filtrada por payee/tag | Razonado, no probado en vivo | URL solo con `payee_id` o `tag_id`: la hoja debe decir «All time» sin perder el filtro. |
+| Long-press para seleccionar | No probado en hardware | En un teléfono real: entra en selección múltiple sin hacer scroll ni abrir la fila (umbral de 8 px ajustado a ojo). |
+
+### 4.8 Performance (RUM-*) — verificaciones en vivo diferidas
+
+RUM-002/003/005/006/007 se cerraron sin credenciales de Supabase en la sandbox;
+sus checklists manuales en [performance-ux-execution-status.md](./performance-ux-execution-status.md)
+quedan para el usuario. Pendiente concreto: medición «después» del costo de la
+cláusula de privacidad de HH-1 en producción, y lector de pantalla real sobre
+los `role="status"` de RUM-007.
+
+## 5. Limitaciones aceptadas (decisiones, no bugs)
+
+No «arreglar» sin reabrir la decisión.
+
+| Área | Limitación | Por qué |
+|---|---|---|
+| Transferencias recurrentes (UC-9) | Las de moneda cruzada **no se auto-postean**. | El monto que llega solo lo conoce el usuario; adivinarlo fabricaría dinero. |
+| Cierre de mes (BR-021) | Marcador suave, reabrible; no bloquea el ledger. | Un mes cerrado debe seguir corrigiéndose en Alpha. |
+| Transfer-as-expense (BR-039) | Llega a KPIs, tendencia, semanas y calendario, nunca al desglose por categoría. | Sale de la pierna de entrada sin allocation; saldos, net worth y budgets intactos. |
+| Pinch zoom móvil | Sigue habilitado. | iOS ignora `user-scalable=no`; deshabilitarlo falla WCAG 1.4.4. |
+| Chrome móvil no `fixed` | Top bar y bottom nav son filas flex de un shell de un viewport. | Tres rondas de `fixed` corregido fallaron. Leer [features/mobile-app-shell.md](./features/mobile-app-shell.md) antes de tocarlo; scroll vía `src/lib/app-scroll.ts`. |
+| Cuotas (BR-035) | El plan no guarda dinero ni hay transacción padre. | Hace imposible el doble conteo por construcción. |
+| FX en UTC (MQ-001) | Las tasas usan `fxToday()` en UTC aunque «hoy» de la app sea local. | Las tasas del proveedor van fechadas en UTC; con día local una tasa manual quedaba fuera del saldo. |
+
+## 6. Decisiones abiertas
+
+| Tema | Pregunta | Doc |
+|---|---|---|
+| Goals | ¿Una meta vinculada a una cuenta debe derivar su progreso del saldo real del ledger en vez de `current_amount` manual? | [features/goals.md](./features/goals.md) |
+| Month start day | ¿Qué **significa** un `budgets.budget_month` / `month_closures` guardado cuando el periodo ya no coincide con el mes calendario? Es la parte difícil de BR-036 s2 y merece decisión escrita. | [features/month-start-day.md](./features/month-start-day.md) |
+| Asistente | Idea #6: el asistente como interfaz principal. Solo si los datos de uso lo justifican. | [features/beginner-friendly-ux.md](./features/beginner-friendly-ux.md) |
+| Quick entry | ¿Payees recientes como chips de un toque? | [SPRINT-LOG.md](./SPRINT-LOG.md) → «Ask for the category first…» |
+| Quick entry | ¿El `+` icon-only del split button («Save and add next») pasa a checkbox «seguir agregando»? Se solapa con TE-T3. | idem |
+| Cache de datos | Ya decidido y entregado: Router Cache de 30 s (`staleTimes`, RUM-005) invalidado por cada escritura, con los timings de servidor medidos (B-5 cerrado 2026-09-25). Sigue sin decidir solo si conviene una cache de datos aparte (React Query/SWR/`unstable_cache`); no hay bloqueo, hace falta un caso de uso que la justifique. | [performance-ux-execution-status.md](./performance-ux-execution-status.md) |
+
+## 7. Diferido / estacionado (revisar solo si se dispara)
+
+| ID | Área | Revisar cuando |
+|---|---|---|
+| BR-D01 | Adjuntos / recibos | El uso real pruebe que hace falta, u OCR sea prioridad. |
+| BR-D02 | Rendimiento de inversiones | Los flujos de caja/deuda/presupuesto del household estén estables. |
+| BR-D03 | Dividir gastos / reembolsos | El uso multi-miembro cree esa necesidad (ahora posible tras HH-*). |
+| BR-D04 | Acceso de asesor / externo | Invitaciones y miembros estén en uso (entregado en HH-4/5/7). |
+| BR-D05 | Gráficos avanzados (Sankey, reportes guardados) | Se pida más análisis que el hub de BR-022. |
+| BR-D06 | OCR / bank sync / billing | Decisión de producto explícita. |
+
+## 8. Higiene del repositorio
+
+| Ítem | Qué lo cierra |
 |---|---|
-| [features/goals.md](./features/goals.md) | Whether a goal linked to an account should derive its progress from that account's real ledger balance instead of the manually-tracked `current_amount`. |
-| [features/month-start-day.md](./features/month-start-day.md) | What a stored `budgets.budget_month` / `month_closures` month **means** once a period no longer coincides with a calendar month. That is a data-model question, not arithmetic, and it deserves its own written decision the way BR-040 got one — it is the hard part of slice 2. |
-| [features/beginner-friendly-ux.md](./features/beginner-friendly-ux.md) | Idea #6: the AI assistant as the primary interface rather than a supplementary drawer. Out of scope of that doc; revisit only if assistant usage data supports it. |
-| [SPRINT-LOG.md](./SPRINT-LOG.md) → "Ask for the category first…" (2026-09-15) | Whether recent payees should be offered as one-tap chips in the quick-entry form, the same treatment PR #64 gave recent descriptions. Raised during device testing, not decided. |
-| [SPRINT-LOG.md](./SPRINT-LOG.md) → "Ask for the category first…" (2026-09-15) | Whether the icon-only `+` half of the mobile split button ("Save and add next") should become a "keep adding" checkbox instead, if the icon reads as ambiguous on-device. Raised during device testing, not decided. |
-
-## 6. Deferred / parked (revisit only when triggered)
-
-| ID | Area | Revisit when |
-|---|---|---|
-| BR-D01 | Attachments / receipts | Real usage proves receipt capture is needed, or OCR becomes a priority. A reference implementation is recorded in the mobile benchmark (3 photo slots on entry + thumbnail on detail); still deferred on purpose. |
-| BR-D02 | Investment performance | Core household cash/debt/budget flows are stable. |
-| BR-D03 | Bill split / reimbursements | Multi-member household usage creates real split/reimbursement needs. |
-| BR-D04 | Advisor / external access | Household invite/member management is shipped and used. |
-| BR-D05 | Advanced charts (Sankey, saved reports) | Users ask for deeper analysis than the BR-022 reports hub gives. |
-| BR-D06 | OCR / bank sync / billing | Explicit product decision; kept out of Alpha correctness work. |
-
-## 7. Repository hygiene
-
-Not features — housekeeping that has a real cost if it keeps sliding.
-
-| Item | State | What closes it |
-|---|---|---|
-| **Two invariants need a column that does not exist** | Both surfaced writing the 2026-09-04 test files, and both need a migration, so neither belongs in a test-only change. (a) `installment_plans` does not store the `p_as_of` that `cancel_installment_plan` was called with, so "a cancelled plan has no live instalment dated after it was cancelled" cannot be stated without a proxy that fires on legitimate data — the reasoning is written out in `br_035_installment_invariants.sql` where check 4 would have gone. (b) `recurring_autopost_log` does not snapshot the two currency codes, so a cross-currency leak whose template was later deleted leaves nothing to find. | (a) Add `installment_plans.cancelled_as_of date`, set it in `cancel_installment_plan`, then add the check. (b) Add `source_currency_code` / `destination_currency_code` to the log and write them in `run_recurring_autopost()`. Both are small additive migrations; do them when something else takes you into those functions rather than on their own. |
-| **Sprints that merge straight to `main` skip their close** | PRs #48–#61 all went onto `main` individually. Nothing about them reached `AGENTS.md`, `SPRINT-LOG.md` or this file until 2026-09-02, eleven days later, and in the meantime `AGENTS.md` actively described a mechanism the code had replaced. | Either run `/cerrar-sprint` on the range when a burst of one-off PRs settles, or accept a standing drift and re-audit on a fixed cadence. The failure mode is not missing history — it is state docs that are *wrong*, which is worse than silent. |
+| **Dos invariantes necesitan una columna inexistente.** (a) `installment_plans` no guarda el `p_as_of` de `cancel_installment_plan`; (b) `recurring_autopost_log` no guarda las dos monedas. | (a) `installment_plans.cancelled_as_of date` + check; (b) `source_currency_code` / `destination_currency_code` en el log, escritos en `run_recurring_autopost()`. Migraciones aditivas pequeñas; hacerlas cuando otro cambio entre en esas funciones (MQ-001-cron toca la segunda). |
+| **Sprints que mergean directo a `main` sin cierre.** Pasó con #48–#61 y otra vez con los MQ (#87–#108) y HH-7 (#120), que no tienen entrada en `SPRINT-LOG.md`. | Correr `/cerrar-sprint` sobre el rango cuando se asiente una racha de PRs sueltos. Lo peligroso no es la historia faltante sino docs de estado *incorrectos*. |
 
 ---
 
-## What's already done (so this list doesn't get re-proposed)
+## Ya cerrado (para que no se vuelva a proponer)
 
-The full BR backlog **BR-001 … BR-048 is closed** except for the four slice-2
-items in §1 above. Nothing else from
-[alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md)
-is open, and every BF except BF-022 is fixed.
-
-Recently closed, and previously listed here as open:
-
-- **Tier-4 (2026-07-30, merged 2026-08-12)** — BR-045 time-of-day, UC-9 recurring
-  transfers, BR-030 statement cycle slice 1, BR-035 installments, BR-040 refunds,
-  BR-036 month start day slice 1.
-- **Tier-3 (2026-07-29, merged 2026-08-12)** — BR-031 multi-currency entry,
-  BR-037 calendar, BR-039 transfer-as-expense, BR-043 budget comparison + payment
-  split, BR-044 notes.
-- **Mobile-capture parity (2026-07-28)** — BR-032, BR-033, BR-034, BR-038,
-  BR-041, BR-042 (weeks), BR-046, BR-047, BR-048, plus multi-value transaction
-  filters.
-- **Earlier** — BR-007/008/010/014/023/024/025/028/029 (PR #37 and the Tier-1
-  easy wins), BR-009 payees CRUD + bulk merge, BR-011 review queue and its
-  polish, BR-015 confirm + Undo, BR-017 balance adjustment, BR-018 budget
-  rollover, BR-021 health score + light Close month, BR-026/027, plus the
-  navbar redesign, the settings page and recurring Sprints A and B.
-
-See `AGENTS.md` → Current status for the shipped-feature summary and
-[SPRINT-LOG.md](./SPRINT-LOG.md) for the per-sprint detail.
+- **BR-001 … BR-048**: cerrado salvo los cuatro slices 2 de §2. Todos los BF
+  salvo BF-022 están arreglados.
+- **MQ-001 … MQ-020** (recorrido móvil, 2026-10-01, #87–#108) — detalle en
+  [mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md). Único
+  remanente: MQ-001-cron (§1).
+- **RUM-001 … RUM-010b** (performance / integridad financiera, cerrado
+  2026-09-25) — detalle en [performance-ux-backlog.md](./performance-ux-backlog.md)
+  y [performance-ux-execution-status.md](./performance-ux-execution-status.md).
+  Remanentes en §4.8 y §6.
+- **HH-0 … HH-7** (household sharing, 2026-10-08 → #120): construido y
+  aplicado. Remanentes en §3 y §4.1.
+- **Tier-4, Tier-3, Mobile-capture parity** (merge 2026-08-12) y anteriores —
+  ver `AGENTS.md` → Current status y [SPRINT-LOG.md](./SPRINT-LOG.md).

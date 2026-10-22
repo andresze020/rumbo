@@ -1,5 +1,9 @@
 # Rumbo — Backlog de confianza financiera, performance y UX
 
+> **Archivado 2026-10-22 — los 11 tickets están cerrados.** Este documento es
+> registro histórico. Los remanentes (verificaciones en vivo, decisión de
+> cache) y cualquier pendiente nuevo viven en [pending-work.md](./pending-work.md).
+
 > Documentation only. Backlog ejecutable RUM-001…RUM-010, derivado de un
 > recorrido móvil de ~63 s por Dashboard, Transactions y Accounts sobre un
 > household personal con 3–4 años de datos. Cada ticket lleva su propio prompt
