@@ -175,7 +175,7 @@ No «arreglar» sin reabrir la decisión.
 | Asistente | Idea #6: el asistente como interfaz principal. Solo si los datos de uso lo justifican. | [features/beginner-friendly-ux.md](./features/beginner-friendly-ux.md) |
 | Quick entry | ¿Payees recientes como chips de un toque? | [SPRINT-LOG.md](./SPRINT-LOG.md) → «Ask for the category first…» |
 | Quick entry | ¿El `+` icon-only del split button («Save and add next») pasa a checkbox «seguir agregando»? Se solapa con TE-T3. | idem |
-| Cache | No hay capa de cache (solo `revalidatePath` + Router Cache de 30 s). Introducir React Query/SWR/`unstable_cache` es una decisión de arquitectura aparte, bloqueada por B-5 hasta tener timings reales. | [performance-ux-execution-status.md](./performance-ux-execution-status.md) |
+| Cache de datos | Ya decidido y entregado: Router Cache de 30 s (`staleTimes`, RUM-005) invalidado por cada escritura, con los timings de servidor medidos (B-5 cerrado 2026-09-25). Sigue sin decidir solo si conviene una cache de datos aparte (React Query/SWR/`unstable_cache`); no hay bloqueo, hace falta un caso de uso que la justifique. | [performance-ux-execution-status.md](./performance-ux-execution-status.md) |
 
 ## 7. Diferido / estacionado (revisar solo si se dispara)
 
