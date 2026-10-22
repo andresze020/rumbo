@@ -17,7 +17,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { TransactionForm } from '@/app/dashboard/transactions/transaction-form'
+import {
+  TransactionForm,
+  type TransactionSavedOutcome,
+} from '@/app/dashboard/transactions/transaction-form'
 import type { TransactionCopyPayload } from '@/app/dashboard/transactions/transaction-list'
 import {
   getQuickAddFormData,
@@ -683,6 +686,41 @@ export function TransactionDialogProvider({
     clearPrefills()
   }
 
+  /**
+   * A save from the dialog, reported directly (no redirect; see
+   * `saveManualTransaction`). The screen behind is refreshed by the action's
+   * own `revalidatePath` in the same response, so the dialog does not wait for
+   * it: the toast and the next draft come first.
+   */
+  function handleSaved({ addNext, next, warning }: TransactionSavedOutcome) {
+    toast({ message: warning ? ui(warning) : t('transactionsList.toastCreated') })
+    afterPaint(finishPendingSave)
+
+    if (addNext && next) {
+      // Same carry-over as the redirect path's `next_*` params: date, type,
+      // account, status, category, payee and tags. Never the amount,
+      // description or notes — and not a Copy's or a share's either.
+      setAddNextDefaults({
+        date: next.date,
+        type: next.type === 'income' || next.type === 'expense' ? next.type : undefined,
+        accountId: next.accountId,
+        status: next.status,
+        categoryId: next.categoryId,
+        payeeName: next.payeeName ?? undefined,
+        tagIds: next.tagIds.length > 0 ? next.tagIds : undefined,
+      })
+      setCopyDefaults(undefined)
+      setSharedDescription(undefined)
+      setFormKey((key) => key + 1)
+      // A payee or tag created by the entry just saved belongs in the next
+      // draft's pickers; refreshed underneath, the draft is already up.
+      void refreshFormData()
+      return
+    }
+
+    closeDialog()
+  }
+
   // `?entry_timing=on|off` switches the timing readout for this device, then
   // leaves the address bar.
   useEffect(() => {
@@ -846,6 +884,7 @@ export function TransactionDialogProvider({
                 // unfiltered list.
                 returnTo={returnTo}
                 onCancel={closeDialog}
+                onSaved={handleSaved}
               />
             )
           ) : null}

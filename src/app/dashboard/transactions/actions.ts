@@ -21,18 +21,18 @@ const RECURRING_NAME_MAX_LENGTH = 120
 // while posting a transaction is open to every editor. Ask before posting
 // anything, so a member who picks a frequency is told up front instead of
 // getting a posted transaction whose schedule silently failed to save.
-async function requireRecurringAccess(
+// Returns the message to show, or null when allowed — a return rather than a
+// redirect, so the entry dialog keeps the draft on screen.
+async function recurringAccessError(
   supabase: Awaited<ReturnType<typeof createClient>>,
   householdId: string
-) {
+): Promise<string | null> {
   const { data: isAdmin } = await supabase.rpc('is_household_admin', {
     p_household_id: householdId,
   })
-  if (isAdmin !== true) {
-    redirectWithError(
-      'Only household owners and admins can set up a recurring schedule. Choose "Does not repeat" to record this once.'
-    )
-  }
+  return isAdmin === true
+    ? null
+    : 'Only household owners and admins can set up a recurring schedule. Choose "Does not repeat" to record this once.'
 }
 
 const TRANSACTION_TYPES = ['income', 'expense'] as const
@@ -65,6 +65,45 @@ function redirectWithTransactionError(message: string, returnTo?: string): never
 
 function redirectWithTransactionInfo(name: string, returnTo?: string): never {
   redirect(addQueryParam(returnTo, name, '1'))
+}
+
+/** What the entry dialog's direct save reports (see `saveManualTransaction`). */
+export type TransactionSaveResult =
+  | { ok: false; error: string }
+  | {
+      ok: true
+      /**
+       * The transaction exists but a follow-up step failed (its time, tags,
+       * fee or recurring schedule). Treated as saved — the draft must not be
+       * offered for a second submit, which would post it twice.
+       */
+      warning?: string
+      /** What a "Save & Add Next" draft keeps; null for transfers and warnings. */
+      next: TransactionNextDefaults | null
+    }
+
+export type TransactionNextDefaults = {
+  date: string
+  type: TransactionType
+  accountId: string
+  status: Status
+  categoryId: string
+  payeeName: string | null
+  tagIds: string[]
+}
+
+/** Nothing was written: the dialog keeps the draft and shows the message. */
+function rejected(error: string): TransactionSaveResult {
+  return { ok: false, error }
+}
+
+/**
+ * Something *was* written before the failure, so purge every dashboard view
+ * (as the old error redirect did) and report it as a saved-with-warning.
+ */
+function savedWithWarning(warning: string): TransactionSaveResult {
+  revalidatePath('/dashboard', 'layout')
+  return { ok: true, warning, next: null }
 }
 
 function addQueryParam(returnTo: string | undefined, name: string, value: string) {
@@ -123,7 +162,15 @@ function parseOptionalTime(value: FormDataEntryValue | null) {
   return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(raw) ? raw : null
 }
 
-export async function createManualTransactionAction(formData: FormData) {
+/**
+ * Creates an income/expense transaction and reports the outcome instead of
+ * redirecting. The entry dialog calls this directly (premium entry sprint,
+ * T4): a redirect made every save wait for the destination page to render on
+ * the server before the dialog could react — 1.2–1.6 s measured on the phone.
+ * The writes, validation and invalidation are exactly the old action's;
+ * `createManualTransactionAction` below is that action, now a thin wrapper.
+ */
+export async function saveManualTransaction(formData: FormData): Promise<TransactionSaveResult> {
   const transactionType = String(formData.get('transaction_type') ?? '').trim()
   const transactionDate = String(formData.get('transaction_date') ?? '').trim()
   const transactionTime = parseOptionalTime(formData.get('transaction_time'))
@@ -137,8 +184,6 @@ export async function createManualTransactionAction(formData: FormData) {
   const payeeName = String(formData.get('payee_name') ?? '').trim()
   const notes = String(formData.get('notes') ?? '').trim()
   const status = String(formData.get('status') ?? '').trim()
-  const returnTo = String(formData.get('return_to') ?? '').trim() || undefined
-  const addNext = formData.get('add_next') === 'true'
   // BR-023: the tag multi-select submits `tags_present=1` plus one `tag_id` per
   // selected tag. Absent sentinel = the form didn't manage tags (leave as-is).
   const tagsProvided = formData.get('tags_present') !== null
@@ -157,31 +202,31 @@ export async function createManualTransactionAction(formData: FormData) {
       : (legacyRate ?? 1)
 
   if (!isTransactionType(transactionType)) {
-    redirectWithError('Select income or expense.')
+    return rejected('Select income or expense.')
   }
 
   if (!transactionDate) {
-    redirectWithError('Transaction date is required.')
+    return rejected('Transaction date is required.')
   }
 
   if (!accountId) {
-    redirectWithError('Select an account.')
+    return rejected('Select an account.')
   }
 
   if (!categoryId) {
-    redirectWithError('Select a category.')
+    return rejected('Select a category.')
   }
 
   if (amount === null) {
-    redirectWithError('Amount must be greater than 0.')
+    return rejected('Amount must be greater than 0.')
   }
 
   if (!isStatus(status)) {
-    redirectWithError('Select posted or pending status.')
+    return rejected('Select posted or pending status.')
   }
 
   if (exchangeRateToBase === null) {
-    redirectWithError('Exchange rate must be greater than 0.')
+    return rejected('Exchange rate must be greater than 0.')
   }
 
   const supabase = await createClient()
@@ -202,7 +247,7 @@ export async function createManualTransactionAction(formData: FormData) {
     .maybeSingle()
 
   if (profileError) {
-    redirectWithError('Could not load your household.')
+    return rejected('Could not load your household.')
   }
 
   if (!profile?.default_household_id) {
@@ -210,7 +255,8 @@ export async function createManualTransactionAction(formData: FormData) {
   }
 
   if (isFrequency(frequency)) {
-    await requireRecurringAccess(supabase, profile.default_household_id)
+    const accessError = await recurringAccessError(supabase, profile.default_household_id)
+    if (accessError) return rejected(accessError)
   }
 
   const { data: category, error: categoryError } = await supabase
@@ -223,11 +269,11 @@ export async function createManualTransactionAction(formData: FormData) {
     .maybeSingle()
 
   if (categoryError || !category) {
-    redirectWithError('Select an active category for this household.')
+    return rejected('Select an active category for this household.')
   }
 
   if (category.category_type !== transactionType) {
-    redirectWithError(
+    return rejected(
       transactionType === 'income'
         ? 'Income transactions require an income category.'
         : 'Expense transactions require an expense category.'
@@ -253,7 +299,7 @@ export async function createManualTransactionAction(formData: FormData) {
   )
 
   if (transactionError) {
-    redirectWithError(
+    return rejected(
       'Could not create the transaction. Please check the form and try again.'
     )
   }
@@ -271,7 +317,7 @@ export async function createManualTransactionAction(formData: FormData) {
       .eq('household_id', profile.default_household_id)
 
     if (timeError) {
-      redirectWithError(
+      return savedWithWarning(
         'Transaction created, but its time could not be saved. Edit it to set the time.'
       )
     }
@@ -285,7 +331,7 @@ export async function createManualTransactionAction(formData: FormData) {
       p_tag_ids: tagIds,
     })
     if (tagError) {
-      redirectWithError(
+      return savedWithWarning(
         'Transaction created, but its tags could not be saved. Edit it to add them.'
       )
     }
@@ -305,7 +351,7 @@ export async function createManualTransactionAction(formData: FormData) {
       .maybeSingle()
 
     if (!account) {
-      redirectWithError(
+      return savedWithWarning(
         'Transaction created, but the recurring schedule could not be saved (account not found). You can add it under Recurring.'
       )
     }
@@ -355,7 +401,7 @@ export async function createManualTransactionAction(formData: FormData) {
     })
 
     if (recurringError) {
-      redirectWithError(
+      return savedWithWarning(
         'Transaction created, but the recurring schedule could not be saved. You can add it under Recurring.'
       )
     }
@@ -367,26 +413,53 @@ export async function createManualTransactionAction(formData: FormData) {
   revalidatePath('/dashboard/accounts')
   revalidatePath('/dashboard')
 
-  if (addNext) {
+  // Everything that describes *which kind of entry this is* carries over to
+  // the next draft of a "Save & Add Next" batch — a stack of receipts, a day
+  // of spending — and re-picking the category, payee and tags for each one is
+  // most of the typing. Amount, description and notes are deliberately not
+  // here: they are what differs between two entries in the same batch, and a
+  // carried-over amount is the kind of prefill that gets posted by accident.
+  return {
+    ok: true,
+    next: {
+      date: transactionDate,
+      type: transactionType,
+      accountId,
+      status,
+      categoryId,
+      payeeName: payeeName || merchantName || null,
+      tagIds: tagsProvided ? tagIds : [],
+    },
+  }
+}
+
+/**
+ * The original redirecting create action, kept for every caller that is not
+ * the entry dialog (the assistant's review form, a form reached as a page).
+ * Same outcomes as before: an error lands on Transactions with `?error=`, a
+ * save lands on `returnTo` with `txn_created`, "Save & Add Next" with the
+ * `next_*` params the dialog provider reopens from.
+ */
+export async function createManualTransactionAction(formData: FormData) {
+  const returnTo = String(formData.get('return_to') ?? '').trim() || undefined
+  const addNext = formData.get('add_next') === 'true'
+
+  const result = await saveManualTransaction(formData)
+  if (!result.ok) redirectWithError(result.error)
+  if (result.warning) redirectWithError(result.warning)
+
+  if (addNext && result.next) {
+    const next = result.next
     const base = returnTo?.startsWith('/dashboard/') ? returnTo : '/dashboard/transactions'
     const url = new URL(base, 'http://localhost')
     url.searchParams.set(TRANSACTION_CREATED_PARAM, transactionCreatedValue())
-    // Everything that describes *which kind of entry this is* carries over —
-    // "Save & Add Next" means a batch (a stack of receipts, a day of spending),
-    // and re-picking the category, payee and tags for each one is most of the
-    // typing. Amount, description and notes stay empty on purpose: those are
-    // what actually differs between two entries in the same batch, and a
-    // carried-over amount is the kind of prefill that gets posted by accident.
-    url.searchParams.set('next_date', transactionDate)
-    url.searchParams.set('next_type', transactionType)
-    if (accountId) url.searchParams.set('next_account', accountId)
-    if (status) url.searchParams.set('next_status', status)
-    if (categoryId) url.searchParams.set('next_category', categoryId)
-    const nextPayee = payeeName || merchantName
-    if (nextPayee) url.searchParams.set('next_payee', nextPayee)
-    if (tagsProvided && tagIds.length > 0) {
-      url.searchParams.set('next_tags', tagIds.join(','))
-    }
+    url.searchParams.set('next_date', next.date)
+    url.searchParams.set('next_type', next.type)
+    if (next.accountId) url.searchParams.set('next_account', next.accountId)
+    if (next.status) url.searchParams.set('next_status', next.status)
+    if (next.categoryId) url.searchParams.set('next_category', next.categoryId)
+    if (next.payeeName) url.searchParams.set('next_payee', next.payeeName)
+    if (next.tagIds.length > 0) url.searchParams.set('next_tags', next.tagIds.join(','))
     // Unique per redirect so the dialog reopen effect fires even when the
     // next entry reuses the same date/type/account as the previous one.
     url.searchParams.set('next_seq', String(Date.now()))
@@ -491,7 +564,8 @@ export async function createRefundTransactionAction(formData: FormData) {
   redirectWithTransactionInfo('refunded', returnTo)
 }
 
-export async function createTransferTransactionAction(formData: FormData) {
+/** The transfer counterpart of `saveManualTransaction`: reports, never redirects. */
+export async function saveTransferTransaction(formData: FormData): Promise<TransactionSaveResult> {
   const fromAccountId = String(formData.get('from_account_id') ?? '').trim()
   const toAccountId = String(formData.get('to_account_id') ?? '').trim()
   const amount = parsePositiveNumber(formData.get('amount'))
@@ -499,7 +573,6 @@ export async function createTransferTransactionAction(formData: FormData) {
   const description = String(formData.get('description') ?? '').trim()
   const notes = String(formData.get('notes') ?? '').trim()
   const status = String(formData.get('status') ?? '').trim()
-  const returnTo = String(formData.get('return_to') ?? '').trim() || undefined
   const exchangeRateToBaseRaw = String(formData.get('exchange_rate_to_base') ?? '').trim()
   const exchangeRateToBase = Number(exchangeRateToBaseRaw)
   const validExchangeRate =
@@ -516,27 +589,27 @@ export async function createTransferTransactionAction(formData: FormData) {
   const frequency = String(formData.get('frequency') ?? '').trim()
 
   if (!fromAccountId) {
-    redirectWithError('Select the source account.')
+    return rejected('Select the source account.')
   }
 
   if (!toAccountId) {
-    redirectWithError('Select the destination account.')
+    return rejected('Select the destination account.')
   }
 
   if (fromAccountId === toAccountId) {
-    redirectWithError('Source and destination accounts must be different.')
+    return rejected('Source and destination accounts must be different.')
   }
 
   if (amount === null) {
-    redirectWithError('Amount must be greater than 0.')
+    return rejected('Amount must be greater than 0.')
   }
 
   if (!transactionDate) {
-    redirectWithError('Transaction date is required.')
+    return rejected('Transaction date is required.')
   }
 
   if (!isStatus(status)) {
-    redirectWithError('Select posted or pending status.')
+    return rejected('Select posted or pending status.')
   }
 
   const supabase = await createClient()
@@ -557,7 +630,7 @@ export async function createTransferTransactionAction(formData: FormData) {
     .maybeSingle()
 
   if (profileError) {
-    redirectWithError('Could not load your household.')
+    return rejected('Could not load your household.')
   }
 
   if (!profile?.default_household_id) {
@@ -565,7 +638,8 @@ export async function createTransferTransactionAction(formData: FormData) {
   }
 
   if (isFrequency(frequency)) {
-    await requireRecurringAccess(supabase, profile.default_household_id)
+    const accessError = await recurringAccessError(supabase, profile.default_household_id)
+    if (accessError) return rejected(accessError)
   }
 
   const { error: transactionError } = await supabase.rpc(
@@ -587,7 +661,7 @@ export async function createTransferTransactionAction(formData: FormData) {
   )
 
   if (transactionError) {
-    redirectWithError(
+    return rejected(
       cleanRpcError(
         transactionError.message,
         'Could not create the transfer. Please check the form and try again.'
@@ -616,7 +690,7 @@ export async function createTransferTransactionAction(formData: FormData) {
       p_payee_name: null,
     })
     if (feeError) {
-      redirectWithError(
+      return savedWithWarning(
         'Transfer created, but its fee could not be recorded. Add it as an expense.'
       )
     }
@@ -638,7 +712,7 @@ export async function createTransferTransactionAction(formData: FormData) {
     const toAccount = routeAccounts?.find((a) => a.id === toAccountId)
 
     if (!fromAccount || !toAccount) {
-      redirectWithError(
+      return savedWithWarning(
         'Transfer created, but the recurring schedule could not be saved (account not found). You can add it under Recurring.'
       )
     }
@@ -668,7 +742,7 @@ export async function createTransferTransactionAction(formData: FormData) {
     })
 
     if (recurringError) {
-      redirectWithError(
+      return savedWithWarning(
         'Transfer created, but the recurring schedule could not be saved. You can add it under Recurring.'
       )
     }
@@ -679,6 +753,16 @@ export async function createTransferTransactionAction(formData: FormData) {
   revalidatePath('/dashboard/transactions')
   revalidatePath('/dashboard/accounts')
   revalidatePath('/dashboard')
+  // Transfers have no "Save & Add Next", so nothing carries over.
+  return { ok: true, next: null }
+}
+
+/** The original redirecting transfer action; see `createManualTransactionAction`. */
+export async function createTransferTransactionAction(formData: FormData) {
+  const returnTo = String(formData.get('return_to') ?? '').trim() || undefined
+  const result = await saveTransferTransaction(formData)
+  if (!result.ok) redirectWithError(result.error)
+  if (result.warning) redirectWithError(result.warning)
   redirect(addQueryParam(returnTo, TRANSACTION_CREATED_PARAM, transactionCreatedValue()))
 }
 

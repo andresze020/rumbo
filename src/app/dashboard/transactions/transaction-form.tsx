@@ -26,7 +26,10 @@ import {
 import {
   createManualTransactionAction,
   createTransferTransactionAction,
+  saveManualTransaction,
+  saveTransferTransaction,
   updateManualTransactionAction,
+  type TransactionNextDefaults,
   updateTransferTransactionAction,
 } from './actions'
 import { PayeePicker, type PayeeOption } from './payee-picker'
@@ -137,11 +140,27 @@ export type TransactionFormCategory = {
   is_system?: boolean
 }
 
+export type TransactionSavedOutcome = {
+  addNext: boolean
+  /** What the next draft keeps; null for a transfer or a saved-with-warning. */
+  next: TransactionNextDefaults | null
+  /** Saved, but a follow-up step (time, tags, fee, schedule) failed. */
+  warning?: string
+}
+
 type TransactionFormProps = {
   accounts: TransactionFormAccount[]
   baseCurrency: string
   cancelHref?: string
   onCancel?: () => void
+  /**
+   * Save without a redirect (the entry dialog, premium entry sprint T4). When
+   * set, a create calls `saveManualTransaction` / `saveTransferTransaction`
+   * directly: a validation error stays in the form with the draft intact, and
+   * a save reports here at once instead of waiting for another page to render
+   * on the server. Edit mode always keeps the redirecting actions.
+   */
+  onSaved?: (outcome: TransactionSavedOutcome) => void
   categories: TransactionFormCategory[]
   payees: PayeeOption[]
   /** Active household tags for the tag multi-select (income/expense only). */
@@ -233,6 +252,7 @@ export function TransactionForm({
   baseCurrency,
   cancelHref,
   onCancel,
+  onSaved,
   categories,
   payees,
   tags = [],
@@ -577,6 +597,38 @@ export function TransactionForm({
     : isEdit
       ? updateManualTransactionAction
       : createManualTransactionAction
+  // The inline save (see `onSaved`). Server-side validation is unchanged; only
+  // the way the outcome comes back is.
+  const [saveError, setSaveError] = useState('')
+  const inlineSave = onSaved && !isEdit
+  async function saveInline(formData: FormData) {
+    setSaveError('')
+    const addNext = formData.get('add_next') === 'true'
+    let result: Awaited<ReturnType<typeof saveManualTransaction>> | undefined
+    try {
+      result = await (isTransfer ? saveTransferTransaction : saveManualTransaction)(formData)
+    } catch (error) {
+      // A session that ended mid-entry redirects to /login from the action;
+      // that navigation is the router's to finish.
+      if (String((error as { digest?: unknown } | null)?.digest ?? '').startsWith('NEXT_REDIRECT')) {
+        throw error
+      }
+      // The request failed in flight, so whether the server committed is
+      // unknown. Saying "try again" would invite a duplicate (there is no
+      // idempotency key); point at Transactions first.
+      setSaveError(
+        ui('The save could not be confirmed. Check Transactions before trying again — it may already be there.')
+      )
+      return
+    }
+    if (!result) return
+    if (!result.ok) {
+      setSaveError(ui(result.error))
+      return
+    }
+    onSaved?.({ addNext, next: result.next, warning: result.warning })
+  }
+
   // BR-045: edit always offers the time (otherwise a time set once could never
   // be cleared) — except on a transfer, whose update action does not store one.
   const timeVisible = showField('time') && !(isEdit && isTransfer)
@@ -2466,7 +2518,7 @@ export function TransactionForm({
 
   return (
     <form
-      action={submitAction}
+      action={inlineSave ? saveInline : submitAction}
       onSubmit={(event) => {
         // T4 entry timing (a no-op unless `?entry_timing=on`): the submitter
         // tells "Save & Add Next" (name="add_next") from a plain create.
@@ -2916,6 +2968,12 @@ export function TransactionForm({
           form is shorter than the screen. A flex spacer rather than `mt-auto`,
           which would fight `space-y-3`'s own margin on the same side. */}
       <div aria-hidden="true" className="hidden max-sm:block max-sm:flex-1" />
+
+      {saveError ? (
+        <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {saveError}
+        </p>
+      ) : null}
 
       {keyboardInset > 0 ? null : (
       <div className="sticky bottom-0 z-10 flex items-center gap-2 border-t bg-popover pb-1 pt-3 sm:static sm:flex-wrap sm:border-t-0 sm:bg-transparent sm:p-0">

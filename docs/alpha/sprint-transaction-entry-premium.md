@@ -496,10 +496,28 @@ transacción, ni UUID, ni hogar — en `sessionStorage` de esa pestaña.
 
 | Evento | Qué mide | Meta p75 | Antes (main) | Después (esta rama) |
 |---|---|---|---|---|
-| `open.cold` | «+» → formulario pintado, sin datos en memoria | ≤ 1,5 s | pendiente | pendiente |
-| `open.warm` | «+» → formulario pintado, con datos en memoria | ≤ 0,7 s | pendiente | pendiente |
-| `save.next` | «Add next» → siguiente borrador listo | ≤ 1,2 s | pendiente | pendiente |
-| `save.close` | «Create» → redirect aterrizado | ≤ 1,2 s | pendiente | pendiente |
+| `open.cold` | «+» → formulario pintado, sin datos en memoria | ≤ 1,5 s | — | 615–869 ms ✅ |
+| `open.warm` | «+» → formulario pintado, con datos en memoria | ≤ 0,7 s | — | 44–49 ms ✅ |
+| `save.next` | «Add next» → siguiente borrador listo | ≤ 1,2 s | — | 1,23–1,66 s ❌ (con redirect) → pendiente re-medir con guardado en línea |
+| `save.close` | «Create» → resultado en pantalla | ≤ 1,2 s | — | 1,26–1,60 s ❌ (con redirect) → pendiente re-medir con guardado en línea |
+
+Primeras mediciones en el teléfono del usuario, 2026-10-22, cuenta real, desde
+Dashboard y desde Accounts (las dos primeras rondas perdieron los `save` por
+un error de la propia medición, ya corregido).
+
+**Guardado en línea (decidido con esos números, aprobado por el usuario).**
+El guardado ya no redirige: el diálogo llama a `saveManualTransaction` /
+`saveTransferTransaction`, que hacen exactamente las mismas validaciones,
+escrituras e invalidaciones que antes y devuelven el resultado. El aviso y el
+siguiente borrador aparecen al llegar la respuesta; la pantalla de atrás se
+refresca con el `revalidatePath` de la misma respuesta, en segundo plano.
+Experimento en navegador antes de hacerlo (página que tarda 1,5 s en
+renderizarse): la acción en línea devolvió su resultado en **53–85 ms** y la
+página se refrescó ~1,5 s después; la misma acción con redirect tardó
+**~1,6 s**. De paso: un error de validación ya no te saca a Transactions con
+`?error=`; se muestra dentro del formulario con el borrador intacto, y desde
+el Dashboard te quedas en el Dashboard. Las acciones con redirect siguen para
+el asistente y los formularios de página.
 
 El «antes» solo se puede tomar con un build que ya tenga la medición, así que
 la comparación honesta es: medir esta rama en preview, y comparar contra la
@@ -523,4 +541,6 @@ cuánto aportó cada uno.
 | 10 | Back con el diálogo abierto tras «Add next» | Cierra el diálogo, no sale de la pantalla | |
 | 11 | 320 px, 375 px, escritorio | «Create transaction» y «Add next» completos; zoom sigue funcionando | |
 | 11b | Guardar desde Accounts, Payees o el Dashboard | Sale «Transacción creada.» una vez; nunca «Cuenta creada.» u otro aviso ajeno | |
+| 11c | Error de validación (p. ej. monto 0 forzado, o frecuencia siendo miembro sin permiso) | El mensaje sale dentro del formulario y el borrador queda intacto; no te saca de la pantalla | |
+| 11d | Guardar desde Budgets o Reports | La pantalla de atrás se actualiza sola tras el aviso | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |
