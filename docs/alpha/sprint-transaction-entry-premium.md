@@ -411,3 +411,105 @@ zoom del navegador sigue funcionando.
   producción; el clip no controla red, sesión, espera humana ni rehidratación.
 - Ajustar objetivos de latencia si el dispositivo/red de QA no permite cumplir
   los umbrales iniciales; registrar baseline y razón antes de optimizar.
+
+---
+
+## Implementación — 2026-10-22 (rama `ccr-95b39f19-3w7kyn`)
+
+> **Estado: código listo, medición en dispositivo y QA de T5 pendientes.**
+> Todo lo de abajo se razonó desde el código y los hallazgos ya anotados de
+> las grabaciones; los videos no están en el repositorio, así que no se
+> agregaron timestamps nuevos. Sin migración, sin RPC, sin cambio de RLS.
+
+### T0 — Mapa del flujo, con la capa de cada demora
+
+Leído del código vigente, de tocar «+» a ver el resultado:
+
+| Paso | Qué pasa | Capa | Antes | Ahora |
+|---|---|---|---|---|
+| 1. Tocar «+» (primera vez, o pestaña recargada) | `openDialog` → `getQuickAddFormData()` (Server Action) | Consulta de datos | `auth.getUser` → `profiles` → `auth.getUser` → `profiles` → 6 listas en paralelo → memoria por categoría: **5–6 viajes en serie** | `getRequestProfile` (caché por request) → 6 listas + memoria en un solo lote: **3 viajes en serie** |
+| 2. Espera de esa primera apertura | El diálogo a pantalla completa | Apertura/render | Una línea gris «Loading form…» en una pantalla vacía | Esqueleto con la forma del formulario (tipo, monto, fechas, filas, acción) y `role="status"` |
+| 3. Aperturas siguientes | Datos en memoria (MQ-009) + refresco en segundo plano | — | Inmediatas (sin cambio) | Igual |
+| 4. Categoría | `SelectorSheet` con chips «Frequently used» | Interacción | Top 4 por **cantidad** de usos en el dispositivo, sin recencia | Top 6 por **frecuencia + recencia** (vida media 21 días); las subcategorías entran como chip, así que una hija frecuente es un toque |
+| 5. Tags | `TagMultiSelect` | Interacción | Lista alfabética completa; en el video hubo scroll largo | Chips «Frequently used» arriba (mismo ranking, hasta 6, sin los ya elegidos) |
+| 6. Guardar y siguiente | Server Action → `redirect` con `created=1&next_*` | Acción de servidor + navegación | Tras el redirect, **dos `router.replace()` más** (toast y provider) para limpiar los flags: dos renders completos de la página en el servidor mientras se escribe la siguiente | En Transactions los flags se limpian con `history.replaceState` (`replaceUrlInPlace`): cero viajes extra. Accounts, Debts y el asistente leen `created=1` en el servidor (sus avisos «… created»), así que ahí sigue la navegación |
+| 7. Botón de alta consecutiva | Split button | Interacción | `+` sin texto en móvil | «+ Add next» / «+ Agregar otra» / «+ Une autre» con texto (cabe a 320 px junto a «Create transaction», medido) |
+| 8. Confirmación | `TransactionToasts` | Feedback | Un toast de 5 s por guardado; en una racha se apilaban 3 sobre la fila de acciones | Un solo toast por mensaje, con contador (`×3`), que reinicia sus 5 s; los que tienen Undo nunca se unen |
+
+**Defecto previo corregido de paso (revisión `ledger-guard`):** tras un
+«Copy» (BR-034) o un «share» (BR-028), «Save & Add Next» volvía a sembrar el
+monto, la descripción y las notas de la entrada original en el siguiente
+borrador. Ahora el efecto de add-next limpia esos prefills; el siguiente
+borrador solo conserva lo que llevan los parámetros `next_*`.
+
+**Aceptado sin cambio:** los contadores de uso (`af_category_usage`,
+`af_tag_usage`) son por dispositivo, no por hogar. No muestran nada ajeno —
+solo se ordenan las categorías y tags del hogar activo—, pero dos hogares en
+el mismo teléfono comparten el tope de 200 entradas.
+
+**Hipótesis que el código descartó:** el toast duplicado. Hay exactamente
+un `toast()` por redirect (`hasRun` lo protege). Lo que el video mostró eran
+toasts de guardados consecutivos apilados, no dos por guardado.
+
+**Hipótesis que siguen abiertas (necesitan la medición en el teléfono):**
+- La espera de varios segundos en la primera apertura de la grabación es
+  mucho más que 5–6 viajes de ~50 ms. Lo más probable es un arranque en frío
+  de la función de Vercel o una pestaña descartada por Android al cambiar a
+  AndroMoney (vuelve sin datos en memoria). La medición `open.cold` lo dirá.
+- El guardado incluye renderizar en el servidor la página de destino entera
+  (Dashboard o Transactions) dentro de la respuesta del Server Action. Si
+  `save.next` sigue por encima de la meta, el siguiente paso es que «Add next»
+  responda sin redirect y refresque la lista en segundo plano. Es un cambio de
+  contrato de la acción, así que no se hizo sin medir.
+
+**No se hizo, a propósito:**
+- Precargar los datos del formulario al montar el dashboard: el Server Action
+  pasaría por la cola del router y podría retrasar la primera navegación
+  (el tipo de clic perdido que fue B-7).
+- Escribir el monto antes de que lleguen las listas: la moneda sale de la
+  cuenta, y la cuenta es justo lo que no cargó.
+- Un acceso extra a fechas de la semana anterior: el doc pide medirlo antes
+  de ocupar espacio, y los chips Today/Yesterday/2 days ago + calendario ya
+  cubren el caso; queda para después de la medición.
+
+### T4 — Cómo medir en el teléfono
+
+1. Abrir cualquier pantalla del dashboard con `?entry_timing=on` (por ejemplo
+   `/dashboard?entry_timing=on`). Aparece una franja «Entry timing» arriba.
+2. Hacer la lista de altas acordada (3 aperturas en frío recargando la
+   pestaña, 3 en caliente, 3 «Add next», 3 «Create»).
+3. «Copy results» copia p50/p75 por evento; pegarlos en la tabla de abajo.
+4. `?entry_timing=off` la apaga.
+
+Cada muestra guarda solo evento, variante, milisegundos y hora — nada de la
+transacción, ni UUID, ni hogar — en `sessionStorage` de esa pestaña.
+
+| Evento | Qué mide | Meta p75 | Antes (main) | Después (esta rama) |
+|---|---|---|---|---|
+| `open.cold` | «+» → formulario pintado, sin datos en memoria | ≤ 1,5 s | pendiente | pendiente |
+| `open.warm` | «+» → formulario pintado, con datos en memoria | ≤ 0,7 s | pendiente | pendiente |
+| `save.next` | «Add next» → siguiente borrador listo | ≤ 1,2 s | pendiente | pendiente |
+| `save.close` | «Create» → redirect aterrizado | ≤ 1,2 s | pendiente | pendiente |
+
+El «antes» solo se puede tomar con un build que ya tenga la medición, así que
+la comparación honesta es: medir esta rama en preview, y comparar contra la
+misma rama con los cambios de rendimiento revertidos si hace falta aislar
+cuánto aportó cada uno.
+
+### T5 — QA pendiente en dispositivo (lo llena el usuario)
+
+| # | Caso | Qué confirmar | Resultado |
+|---|---|---|---|
+| 1 | Gasto simple, categoría hija frecuente | Un toque en el chip la elige; monto, signo y cuenta correctos en Transactions | |
+| 2 | Ingreso | Signo correcto; la categoría de gasto no aparece como chip | |
+| 3 | 3× «Add next» seguidos | Cada uno guarda una sola vez; un solo toast con `×2`, `×3`; el siguiente borrador conserva fecha, cuenta, categoría, payee y tags, y llega con monto, descripción y notas vacíos | |
+| 4 | Doble toque en «Add next» | Una sola transacción | |
+| 5 | Transferencia y edición | Sin «Add next»; nada distinto a antes | |
+| 5b | «Copy» de una transacción y luego «Add next» | El segundo borrador llega **sin** el monto, la descripción ni las notas copiados | |
+| 6 | Cuenta en otra moneda | Prefijo de moneda y vista previa FX como antes | |
+| 7 | Tags | Chips frecuentes arriba; tocar uno lo agrega y desaparece del grupo; la búsqueda los oculta | |
+| 8 | Primera apertura con red lenta | Esqueleto, nunca una pantalla vacía; luego el formulario sin salto | |
+| 9 | Cambiar de hogar con el diálogo abierto | Ninguna lista ni chip del hogar anterior | |
+| 10 | Back con el diálogo abierto tras «Add next» | Cierra el diálogo, no sale de la pantalla | |
+| 11 | 320 px, 375 px, escritorio | «Create transaction» y «Add next» completos; zoom sigue funcionando | |
+| 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |

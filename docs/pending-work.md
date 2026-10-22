@@ -27,7 +27,7 @@
 
 | # | Qué | Prioridad | Tipo | Sección |
 |---|---|---|---|---|
-| 1 | Sprint «Ingreso de transacciones Premium» (T0–T5) | P0–P1 | Código + medición | §1 |
+| 1 | Sprint «Ingreso de transacciones Premium»: código listo, falta medir en el teléfono y QA T5 | P0–P1 | Medición + QA | §1 |
 | 2 | QA manual de household sharing con dos cuentas (HH-6) | Gate | QA manual | §4.1 |
 | 3 | Configuración de Supabase para emails de invitación (HH-7) + leaked-password protection | Gate | Config manual | §3 |
 | 4 | QA en vivo de Tier-3/4 (BR-030, BR-043, BR-037, BR-036, BR-045, BR-031) | Gate | QA manual | §4.5 |
@@ -44,13 +44,9 @@
 
 | ID | Prio | Área | Qué falta | Detalle |
 |---|---:|---|---|---|
-| **TE-T0** | P0 | Captura | Matriz de evidencia y mapa del flujo de alta de transacción (pantallas, toques, esperas) a partir de las grabaciones del 2026-10-14. Sin BD. | [alpha/sprint-transaction-entry-premium.md](./alpha/sprint-transaction-entry-premium.md#t0--matriz-de-evidencia-y-mapa-del-flujo) |
-| **TE-T1** | P1 | Captura | Entrada enfocada y jerarquía visual del formulario (`transaction-form.tsx`, `transaction-dialog-provider.tsx`). | idem, T1 |
-| **TE-T2** | P1 | Captura | Secuencia de teclado y selectores (`quickEntry`, `SelectorSheet`, `PayeePicker`, `AmountInput`). | idem, T2 |
-| **TE-T3** | P1 | Captura | Guardar una secuencia con confianza: aclarar «Save & Add Next». | idem, T3 |
-| **TE-T4** | P1 | Performance | Presupuesto de rendimiento del flujo (apertura fría/caliente y guardado, p50/p75 en build de producción). | idem, T4 |
-| **TE-T5** | P0 | QA | QA de fidelidad financiera y responsive del flujo (ingresos, gastos, transferencias, edición, multimoneda). | idem, T5 |
-| TE-pend | — | Medición | Antes de cerrar el sprint: tiempo activo por alta, lista común de operaciones para comparar con AndroMoney, baseline p50/p75 y ajuste de umbrales si el dispositivo no los permite. | idem, «Pendientes para cerrar implementación» |
+| **TE-T0…T4** | P0–P1 | Captura | **Código entregado 2026-10-22** (rama `ccr-95b39f19-3w7kyn`): mapa del flujo, esqueleto de carga, `getQuickAddFormData` de 5–6 a 3 viajes en serie, sin renders extra tras «Add next», «+ Add next» con texto, toasts unidos, chips por frecuencia + recencia (categorías y tags), medición `?entry_timing=on`. **Falta:** medir p50/p75 en el teléfono (tabla T4) y decidir con esos números si «Add next» debe dejar de redirigir. | [alpha/sprint-transaction-entry-premium.md](./alpha/sprint-transaction-entry-premium.md#implementación--2026-10-22-rama-ccr-95b39f19-3w7kyn) |
+| **TE-T5** | P0 | QA | QA en dispositivo: 12 casos (montos, signos, monedas, doble toque, hogar, Back, 320 px, Undo). | idem, «T5 — QA pendiente en dispositivo» |
+| TE-pend | — | Medición | Comparación cronometrada con AndroMoney sobre la misma lista de altas, sin alternar apps. | idem, «Pendientes para cerrar implementación» |
 | Asistente-Cancel | P2 | Asistente | Regresión de PR #64: el diálogo «Review transaction» de `assistant-chat.tsx` no usa `useBackDismiss` (Back sale de la página) y `onCancel` solo oculta el link Cancel. Elegir: cablear `useBackDismiss`, o que `TransactionForm` invoque `onCancel` desde un botón visible. Sigue cerrable por X, Escape y backdrop. | [SPRINT-LOG.md](./SPRINT-LOG.md) → «Ask for the category first…» |
 | MQ-001-cron | P2 | Recurrentes | `run_recurring_autopost` corre a las 06:00 UTC con `current_date`. La columna `households.timezone` ya existe (migración `20261001120000_mq_001_household_timezone.sql`) pero nada la lee ni la escribe. Falta: el job postea por household con `(now() at time zone h.timezone)::date` y la app escribe la columna. Hoy no afecta a Toronto/Montréal; sí a zonas UTC-7 o más al oeste. | [mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md#mq-001--today-y-el-mes-actual-se-calculan-en-utc) |
 | BF-022 | P3 | Transacciones | Flujo de reconciliación («cleared» contra extracto). Requiere migración (`reconciled_at`). Diferido a Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
@@ -174,7 +170,6 @@ No «arreglar» sin reabrir la decisión.
 | Month start day | ¿Qué **significa** un `budgets.budget_month` / `month_closures` guardado cuando el periodo ya no coincide con el mes calendario? Es la parte difícil de BR-036 s2 y merece decisión escrita. | [features/month-start-day.md](./features/month-start-day.md) |
 | Asistente | Idea #6: el asistente como interfaz principal. Solo si los datos de uso lo justifican. | [features/beginner-friendly-ux.md](./features/beginner-friendly-ux.md) |
 | Quick entry | ¿Payees recientes como chips de un toque? | [SPRINT-LOG.md](./SPRINT-LOG.md) → «Ask for the category first…» |
-| Quick entry | ¿El `+` icon-only del split button («Save and add next») pasa a checkbox «seguir agregando»? Se solapa con TE-T3. | idem |
 | Cache de datos | Ya decidido y entregado: Router Cache de 30 s (`staleTimes`, RUM-005) invalidado por cada escritura, con los timings de servidor medidos (B-5 cerrado 2026-09-25). Sigue sin decidir solo si conviene una cache de datos aparte (React Query/SWR/`unstable_cache`); no hay bloqueo, hace falta un caso de uso que la justifique. | [performance-ux-execution-status.md](./performance-ux-execution-status.md) |
 
 ## 7. Diferido / estacionado (revisar solo si se dispara)
