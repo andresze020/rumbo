@@ -27,7 +27,7 @@
 
 | # | Qué | Prioridad | Tipo | Sección |
 |---|---|---|---|---|
-| 1 | Sprint «Ingreso de transacciones Premium»: código listo, falta medir en el teléfono y QA T5 | P0–P1 | Medición + QA | §1 |
+| 1 | Sprint «Ingreso de transacciones Premium»: código listo y medido; falta QA T5 y merge (PR #122) | P0–P1 | QA | §1 |
 | 2 | QA manual de household sharing con dos cuentas (HH-6) | Gate | QA manual | §4.1 |
 | 3 | Configuración de Supabase para emails de invitación (HH-7) + leaked-password protection | Gate | Config manual | §3 |
 | 4 | QA en vivo de Tier-3/4 (BR-030, BR-043, BR-037, BR-036, BR-045, BR-031) | Gate | QA manual | §4.5 |
@@ -44,7 +44,7 @@
 
 | ID | Prio | Área | Qué falta | Detalle |
 |---|---:|---|---|---|
-| **TE-T0…T4** | P0–P1 | Captura | **Código entregado 2026-10-22** (rama `ccr-95b39f19-3w7kyn`): mapa del flujo, esqueleto de carga, `getQuickAddFormData` de 5–6 a 3 viajes en serie, sin renders extra tras «Add next», «+ Add next» con texto, toasts unidos, chips por frecuencia + recencia (categorías y tags), medición `?entry_timing=on`. **Falta:** medir p50/p75 en el teléfono (tabla T4) y decidir con esos números si «Add next» debe dejar de redirigir. | [alpha/sprint-transaction-entry-premium.md](./alpha/sprint-transaction-entry-premium.md#implementación--2026-10-22-rama-ccr-95b39f19-3w7kyn) |
+| **TE-T0…T4** | P0–P1 | Captura | **Código entregado 2026-10-22** (rama `ccr-95b39f19-3w7kyn`): mapa del flujo, esqueleto de carga, `getQuickAddFormData` de 5–6 a 3 viajes en serie, sin renders extra tras «Add next», «+ Add next» con texto, toasts unidos, chips por frecuencia + recencia (categorías y tags), medición `?entry_timing=on`. Medido en el teléfono 2026-10-22: abrir 0,6 s en frío / 50 ms en caliente; guardar 0,7–1,0 s tras quitar el redirect del diálogo (antes 1,2–1,6 s). T4 cumplido. | [alpha/sprint-transaction-entry-premium.md](./alpha/sprint-transaction-entry-premium.md#implementación--2026-10-22-rama-ccr-95b39f19-3w7kyn) |
 | **TE-T5** | P0 | QA | QA en dispositivo: 12 casos (montos, signos, monedas, doble toque, hogar, Back, 320 px, Undo). | idem, «T5 — QA pendiente en dispositivo» |
 | TE-pend | — | Medición | Comparación cronometrada con AndroMoney sobre la misma lista de altas, sin alternar apps. | idem, «Pendientes para cerrar implementación» |
 | Asistente-Cancel | P2 | Asistente | Regresión de PR #64: el diálogo «Review transaction» de `assistant-chat.tsx` no usa `useBackDismiss` (Back sale de la página) y `onCancel` solo oculta el link Cancel. Elegir: cablear `useBackDismiss`, o que `TransactionForm` invoque `onCancel` desde un botón visible. Sigue cerrable por X, Escape y backdrop. | [SPRINT-LOG.md](./SPRINT-LOG.md) → «Ask for the category first…» |

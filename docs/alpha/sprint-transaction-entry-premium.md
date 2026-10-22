@@ -416,7 +416,7 @@ zoom del navegador sigue funcionando.
 
 ## Implementación — 2026-10-22 (rama `ccr-95b39f19-3w7kyn`)
 
-> **Estado: código listo, medición en dispositivo y QA de T5 pendientes.**
+> **Estado: código listo, T4 medido en dispositivo (cumplido); QA de T5 pendiente.**
 > Todo lo de abajo se razonó desde el código y los hallazgos ya anotados de
 > las grabaciones; los videos no están en el repositorio, así que no se
 > agregaron timestamps nuevos. Sin migración, sin RPC, sin cambio de RLS.
@@ -498,12 +498,18 @@ transacción, ni UUID, ni hogar — en `sessionStorage` de esa pestaña.
 |---|---|---|---|---|
 | `open.cold` | «+» → formulario pintado, sin datos en memoria | ≤ 1,5 s | — | 615–869 ms ✅ |
 | `open.warm` | «+» → formulario pintado, con datos en memoria | ≤ 0,7 s | — | 44–49 ms ✅ |
-| `save.next` | «Add next» → siguiente borrador listo | ≤ 1,2 s | — | 1,23–1,66 s ❌ (con redirect) → pendiente re-medir con guardado en línea |
-| `save.close` | «Create» → resultado en pantalla | ≤ 1,2 s | — | 1,26–1,60 s ❌ (con redirect) → pendiente re-medir con guardado en línea |
+| `save.next` | «Add next» → siguiente borrador listo | ≤ 1,2 s | 1,23–1,66 s (redirect) | 1,01 s p50 · 1,24 s p75 — en el límite |
+| `save.close` | «Create» → resultado en pantalla | ≤ 1,2 s | 1,26–1,60 s (redirect) | 0,66–0,99 s p50 · 0,90–1,16 s p75 ✅ |
 
 Primeras mediciones en el teléfono del usuario, 2026-10-22, cuenta real, desde
 Dashboard y desde Accounts (las dos primeras rondas perdieron los `save` por
 un error de la propia medición, ya corregido).
+
+Segunda ronda (2026-10-22, guardado en línea, cuenta real, Dashboard y
+Accounts): guardar bajó 20–40 %. Lo que queda (~0,7–1 s) es el propio
+guardado: teléfono → Vercel → 4–5 consultas en serie a Supabase → vuelta. Se
+podría recortar ~100 ms juntando consultas; con 1–2 muestras por caso no se
+persigue ahora. **T4 se da por cumplido.**
 
 **Guardado en línea (decidido con esos números, aprobado por el usuario).**
 El guardado ya no redirige: el diálogo llama a `saveManualTransaction` /
