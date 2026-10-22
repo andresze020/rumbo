@@ -3,6 +3,10 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import {
+  TRANSACTION_CREATED_PARAM,
+  transactionCreatedValue,
+} from '@/lib/transactions/landing-flags'
 import { cleanSupabaseActionError as cleanRpcError } from '@/lib/supabase/errors'
 import {
   advanceUntilFuture,
@@ -366,7 +370,7 @@ export async function createManualTransactionAction(formData: FormData) {
   if (addNext) {
     const base = returnTo?.startsWith('/dashboard/') ? returnTo : '/dashboard/transactions'
     const url = new URL(base, 'http://localhost')
-    url.searchParams.set('created', '1')
+    url.searchParams.set(TRANSACTION_CREATED_PARAM, transactionCreatedValue())
     // Everything that describes *which kind of entry this is* carries over —
     // "Save & Add Next" means a batch (a stack of receipts, a day of spending),
     // and re-picking the category, payee and tags for each one is most of the
@@ -389,7 +393,7 @@ export async function createManualTransactionAction(formData: FormData) {
     redirect(`${url.pathname}?${url.searchParams.toString()}`)
   }
 
-  redirectWithTransactionInfo('created', returnTo)
+  redirect(addQueryParam(returnTo, TRANSACTION_CREATED_PARAM, transactionCreatedValue()))
 }
 
 /**
@@ -675,7 +679,7 @@ export async function createTransferTransactionAction(formData: FormData) {
   revalidatePath('/dashboard/transactions')
   revalidatePath('/dashboard/accounts')
   revalidatePath('/dashboard')
-  redirectWithTransactionInfo('created', returnTo)
+  redirect(addQueryParam(returnTo, TRANSACTION_CREATED_PARAM, transactionCreatedValue()))
 }
 
 export async function updateManualTransactionAction(formData: FormData) {

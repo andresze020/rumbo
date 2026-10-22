@@ -27,6 +27,8 @@ import { X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { useBackDismiss } from '@/lib/use-back-dismiss'
+import { useToast } from '@/components/toast-provider'
+import { TRANSACTION_CREATED_PARAM } from '@/lib/transactions/landing-flags'
 import { EntryTimingReadout } from '@/components/entry-timing-readout'
 import {
   isEntryTimingEnabled,
@@ -147,6 +149,7 @@ function useKeepFocusedFieldVisible(keyboardOpen: boolean) {
  * the user was working in.
  */
 const TRANSIENT_RETURN_PARAMS = [
+  TRANSACTION_CREATED_PARAM,
   'created',
   'updated',
   'voided',
@@ -222,23 +225,10 @@ function readAddNextDefaults(searchParams: URLSearchParams): AddNextDefaults | n
 }
 
 /**
- * Strip one-shot flags (`created`, `next_*`) from the address bar without a
- * server round trip.
- *
- * For screens whose server render does not read these flags (Transactions):
- * there a `router.replace()` was a full navigation, and after every "Save &
- * Add Next" the list was rendered on the server twice more (once for the
- * toast's cleanup, once for the dialog's) while the next entry was being
- * typed. See `stripOneShotFlags` for the screens that do read them. The App Router integrates `history.replaceState`, so
- * `useSearchParams` still sees the cleaned URL. `history.state` is passed
- * through so the router's entry, and `useBackDismiss`'s overlay marker on it,
- * survive.
- */
-/**
  * Writes one entry-timing sample once the browser has painted (two frames).
  *
  * Deliberately not cancelled by the effect that schedules it. Landing a save
- * re-renders the provider straight away — the toast strips `created=1` from
+ * re-renders the provider straight away — the toast strips `txn_created` from
  * the URL in the very next frame — and an effect cleanup that cancelled the
  * pending frame threw every `save` sample away (first device run, 2026-10-22:
  * only `open.cold` was ever recorded). The timer was already taken off its
@@ -255,6 +245,18 @@ function recordAfterPaint(
   })
 }
 
+/**
+ * Strip one-shot flags (`txn_created`, `next_*`) from the address bar without
+ * a server round trip.
+ *
+ * A `router.replace()` here was a full navigation: after every "Save & Add
+ * Next" the destination page was rendered on the server twice more (once for
+ * the toast's cleanup, once for the dialog's) while the next entry was being
+ * typed. The App Router integrates `history.replaceState`, so
+ * `useSearchParams` still sees the cleaned URL. `history.state` is passed
+ * through so the router's entry, and `useBackDismiss`'s overlay marker on it,
+ * survive. See `stripOneShotFlags` for the one screen that still navigates.
+ */
 export function replaceUrlInPlace(href: string) {
   window.history.replaceState(window.history.state, '', href)
 }
@@ -317,16 +319,16 @@ export function TransactionDialogProvider({
   const router = useRouter()
 
   /**
-   * Strips `created` / `next_*` once they have done their job. On
-   * Transactions that is a plain history update (`replaceUrlInPlace`): no
-   * part of that page reads the flags on the server, so a navigation there
-   * only re-rendered the list for nothing. Accounts, Debts and the assistant
-   * do read `created=1` server-side (their own "… created" banners), so there
-   * the cleanup stays a real navigation, which also takes the banner away.
+   * Strips `txn_created` / `next_*` once they have done their job, as a plain
+   * history update (`replaceUrlInPlace`): no screen's server render reads
+   * them, so a navigation only re-rendered the page for nothing. The one
+   * exception is the assistant, whose page shows its own "created from the
+   * assistant" banner from the flag; there the cleanup stays a navigation,
+   * which also takes the banner away.
    */
   function stripOneShotFlags(href: string) {
-    if (pathname === '/dashboard/transactions') replaceUrlInPlace(href)
-    else router.replace(href)
+    if (pathname === '/dashboard/assistant') router.replace(href)
+    else replaceUrlInPlace(href)
   }
   const searchParams = useSearchParams()
   const { t } = useLanguage()
@@ -457,7 +459,8 @@ export function TransactionDialogProvider({
   const nextAccount = searchParams.get('next_account')
   const nextStatus = searchParams.get('next_status')
   const nextSeq = searchParams.get('next_seq')
-  const created = searchParams.get('created')
+  // Unique per save (a timestamp), so two landings in a row are two values.
+  const txnCreated = searchParams.get(TRANSACTION_CREATED_PARAM)
   const hasPendingNext = !!(nextDate || nextType || nextAccount || nextSeq)
 
   // Tracks which "next_seq" (or fallback key) has already been applied, so a
@@ -508,7 +511,7 @@ export function TransactionDialogProvider({
       function cleanNextParams() {
         const cleaned = new URLSearchParams(searchParams.toString())
         for (const key of ADD_NEXT_PARAMS) cleaned.delete(key)
-        cleaned.delete('created') // prevent the auto-close effect from firing after the URL is cleaned
+        cleaned.delete(TRANSACTION_CREATED_PARAM) // prevent the auto-close effect from firing after the URL is cleaned
         const qs = cleaned.toString()
         stripOneShotFlags(qs ? `${pathname}?${qs}` : pathname)
       }
@@ -542,19 +545,45 @@ export function TransactionDialogProvider({
 
   // Auto-close the dialog after the final "Create transaction" in an add-next session.
   useEffect(() => {
-    if (created !== '1' || hasPendingNext || !addNextDefaults) return
+    if (!txnCreated || hasPendingNext || !addNextDefaults) return
     const frame = window.requestAnimationFrame(() => {
       setOpen(false)
       setAddNextDefaults(null)
       const cleaned = new URLSearchParams(searchParams.toString())
-      cleaned.delete('created')
+      cleaned.delete(TRANSACTION_CREATED_PARAM)
       const qs = cleaned.toString()
       stripOneShotFlags(qs ? `${pathname}?${qs}` : pathname)
     })
 
     return () => window.cancelAnimationFrame(frame)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [created, hasPendingNext, addNextDefaults])
+  }, [txnCreated, hasPendingNext, addNextDefaults])
+
+  // "Transaction created." on whichever screen the save landed on. It used to
+  // come from the Transactions screen alone, so a save from Accounts or the
+  // Dashboard got no confirmation (or another screen's "… created" banner).
+  // The assistant page keeps its own banner instead. A plain create is
+  // stripped here; an add-next landing is stripped by the effects above once
+  // the next draft is up.
+  const { toast } = useToast()
+  const toastedLanding = useRef<string | null>(null)
+  useEffect(() => {
+    if (!txnCreated || toastedLanding.current === txnCreated) return
+    const frame = window.requestAnimationFrame(() => {
+      toastedLanding.current = txnCreated
+      if (pathname !== '/dashboard/assistant') {
+        toast({ message: t('transactionsList.toastCreated') })
+      }
+      if (!hasPendingNext && !addNextDefaults) {
+        const cleaned = new URLSearchParams(searchParams.toString())
+        cleaned.delete(TRANSACTION_CREATED_PARAM)
+        const qs = cleaned.toString()
+        stripOneShotFlags(qs ? `${pathname}?${qs}` : pathname)
+      }
+    })
+    return () => window.cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [txnCreated])
 
   // Opens the dialog when landing on a `?quick_add=income|expense|transfer`
   // link (e.g. a PWA manifest shortcut) or a Web Share Target GET (BR-028),
@@ -690,18 +719,16 @@ export function TransactionDialogProvider({
     recordAfterPaint('open', timer)
   }, [formOnScreen, formKey])
 
-  // save: the redirect has landed (`created=1`), with the next draft up when
+  // save: the redirect has landed (`txn_created`), with the next draft up when
   // it was "Save & Add Next". A submit that never lands (a validation error)
   // leaves a stale timer; anything older than 30 s is dropped, not recorded.
   useEffect(() => {
-    if (created !== '1' || !saveTimer.current) return
+    if (!txnCreated || !saveTimer.current) return
     const timer = saveTimer.current
     saveTimer.current = null
     if (performance.now() - timer.start > 30_000) return
     recordAfterPaint('save', timer)
-    // `searchParams`, not just `created`: a screen that never strips
-    // `created=1` would otherwise hide the second save's landing.
-  }, [created, searchParams])
+  }, [txnCreated])
 
   // Back dismisses the entry sheet instead of leaving the screen behind it.
   // A picker sheet opened on top of this one owns its own history entry, so it

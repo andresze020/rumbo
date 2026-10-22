@@ -442,6 +442,16 @@ monto, la descripción y las notas de la entrada original en el siguiente
 borrador. Ahora el efecto de add-next limpia esos prefills; el siguiente
 borrador solo conserva lo que llevan los parámetros `next_*`.
 
+**Segundo defecto previo (visto al medir desde Accounts, 2026-10-22):** el
+guardado aterrizaba con `created=1`, el mismo flag que Accounts, Payees,
+Goals, Tags, Categories, Debts y otras pantallas usan para *sus* altas. Como
+el «+» es global, guardar una transacción desde Accounts mostraba «Cuenta
+creada.», y la confirmación real solo existía en Transactions. Ahora el
+guardado usa su propio flag (`txn_created`, con un valor único por guardado),
+el provider muestra «Transacción creada.» en cualquier pantalla y Transactions
+dejó de mostrarlo por su cuenta. Con eso la limpieza del flag es un
+`replaceState` en todas partes salvo en el asistente, que conserva su aviso.
+
 **Aceptado sin cambio:** los contadores de uso (`af_category_usage`,
 `af_tag_usage`) son por dispositivo, no por hogar. No muestran nada ajeno —
 solo se ordenan las categorías y tags del hogar activo—, pero dos hogares en
@@ -512,4 +522,5 @@ cuánto aportó cada uno.
 | 9 | Cambiar de hogar con el diálogo abierto | Ninguna lista ni chip del hogar anterior | |
 | 10 | Back con el diálogo abierto tras «Add next» | Cierra el diálogo, no sale de la pantalla | |
 | 11 | 320 px, 375 px, escritorio | «Create transaction» y «Add next» completos; zoom sigue funcionando | |
+| 11b | Guardar desde Accounts, Payees o el Dashboard | Sale «Transacción creada.» una vez; nunca «Cuenta creada.» u otro aviso ajeno | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |

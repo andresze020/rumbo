@@ -12,6 +12,9 @@ type PendingUndo = {
   restoreStatus: string
 }
 
+// "Transaction created." is not here: a transaction can be saved from any
+// screen, so the dialog provider shows that one everywhere (see
+// `TRANSACTION_CREATED_PARAM`).
 export function TransactionToasts() {
   const { toast } = useToast()
   const { t } = useLanguage()
@@ -27,20 +30,18 @@ export function TransactionToasts() {
   useEffect(() => {
     if (hasRun.current) return
 
-    const created = searchParams.get('created') === '1'
     const updated = searchParams.get('updated') === '1'
     const voided = searchParams.get('voided') === '1'
     const unvoided = searchParams.get('unvoided') === '1'
     // BR-040
     const refunded = searchParams.get('refunded') === '1'
-    if (!created && !updated && !voided && !unvoided && !refunded) return
+    if (!updated && !voided && !unvoided && !refunded) return
 
     hasRun.current = true
 
     // Defer to a frame so the toast + captured undo state settle outside the
     // effect body (mirrors ArchiveToast), then strip the flags from the URL.
     const frame = window.requestAnimationFrame(() => {
-      if (created) toast({ message: t('transactionsList.toastCreated') })
       if (updated) toast({ message: t('transactionsList.toastUpdated') })
       if (unvoided) toast({ message: t('transactionsList.toastRestored') })
       if (refunded) toast({ message: t('transactionsList.toastRefunded') })
@@ -59,7 +60,6 @@ export function TransactionToasts() {
       }
 
       const params = new URLSearchParams(searchParams.toString())
-      params.delete('created')
       params.delete('updated')
       params.delete('voided')
       params.delete('unvoided')
