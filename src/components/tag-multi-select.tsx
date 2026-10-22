@@ -28,6 +28,13 @@ type TagMultiSelectProps = {
    */
   value?: string[]
   onValueChange?: (tagIds: string[]) => void
+  /**
+   * Tags to offer as one-tap chips above the list, best first (the entry
+   * form's frequency + recency ranking). Already-selected ones are skipped.
+   */
+  suggestedTagIds?: string[]
+  /** Heading for those chips, e.g. "Frequently used". */
+  suggestedLabel?: string
   /** Controlled disclosure, so the picker can be opened from outside. */
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -69,6 +76,8 @@ export function TagMultiSelect({
   label,
   helpText,
   manageLabel,
+  suggestedTagIds = [],
+  suggestedLabel,
 }: TagMultiSelectProps) {
   const isMobile = useIsMobile()
   // Tags created inline this session, merged into the offered list so they show
@@ -154,6 +163,40 @@ export function TagMultiSelect({
   const selectedTags = selected
     .map((id) => tagsById.get(id))
     .filter((tag): tag is TagOption => Boolean(tag))
+
+  // T2 of the premium entry sprint: the long alphabetical list was a scroll
+  // for the same three or four tags on every entry in the 2026-10-14
+  // recording. Hidden while searching — the search *is* the shortcut then.
+  const suggestedTags = query
+    ? []
+    : suggestedTagIds
+        .filter((id) => !selectedSet.has(id))
+        .map((id) => tagsById.get(id))
+        .filter((tag): tag is TagOption => Boolean(tag))
+
+  const suggestedChips =
+    suggestedTags.length > 0 ? (
+      <div className="mb-2 flex flex-wrap items-center gap-1.5 border-b pb-2">
+        {suggestedLabel ? (
+          <span className="text-xs text-muted-foreground">{suggestedLabel}</span>
+        ) : null}
+        {suggestedTags.map((tag) => (
+          <button
+            key={tag.id}
+            type="button"
+            onClick={() => toggle(tag.id)}
+            className="flex h-8 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <span
+              aria-hidden="true"
+              className="size-2 shrink-0 rounded-full"
+              style={{ backgroundColor: tag.color ?? 'var(--muted-foreground)' }}
+            />
+            {tag.name}
+          </button>
+        ))}
+      </div>
+    ) : null
 
   const removableChips = (
     <>
@@ -312,6 +355,7 @@ export function TagMultiSelect({
               {removableChips}
             </div>
           ) : null}
+          {suggestedChips}
           {optionList}
           <button
             type="button"
@@ -324,7 +368,10 @@ export function TagMultiSelect({
       ) : open ? (
         <div className="rounded-xl border bg-popover p-2 shadow-sm">
           {searchField}
-          <div className="mt-2 max-h-48 overflow-y-auto">{optionList}</div>
+          <div className="mt-2 max-h-48 overflow-y-auto">
+            {suggestedChips}
+            {optionList}
+          </div>
         </div>
       ) : null}
 

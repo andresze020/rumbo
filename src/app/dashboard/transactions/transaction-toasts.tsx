@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/toast-provider'
 import { useLanguage } from '@/components/language-provider'
+import { replaceUrlInPlace } from '@/components/transaction-dialog-provider'
 import { unvoidTransactionAction } from './actions'
 
 type PendingUndo = {
@@ -14,7 +15,6 @@ type PendingUndo = {
 export function TransactionToasts() {
   const { toast } = useToast()
   const { t } = useLanguage()
-  const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const hasRun = useRef(false)
@@ -66,7 +66,10 @@ export function TransactionToasts() {
       params.delete('refunded')
       params.delete('undo_id')
       params.delete('undo_status')
-      router.replace(params.size ? `${pathname}?${params.toString()}` : pathname, { scroll: false })
+      // In place, not `router.replace()`: no page reads these flags, and a
+      // navigation here re-rendered the whole list on the server after every
+      // save (see `replaceUrlInPlace`).
+      replaceUrlInPlace(params.size ? `${pathname}?${params.toString()}` : pathname)
     })
 
     return () => window.cancelAnimationFrame(frame)

@@ -27,6 +27,13 @@ import { X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { useBackDismiss } from '@/lib/use-back-dismiss'
+import { EntryTimingReadout } from '@/components/entry-timing-readout'
+import {
+  isEntryTimingEnabled,
+  recordEntrySample,
+  setEntryTimingEnabled,
+  type EntryVariant,
+} from '@/lib/perf/entry-timing'
 import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
 import { todayIsoDateLocal } from '@/lib/format'
 
@@ -213,6 +220,69 @@ function readAddNextDefaults(searchParams: URLSearchParams): AddNextDefaults | n
   }
 }
 
+/**
+ * Strip one-shot flags (`created`, `next_*`) from the address bar without a
+ * server round trip.
+ *
+ * For screens whose server render does not read these flags (Transactions):
+ * there a `router.replace()` was a full navigation, and after every "Save &
+ * Add Next" the list was rendered on the server twice more (once for the
+ * toast's cleanup, once for the dialog's) while the next entry was being
+ * typed. See `stripOneShotFlags` for the screens that do read them. The App Router integrates `history.replaceState`, so
+ * `useSearchParams` still sees the cleaned URL. `history.state` is passed
+ * through so the router's entry, and `useBackDismiss`'s overlay marker on it,
+ * survive.
+ */
+export function replaceUrlInPlace(href: string) {
+  window.history.replaceState(window.history.state, '', href)
+}
+
+/**
+ * What the first open shows while the form's lists load (T1 of the premium
+ * entry sprint). It used to be one line of grey text, "Loading form…", on an
+ * otherwise empty full-screen sheet — in the 2026-10-14 recording it sat
+ * there for several seconds and read as a blank screen. This is the form's
+ * own outline instead: type switch, the large amount, the field rows and the
+ * action bar at the bottom edge, so the eye lands where the amount will be.
+ *
+ * Nothing in it is interactive. Typing before the lists arrive was considered
+ * and left out: the amount's currency comes from the account, and the account
+ * is exactly what has not loaded yet.
+ */
+function TransactionFormSkeleton({ label }: { label: string }) {
+  return (
+    <div role="status" aria-live="polite" className="flex flex-1 flex-col gap-3">
+      <span className="sr-only">{label}</span>
+      <div aria-hidden="true" className="flex flex-1 flex-col gap-3">
+        {/* Type switch */}
+        <div className="h-11 w-full animate-pulse rounded-2xl bg-muted" />
+        {/* Amount card */}
+        <div className="space-y-3 rounded-2xl border p-3">
+          <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+          <div className="h-14 w-full animate-pulse rounded-xl bg-muted/70" />
+        </div>
+        {/* Date chips + field rows, one card like the form's own list */}
+        <div className="rounded-2xl border px-3">
+          <div className="flex gap-2 py-3">
+            {[0, 1, 2].map((chip) => (
+              <div key={chip} className="h-10 flex-1 animate-pulse rounded-xl bg-muted" />
+            ))}
+          </div>
+          {[0, 1, 2, 3, 4].map((row) => (
+            <div key={row} className="flex h-11 items-center gap-3 border-t">
+              <div className="size-4 shrink-0 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-20 animate-pulse rounded bg-muted" />
+              <div className="ml-auto h-3 w-16 animate-pulse rounded bg-muted" />
+            </div>
+          ))}
+        </div>
+        <div className="hidden max-sm:block max-sm:flex-1" />
+        <div className="h-11 w-full animate-pulse rounded-xl bg-muted sm:h-9 sm:w-48" />
+      </div>
+    </div>
+  )
+}
+
 export function TransactionDialogProvider({
   children,
   householdId,
@@ -223,6 +293,19 @@ export function TransactionDialogProvider({
 }) {
   const pathname = usePathname()
   const router = useRouter()
+
+  /**
+   * Strips `created` / `next_*` once they have done their job. On
+   * Transactions that is a plain history update (`replaceUrlInPlace`): no
+   * part of that page reads the flags on the server, so a navigation there
+   * only re-rendered the list for nothing. Accounts, Debts and the assistant
+   * do read `created=1` server-side (their own "… created" banners), so there
+   * the cleanup stays a real navigation, which also takes the banner away.
+   */
+  function stripOneShotFlags(href: string) {
+    if (pathname === '/dashboard/transactions') replaceUrlInPlace(href)
+    else router.replace(href)
+  }
   const searchParams = useSearchParams()
   const { t } = useLanguage()
   const ui = useUiTranslation()
@@ -253,6 +336,12 @@ export function TransactionDialogProvider({
   const [sharedDescription, setSharedDescription] = useState<string | undefined>()
   // BR-034: the source transaction a "Copy" is seeded from.
   const [copyDefaults, setCopyDefaults] = useState<TransactionCopyPayload | undefined>()
+
+  // T4 entry timing (opt-in, `?entry_timing=on`; see lib/perf/entry-timing).
+  // Only a start time and a variant are held — never anything about the entry.
+  const [entryTimingOn, setEntryTimingOn] = useState(false)
+  const openTimer = useRef<{ start: number; variant: EntryVariant } | null>(null)
+  const saveTimer = useRef<{ start: number; variant: EntryVariant } | null>(null)
 
   const returnTo = useMemo(
     () => buildReturnTo(pathname, new URLSearchParams(searchParams.toString())),
@@ -366,16 +455,24 @@ export function TransactionDialogProvider({
 
     const frame = window.requestAnimationFrame(() => {
       setAddNextDefaults(readAddNextDefaults(searchParams))
+      // The entry just saved may have been a Copy (BR-034) or a share
+      // (BR-028). Their amount, description and notes belonged to *that*
+      // entry; left in place they were seeded again into the next draft,
+      // which is the carried-over amount "Save & Add Next" promises never to
+      // make. The add-next params carry everything the next entry keeps.
+      setCopyDefaults(undefined)
+      setSharedDescription(undefined)
       setFormKey((k) => k + 1)
       setOpen(true)
       setLoading(true)
 
-      // Fully sequence the fetch and the URL cleanup: starting router.replace()
-      // while getQuickAddFormData() is still in flight can hang that server
-      // action indefinitely (it never resolves nor rejects), leaving the
-      // dialog stuck on "Loading form...". Only replace the URL once the
-      // fetch has settled, and back it with a timeout so a hang (whatever its
-      // cause) still surfaces a "try again" message instead of spinning
+      // Fully sequence the fetch and the URL cleanup. The cleanup used to be a
+      // router.replace(), and starting one while getQuickAddFormData() was
+      // still in flight could hang that server action indefinitely, leaving
+      // the dialog stuck on "Loading form...". On Transactions it is a plain
+      // history update now (`stripOneShotFlags`); elsewhere it still
+      // navigates, so the order and the timeout stay: a hang, whatever its
+      // cause, still surfaces a "try again" message instead of spinning
       // forever.
       let settled = false
       const timeoutId = window.setTimeout(() => {
@@ -391,7 +488,7 @@ export function TransactionDialogProvider({
         for (const key of ADD_NEXT_PARAMS) cleaned.delete(key)
         cleaned.delete('created') // prevent the auto-close effect from firing after the URL is cleaned
         const qs = cleaned.toString()
-        router.replace(qs ? `${pathname}?${qs}` : pathname)
+        stripOneShotFlags(qs ? `${pathname}?${qs}` : pathname)
       }
 
       getQuickAddFormData()
@@ -430,7 +527,7 @@ export function TransactionDialogProvider({
       const cleaned = new URLSearchParams(searchParams.toString())
       cleaned.delete('created')
       const qs = cleaned.toString()
-      router.replace(qs ? `${pathname}?${qs}` : pathname)
+      stripOneShotFlags(qs ? `${pathname}?${qs}` : pathname)
     })
 
     return () => window.cancelAnimationFrame(frame)
@@ -458,7 +555,9 @@ export function TransactionDialogProvider({
     cleaned.delete('share_text')
     cleaned.delete('share_url')
     const qs = cleaned.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname)
+    // In place: this runs while `openDialog`'s fetch is in flight, which is
+    // exactly when a router navigation could stall it (see below).
+    replaceUrlInPlace(qs ? `${pathname}?${qs}` : pathname)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -473,6 +572,10 @@ export function TransactionDialogProvider({
   }, [householdId])
 
   async function openDialog(options?: OpenDialogOptions) {
+    openTimer.current = {
+      start: performance.now(),
+      variant: formDataRef.current?.householdId === householdId ? 'warm' : 'cold',
+    }
     setTriggerAccountId(options?.accountId)
     setTriggerType(options?.type)
     setSharedDescription(options?.description)
@@ -537,6 +640,64 @@ export function TransactionDialogProvider({
     setOpen(false)
     clearPrefills()
   }
+
+  // `?entry_timing=on|off` switches the timing readout for this device, then
+  // leaves the address bar.
+  useEffect(() => {
+    const requested = searchParams.get('entry_timing')
+    if (requested === 'on' || requested === 'off') {
+      setEntryTimingEnabled(requested === 'on')
+      const cleaned = new URLSearchParams(searchParams.toString())
+      cleaned.delete('entry_timing')
+      const qs = cleaned.toString()
+      replaceUrlInPlace(qs ? `${pathname}?${qs}` : pathname)
+    }
+    // A frame later, like the provider's other URL-driven state.
+    const frame = window.requestAnimationFrame(() => setEntryTimingOn(isEntryTimingEnabled()))
+    return () => window.cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get('entry_timing')])
+
+  // open: the form is on screen. Two frames, so the sample ends after the
+  // browser has painted it, not when React committed it.
+  const formOnScreen = open && !!usableFormData && !awaitingSeededAccount
+  useEffect(() => {
+    if (!formOnScreen || !openTimer.current) return
+    const timer = openTimer.current
+    openTimer.current = null
+    let second = 0
+    const first = window.requestAnimationFrame(() => {
+      second = window.requestAnimationFrame(() =>
+        recordEntrySample('open', timer.variant, performance.now() - timer.start)
+      )
+    })
+    return () => {
+      window.cancelAnimationFrame(first)
+      window.cancelAnimationFrame(second)
+    }
+  }, [formOnScreen, formKey])
+
+  // save: the redirect has landed (`created=1`), with the next draft up when
+  // it was "Save & Add Next". A submit that never lands (a validation error)
+  // leaves a stale timer; anything older than 30 s is dropped, not recorded.
+  useEffect(() => {
+    if (created !== '1' || !saveTimer.current) return
+    const timer = saveTimer.current
+    saveTimer.current = null
+    if (performance.now() - timer.start > 30_000) return
+    let second = 0
+    const first = window.requestAnimationFrame(() => {
+      second = window.requestAnimationFrame(() =>
+        recordEntrySample('save', timer.variant, performance.now() - timer.start)
+      )
+    })
+    return () => {
+      window.cancelAnimationFrame(first)
+      window.cancelAnimationFrame(second)
+    }
+    // `searchParams`, not just `created`: a screen that never strips
+    // `created=1` would otherwise hide the second save's landing.
+  }, [created, searchParams])
 
   // Back dismisses the entry sheet instead of leaving the screen behind it.
   // A picker sheet opened on top of this one owns its own history entry, so it
@@ -621,10 +782,10 @@ export function TransactionDialogProvider({
           {/* Only the very first open waits: later ones render the last data
               while it revalidates (MQ-009, `refreshFormData`). */}
           {(loading && !usableFormData) || awaitingSeededAccount ? (
-            <p className="py-4 text-sm text-muted-foreground">Loading form…</p>
+            <TransactionFormSkeleton label={ui('Loading form…')} />
           ) : loadError && !usableFormData ? (
             <p className="py-4 text-sm text-destructive">
-              Could not load form data. Please refresh and try again.
+              {ui('Could not load form data. Please refresh and try again.')}
             </p>
           ) : usableFormData ? (
             usableFormData.accounts.length === 0 ? (
@@ -632,6 +793,19 @@ export function TransactionDialogProvider({
                 Create an account first before adding transactions.
               </p>
             ) : (
+              <div
+                className="contents"
+                // Starts the T4 save timer. Capture phase, so it runs before the
+                // form's own submit handling; `submitter` tells "Save & Add
+                // Next" (name="add_next") from a plain create.
+                onSubmitCapture={(event) => {
+                  const submitter = (event.nativeEvent as SubmitEvent).submitter
+                  saveTimer.current = {
+                    start: performance.now(),
+                    variant: submitter?.getAttribute('name') === 'add_next' ? 'next' : 'close',
+                  }
+                }}
+              >
               <TransactionForm
                 key={formKey}
                 accounts={usableFormData.accounts}
@@ -664,10 +838,12 @@ export function TransactionDialogProvider({
                 returnTo={returnTo}
                 onCancel={closeDialog}
               />
+              </div>
             )
           ) : null}
         </DialogContent>
       </Dialog>
+      {entryTimingOn ? <EntryTimingReadout /> : null}
     </TransactionDialogContext.Provider>
   )
 }

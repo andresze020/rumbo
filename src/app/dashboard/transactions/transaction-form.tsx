@@ -36,6 +36,13 @@ import { useIsMobile } from '@/lib/use-is-mobile'
 import { storedAccountName } from '@/lib/privacy/account-label'
 import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
 import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
+import {
+  CATEGORY_USAGE_KEY,
+  TAG_USAGE_KEY,
+  parseUsage,
+  rankByUsage,
+  recordUsage,
+} from '@/lib/quick-entry/usage-ranking'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
 import { AdvancedFields } from '@/components/advanced-fields'
 import { AmountInput } from '@/components/amount-input'
@@ -190,8 +197,6 @@ type TransactionFormProps = {
   defaultCost?: number
   defaultCostCategoryId?: string | null
 }
-
-const CATEGORY_USAGE_KEY = 'af_category_usage'
 
 // Only the account name is shown: the currency already appears above the amount,
 // and users typically name accounts after their bank, so the institution and
@@ -454,7 +459,11 @@ export function TransactionForm({
     [availableCategories, transactionType]
   )
 
-  // Most-used categories (for the current type) as one-tap chips.
+  // The categories (for the current type) this device uses most *lately*, as
+  // one-tap chips — subcategories included, so a frequent child is one tap
+  // instead of a walk through its parent. Six rather than four: the
+  // 2026-10-14 recording walked the tree for categories that were in regular
+  // use but missed the cut (see `usage-ranking.ts`).
   const [frequentCategories, setFrequentCategories] = useState<TransactionFormCategory[]>([])
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -464,13 +473,8 @@ export function TransactionForm({
         return
       }
       try {
-        const raw = window.localStorage.getItem(CATEGORY_USAGE_KEY)
-        const usage: Record<string, number> = raw ? JSON.parse(raw) : {}
-        const ranked = compatibleCategories
-          .filter((c) => usage[c.id] > 0)
-          .sort((a, b) => (usage[b.id] ?? 0) - (usage[a.id] ?? 0))
-          .slice(0, 4)
-        setFrequentCategories(ranked)
+        const usage = parseUsage(window.localStorage.getItem(CATEGORY_USAGE_KEY))
+        setFrequentCategories(rankByUsage(compatibleCategories, usage, Date.now(), 6))
       } catch {
         setFrequentCategories([])
       }
@@ -478,6 +482,23 @@ export function TransactionForm({
 
     return () => window.cancelAnimationFrame(frame)
   }, [compatibleCategories])
+
+  // Same ranking for tags, offered at the top of the tag picker. Read once per
+  // mount: the form remounts for every entry, "Save & Add Next" included.
+  const [suggestedTagIds, setSuggestedTagIds] = useState<string[]>([])
+  useEffect(() => {
+    if (typeof window === 'undefined' || tags.length < 2) return
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        const usage = parseUsage(window.localStorage.getItem(TAG_USAGE_KEY))
+        setSuggestedTagIds(rankByUsage(tags, usage, Date.now(), 6).map((tag) => tag.id))
+      } catch {
+        setSuggestedTagIds([])
+      }
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [tags])
   const isTransfer = transactionType === 'transfer'
   const selectedFromAccount = availableAccounts.find((a) => a.id === fromAccountId)
   const selectedToAccount = availableAccounts.find((a) => a.id === toAccountId)
@@ -624,19 +645,28 @@ export function TransactionForm({
   }
 
   /**
-   * Counts category use so the "Frequently used" chips can rank. Only the
-   * counter is kept — the last account and last category are deliberately not
-   * remembered, because restoring them pre-filled a blank form (see above).
+   * Counts category and tag use so the "Frequently used" chips can rank. Only
+   * ids, counts and a timestamp are kept — the last account and last category
+   * are deliberately not remembered, because restoring them pre-filled a blank
+   * form (see above).
    */
-  function rememberCategoryUsage() {
-    if (typeof window === 'undefined' || isTransfer || !categoryId) return
+  function rememberEntryUsage() {
+    if (typeof window === 'undefined' || isTransfer) return
+    const now = Date.now()
     try {
-      const raw = window.localStorage.getItem(CATEGORY_USAGE_KEY)
-      const usage: Record<string, number> = raw ? JSON.parse(raw) : {}
-      usage[categoryId] = (usage[categoryId] ?? 0) + 1
-      window.localStorage.setItem(CATEGORY_USAGE_KEY, JSON.stringify(usage))
+      if (categoryId) {
+        const usage = parseUsage(window.localStorage.getItem(CATEGORY_USAGE_KEY))
+        window.localStorage.setItem(
+          CATEGORY_USAGE_KEY,
+          JSON.stringify(recordUsage(usage, [categoryId], now))
+        )
+      }
+      if (tagIds.length > 0 && showField('tags')) {
+        const usage = parseUsage(window.localStorage.getItem(TAG_USAGE_KEY))
+        window.localStorage.setItem(TAG_USAGE_KEY, JSON.stringify(recordUsage(usage, tagIds, now)))
+      }
     } catch {
-      // Ignore malformed usage data; chips simply won't update this time.
+      // Storage full or blocked; the chips simply won't update this time.
     }
   }
 
@@ -2436,7 +2466,7 @@ export function TransactionForm({
   return (
     <form
       action={submitAction}
-      onSubmit={rememberCategoryUsage}
+      onSubmit={rememberEntryUsage}
       className="space-y-3 max-sm:flex max-sm:min-h-full max-sm:flex-1 max-sm:flex-col"
     >
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
@@ -2697,6 +2727,8 @@ export function TransactionForm({
       {!isTransfer && showField('tags') ? (
         <TagMultiSelect
           tags={tags}
+          suggestedTagIds={suggestedTagIds}
+          suggestedLabel={t('transactionForm.frequentlyUsed')}
           value={tagIds}
           onValueChange={(next) => {
             setTagIds(next)
@@ -2865,9 +2897,9 @@ export function TransactionForm({
             X and the backdrop all already cancel, so a fourth way to do it was
             only costing height. `cancelHref` still renders one, because a form
             reached as a plain page has no other way out.
-          - **Save & add next** keeps its full label on desktop and shrinks to
-            its icon on mobile, where it sits directly beside the primary submit
-            and reads as "…and another". */}
+          - **Save & add next** keeps its full label on desktop and a short
+            "+ Add next" on mobile, where it sits directly beside the primary
+            submit as the second half of one split button. */}
       {/* Unmounted rather than `hidden`: this row is a `flex` container, and a
           `display` utility beats the UA stylesheet's `[hidden] { display: none }`,
           so the attribute alone would leave the bar on screen. */}
@@ -2916,15 +2948,21 @@ export function TransactionForm({
               aria-label={t('transactionForm.saveAndAddNext')}
               title={t('transactionForm.saveAndAddNext')}
               className={cn(
-                'h-11 w-14 shrink-0 rounded-none border-l border-primary-foreground/25 p-0',
-                'sm:h-9 sm:w-auto sm:rounded-lg sm:border-l-0 sm:px-3',
+                'h-11 shrink-0 gap-1 rounded-none border-l border-primary-foreground/25 px-3 text-sm font-semibold',
+                'sm:h-9 sm:rounded-lg sm:border-l-0 sm:font-medium',
                 // Desktop keeps the quieter outline treatment it had; on mobile
                 // it is the same solid as its other half.
                 'sm:border sm:border-border sm:bg-background sm:text-foreground sm:hover:bg-muted'
               )}
               pendingText={t('transactionForm.saving')}
             >
-              <Plus className="size-4.5 sm:hidden" aria-hidden="true" />
+              {/* Worded on mobile too: the bare "+" read as "add a field" or
+                  "new transaction" rather than "save this, then another", and
+                  AndroMoney's labelled ADD NEXT was the easier one to find in
+                  the 2026-10-14 recordings. Short, so "Create transaction"
+                  still fits beside it at 320px. */}
+              <Plus className="size-4 sm:hidden" aria-hidden="true" />
+              <span className="sm:hidden">{t('transactionForm.addNext')}</span>
               <span className="hidden sm:inline">{t('transactionForm.saveAndAddNext')}</span>
             </SubmitButton>
           ) : null}
