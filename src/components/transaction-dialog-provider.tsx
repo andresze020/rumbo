@@ -40,7 +40,6 @@ import {
   setEntryTimingEnabled,
   type EntryVariant,
 } from '@/lib/perf/entry-timing'
-import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import { nextDraftNeedsFreshLists } from '@/lib/quick-entry/next-draft'
 import { todayIsoDateLocal } from '@/lib/format'
@@ -91,84 +90,137 @@ function todayIsoDate() {
   return todayIsoDateLocal()
 }
 
+/** Fields that raise the soft keyboard (date and toggle inputs do not). */
+const TEXT_ENTRY =
+  'textarea, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])' +
+  ':not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="date"])' +
+  ':not([type="time"]):not([type="range"]):not([type="color"]):not([type="file"])'
+
 /**
- * Scroll whatever field is being typed into back into view once the keyboard
- * is up — by scrolling the form's own scroller, and nothing else.
- *
- * Lifting the sheet above the keyboard leaves very little sheet, and the
- * browser's own "scroll the focused input into view" runs before the sheet has
- * been resized and lands in the wrong place, so redo it against the final
- * geometry.
- *
- * Not `scrollIntoView`. That scrolls every scrollable ancestor *and the visual
- * viewport*, and near the end of the form — Description, Notes — the scroller
- * runs out of room before the field reaches the top, so the browser panned
- * the whole screen instead: the sheet's top row (the X, the batch
- * confirmation) left the screen and everything jumped (device run,
- * 2026-10-22). Only the scroller moves now; if it cannot bring the field all
- * the way up, the field simply sits lower.
+ * The top share of the form's scroller that the keyboard never reaches. A field
+ * already inside it is left where it is. Phone keyboards take 35–50% of the
+ * screen, and Brave believes they take ~100px more than they do (below).
  */
-function useKeepFocusedFieldVisible(
-  keyboardOpen: boolean,
-  scrollerRef: { current: HTMLDivElement | null }
+const KEYBOARD_FREE_BAND = 0.25
+
+/** Long enough to read as movement, short enough to finish before the keyboard. */
+const PLACE_MS = 160
+
+/**
+ * Phone only: when a field that raises the keyboard gets focus, move it to the
+ * top of the form *before* the keyboard arrives. The keyboard then opens over
+ * the bottom of the sheet, and nothing on screen has to move again.
+ *
+ * Measuring the keyboard failed on every round. The sheet used to be lifted
+ * above it and re-scrolled once it was up, from the visual viewport's numbers.
+ * Brave reports a visual viewport about 100px shorter than what it shows (its
+ * bottom toolbar's height, which it hides for the keyboard). So the sheet rose
+ * too high and shrank to a strip between the X and the keyboard, and every
+ * field jumped twice on the way: once when the sheet resized, once when it was
+ * scrolled back (device runs, 2026-10-22). Nothing here reads the keyboard's
+ * size. The sheet stays full screen, and the only movement is this one scroll,
+ * at focus time.
+ *
+ * Only the scroller moves: `scrollIntoView` would also pan the visual
+ * viewport, which took the X row off the screen. Near the end of the form the
+ * scroller has no room left to bring a field up, so `roomRef` (an empty box
+ * after the form) grows while a field is being typed into. It sits under the
+ * keyboard and is never seen. A spacer, not padding: the form is a flex child
+ * stretched to the scroller's height, and the scroller's bottom padding added
+ * no scroll room at all.
+ */
+function usePlaceFieldsAboveKeyboard(
+  enabled: boolean,
+  scrollerRef: { current: HTMLDivElement | null },
+  roomRef: { current: HTMLDivElement | null }
 ) {
   useEffect(() => {
-    if (!keyboardOpen) return
+    if (!enabled) return
+    let frame = 0
+    let extra = 0
 
-    const reveal = () => {
-      const active = document.activeElement
-      if (!(active instanceof HTMLElement)) return
-      if (!active.matches('input, select, textarea')) return
+    const ownField = (node: EventTarget | null): HTMLElement | null => {
       const scroller = scrollerRef.current
-      if (!scroller || !scroller.contains(active)) return
-      // A picker sheet's search field lives inside the form's DOM but on its
-      // own full-screen layer; it is never the form's to scroll.
-      if (active.closest('[role="dialog"]') !== scroller.closest('[role="dialog"]')) return
+      if (!scroller || !(node instanceof HTMLElement)) return null
+      if (!node.matches(TEXT_ENTRY) || !scroller.contains(node)) return null
+      if ((node as HTMLInputElement).readOnly || (node as HTMLInputElement).disabled) return null
+      // A picker sheet's search field is on its own full-screen layer.
+      if (node.closest('[role="dialog"]') !== scroller.closest('[role="dialog"]')) return null
+      return node
+    }
 
-      // What is actually on screen of the scroller: its own box, cut by the
-      // visual viewport (iOS does not lift the sheet; the keyboard covers it).
+    const scrollTo = (scroller: HTMLElement, to: number) => {
+      window.cancelAnimationFrame(frame)
+      const from = scroller.scrollTop
+      if (Math.abs(to - from) < 2) return
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        scroller.scrollTop = to
+        return
+      }
+      const start = performance.now()
+      const step = (now: number) => {
+        const t = Math.min(1, (now - start) / PLACE_MS)
+        scroller.scrollTop = from + (to - from) * (1 - (1 - t) ** 3)
+        if (t < 1) frame = window.requestAnimationFrame(step)
+      }
+      frame = window.requestAnimationFrame(step)
+    }
+
+    const place = (field: HTMLElement) => {
+      const scroller = scrollerRef.current
+      if (!scroller) return
       const box = scroller.getBoundingClientRect()
-      const vv = window.visualViewport
-      const visibleTop = Math.max(box.top, vv ? vv.offsetTop : 0)
-      const visibleBottom = Math.min(
-        box.bottom,
-        vv ? vv.offsetTop + vv.height : window.innerHeight
-      )
-      const rect = active.getBoundingClientRect()
+      const rect = field.getBoundingClientRect()
+      if (rect.top >= box.top && rect.bottom <= box.top + box.height * KEYBOARD_FREE_BAND) return
 
-      // Only when the field is actually out of the way. Scrolling a field that
-      // is already on screen is what made a deliberate scroll snap back: the
-      // user drags, this fires, and the page yanks itself home.
-      if (rect.top >= visibleTop && rect.bottom <= visibleBottom) return
-
-      // Top, not centre: the rest of the little sheet that is left goes to the
-      // fields that come *after* this one, which is what you need to see next.
-      const margin = 12
-      scroller.scrollTo({
-        top: Math.max(0, scroller.scrollTop + rect.top - visibleTop - margin),
-        behavior: 'smooth',
-      })
+      const target = Math.max(0, Math.round(scroller.scrollTop + rect.top - box.top - 12))
+      // Room is only ever added during a typing session, never taken away:
+      // shrinking it under a scrolled form would clamp the scroll and jump.
+      const missing = target - (scroller.scrollHeight - scroller.clientHeight)
+      const room = roomRef.current
+      if (missing > 0 && room) {
+        extra += missing
+        room.style.height = `${extra}px`
+      }
+      scrollTo(scroller, target)
     }
 
-    // The sheet resizes a frame or two behind the keyboard animation; wait for
-    // the new height before deciding where the top is.
-    const timer = window.setTimeout(reveal, 150)
-    // Moving between fields while the keyboard is already up does not reopen
-    // it, so this effect would not re-run on its own.
-    document.addEventListener('focusin', reveal)
+    const unpad = () => {
+      if (!extra) return
+      extra = 0
+      if (roomRef.current) roomRef.current.style.height = ''
+    }
 
+    const onFocusIn = (event: FocusEvent) => {
+      const field = ownField(event.target)
+      if (field) place(field)
+    }
+    // Typing is over only when focus lands somewhere that is not another field
+    // (a picker, a button, nothing). Moving between fields keeps the room.
+    const onFocusOut = () => {
+      window.setTimeout(() => {
+        if (!ownField(document.activeElement)) unpad()
+      }, 0)
+    }
+    // Tapping a field that already has focus reopens a keyboard that Back
+    // dismissed, with no new focus event.
+    const onClick = (event: MouseEvent) => {
+      const field = ownField(event.target)
+      if (field && field === document.activeElement) place(field)
+    }
+
+    document.addEventListener('focusin', onFocusIn)
+    document.addEventListener('focusout', onFocusOut)
+    document.addEventListener('click', onClick)
     return () => {
-      window.clearTimeout(timer)
-      document.removeEventListener('focusin', reveal)
+      window.cancelAnimationFrame(frame)
+      document.removeEventListener('focusin', onFocusIn)
+      document.removeEventListener('focusout', onFocusOut)
+      document.removeEventListener('click', onClick)
+      unpad()
     }
-    // Deliberately the *boolean*, not the pixel inset. Scrolling with the
-    // keyboard up hides and shows the browser's URL bar, which changes
-    // `window.innerHeight` and so the measured inset — and keying this effect
-    // on that number meant every one of those wobbles re-ran it and dragged the
-    // page back to the focused field mid-scroll. Only opening the keyboard
-    // should reveal anything; the guard above handles the rest. (The ref is
-    // stable.)
-  }, [keyboardOpen, scrollerRef])
+    // The ref is stable.
+  }, [enabled, scrollerRef, roomRef])
 }
 
 /**
@@ -355,11 +407,12 @@ export function TransactionDialogProvider({
   const searchParams = useSearchParams()
   const { t } = useLanguage()
   const ui = useUiTranslation()
-  const keyboardInset = useSoftKeyboardInset()
   // The form's scroller (the wrapper on a phone, the sheet itself on desktop).
   const scrollerRef = useRef<HTMLDivElement>(null)
-  useKeepFocusedFieldVisible(keyboardInset > 0, scrollerRef)
+  // Scroll room under the form while typing; see `usePlaceFieldsAboveKeyboard`.
+  const keyboardRoomRef = useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
+  usePlaceFieldsAboveKeyboard(isMobile, scrollerRef, keyboardRoomRef)
   // Entries saved with "Save & Add Next" since this dialog opened. Shown in
   // the dialog itself: on a phone the full-screen sheet covers the toast stack,
   // so a batch had no visible confirmation at all — the next draft simply
@@ -828,10 +881,10 @@ export function TransactionDialogProvider({
             clearPrefills()
           }
         }}
-        // On a phone the sheet is the whole screen, so the only "outside" left
-        // is whatever sliver of backdrop the browser's keyboard geometry
-        // exposes — and one tap there threw a half-typed entry away (device
-        // run, 2026-10-22). The X, Escape and Back still close it.
+        // On a phone the sheet is the whole screen, so nothing outside it is
+        // meant to be tapped. When a strip of backdrop did show, one tap there
+        // threw a half-typed entry away (device run, 2026-10-22). The X,
+        // Escape and Back still close it.
         disablePointerDismissal={isMobile}
       >
         <DialogContent
@@ -847,19 +900,16 @@ export function TransactionDialogProvider({
             // gets the whole screen: `h-dvh`, square corners, and the actions
             // pushed to the bottom edge by the spacer inside the form.
             'max-h-[90dvh] overflow-y-auto sm:max-w-xl ' +
-            // `entry-sheet`: lifted above the keyboard by `ViewportPin`'s
-            // measurement (globals.css), the one the other form sheets use. It
-            // used to be lifted here by `innerHeight - visualViewport.height`,
-            // which in Brave counts the bottom toolbar the keyboard has hidden:
-            // the sheet rose a toolbar too high and left a strip of backdrop
-            // between the form and the keyboard (device run, 2026-10-22).
+            // Not lifted above the keyboard: it stays full screen and the
+            // keyboard covers its bottom. Fields are moved up before the
+            // keyboard opens instead (`usePlaceFieldsAboveKeyboard`).
             //
             // `overflow-hidden` on mobile: the sheet itself must not scroll —
             // the wrapper below does. The picker sheets are positioned against
             // this box (see `SelectorSheet`), and while it was the scroller
             // they were shifted up by however far the form had been scrolled,
             // leaving the form's buttons showing under every picker.
-            'entry-sheet max-sm:overflow-hidden ' +
+            'max-sm:overflow-hidden ' +
             // Flex column on mobile so the form can claim the leftover height
             // and pin its actions to the bottom edge; the desktop grid is
             // untouched.
@@ -974,6 +1024,7 @@ export function TransactionDialogProvider({
               />
             )
           ) : null}
+          <div ref={keyboardRoomRef} aria-hidden="true" className="shrink-0 sm:hidden" />
           </div>
         </DialogContent>
       </Dialog>

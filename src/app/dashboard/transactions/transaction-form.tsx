@@ -37,7 +37,6 @@ import { RelativeDateChips } from './relative-date-chips'
 import { SelectorSheet } from '@/components/selector-sheet'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import { storedAccountName } from '@/lib/privacy/account-label'
-import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
 import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
 import {
   CATEGORY_USAGE_KEY,
@@ -355,9 +354,6 @@ export function TransactionForm({
   // focus. Consumed by the effect below.
   const skipAutoFocusRef = useRef(false)
   const isMobile = useIsMobile()
-  // Non-zero only while a soft keyboard is up on a phone. See the actions row
-  // at the bottom of the form for what it buys.
-  const keyboardInset = useSoftKeyboardInset()
 
   // Accounts/categories created inline from the mobile pickers, merged into the
   // prop lists so they show up and can be selected without a page reload.
@@ -2965,15 +2961,14 @@ export function TransactionForm({
       )}
 
       {/* ── Actions ──────────────────────────────────────────────────── */}
-      {/* One row, not three stacked buttons, and no row at all while typing.
+      {/* One row, not three stacked buttons.
 
-          With the keyboard up, the sheet is a few hundred pixels tall and this
-          bar was taking a chunk of it to offer "Create transaction" at the exact
-          moment nobody wants it: you have just entered the amount and cannot see
-          a single field below it. So it hides for the duration — the same trade
-          the dialog already makes with its title — and the space goes to the
-          form. Dismissing the keyboard brings it straight back, and while it is
-          gone the keyboard's own Next carries the entry forward.
+          Always mounted. It used to unmount while the keyboard was up, to give
+          the lifted sheet that space. The sheet is no longer lifted, so the
+          keyboard simply covers the row, and the keyboard's own Next carries
+          the entry forward. Unmounting it also reflowed the form every time the
+          keyboard opened, which was part of the jump onto Description (device
+          run, 2026-10-22).
 
           The rest of the row:
           - **Cancel is gone** wherever the form is dismissable on its own. In a
@@ -2998,7 +2993,6 @@ export function TransactionForm({
         </p>
       ) : null}
 
-      {keyboardInset > 0 ? null : (
       <div className="sticky bottom-0 z-10 flex items-center gap-2 border-t bg-popover pb-1 pt-3 sm:static sm:flex-wrap sm:border-t-0 sm:bg-transparent sm:p-0">
         {/* One split button on mobile, not a wide primary next to an orphaned
             square. "Save" and "save and start another" are the same action with
@@ -3069,7 +3063,6 @@ export function TransactionForm({
           </Link>
         ) : null}
       </div>
-      )}
     </form>
   )
 }

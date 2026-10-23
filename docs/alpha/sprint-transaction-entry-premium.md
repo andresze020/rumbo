@@ -562,6 +562,15 @@ la página de atrás durante el refresco.
 
 Mediciones de la ronda (LTE, n pequeño): `open.cold` 1.798 ms (red móvil + arranque en frío; sobre la meta, en WiFi 615–869 ms), `open.warm` 109–165 ms, `save.next` 762 ms p50 · 958 ms p75 ✅, `save.close` 688 ms ✅.
 
+### Quinta ronda en dispositivo (2026-10-22) — dejar de medir el teclado
+
+Con el teclado abierto, el formulario quedaba reducido a una tira de unos 150 px entre la X y el teclado, con un hueco vacío debajo. Al saltar a Descripción seguía el «flick».
+
+| Síntoma | Causa | Arreglo | Verificado en la réplica |
+|---|---|---|---|
+| Formulario encogido, hueco entre la hoja y el teclado | Brave reporta el área visible unos 100 px más corta de lo que muestra: es la altura de su barra inferior, que esconde al abrir el teclado. Las rondas 3 y 4 tomaban esa medida como verdadera y subían y encogían la hoja de más | La hoja ya no se sube: queda a pantalla completa y el teclado tapa su parte de abajo. Se quitó `.entry-sheet` del CSS, se borró `useSoftKeyboardInset` y ya nada lee el tamaño del teclado | La hoja queda en 0→780 con el teclado abierto, y su alto no cambia en ningún momento (`sheetResized: false`) con un teclado simulado que Brave reporta 100 px más alto |
+| «Flick» al saltar a Descripción | Al abrir el teclado pasaban tres cosas a la vez: la hoja cambiaba de alto, la fila de botones se desmontaba y el campo se volvía a desplazar | `usePlaceFieldsAboveKeyboard`: al recibir foco, el campo sube a la parte de arriba del formulario en un solo movimiento de 160 ms, antes de que llegue el teclado. Los botones ya no se desmontan. Cerca del final, un espaciador vacío bajo el formulario da el recorrido que falta | Descripción queda a 92 px y Notas a 133 px (bajo la X, que sigue a 16 px), con un solo movimiento. «Amount received» de una transferencia pasa de 344 a 76 px. El monto, que ya está arriba, no se mueve |
+
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 
 | # | Caso | Qué confirmar | Resultado |
@@ -582,8 +591,8 @@ Mediciones de la ronda (LTE, n pequeño): `open.cold` 1.798 ms (red móvil + arr
 | 11c | Error de validación (p. ej. monto 0 forzado, o frecuencia siendo miembro sin permiso) | El mensaje sale dentro del formulario y el borrador queda intacto; no te saca de la pantalla | |
 | 11d | Guardar desde Budgets o Reports | La pantalla de atrás se actualiza sola tras el aviso | |
 | 11e | Bajar hasta Tags, abrirlo, cerrarlo y abrir Cuenta | Los dos selectores cubren la pantalla entera; no asoman los botones del formulario | |
-| 11f | Con el teclado abierto en el monto o la descripción | El formulario queda pegado al teclado, sin franja de fondo; tocar cerca del teclado no cierra el formulario | |
+| 11f | Con el teclado abierto en el monto o la descripción | El formulario ocupa toda la pantalla y el teclado tapa solo su parte de abajo, sin hueco ni franja. El campo que escribes queda justo bajo la X | |
 | 11g | Racha de 3 «Agregar otra» y luego X, y luego Atrás | Arriba se ve «✓ Transacción creada ×3»; un solo Atrás sale de la pantalla | |
 | 11h | Formulario lleno sin descripción → Ingreso → elegir categoría | No salta a Descripción ni abre el teclado | |
-| 11i | Con el teclado abierto | La franja sobre el teclado (si Brave la deja) es del color del formulario, no la página borrosa; la X nunca sale de la pantalla | |
+| 11i | Saltar a Descripción por la cadena (monto → categoría → cuenta → payee) y tocar Notas o «Amount received» de una transferencia | Un solo movimiento suave hacia arriba antes del teclado, sin «flick». La X nunca sale de la pantalla | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |

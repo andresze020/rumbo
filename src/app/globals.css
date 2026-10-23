@@ -221,25 +221,6 @@
       bottom: var(--vv-keyboard-inset, 0px);
       max-height: calc(var(--vv-keyboard-height, 100dvh) - 0.5rem);
     }
-
-    /* The transaction entry sheet (TransactionDialogProvider), on the same
-       measurement as the form sheets. */
-    html[data-vv-keyboard] .entry-sheet {
-      bottom: var(--vv-keyboard-inset, 0px);
-      max-height: calc(var(--vv-keyboard-height, 100dvh) - 0.5rem);
-    }
-
-    /* Behind the full-screen entry sheet the backdrop is the sheet's own
-       colour, not a blurred view of the page. Nothing behind it is meant to be
-       seen on a phone, and with the keyboard up Brave reports a visual
-       viewport ~50px shorter than what it shows, so the lifted sheet stops
-       short of the keyboard and that band showed the blurred dashboard
-       (device runs, 2026-10-22). `~` rather than `+`: the dialog's focus
-       guards sit between the backdrop and the popup. */
-    [data-slot='dialog-overlay']:has(~ .entry-sheet) {
-      background-color: var(--popover);
-      backdrop-filter: none;
-    }
   }
 
   /*
