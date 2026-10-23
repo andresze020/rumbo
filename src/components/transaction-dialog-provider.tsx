@@ -107,6 +107,13 @@ const KEYBOARD_FREE_BAND = 0.25
 const PLACE_MS = 160
 
 /**
+ * How long the scroll room outlives the last focused field. Tapping a row's
+ * toggle (Notes, say) moves focus to that button for a moment before the
+ * field inside gets it; dropping the room in between clamped the scroll.
+ */
+const ROOM_GRACE_MS = 500
+
+/**
  * Phone only: when a field that raises the keyboard gets focus, move it to the
  * top of the form *before* the keyboard arrives. The keyboard then opens over
  * the bottom of the sheet, and nothing on screen has to move again.
@@ -120,6 +127,13 @@ const PLACE_MS = 160
  * scrolled back (device runs, 2026-10-22). Nothing here reads the keyboard's
  * size. The sheet stays full screen, and the only movement is this one scroll,
  * at focus time.
+ *
+ * With the keyboard already up (Description → Notes), the move is instant
+ * instead. Right after the focus event the browser scrolls the field into
+ * the part of the screen it believes is visible, and an animated move had not
+ * started yet: it found Notes under the keyboard and panned the whole screen,
+ * X row included (device run, 2026-10-23). Placed synchronously, the field is
+ * already in view when the browser looks.
  *
  * Only the scroller moves: `scrollIntoView` would also pan the visual
  * viewport, which took the X row off the screen. Near the end of the form the
@@ -138,6 +152,7 @@ function usePlaceFieldsAboveKeyboard(
     if (!enabled) return
     let frame = 0
     let extra = 0
+    let unpadTimer = 0
 
     const ownField = (node: EventTarget | null): HTMLElement | null => {
       const scroller = scrollerRef.current
@@ -149,11 +164,11 @@ function usePlaceFieldsAboveKeyboard(
       return node
     }
 
-    const scrollTo = (scroller: HTMLElement, to: number) => {
+    const scrollTo = (scroller: HTMLElement, to: number, instant: boolean) => {
       window.cancelAnimationFrame(frame)
       const from = scroller.scrollTop
       if (Math.abs(to - from) < 2) return
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      if (instant || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         scroller.scrollTop = to
         return
       }
@@ -182,7 +197,8 @@ function usePlaceFieldsAboveKeyboard(
         extra += missing
         room.style.height = `${extra}px`
       }
-      scrollTo(scroller, target)
+      // `data-vv-keyboard` is only trusted as a yes/no here, never as a size.
+      scrollTo(scroller, target, document.documentElement.hasAttribute('data-vv-keyboard'))
     }
 
     const unpad = () => {
@@ -193,14 +209,17 @@ function usePlaceFieldsAboveKeyboard(
 
     const onFocusIn = (event: FocusEvent) => {
       const field = ownField(event.target)
-      if (field) place(field)
+      if (!field) return
+      window.clearTimeout(unpadTimer)
+      place(field)
     }
-    // Typing is over only when focus lands somewhere that is not another field
+    // Typing is over only when focus stays somewhere that is not another field
     // (a picker, a button, nothing). Moving between fields keeps the room.
     const onFocusOut = () => {
-      window.setTimeout(() => {
+      window.clearTimeout(unpadTimer)
+      unpadTimer = window.setTimeout(() => {
         if (!ownField(document.activeElement)) unpad()
-      }, 0)
+      }, ROOM_GRACE_MS)
     }
     // Tapping a field that already has focus reopens a keyboard that Back
     // dismissed, with no new focus event.
@@ -214,6 +233,7 @@ function usePlaceFieldsAboveKeyboard(
     document.addEventListener('click', onClick)
     return () => {
       window.cancelAnimationFrame(frame)
+      window.clearTimeout(unpadTimer)
       document.removeEventListener('focusin', onFocusIn)
       document.removeEventListener('focusout', onFocusOut)
       document.removeEventListener('click', onClick)
@@ -904,12 +924,14 @@ export function TransactionDialogProvider({
             // keyboard covers its bottom. Fields are moved up before the
             // keyboard opens instead (`usePlaceFieldsAboveKeyboard`).
             //
-            // `overflow-hidden` on mobile: the sheet itself must not scroll —
+            // `overflow-clip` on mobile: the sheet itself must not scroll —
             // the wrapper below does. The picker sheets are positioned against
             // this box (see `SelectorSheet`), and while it was the scroller
             // they were shifted up by however far the form had been scrolled,
-            // leaving the form's buttons showing under every picker.
-            'max-sm:overflow-hidden ' +
+            // leaving the form's buttons showing under every picker. Clip, not
+            // hidden: a `hidden` box is still a scroll container, and the
+            // browser's own focus scrolling scrolled it, X row and all.
+            'max-sm:overflow-clip ' +
             // Flex column on mobile so the form can claim the leftover height
             // and pin its actions to the bottom edge; the desktop grid is
             // untouched.
