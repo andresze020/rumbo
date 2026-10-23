@@ -578,6 +578,23 @@ Con el teclado abierto, el formulario quedaba reducido a una tira de unos 150 px
 
 Réplica, con un simulador que hace el desplazamiento del navegador tras el foco: monto (teclado arriba) → Notas pasó de «el navegador intervino» a «no hizo falta». Notas queda en 112 px, bajo la X, que sigue en 16 px.
 
+**Séptima ronda (2026-10-23): buenas prácticas del teclado.** Notas quedó bien. Pero al pasar a la tasa de cambio con el teclado abierto, toda la pantalla volvió a desplazarse (sin X). De vuelta en Notas y Descripción, el campo quedaba arriba sin su título.
+
+Las herramientas estándar de Chrome Android para el teclado son dos:
+- **`interactive-widget`** en la meta etiqueta `viewport`: con `resizes-content` el teclado encoge el layout. Afecta a toda la app y depende de la misma medición que Brave reporta mal.
+- **VirtualKeyboard API:** con `navigator.virtualKeyboard.overlaysContent = true`, el teclado queda encima del contenido. El navegador ya no encoge ni desplaza la pantalla para perseguir el campo, y la app decide dónde va.
+
+Se usa la segunda, solo mientras la hoja de alta está abierta en el teléfono; al cerrarla se restaura el valor anterior. Donde la API no existe, todo sigue como antes.
+
+Otros cambios:
+- **Se mueve la fila, no solo el recuadro.** El ancla es `[data-entry-row]` (las filas del formulario), si no un `<label for>` visible justo encima, si no el campo mismo. Así «Notes», «Description» o «Exchange rate» se ven sobre el campo.
+- **El espacio extra bajo el formulario se mide de nuevo tras crecer.** Con un formulario largo (una cuenta en COP, con la tasa de cambio), el formulario se encoge como hijo flex y el espaciador no aportaba toda su altura. Descripción se quedaba a media pantalla.
+
+Réplica con tu secuencia (cuenta COP; Descripción → Notas → tasa → Notas → tasa → Descripción) y un simulador del desplazamiento del navegador tras el foco y al abrir el teclado:
+- En cada paso la X sigue a 16 px y el título de la fila queda a 68–69 px.
+- El campo queda sobre el teclado, y el navegador nunca tuvo que intervenir.
+- `overlaysContent` vale `true` con la hoja abierta y `false` al cerrarla.
+
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 
 | # | Caso | Qué confirmar | Resultado |
@@ -601,5 +618,5 @@ Réplica, con un simulador que hace el desplazamiento del navegador tras el foco
 | 11f | Con el teclado abierto en el monto o la descripción | El formulario ocupa toda la pantalla y el teclado tapa solo su parte de abajo, sin hueco ni franja. El campo que escribes queda justo bajo la X | |
 | 11g | Racha de 3 «Agregar otra» y luego X, y luego Atrás | Arriba se ve «✓ Transacción creada ×3»; un solo Atrás sale de la pantalla | |
 | 11h | Formulario lleno sin descripción → Ingreso → elegir categoría | No salta a Descripción ni abre el teclado | |
-| 11i | Saltar a Descripción por la cadena (monto → categoría → cuenta → payee) y tocar Notas o «Amount received» de una transferencia | Un solo movimiento suave hacia arriba antes del teclado, sin «flick». La X nunca sale de la pantalla | |
+| 11i | Saltar a Descripción por la cadena (monto → categoría → cuenta → payee); tocar Notas, la tasa de cambio (cuenta en otra moneda) o «Amount received» de una transferencia, e ir y volver entre ellos con el teclado abierto | Un solo movimiento suave hacia arriba antes del teclado, sin «flick». Cada campo queda con su título justo bajo la X; la X nunca sale de la pantalla | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |

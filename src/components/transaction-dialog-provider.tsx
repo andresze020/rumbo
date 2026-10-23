@@ -113,9 +113,13 @@ const PLACE_MS = 160
  */
 const ROOM_GRACE_MS = 500
 
+/** The part of the VirtualKeyboard API used here (Chromium only). */
+type VirtualKeyboardLike = { overlaysContent: boolean; boundingRect: DOMRect }
+
 /**
- * Phone only: when a field that raises the keyboard gets focus, move it to the
- * top of the form *before* the keyboard arrives. The keyboard then opens over
+ * Phone only, while the entry sheet is open: when a field that raises the
+ * keyboard gets focus, move its row to the top of the form *before* the
+ * keyboard arrives. The keyboard then opens over
  * the bottom of the sheet, and nothing on screen has to move again.
  *
  * Measuring the keyboard failed on every round. The sheet used to be lifted
@@ -135,6 +139,19 @@ const ROOM_GRACE_MS = 500
  * X row included (device run, 2026-10-23). Placed synchronously, the field is
  * already in view when the browser looks.
  *
+ * Where the VirtualKeyboard API exists (Chrome and Brave on Android), the
+ * keyboard is also told to overlay the page (`overlaysContent`) while the sheet
+ * is open. Then the browser neither shrinks the viewport nor pans it to chase
+ * the focused field: placing the field is entirely this hook's job, which is
+ * what the API is for. Without it, focusing the exchange rate with the
+ * keyboard up still panned the whole screen past the X (device run,
+ * 2026-10-23). Other browsers keep their default behaviour.
+ *
+ * The row moves, not just the box: the row's title ("Notes", "Exchange
+ * rate") stays on screen above the field being typed into. The anchor is
+ * the closest `[data-entry-row]`, else a visible `<label for>` just above
+ * the field, else the field itself.
+ *
  * Only the scroller moves: `scrollIntoView` would also pan the visual
  * viewport, which took the X row off the screen. Near the end of the form the
  * scroller has no room left to bring a field up, so `roomRef` (an empty box
@@ -153,6 +170,27 @@ function usePlaceFieldsAboveKeyboard(
     let frame = 0
     let extra = 0
     let unpadTimer = 0
+
+    const keyboard = (navigator as Navigator & { virtualKeyboard?: VirtualKeyboardLike })
+      .virtualKeyboard
+    const overlaid = keyboard?.overlaysContent ?? false
+    if (keyboard) keyboard.overlaysContent = true
+    const keyboardUp = () =>
+      document.documentElement.hasAttribute('data-vv-keyboard') ||
+      (keyboard?.boundingRect.height ?? 0) > 0
+
+    /** The top of what should land at the top: the field's row or label. */
+    const anchorTop = (field: HTMLElement, fieldTop: number) => {
+      const row = field.closest<HTMLElement>('[data-entry-row]')
+      if (row) return row.getBoundingClientRect().top
+      const label = field.id
+        ? document.querySelector<HTMLElement>(`label[for="${CSS.escape(field.id)}"]`)
+        : null
+      const box = label?.getBoundingClientRect()
+      // Visible (not `sr-only`) and just above the field.
+      if (box && box.height > 2 && box.top <= fieldTop && fieldTop - box.top < 160) return box.top
+      return fieldTop
+    }
 
     const ownField = (node: EventTarget | null): HTMLElement | null => {
       const scroller = scrollerRef.current
@@ -186,19 +224,23 @@ function usePlaceFieldsAboveKeyboard(
       if (!scroller) return
       const box = scroller.getBoundingClientRect()
       const rect = field.getBoundingClientRect()
-      if (rect.top >= box.top && rect.bottom <= box.top + box.height * KEYBOARD_FREE_BAND) return
+      const top = anchorTop(field, rect.top)
+      if (top >= box.top && rect.bottom <= box.top + box.height * KEYBOARD_FREE_BAND) return
 
-      const target = Math.max(0, Math.round(scroller.scrollTop + rect.top - box.top - 12))
+      const target = Math.max(0, Math.round(scroller.scrollTop + top - box.top - 4))
       // Room is only ever added during a typing session, never taken away:
       // shrinking it under a scrolled form would clamp the scroll and jump.
-      const missing = target - (scroller.scrollHeight - scroller.clientHeight)
+      // Measured again after each top-up: a taller form shrinks as a flex
+      // child and overflows, so the spacer does not add its full height.
       const room = roomRef.current
-      if (missing > 0 && room) {
+      for (let i = 0; room && i < 4; i++) {
+        const missing = target - (scroller.scrollHeight - scroller.clientHeight)
+        if (missing <= 0) break
         extra += missing
         room.style.height = `${extra}px`
       }
-      // `data-vv-keyboard` is only trusted as a yes/no here, never as a size.
-      scrollTo(scroller, target, document.documentElement.hasAttribute('data-vv-keyboard'))
+      // Keyboard state is only trusted as a yes/no here, never as a size.
+      scrollTo(scroller, target, keyboardUp())
     }
 
     const unpad = () => {
@@ -234,6 +276,7 @@ function usePlaceFieldsAboveKeyboard(
     return () => {
       window.cancelAnimationFrame(frame)
       window.clearTimeout(unpadTimer)
+      if (keyboard) keyboard.overlaysContent = overlaid
       document.removeEventListener('focusin', onFocusIn)
       document.removeEventListener('focusout', onFocusOut)
       document.removeEventListener('click', onClick)
@@ -432,7 +475,6 @@ export function TransactionDialogProvider({
   // Scroll room under the form while typing; see `usePlaceFieldsAboveKeyboard`.
   const keyboardRoomRef = useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
-  usePlaceFieldsAboveKeyboard(isMobile, scrollerRef, keyboardRoomRef)
   // Entries saved with "Save & Add Next" since this dialog opened. Shown in
   // the dialog itself: on a phone the full-screen sheet covers the toast stack,
   // so a batch had no visible confirmation at all — the next draft simply
@@ -443,6 +485,7 @@ export function TransactionDialogProvider({
   // render so a freshly mounted provider (e.g. after a server-action redirect
   // remounts this layout) opens pre-filled instead of starting empty.
   const [open, setOpen] = useState(() => readAddNextDefaults(searchParams) !== null)
+  usePlaceFieldsAboveKeyboard(isMobile && open, scrollerRef, keyboardRoomRef)
   const [formData, setFormData] = useState<QuickAddFormData | null>(null)
   // Mirrors `formData` for `refreshFormData`, which must see the latest value
   // from inside an async call started by an earlier render.

@@ -1240,7 +1240,9 @@ export function TransactionForm({
   }) => {
     const open = expandedField === id
     return (
-      <div key={id} className="border-t first:border-t-0">
+      // `data-entry-row`: typing in this row's field scrolls the whole row,
+      // title included, to the top (see `usePlaceFieldsAboveKeyboard`).
+      <div key={id} data-entry-row className="border-t first:border-t-0">
         <button
           type="button"
           aria-expanded={open}
