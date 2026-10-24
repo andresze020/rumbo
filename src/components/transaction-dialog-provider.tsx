@@ -113,6 +113,12 @@ const PLACE_MS = 160
  */
 const ROOM_GRACE_MS = 500
 
+/** How long a background prefetch of the form's data counts as fresh. */
+const PREFETCH_FRESH_MS = 15_000
+
+/** The longest the prefetch waits for an idle moment after the screen loads. */
+const PREFETCH_IDLE_TIMEOUT_MS = 4_000
+
 /** Spacing steps for the entry form on a phone, loosest first (globals.css). */
 const FIT_LEVELS = ['', 'compact', 'tight'] as const
 
@@ -521,7 +527,7 @@ export function replaceUrlInPlace(href: string) {
  */
 function TransactionFormSkeleton({ label }: { label: string }) {
   return (
-    <div role="status" aria-live="polite" className="flex flex-1 flex-col gap-3">
+    <div role="status" aria-live="polite" data-entry-skeleton className="flex flex-1 flex-col gap-3">
       <span className="sr-only">{label}</span>
       <div aria-hidden="true" className="flex flex-1 flex-col gap-3">
         {/* Type switch */}
@@ -581,6 +587,19 @@ export function TransactionDialogProvider({
   const ui = useUiTranslation()
   // The form's scroller (the wrapper on a phone, the sheet itself on desktop).
   const scrollerRef = useRef<HTMLDivElement>(null)
+  // Set on open and on every "Add next": the next render that has the amount
+  // field focuses it, so an entry starts by typing the figure — no tap on the
+  // field first. Programmatic, so it only raises the phone's keyboard when it
+  // lands close enough to the tap that opened the form (a warm open, the next
+  // draft); a cold open still waits for its data and may need the tap.
+  const focusAmountRef = useRef(false)
+  useEffect(() => {
+    if (!open || !focusAmountRef.current) return
+    const amount = document.getElementById('amount')
+    if (!(amount instanceof HTMLInputElement)) return
+    focusAmountRef.current = false
+    amount.focus({ preventScroll: true })
+  })
   // Scroll room under the form while typing; see `usePlaceFieldsAboveKeyboard`.
   const keyboardRoomRef = useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
@@ -601,6 +620,41 @@ export function TransactionDialogProvider({
   // from inside an async call started by an earlier render.
   const formDataRef = useRef<QuickAddFormData | null>(null)
   const formFetchInFlight = useRef(false)
+
+  // T4 follow-up: the first open of a session no longer waits on the form's
+  // data. Once the screen behind is idle, the lists are fetched in the
+  // background, so the first "+" opens like every later one (it measured
+  // 1.8s on LTE while it waited). Skipped when the data is already here.
+  const prefetchRef = useRef<Promise<void> | null>(null)
+  const prefetchedAt = useRef(0)
+  useEffect(() => {
+    if (!householdId) return
+    const run = () => {
+      if (formDataRef.current?.householdId === householdId || formFetchInFlight.current) return
+      formFetchInFlight.current = true
+      prefetchRef.current = getQuickAddFormData()
+        .then((data) => {
+          if (!data || formDataRef.current?.householdId === householdId) return
+          formDataRef.current = data
+          prefetchedAt.current = Date.now()
+          setFormData(data)
+        })
+        .catch(() => {
+          // A failed prefetch costs nothing: the open fetches as it always did.
+        })
+        .finally(() => {
+          formFetchInFlight.current = false
+          prefetchRef.current = null
+        })
+    }
+    // Safari has no requestIdleCallback; a short timeout stands in for it.
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(run, { timeout: PREFETCH_IDLE_TIMEOUT_MS })
+      return () => window.cancelIdleCallback(id)
+    }
+    const id = globalThis.setTimeout(run, 1500)
+    return () => globalThis.clearTimeout(id)
+  }, [householdId])
   // A background refresh is running (the form may already be on screen).
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(() => readAddNextDefaults(searchParams) !== null)
@@ -878,6 +932,7 @@ export function TransactionDialogProvider({
   }, [householdId])
 
   async function openDialog(options?: OpenDialogOptions) {
+    focusAmountRef.current = true
     openTimer.current = {
       start: performance.now(),
       variant: formDataRef.current?.householdId === householdId ? 'warm' : 'cold',
@@ -909,6 +964,22 @@ export function TransactionDialogProvider({
    * lands. A failed background refresh keeps the data already on screen.
    */
   async function refreshFormData() {
+    // An open during the idle prefetch waits for it rather than racing it, and
+    // a prefetch that just landed is fresh enough to skip the refetch.
+    if (prefetchRef.current) {
+      if (formDataRef.current?.householdId !== householdId) {
+        setLoading(true)
+        setLoadError(false)
+      }
+      await prefetchRef.current
+    }
+    if (
+      formDataRef.current?.householdId === householdId &&
+      Date.now() - prefetchedAt.current < PREFETCH_FRESH_MS
+    ) {
+      setLoading(false)
+      return
+    }
     if (formFetchInFlight.current) return
     formFetchInFlight.current = true
     // Another household's lists are not a cache for this one: switching
@@ -957,6 +1028,10 @@ export function TransactionDialogProvider({
    */
   function handleSaved({ addNext, next, warning }: TransactionSavedOutcome) {
     afterPaint(finishPendingSave)
+    // A short tick on a phone that supports it (Android; iOS ignores it): the
+    // save is confirmed in the hand as well as on screen. Not on a warning,
+    // which asks for a look rather than a tick.
+    if (isMobile && !warning) navigator.vibrate?.(12)
 
     if (addNext && next) {
       setSavedInBatch((count) => count + 1)
@@ -974,6 +1049,7 @@ export function TransactionDialogProvider({
       })
       setCopyDefaults(undefined)
       setSharedDescription(undefined)
+      focusAmountRef.current = true
       setFormKey((key) => key + 1)
       // The next entry starts where the last one did: at the amount, with the
       // confirmation above it. The scroller outlives the remounted form, so
@@ -1061,6 +1137,9 @@ export function TransactionDialogProvider({
         disablePointerDismissal={isMobile}
       >
         <DialogContent
+          // The amount, not the X, gets the opening focus (see focusAmountRef);
+          // before the form has loaded there is nothing to take it yet.
+          initialFocus={() => document.getElementById('amount') ?? false}
           // Own close button: the built-in one is absolutely positioned in the
           // corner, where on a phone it lands on top of the type selector's
           // "Transfer". Ours gets its own row instead (see below).

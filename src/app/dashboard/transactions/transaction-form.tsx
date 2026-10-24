@@ -620,7 +620,17 @@ export function TransactionForm({
   // the way the outcome comes back is.
   const [saveError, setSaveError] = useState('')
   const inlineSave = onSaved && !isEdit
+  // One save per draft. React queues a form action submitted while another
+  // is pending and runs it afterwards with the same fields, so two taps in the
+  // same instant (before the disabled state had rendered) saved the entry
+  // twice — the browser scenario caught it. Released only when this draft was
+  // not saved, so a rejected save can be fixed and sent again; a saved draft
+  // closes or is replaced by the next one, a new form with its own flag.
+  const savingDraftRef = useRef(false)
+
   async function saveInline(formData: FormData) {
+    if (savingDraftRef.current) return
+    savingDraftRef.current = true
     setSaveError('')
     const addNext = formData.get('add_next') === 'true'
     let result: Awaited<ReturnType<typeof saveManualTransaction>> | undefined
@@ -635,13 +645,19 @@ export function TransactionForm({
       // The request failed in flight, so whether the server committed is
       // unknown. Saying "try again" would invite a duplicate (there is no
       // idempotency key); point at Transactions first.
+      // Released: after checking, a retry is the user's call.
+      savingDraftRef.current = false
       setSaveError(
         ui('The save could not be confirmed. Check Transactions before trying again — it may already be there.')
       )
       return
     }
-    if (!result) return
+    if (!result) {
+      savingDraftRef.current = false
+      return
+    }
     if (!result.ok) {
+      savingDraftRef.current = false
       setSaveError(ui(result.error))
       return
     }
@@ -2533,6 +2549,9 @@ export function TransactionForm({
           sight, and takes no line breaks — Enter moves the entry on. */}
       <Textarea
         aria-label={t('transactionForm.description')}
+        // The screen is otherwise empty for a category with no past
+        // descriptions to suggest.
+        placeholder={ui('What was it for?')}
         autoFocus
         rows={1}
         enterKeyHint="next"

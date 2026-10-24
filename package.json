@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e:entry": "node e2e/entry/run.mjs",
     "i18n:check": "node scripts/check-i18n-coverage.mjs",
     "perf:census": "node scripts/perf-census.mjs",
     "perf:baseline": "node scripts/perf-baseline.mjs",
