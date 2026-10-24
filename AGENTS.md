@@ -23,15 +23,28 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
+- **Premium transaction entry, T0…T5 done, PR #122 pending merge**
+  (2026-10-22 → 10-24, no migration). Mechanisms to know before touching the
+  Add dialog (`transaction-dialog-provider.tsx`, `transaction-form.tsx`):
+  - The dialog saves **inline, no redirect**: `saveManualTransaction` /
+    `saveTransferTransaction` (`transactions/actions.ts`) return a result;
+    the redirecting actions remain for the assistant and page forms. The save
+    flag is `txn_created`, not `created=1`.
+  - Keyboard: while the sheet is open on a phone,
+    `navigator.virtualKeyboard.overlaysContent = true` and
+    `usePlaceFieldsAboveKeyboard` places the focused row; **never measure the
+    keyboard** (Brave under-reports the visible area ~100 px).
+    `useFitEntryForm` picks `normal`/`compact`/`tight` so the form fits one screen.
+  - On a phone, Description, Notes and the exchange rate are full-screen
+    sheets; the bottom-bar "+" opens the form directly (no menu).
+  - Browser tests: `npm run e2e:entry` (+ CI job `entry form in a browser`).
+  - Detail: `docs/alpha/sprint-transaction-entry-premium.md`, `docs/SPRINT-LOG.md`.
 - **Household sharing built, HH-0…HH-6** (2026-10-08 → 10-11, #113-#118 +
   HH-6 branch). All migrations applied; DB switch `household_sharing` and
   Vercel `RUMBO_HOUSEHOLD_SHARING` ON; open: the two-account QA pass
   ([`docs/alpha/hh-6-household-sharing-qa.md`](docs/alpha/hh-6-household-sharing-qa.md)).
   See [`docs/features/household-sharing.md`](docs/features/household-sharing.md);
   full detail in `docs/SPRINT-LOG.md`.
-- **BR-030 / BR-043 audited, two refund bugs fixed** (2026-09-30, #84-#86).
-  Both migrations applied; new subagents `verify-runner` and `qa-smoke`. Full
-  detail in `docs/SPRINT-LOG.md`.
 
 > **Historia anterior:** las entradas de sprint previas viven en
 > `docs/SPRINT-LOG.md` (append-only, más reciente arriba). No se resumen aquí:
@@ -185,7 +198,7 @@ Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 
 ## Tests
 
-Three layers, no overlap. Full conventions and the stack decision live in
+Several layers, no overlap. Full conventions and the stack decision live in
 `docs/testing.md`; what a release must pass is `docs/release-checklist.md`.
 
 - **Performance — `npm run perf:census`** (static round-trip count per route, no
@@ -238,6 +251,9 @@ Three layers, no overlap. Full conventions and the stack decision live in
   until no skeleton is left, and lost navigations (exit 1 if any).
   `--think=<ms>` adds an untimed pause before each flow (a person's pace).
   Report both paces when a change makes pages appear faster (RUM-005).
+- **Browser scenarios — `npm run e2e:entry`** (premium entry sprint). The Add
+  dialog in Chromium against a Supabase stand-in (`e2e/entry/`); in CI. Add a
+  scenario there when a device run finds an entry-flow bug. `docs/testing.md`.
 
 ## Git rules
 

@@ -16,26 +16,38 @@ import {
   FileText,
   ListChecks,
   Plus,
+  Receipt,
   Repeat,
   Shapes,
   Sparkles,
-  Store,
   StickyNote,
+  Store,
   Wallet,
 } from 'lucide-react'
 import {
   createManualTransactionAction,
   createTransferTransactionAction,
+  saveManualTransaction,
+  saveTransferTransaction,
   updateManualTransactionAction,
+  type TransactionNextDefaults,
   updateTransferTransactionAction,
+  changeTransactionTypeAction,
 } from './actions'
 import { PayeePicker, type PayeeOption } from './payee-picker'
 import { RelativeDateChips } from './relative-date-chips'
 import { SelectorSheet } from '@/components/selector-sheet'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import { storedAccountName } from '@/lib/privacy/account-label'
-import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
 import { TagMultiSelect, type TagOption } from '@/components/tag-multi-select'
+import {
+  CATEGORY_USAGE_KEY,
+  TAG_USAGE_KEY,
+  parseUsage,
+  rankByUsage,
+  recordUsage,
+} from '@/lib/quick-entry/usage-ranking'
+import { markSaveStart } from '@/lib/perf/entry-timing'
 import { quickCreateAccount, quickCreateCategory } from '../quick-create-actions'
 import { AdvancedFields } from '@/components/advanced-fields'
 import { AmountInput } from '@/components/amount-input'
@@ -58,6 +70,7 @@ import {
   currentTimeLocal,
   formatCurrency,
   formatIsoDate,
+  formatRate,
   shiftIsoDate,
   todayIsoDateLocal,
 } from '@/lib/format'
@@ -73,7 +86,24 @@ import { cn } from '@/lib/utils'
 type TransactionType = 'income' | 'expense' | 'transfer'
 
 /** Which selector surface is open (mobile sheet or desktop popover). */
-type PickerField = null | 'account' | 'from' | 'to' | 'category' | 'payee'
+/**
+ * What the mobile full-screen sheet is showing. Description and notes are not
+ * pickers, but they open in the same sheet: typing in a row inside the form
+ * meant the keyboard covering it, the form scrolling to make room and staying
+ * scrolled after the keyboard closed (device runs, 2026-10-22…24). On a screen
+ * of their own, nothing behind them has to move.
+ */
+type PickerField =
+  | null
+  | 'account'
+  | 'from'
+  | 'to'
+  | 'category'
+  | 'payee'
+  | 'description'
+  | 'notes'
+  | 'rate'
+  | 'cost'
 
 /**
  * The fields the fill-fast chain walks, in the order it walks them. Everything
@@ -106,6 +136,9 @@ const ENTRY_CHAINS: Record<
   account_first: ['account', 'category', 'payee', 'description', 'tags'],
 }
 
+/** The chain fields an income or expense cannot be saved without. */
+const REQUIRED_CHAIN_FIELDS: ReadonlySet<ChainField> = new Set(['category', 'account'])
+
 export type TransactionFormAccount = {
   id: string
   name: string
@@ -129,11 +162,29 @@ export type TransactionFormCategory = {
   is_system?: boolean
 }
 
+export type TransactionSavedOutcome = {
+  addNext: boolean
+  /** What the next draft keeps; null for a transfer or a saved-with-warning. */
+  next: TransactionNextDefaults | null
+  /** Saved, but a follow-up step (time, tags, fee, schedule) failed. */
+  warning?: string
+}
+
 type TransactionFormProps = {
   accounts: TransactionFormAccount[]
   baseCurrency: string
   cancelHref?: string
   onCancel?: () => void
+  /**
+   * Save without a redirect (the entry dialog, premium entry sprint T4). When
+   * set, a create calls `saveManualTransaction` / `saveTransferTransaction`
+   * directly: a validation error stays in the form with the draft intact, and
+   * a save reports here at once instead of waiting for another page to render
+   * on the server. Edit mode always keeps the redirecting actions.
+   */
+  onSaved?: (outcome: TransactionSavedOutcome) => void
+  /** Shown in the amount card's header: the dialog's "created ×N" pill. */
+  batchNotice?: ReactNode
   categories: TransactionFormCategory[]
   payees: PayeeOption[]
   /** Active household tags for the tag multi-select (income/expense only). */
@@ -177,9 +228,9 @@ type TransactionFormProps = {
    * Edit mode: the id of the transaction being edited. The same form then saves
    * through the update actions instead of the create ones, so Add and Edit can
    * never drift apart. What it switches off is what only makes sense for a new
-   * entry — the type switch (a transaction's type is fixed once recorded),
-   * recurrence, "Save & add next", the category autofill and the exchange-rate
+   * entry — recurrence, "Save & add next", the category autofill and the exchange-rate
    * entry on a single-account transaction (the update RPC keeps the saved rate).
+   * The type switch stays: a new type saves as a replacement (void + recreate).
    */
   editTransactionId?: string
   /** Edit mode: `HH:MM`, or empty for an untimed transaction (BR-045). */
@@ -190,8 +241,6 @@ type TransactionFormProps = {
   defaultCost?: number
   defaultCostCategoryId?: string | null
 }
-
-const CATEGORY_USAGE_KEY = 'af_category_usage'
 
 // Only the account name is shown: the currency already appears above the amount,
 // and users typically name accounts after their bank, so the institution and
@@ -227,6 +276,8 @@ export function TransactionForm({
   baseCurrency,
   cancelHref,
   onCancel,
+  onSaved,
+  batchNotice,
   categories,
   payees,
   tags = [],
@@ -257,6 +308,10 @@ export function TransactionForm({
   const { t, locale } = useLanguage()
   const ui = useUiTranslation()
   const isEdit = Boolean(editTransactionId)
+  // Edit can switch the type too. The saved type is `defaultType`; picking
+  // another one saves through `changeTransactionTypeAction` (void + recreate,
+  // atomically), so only a same-type edit keeps the in-place update's limits.
+  const originalType: TransactionType = defaultType ?? 'expense'
   // Editing keeps the field order but not the fill-fast behaviours: an existing
   // entry is already complete, so auto-advancing would open a picker behind
   // every correction and the autofill would overwrite what was saved.
@@ -270,6 +325,8 @@ export function TransactionForm({
   const categoryName = (category: TransactionFormCategory) =>
     localizeSystemCategoryName(category.name, Boolean(category.is_system), locale)
   const [transactionType, setTransactionType] = useState<TransactionType>(defaultType ?? 'expense')
+  const typeChanged = isEdit && transactionType !== originalType
+  const updatesInPlace = isEdit && !typeChanged
   const [transactionDate, setTransactionDate] = useState(defaultDate)
   // BR-045: optional time of day. Seeded from the *viewer's* clock — same
   // reasoning as RelativeDateChips' `useState(() => todayIsoDateLocal())`, and
@@ -326,9 +383,6 @@ export function TransactionForm({
   // focus. Consumed by the effect below.
   const skipAutoFocusRef = useRef(false)
   const isMobile = useIsMobile()
-  // Non-zero only while a soft keyboard is up on a phone. See the actions row
-  // at the bottom of the form for what it buys.
-  const keyboardInset = useSoftKeyboardInset()
 
   // Accounts/categories created inline from the mobile pickers, merged into the
   // prop lists so they show up and can be selected without a page reload.
@@ -418,10 +472,11 @@ export function TransactionForm({
   // *offered* as one-tap chips, which suggests without deciding.
 
   const selectedAccount = availableAccounts.find((a) => a.id === accountId)
-  // Not in edit mode: the update RPC takes no rate, so asking for one would
-  // block a save over a figure that is then thrown away.
+  // Not in a same-type edit: the update RPC takes no rate, so asking for one
+  // would block a save over a figure that is then thrown away. A type change
+  // creates a new transaction, which does need it.
   const isMultiCurrency =
-    !isEdit && Boolean(selectedAccount && selectedAccount.currency_code !== baseCurrency)
+    !updatesInPlace && Boolean(selectedAccount && selectedAccount.currency_code !== baseCurrency)
   const parsedRate = Number(userRate)
   const rateIsValid =
     userRate.trim() !== '' && Number.isFinite(parsedRate) && parsedRate > 0
@@ -454,7 +509,11 @@ export function TransactionForm({
     [availableCategories, transactionType]
   )
 
-  // Most-used categories (for the current type) as one-tap chips.
+  // The categories (for the current type) this device uses most *lately*, as
+  // one-tap chips — subcategories included, so a frequent child is one tap
+  // instead of a walk through its parent. Six rather than four: the
+  // 2026-10-14 recording walked the tree for categories that were in regular
+  // use but missed the cut (see `usage-ranking.ts`).
   const [frequentCategories, setFrequentCategories] = useState<TransactionFormCategory[]>([])
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -464,13 +523,8 @@ export function TransactionForm({
         return
       }
       try {
-        const raw = window.localStorage.getItem(CATEGORY_USAGE_KEY)
-        const usage: Record<string, number> = raw ? JSON.parse(raw) : {}
-        const ranked = compatibleCategories
-          .filter((c) => usage[c.id] > 0)
-          .sort((a, b) => (usage[b.id] ?? 0) - (usage[a.id] ?? 0))
-          .slice(0, 4)
-        setFrequentCategories(ranked)
+        const usage = parseUsage(window.localStorage.getItem(CATEGORY_USAGE_KEY))
+        setFrequentCategories(rankByUsage(compatibleCategories, usage, Date.now(), 6))
       } catch {
         setFrequentCategories([])
       }
@@ -478,6 +532,23 @@ export function TransactionForm({
 
     return () => window.cancelAnimationFrame(frame)
   }, [compatibleCategories])
+
+  // Same ranking for tags, offered at the top of the tag picker. Read once per
+  // mount: the form remounts for every entry, "Save & Add Next" included.
+  const [suggestedTagIds, setSuggestedTagIds] = useState<string[]>([])
+  useEffect(() => {
+    if (typeof window === 'undefined' || tags.length < 2) return
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        const usage = parseUsage(window.localStorage.getItem(TAG_USAGE_KEY))
+        setSuggestedTagIds(rankByUsage(tags, usage, Date.now(), 6).map((tag) => tag.id))
+      } catch {
+        setSuggestedTagIds([])
+      }
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [tags])
   const isTransfer = transactionType === 'transfer'
   const selectedFromAccount = availableAccounts.find((a) => a.id === fromAccountId)
   const selectedToAccount = availableAccounts.find((a) => a.id === toAccountId)
@@ -548,13 +619,71 @@ export function TransactionForm({
       /fee|comis|charg|bank|banc|cargo|surcharg/i.test(c.label)
     )?.id ?? ''
   const effectiveCostCategoryId = costCategoryId || defaultCostCategoryId
-  const submitAction = isTransfer
+  const costNeedsCategory = costIsPositive && !effectiveCostCategoryId
+  // Which cost field the transfer shows: the unified cost (fees + exchange)
+  // when the currencies differ, an optional cash fee when they match (new
+  // transfers only, both accounts picked).
+  const sameCurrencyFeeVisible =
+    isTransfer && !isEdit && !isCrossCurrencyTransfer && Boolean(selectedFromAccount && selectedToAccount)
+  const costVisible = (isTransfer && isCrossCurrencyTransfer) || sameCurrencyFeeVisible
+  const costCurrency = isCrossCurrencyTransfer ? baseCurrency : (selectedFromAccount?.currency_code ?? baseCurrency)
+  const submitAction = typeChanged
+    ? changeTransactionTypeAction
+    : isTransfer
     ? isEdit
       ? updateTransferTransactionAction
       : createTransferTransactionAction
     : isEdit
       ? updateManualTransactionAction
       : createManualTransactionAction
+  // The inline save (see `onSaved`). Server-side validation is unchanged; only
+  // the way the outcome comes back is.
+  const [saveError, setSaveError] = useState('')
+  const inlineSave = onSaved && !isEdit
+  // One save per draft. React queues a form action submitted while another
+  // is pending and runs it afterwards with the same fields, so two taps in the
+  // same instant (before the disabled state had rendered) saved the entry
+  // twice — the browser scenario caught it. Released only when this draft was
+  // not saved, so a rejected save can be fixed and sent again; a saved draft
+  // closes or is replaced by the next one, a new form with its own flag.
+  const savingDraftRef = useRef(false)
+
+  async function saveInline(formData: FormData) {
+    if (savingDraftRef.current) return
+    savingDraftRef.current = true
+    setSaveError('')
+    const addNext = formData.get('add_next') === 'true'
+    let result: Awaited<ReturnType<typeof saveManualTransaction>> | undefined
+    try {
+      result = await (isTransfer ? saveTransferTransaction : saveManualTransaction)(formData)
+    } catch (error) {
+      // A session that ended mid-entry redirects to /login from the action;
+      // that navigation is the router's to finish.
+      if (String((error as { digest?: unknown } | null)?.digest ?? '').startsWith('NEXT_REDIRECT')) {
+        throw error
+      }
+      // The request failed in flight, so whether the server committed is
+      // unknown. Saying "try again" would invite a duplicate (there is no
+      // idempotency key); point at Transactions first.
+      // Released: after checking, a retry is the user's call.
+      savingDraftRef.current = false
+      setSaveError(
+        ui('The save could not be confirmed. Check Transactions before trying again — it may already be there.')
+      )
+      return
+    }
+    if (!result) {
+      savingDraftRef.current = false
+      return
+    }
+    if (!result.ok) {
+      savingDraftRef.current = false
+      setSaveError(ui(result.error))
+      return
+    }
+    onSaved?.({ addNext, next: result.next, warning: result.warning })
+  }
+
   // BR-045: edit always offers the time (otherwise a time set once could never
   // be cleared) — except on a transfer, whose update action does not store one.
   const timeVisible = showField('time') && !(isEdit && isTransfer)
@@ -566,7 +695,7 @@ export function TransactionForm({
       Boolean(toAccountId) &&
       (!isCrossCurrencyTransfer || toAmountValid) &&
       (!needsFromRate || rateIsValid) &&
-      (!isTransfer || !costIsPositive || Boolean(effectiveCostCategoryId)) &&
+      !costNeedsCategory &&
       (!isCrossCurrencyTransfer || !costExceedsSent)
     : compatibleCategories.length > 0 &&
       Boolean(categoryId) &&
@@ -575,14 +704,16 @@ export function TransactionForm({
   useEffect(() => {
     if (!isMultiCurrency || !selectedAccount || !transactionDate) return
     void autoFetch(selectedAccount.currency_code, transactionDate)
+    // The type is a dependency too: switching it clears the rate
+    // (`handleTransactionTypeChange`), and in edit it is what turns the rate on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountId, transactionDate])
+  }, [accountId, transactionDate, isMultiCurrency, transactionType])
 
   useEffect(() => {
     if (!needsFromRate || !selectedFromAccount || !transactionDate) return
     void autoFetch(selectedFromAccount.currency_code, transactionDate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromAccountId, transactionDate])
+  }, [fromAccountId, transactionDate, transactionType])
 
   // Fetch each cross-currency leg's market rate to base to suggest the cost.
   useEffect(() => {
@@ -624,24 +755,49 @@ export function TransactionForm({
   }
 
   /**
-   * Counts category use so the "Frequently used" chips can rank. Only the
-   * counter is kept — the last account and last category are deliberately not
-   * remembered, because restoring them pre-filled a blank form (see above).
+   * Counts category and tag use so the "Frequently used" chips can rank. Only
+   * ids, counts and a timestamp are kept — the last account and last category
+   * are deliberately not remembered, because restoring them pre-filled a blank
+   * form (see above).
    */
-  function rememberCategoryUsage() {
-    if (typeof window === 'undefined' || isTransfer || !categoryId) return
+  function rememberEntryUsage() {
+    if (typeof window === 'undefined' || isTransfer) return
+    const now = Date.now()
     try {
-      const raw = window.localStorage.getItem(CATEGORY_USAGE_KEY)
-      const usage: Record<string, number> = raw ? JSON.parse(raw) : {}
-      usage[categoryId] = (usage[categoryId] ?? 0) + 1
-      window.localStorage.setItem(CATEGORY_USAGE_KEY, JSON.stringify(usage))
+      if (categoryId) {
+        const usage = parseUsage(window.localStorage.getItem(CATEGORY_USAGE_KEY))
+        window.localStorage.setItem(
+          CATEGORY_USAGE_KEY,
+          JSON.stringify(recordUsage(usage, [categoryId], now))
+        )
+      }
+      if (tagIds.length > 0 && showField('tags')) {
+        const usage = parseUsage(window.localStorage.getItem(TAG_USAGE_KEY))
+        window.localStorage.setItem(TAG_USAGE_KEY, JSON.stringify(recordUsage(usage, tagIds, now)))
+      }
     } catch {
-      // Ignore malformed usage data; chips simply won't update this time.
+      // Storage full or blocked; the chips simply won't update this time.
     }
   }
 
   function handleTransactionTypeChange(value: TransactionType) {
+    const previousType = transactionType
     setTransactionType(value)
+    if (isEdit && value === originalType) {
+      // Back to the saved type: back to the saved values, not a blank form.
+      setAccountId(defaultAccountId ?? '')
+      setFromAccountId(defaultFromAccountId ?? '')
+      setToAccountId(defaultToAccountId ?? '')
+      setCategoryId(defaultCategoryId ?? '')
+      setUserRate('')
+      setFxNote('')
+      setFxError('')
+      return
+    }
+    if (previousType === 'transfer' && value !== 'transfer' && fromAccountId) {
+      // A transfer turned into an expense/income keeps the account it left from.
+      setAccountId(fromAccountId)
+    }
     if (value === 'transfer') {
       // Carry current account over as the transfer source — unless it is the
       // autofill's guess rather than the user's pick, in which case it goes
@@ -746,17 +902,52 @@ export function TransactionForm({
   // Exchange-rate block, shared by the transfer and single-account paths. Stays
   // outside the "More details" collapse because the rate is required to submit a
   // non-base-currency entry, so it must always be visible.
-  function fxFields(account: TransactionFormAccount | undefined, defaultOpen = true) {
+  /**
+   * Mobile: the exchange rate as a row of the fields card, right under the
+   * account whose currency asks for it. It opens the rate on its own screen,
+   * like description and notes: typed inside the form, the field sat at the end
+   * of a long form, under the keyboard (device run, 2026-10-23).
+   */
+  function mobileRateRowFor(account: TransactionFormAccount | undefined) {
     if (!account) return null
+    const missing = !rateIsValid
     return (
-      <AdvancedFields
-        defaultOpen={defaultOpen}
-        summary={
-          rateIsValid
-            ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${account.currency_code}`
-            : undefined
-        }
-      >
+      <div data-entry-row className="border-t first:border-t-0">
+        <button
+          type="button"
+          onClick={() => {
+            setExpandedField(null)
+            resetPickerState()
+            setSheetField('rate')
+          }}
+          className="flex w-full items-center gap-3 px-1 py-2.5 text-left"
+        >
+          <ArrowLeftRight className="size-4.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="shrink-0 text-sm font-medium">{ui('Exchange rate')}</span>
+          <span
+            className={cn(
+              'ml-auto truncate text-sm tabular-nums',
+              fxError
+                ? 'text-destructive'
+                : missing && !fetchingRate
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-foreground'
+            )}
+          >
+            {fetchingRate
+              ? ui('Fetching…')
+              : `1 ${baseCurrency} = ${missing ? '?' : formatRate(parsedRate, locale)} ${account.currency_code}`}
+          </span>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </button>
+      </div>
+    )
+  }
+
+  /** The rate's label, help, field and status: inline on desktop, the sheet's content on mobile. */
+  function fxBody(account: TransactionFormAccount, autoFocus = false) {
+    return (
+      <>
         <Label htmlFor="user_rate">
           Exchange rate: 1 {baseCurrency} = ? {account.currency_code}
           <InfoTooltip term="exchangeRate" label="Exchange rate" />
@@ -773,6 +964,7 @@ export function TransactionForm({
         <div className="flex gap-2">
           <Input
             id="user_rate"
+            autoFocus={autoFocus}
             type="text"
             inputMode="decimal"
             placeholder={fetchingRate ? 'Fetching…' : 'e.g. 2690'}
@@ -809,7 +1001,27 @@ export function TransactionForm({
             <span className="font-normal text-muted-foreground">at this rate</span>
           </p>
         ) : null}
-        <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
+      </>
+    )
+  }
+
+  function fxFields(account: TransactionFormAccount | undefined, defaultOpen = true) {
+    if (!account) return null
+    const hidden = <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
+    // Mobile: the field lives on its own screen, opened from a row in the
+    // fields card (`mobileRateRow`); only the value is submitted from here.
+    if (isMobile) return hidden
+    return (
+      <AdvancedFields
+        defaultOpen={defaultOpen}
+        summary={
+          rateIsValid
+            ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${account.currency_code}`
+            : undefined
+        }
+      >
+        {fxBody(account)}
+        {hidden}
       </AdvancedFields>
     )
   }
@@ -869,6 +1081,15 @@ export function TransactionForm({
    * The row still expands, so the field is visible and one tap from typing.
    */
   const openDescription = (quiet = false) => {
+    // Mobile: its own screen, in the sheet that may already be open (the chain
+    // arrives from the payee picker), so the keyboard just stays up. Quiet
+    // (after an autofill the user still has to read) opens nothing.
+    if (isMobile) {
+      setExpandedField(null)
+      resetPickerState()
+      setSheetField(quiet ? null : 'description')
+      return
+    }
     setSheetField(null)
     // On mobile the row has to expand first; expanding it focuses the input on
     // its own (see the `expandedField` effect) unless told not to. Only armed on
@@ -961,13 +1182,33 @@ export function TransactionForm({
   }
 
   /** Queue the next field for `closePicker` to open once the picker dismisses. */
+  // Chain fields the user has picked at least once in this form.
+  const pickedRef = useRef(new Set<ChainField>())
+
   const advanceAfter = (
     from: ChainField,
     justFilled: Partial<Record<ChainField, boolean>> = {},
     quiet = false
   ) => {
     if (!quickEntry.autoAdvance) return
-    advanceToRef.current = nextInChain(from, justFilled)
+    // Filling a field in is progress; changing one is a correction, and a
+    // correction only ever leads on to a *required* field that is still
+    // empty. Without this, switching Expense → Income (which empties the
+    // category) and picking the new category jumped past the account and
+    // payee already on screen into Description, keyboard and all (device run,
+    // 2026-10-22). A correction is a field that held a value before this pick
+    // (seeded by "Save & Add Next", a Copy, an account card, or the autofill)
+    // or one the user already picked once here — the category above was empty
+    // at that moment, but only because the type switch had just cleared it.
+    // The values are read from this render, before the pick lands.
+    const hadValue = { account: accountId, category: categoryId, payee: payeeName }[
+      from as 'account' | 'category' | 'payee'
+    ]
+    const correcting = Boolean(hadValue) || pickedRef.current.has(from)
+    pickedRef.current.add(from)
+    const next = nextInChain(from, justFilled)
+    advanceToRef.current =
+      correcting && next !== null && !REQUIRED_CHAIN_FIELDS.has(next) ? null : next
     advanceQuietRef.current = quiet
   }
 
@@ -1138,7 +1379,9 @@ export function TransactionForm({
   }) => {
     const open = expandedField === id
     return (
-      <div key={id} className="border-t first:border-t-0">
+      // `data-entry-row`: typing in this row's field scrolls the whole row,
+      // title included, to the top (see `usePlaceFieldsAboveKeyboard`).
+      <div key={id} data-entry-row className="border-t first:border-t-0">
         <button
           type="button"
           aria-expanded={open}
@@ -1188,14 +1431,14 @@ export function TransactionForm({
     placeholder,
     onOpen,
   }: {
-    id: 'account' | 'from' | 'to' | 'category' | 'payee'
+    id: Exclude<PickerField, null>
     icon: ReactNode
     label: string
     value?: string
     placeholder: string
     onOpen?: () => void
   }) => (
-    <div key={id} className="border-t first:border-t-0">
+    <div key={id} data-entry-row className="border-t first:border-t-0">
       <button
         type="button"
         onClick={() => {
@@ -1903,14 +2146,70 @@ export function TransactionForm({
     onOpen: syncCategoryDrillToSelection,
   })
 
+  // Mobile: the transfer's fee / cost as a row of the fields card, opening its
+  // own screen like the exchange rate. The card it replaces (field, category
+  // select, help) took ~180px and pushed the transfer past one screen.
+  const costLabel = isCrossCurrencyTransfer
+    ? t('transactionForm.transferCost')
+    : t('transactionForm.transferFee')
+  const mobileCostRow = costVisible ? (
+    <div data-entry-row className="border-t first:border-t-0">
+      <button
+        type="button"
+        onClick={() => {
+          setExpandedField(null)
+          resetPickerState()
+          setSheetField('cost')
+        }}
+        className="flex w-full items-center gap-3 px-1 py-2.5 text-left"
+      >
+        <Receipt className="size-4.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        {/* The label gives way, not the value: "Transfer cost (fees +
+            exchange)" is long enough to push the figure off the row. */}
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-sm font-medium">{costLabel}</span>
+          {/* Save stays disabled until a positive cost has a category, and the
+              picker lives on the cost screen: say so on the row. */}
+          {costNeedsCategory ? (
+            <span className="truncate text-xs text-amber-600 dark:text-amber-400">
+              {t('transactionForm.transferCostCategory')}
+            </span>
+          ) : null}
+        </span>
+        <span
+          className={cn(
+            'ml-auto shrink-0 text-sm tabular-nums',
+            costExceedsSent
+              ? 'text-destructive'
+              : costNeedsCategory
+                ? 'text-amber-600 dark:text-amber-400'
+              : costLooksOff
+                ? 'text-amber-600 dark:text-amber-400'
+                : costIsPositive
+                  ? 'text-foreground'
+                  : 'text-muted-foreground'
+          )}
+        >
+          {costIsPositive ? formatCurrency(parsedCost, costCurrency, locale) : '—'}
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </button>
+    </div>
+  ) : null
+  const mobileRateRow = mobileRateRowFor(
+    isTransfer ? (needsFromRate ? selectedFromAccount : undefined) : isMultiCurrency ? selectedAccount : undefined
+  )
+
   const orderedPickerRows = categoryFirst ? (
     <>
       {categoryPickerRow}
       {accountPickerRow}
+      {mobileRateRow}
     </>
   ) : (
     <>
       {accountPickerRow}
+      {mobileRateRow}
       {categoryPickerRow}
     </>
   )
@@ -1993,7 +2292,7 @@ export function TransactionForm({
           carry the answer for the dates that cover most manual entry. The
           calendar button is the escape hatch to any other date, and it shows
           that date once it is off-chip, so nothing became unreadable. */}
-      <div className="flex items-center gap-1.5 px-1 py-2">
+      <div data-entry-dates className="flex items-center gap-1.5 px-1 py-2">
         <RelativeDateChips
           value={transactionDate}
           onSelect={changeTransactionDate}
@@ -2005,6 +2304,21 @@ export function TransactionForm({
           aria-expanded={expandedField === 'date'}
           onClick={() => {
             resetPickerState()
+            // The phone's own date picker, straight away: the inline panel
+            // added a whole row (the form then no longer fit one screen) to
+            // show a field whose only job is to open that picker. The chosen
+            // date already shows on this button. The panel stays as the
+            // fallback where `showPicker` is missing or refuses.
+            const input = document.getElementById('transaction_date') as HTMLInputElement | null
+            if (expandedField !== 'date' && input?.showPicker) {
+              try {
+                input.showPicker()
+                setExpandedField(null)
+                return
+              } catch {
+                // Fall through to the panel.
+              }
+            }
             setExpandedField(expandedField === 'date' ? null : 'date')
           }}
           className={cn(
@@ -2020,7 +2334,10 @@ export function TransactionForm({
       </div>
       <div
         data-field-panel="date"
-        className={cn('px-1 pb-3 [&_label]:sr-only', expandedField === 'date' ? 'block' : 'hidden')}
+        // Visually hidden rather than `display: none` while closed, so the
+        // calendar button can open its picker (`showPicker` wants a rendered
+        // field).
+        className={cn('px-1 pb-3 [&_label]:sr-only', expandedField === 'date' ? 'block' : 'sr-only')}
       >
         {dateField}
       </div>
@@ -2040,6 +2357,8 @@ export function TransactionForm({
 
       {/* A transfer's From/To selectors live in the amounts card above, beside
           the figure each one applies to — they are deliberately absent here. */}
+      {isTransfer ? mobileRateRow : null}
+      {isTransfer ? mobileCostRow : null}
       {isTransfer ? repeatRow : null}
       {isTransfer ? null : (
         <>
@@ -2065,93 +2384,29 @@ export function TransactionForm({
         </>
       )}
 
-      {editRow({
+      {/* Description and notes open the full-screen sheet (see PickerField).
+          Hidden inputs carry their values, since the sheet's fields only exist
+          while it is open. */}
+      <input type="hidden" name="description" value={description} />
+      {pickerRow({
         id: 'description',
         icon: <FileText className="size-4.5" />,
         label: t('transactionForm.description'),
         value: description,
         placeholder: '—',
-        children: (
-          <div className="space-y-1.5">
-            <Label htmlFor="description">{t('transactionForm.description')}</Label>
-            {/* BR-046: the descriptions this category has carried before, as
-                one-tap chips. The browser offers the same thing from its own
-                cache of submitted values, but that list is per field name
-                across every site, sits in a keyboard strip nobody styled, and
-                knows nothing about which category you just picked. This does.
-                Offered, never filled: unlike the account or the payee, a
-                description really is different most times. */}
-            {descriptionSuggestions.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5 pb-0.5">
-                {descriptionSuggestions.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    onClick={() => setDescription(suggestion)}
-                    className={cn(
-                      'flex h-8 max-w-full items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
-                      description === suggestion
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    <Sparkles className="size-3 shrink-0" aria-hidden="true" />
-                    <span className="truncate">{suggestion}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            <Input
-              id="description"
-              name="description"
-              // The chips above are this field's suggestions now. The browser's
-              // own list came from its cache of submitted values, keyed on the
-              // field name across every site, and it knew nothing about the
-              // category — so it sat in a keyboard strip nobody styled, offering
-              // worse answers than the row right above it.
-              autoComplete="off"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onKeyDown={(e) => {
-                // A text field has no "chosen" moment a picker can hook into,
-                // so the keyboard's Enter/Done is the one: it closes the row and
-                // hands the chain on to tags. Without preventDefault this would
-                // submit the half-filled form instead.
-                if (e.key !== 'Enter') return
-                e.preventDefault()
-                const next = quickEntry.autoAdvance
-                  ? nextInChain('description', {
-                      description: Boolean(description.trim()),
-                    })
-                  : null
-                setExpandedField(null)
-                if (next) goTo(next)
-              }}
-            />
-          </div>
-        ),
       })}
-      {showField('notes')
-        ? editRow({
-            id: 'note',
+      {showField('notes') ? (
+        <>
+          <input type="hidden" name="notes" value={notes} />
+          {pickerRow({
+            id: 'notes',
             icon: <StickyNote className="size-4.5" />,
             label: t('transactionForm.notes'),
             value: notes,
             placeholder: '—',
-            children: (
-              <div className="space-y-1.5">
-                <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-                <Textarea
-                  id="notes"
-                  name="notes"
-                  rows={3}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </div>
-            ),
-          })
-        : null}
+          })}
+        </>
+      ) : null}
       {showField('status')
         ? editRow({
             id: 'status',
@@ -2172,6 +2427,13 @@ export function TransactionForm({
   // other. So they belong in one card, each directly above the account it
   // applies to, instead of an amount at the top and "amount received" pushed
   // below the date, description and notes.
+  // The amount card wears the type picked above it: a faint wash of the same
+  // colour as the selector's active option, so the two read as one control.
+  const AMOUNT_CARD_TINT = {
+    expense: 'border-rose-500/20 bg-linear-to-b from-rose-500/[0.07] to-muted/30',
+    income: 'border-emerald-500/20 bg-linear-to-b from-emerald-500/[0.07] to-muted/30',
+    transfer: 'border-sky-500/20 bg-linear-to-b from-sky-500/[0.07] to-muted/30',
+  } as const
   const AMOUNT_LABEL_CLS =
     'text-xs font-medium uppercase tracking-wider text-muted-foreground'
   const CURRENCY_CHIP_CLS =
@@ -2213,11 +2475,14 @@ export function TransactionForm({
         body,
       })
     }
+    // One row on a phone, the label inside it: a label above plus a full-size
+    // button was ~70px per account, and with the fee the transfer no longer
+    // fit one screen (user request, 2026-10-24).
     return (
-      <div className="space-y-1.5">
-        <Label>{label}</Label>
+      <div>
         <button
           type="button"
+          aria-label={`${label}: ${valueText || placeholder}`}
           onClick={() => {
             setExpandedField(null)
             resetPickerState()
@@ -2225,6 +2490,9 @@ export function TransactionForm({
           }}
           className="flex h-11 w-full items-center gap-2 rounded-xl border bg-background px-3 text-left text-sm"
         >
+          <span className="w-[4.5rem] shrink-0 truncate text-xs font-medium text-muted-foreground">
+            {label}
+          </span>
           {accountLeading(account) ? (
             <span className="shrink-0 text-muted-foreground">{accountLeading(account)}</span>
           ) : null}
@@ -2237,15 +2505,92 @@ export function TransactionForm({
     )
   }
 
-  const transferAmountsCard = (
-    <div className="space-y-2.5 rounded-2xl border bg-muted/30 p-3">
-      <div>
-        <div className="flex items-center justify-between">
-          <Label htmlFor="amount" className={AMOUNT_LABEL_CLS}>
-            {t('transactionForm.amountSent')}
-          </Label>
-          <span className={CURRENCY_CHIP_CLS}>{amountCurrencyCode}</span>
+  // Mobile: a transfer leg's account as a chip in its amount's header row,
+  // "FROM [Checking ›]  CAD", instead of a separate row under the amount.
+  // Two rows of ~52px each were what kept a transfer from fitting one screen
+  // (user request, 2026-10-24). Desktop keeps its comboboxes.
+  const transferAccountChip = ({
+    id,
+    shortLabel,
+    label,
+    account,
+    placeholder,
+    currencyCode,
+  }: {
+    id: 'from' | 'to'
+    shortLabel: string
+    label: string
+    account: TransactionFormAccount | undefined
+    placeholder: string
+    currencyCode: string | undefined
+  }) => {
+    const valueText = account ? formatAccountLabel(account) : ''
+    return (
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={AMOUNT_LABEL_CLS}>{shortLabel}</span>
+          <button
+            type="button"
+            aria-label={`${label}: ${valueText || placeholder}`}
+            onClick={() => {
+              setExpandedField(null)
+              resetPickerState()
+              setSheetField(id)
+            }}
+            className={cn(
+              'flex h-8 min-w-0 items-center gap-1.5 rounded-full border bg-background/60 pl-2.5 pr-2 text-sm font-medium transition-colors active:bg-muted',
+              !valueText && 'border-dashed text-muted-foreground'
+            )}
+          >
+            {accountLeading(account) ? (
+              <span className="shrink-0 text-muted-foreground [&_svg]:size-3.5">
+                {accountLeading(account)}
+              </span>
+            ) : null}
+            <span className="truncate">{valueText || placeholder}</span>
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </button>
         </div>
+        {currencyCode ? <span className={CURRENCY_CHIP_CLS}>{currencyCode}</span> : null}
+      </div>
+    )
+  }
+
+  const fromAccountChip = transferAccountChip({
+    id: 'from',
+    shortLabel: t('transactionForm.fromShort'),
+    label: t('transactionForm.fromAccount'),
+    account: selectedFromAccount,
+    placeholder: t('transactionForm.selectSource'),
+    currencyCode: amountCurrencyCode,
+  })
+  const toAccountChip = transferAccountChip({
+    id: 'to',
+    shortLabel: t('transactionForm.toShort'),
+    label: t('transactionForm.toAccount'),
+    account: selectedToAccount,
+    placeholder: t('transactionForm.selectDestination'),
+    currencyCode: isCrossCurrencyTransfer ? selectedToAccount?.currency_code : undefined,
+  })
+
+  const transferAmountsCard = (
+    <div data-entry-amount className={cn('space-y-2.5 rounded-2xl border p-3', AMOUNT_CARD_TINT.transfer)}>
+      <div>
+        {isMobile ? (
+          <>
+            {fromAccountChip}
+            <Label htmlFor="amount" className="sr-only">
+              {t('transactionForm.amountSent')}
+            </Label>
+          </>
+        ) : (
+          <div className="flex items-center justify-between">
+            <Label htmlFor="amount" className={AMOUNT_LABEL_CLS}>
+              {t('transactionForm.amountSent')}
+            </Label>
+            <span className={CURRENCY_CHIP_CLS}>{amountCurrencyCode}</span>
+          </div>
+        )}
         <AmountInput
           id="amount"
           name="amount"
@@ -2265,7 +2610,7 @@ export function TransactionForm({
           required
           className="mt-1.5"
         />
-        <div className="mt-2">
+        <div className="mt-2 max-sm:hidden">
           {transferAccountField({
             id: 'from',
             label: t('transactionForm.fromAccount'),
@@ -2278,7 +2623,9 @@ export function TransactionForm({
         </div>
       </div>
 
-      <div className="flex items-center gap-2" aria-hidden="true">
+      {/* The From/To rows read top to bottom on a phone; the arrow between
+          them only cost a row of height there. */}
+      <div className="flex items-center gap-2 max-sm:hidden" aria-hidden="true">
         <span className="h-px flex-1 bg-border" />
         <ArrowDown className="size-3.5 text-muted-foreground" />
         <span className="h-px flex-1 bg-border" />
@@ -2288,14 +2635,21 @@ export function TransactionForm({
         {/* Only a cross-currency transfer has a second amount to enter. When both
             legs share a currency the same figure arrives, so the destination
             block is just the account. */}
+        {isMobile ? toAccountChip : null}
         {isCrossCurrencyTransfer ? (
           <>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="to_amount" className={AMOUNT_LABEL_CLS}>
+            {isMobile ? (
+              <Label htmlFor="to_amount" className="sr-only">
                 {t('transactionForm.amountReceived')}
               </Label>
-              <span className={CURRENCY_CHIP_CLS}>{selectedToAccount?.currency_code}</span>
-            </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <Label htmlFor="to_amount" className={AMOUNT_LABEL_CLS}>
+                  {t('transactionForm.amountReceived')}
+                </Label>
+                <span className={CURRENCY_CHIP_CLS}>{selectedToAccount?.currency_code}</span>
+              </div>
+            )}
             <AmountInput
               id="to_amount"
               name="to_amount"
@@ -2313,7 +2667,7 @@ export function TransactionForm({
             />
           </>
         ) : null}
-        <div className={isCrossCurrencyTransfer ? 'mt-2' : undefined}>
+        <div className={cn(isCrossCurrencyTransfer && 'mt-2', 'max-sm:hidden')}>
           {transferAccountField({
             id: 'to',
             label: t('transactionForm.toAccount'),
@@ -2324,7 +2678,14 @@ export function TransactionForm({
             body: accountPickerBody(toAccountId, selectToAccount, fromAccountId),
           })}
         </div>
-        <p className="mt-1.5 text-xs text-muted-foreground">
+        {/* "The same amount arrives" is self-evident with one amount on screen;
+            on a phone it only cost height. */}
+        <p
+          // Hidden on a phone either way: the same-currency note is
+          // self-evident, and the cross-currency one is what the transfer
+          // cost row (and its screen) already explain.
+          className="mt-1.5 text-xs text-muted-foreground max-sm:hidden"
+        >
           {isCrossCurrencyTransfer
             ? t('transactionForm.amountReceivedHelp')
             : t('transactionForm.amountArrivesSame')}
@@ -2336,6 +2697,159 @@ export function TransactionForm({
           {t('transactionForm.needTwoAccounts')}
         </p>
       ) : null}
+    </div>
+  )
+
+  // ── Description / notes on their own screen (mobile) ───────────────────
+  // Enter (or Done) on the description hands the chain on, as the inline field
+  // did; notes are free text, so Enter is a new line and Done closes.
+  const finishDescription = () => {
+    const next = quickEntry.autoAdvance
+      ? nextInChain('description', { description: Boolean(description.trim()) })
+      : null
+    if (next) goTo(next)
+    else setSheetField(null)
+  }
+  const doneButton = (onDone: () => void) => (
+    <Button type="button" className="mt-2 h-11 w-full rounded-xl text-sm font-semibold" onClick={onDone}>
+      {ui('Done')}
+    </Button>
+  )
+  // Which entry this is, above the field: on its own screen the amount and
+  // category are out of sight, and the description is written for them.
+  const entryContext = [
+    amountIsValid ? formatCurrency(parsedAmount, amountCurrencyCode, locale) : null,
+    isTransfer
+      ? [selectedFromAccount?.name, selectedToAccount?.name].filter(Boolean).join(' → ') || null
+      : categoryValue || null,
+    isTransfer ? null : (selectedAccount?.name ?? null),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const entryContextLine = entryContext ? (
+    <p className="mb-2 truncate text-sm text-muted-foreground">{entryContext}</p>
+  ) : null
+  const descriptionSheetField = (
+    <div>
+      {entryContextLine}
+      {/* One line of meaning, several of display: it grows downward as it
+          wraps (`field-sizing: content`) instead of scrolling sideways out of
+          sight, and takes no line breaks — Enter moves the entry on. */}
+      <Textarea
+        aria-label={t('transactionForm.description')}
+        // The screen is otherwise empty for a category with no past
+        // descriptions to suggest.
+        placeholder={ui('What was it for?')}
+        autoFocus
+        rows={1}
+        enterKeyHint="next"
+        value={description}
+        onChange={(e) => setDescription(e.target.value.replace(/[\r\n]+/g, ' '))}
+        onKeyDown={(e) => {
+          // Without preventDefault, Enter would add a line break.
+          if (e.key !== 'Enter') return
+          e.preventDefault()
+          finishDescription()
+        }}
+        className="min-h-12 resize-none rounded-xl py-3 text-base"
+      />
+      {doneButton(finishDescription)}
+    </div>
+  )
+  // BR-046: the descriptions this category has carried before, as one-tap
+  // chips. Offered, never filled: a description really is different most times.
+  const descriptionSheetBody =
+    descriptionSuggestions.length > 0 ? (
+      <div className="flex flex-wrap gap-2 p-3">
+        {descriptionSuggestions.map((suggestion) => (
+          <button
+            key={suggestion}
+            type="button"
+            onClick={() => setDescription(suggestion)}
+            className={cn(
+              'flex h-9 max-w-full items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors',
+              description === suggestion
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground active:bg-muted'
+            )}
+          >
+            <Sparkles className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{suggestion}</span>
+          </button>
+        ))}
+      </div>
+    ) : null
+  const notesSheetField = (
+    <div>
+      {entryContextLine}
+      <Textarea
+        aria-label={t('transactionForm.notes')}
+        autoFocus
+        rows={5}
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        className="rounded-xl text-base"
+      />
+      {doneButton(() => setSheetField(null))}
+    </div>
+  )
+
+  const costSheetField = (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className={AMOUNT_LABEL_CLS}>{costLabel}</span>
+        <span className={CURRENCY_CHIP_CLS}>{costCurrency}</span>
+      </div>
+      <Input
+        aria-label={costLabel}
+        autoFocus
+        inputMode="decimal"
+        enterKeyHint="done"
+        value={costValue}
+        onChange={(e) => {
+          setCostInput(e.target.value)
+          setCostTouched(true)
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return
+          e.preventDefault()
+          setSheetField(null)
+        }}
+        placeholder="0.00"
+        className="h-12 rounded-xl text-base"
+      />
+      <select
+        aria-label={t('transactionForm.transferCostCategory')}
+        value={effectiveCostCategoryId}
+        onChange={(e) => setCostCategoryId(e.target.value)}
+        className={cn(nativeSelectCls, 'h-11 w-full rounded-xl')}
+        disabled={!costIsPositive}
+      >
+        <option value="" disabled>
+          {t('transactionForm.transferCostCategory')}
+        </option>
+        {expenseCategoryOptions.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+      {costExceedsSent ? (
+        <p className="text-xs text-destructive">{t('transactionForm.transferCostTooLarge')}</p>
+      ) : costLooksOff && suggestedCost != null ? (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          {t('transactionForm.transferCostLooksOff', {
+            amount: formatCurrency(suggestedCost, baseCurrency),
+          })}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          {isCrossCurrencyTransfer
+            ? t('transactionForm.transferCostHelp')
+            : t('transactionForm.transferFeeHelp')}
+        </p>
+      )}
+      {doneButton(() => setSheetField(null))}
     </div>
   )
 
@@ -2363,7 +2877,15 @@ export function TransactionForm({
       : undefined
 
   const baseSheetTitle =
-    sheetField === 'category'
+    sheetField === 'description'
+      ? t('transactionForm.description')
+      : sheetField === 'notes'
+        ? t('transactionForm.notes')
+        : sheetField === 'rate'
+          ? ui('Exchange rate')
+          : sheetField === 'cost'
+            ? costLabel
+        : sheetField === 'category'
       ? 'Category'
       : sheetField === 'payee'
         ? t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')
@@ -2383,7 +2905,22 @@ export function TransactionForm({
   // top of the list, so it stays under the header while the list scrolls.
   let sheetBody: ReactNode = null
   let sheetSearch: ReactNode = null
-  if (sheetField === 'category') {
+  if (sheetField === 'description') {
+    sheetSearch = descriptionSheetField
+    sheetBody = descriptionSheetBody
+  } else if (sheetField === 'notes') {
+    sheetSearch = notesSheetField
+  } else if (sheetField === 'cost') {
+    sheetSearch = costSheetField
+  } else if (sheetField === 'rate') {
+    const rateAccount = isTransfer ? selectedFromAccount : selectedAccount
+    sheetSearch = rateAccount ? (
+      <div className="space-y-3">
+        {fxBody(rateAccount, true)}
+        {doneButton(() => setSheetField(null))}
+      </div>
+    ) : null
+  } else if (sheetField === 'category') {
     sheetBody = categoryPickerBody(false)
     sheetSearch = categoryDrillParentId ? subcategorySearchField : categorySearchField
   } else if (sheetField === 'payee') {
@@ -2435,8 +2972,19 @@ export function TransactionForm({
 
   return (
     <form
-      action={submitAction}
-      onSubmit={rememberCategoryUsage}
+      action={inlineSave ? saveInline : submitAction}
+      onSubmit={(event) => {
+        // T4 entry timing (a no-op unless `?entry_timing=on`): the submitter
+        // tells "Save & Add Next" (name="add_next") from a plain create.
+        if (!isEdit) {
+          const submitter = (event.nativeEvent as SubmitEvent).submitter
+          markSaveStart(submitter?.getAttribute('name') === 'add_next' ? 'next' : 'close')
+        }
+        rememberEntryUsage()
+      }}
+      // `data-entry-form` & co.: hooks for the dialog's fit-to-screen density
+      // (`useFitEntryForm`, globals.css).
+      data-entry-form
       className="space-y-3 max-sm:flex max-sm:min-h-full max-sm:flex-1 max-sm:flex-col"
     >
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
@@ -2455,10 +3003,13 @@ export function TransactionForm({
       </SelectorSheet>
 
       {/* ── Type: segmented control ──────────────────────────────────── */}
-      {/* A recorded transaction keeps its type: the dialog title says which one
-          it is, and switching would mean a different set of ledger entries. */}
-      {isEdit ? null : (
+      {/* Edit offers it too: a different type saves as a replacement (the
+          original is voided, see `changeTransactionTypeAction`), and the hint
+          below says so before the save. */}
+      {/* `data-entry-type`: the dialog keeps it clear of its floating X. */}
+      <div data-entry-type>
         <SegmentedField
+          fit="content"
           name="transaction_type"
           value={transactionType}
           onChange={(value) => handleTransactionTypeChange(value as TransactionType)}
@@ -2473,18 +3024,37 @@ export function TransactionForm({
             ),
           }))}
         />
-      )}
+        {typeChanged ? (
+          <p data-entry-type-hint className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+            {ui('Saving replaces it: the original stays voided in the history.')}
+          </p>
+        ) : null}
+      </div>
 
       {/* ── Amount: one hero for expense/income, a paired card for transfers ── */}
       {isTransfer ? (
         transferAmountsCard
       ) : (
-        <div className="rounded-2xl border bg-muted/30 p-3">
+        <div
+          data-entry-amount
+          className={cn(
+            'rounded-2xl border p-3 transition-colors duration-300',
+            AMOUNT_CARD_TINT[transactionType === 'income' ? 'income' : 'expense']
+          )}
+        >
           <div className="flex items-center justify-between">
             <Label htmlFor="amount" className={AMOUNT_LABEL_CLS}>
               {t('transactionForm.amount')}
             </Label>
-            <span className={CURRENCY_CHIP_CLS}>{amountCurrencyCode}</span>
+            <div className="flex min-w-0 items-center gap-2">
+              {batchNotice}
+              {isMobile && isMultiCurrency && baseEquivalent ? (
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                  ≈ {baseEquivalent}
+                </span>
+              ) : null}
+              <span className={CURRENCY_CHIP_CLS}>{amountCurrencyCode}</span>
+            </div>
           </div>
           <AmountInput
             id="amount"
@@ -2510,7 +3080,9 @@ export function TransactionForm({
               only value the user has is the one in the account's currency —
               nobody records a COP purchase by typing CAD — so this reads out the
               conversion instead of asking for it. */}
-          {isMultiCurrency ? (
+          {/* Mobile shows the equivalent in the card's header instead (one
+              line less), and a missing rate already shows on its own row. */}
+          {isMultiCurrency && !isMobile ? (
             <p className="mt-2 text-xs text-muted-foreground">
               {baseEquivalent
                 ? t('transactionForm.amountInBasePreview', {
@@ -2567,7 +3139,12 @@ export function TransactionForm({
               id="description"
               name="description"
               autoComplete="off"
-              defaultValue={defaultDescription}
+              // Controlled, like every field of the draft: React resets
+              // uncontrolled fields when a form action finishes, so a
+              // rejected inline save wiped the description (Codex review on
+              // #122).
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
             />
           </div>
         </div>
@@ -2628,7 +3205,12 @@ export function TransactionForm({
               id="description"
               name="description"
               autoComplete="off"
-              defaultValue={defaultDescription}
+              // Controlled, like every field of the draft: React resets
+              // uncontrolled fields when a form action finishes, so a
+              // rejected inline save wiped the description (Codex review on
+              // #122).
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
             />
           </div>
 
@@ -2681,7 +3263,14 @@ export function TransactionForm({
         {showField('notes') ? (
           <div className={cn('space-y-1.5 sm:block', showMoreDetails ? 'block' : 'hidden')}>
             <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-            <Textarea id="notes" name="notes" rows={2} defaultValue={defaultNotes} />
+            {/* Controlled for the same reason as the description above. */}
+            <Textarea
+              id="notes"
+              name="notes"
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
           </div>
         ) : null}
       </div>
@@ -2697,6 +3286,8 @@ export function TransactionForm({
       {!isTransfer && showField('tags') ? (
         <TagMultiSelect
           tags={tags}
+          suggestedTagIds={suggestedTagIds}
+          suggestedLabel={t('transactionForm.frequentlyUsed')}
           value={tagIds}
           onValueChange={(next) => {
             setTagIds(next)
@@ -2711,7 +3302,24 @@ export function TransactionForm({
       ) : null}
 
       {/* ── Cross-currency: unified transfer cost (fees + exchange) ────── */}
-      {isTransfer && isCrossCurrencyTransfer ? (
+      {/* Desktop only: on a phone it is a row of the fields card that opens
+          its own screen (`mobileCostRow`), and these values travel in the
+          hidden inputs below. */}
+      {isMobile && costVisible ? (
+        <>
+          <input
+            type="hidden"
+            name={isCrossCurrencyTransfer ? 'cost_base' : 'fee_amount'}
+            value={costValue}
+          />
+          <input
+            type="hidden"
+            name={isCrossCurrencyTransfer ? 'cost_category_id' : 'fee_category_id'}
+            value={costIsPositive ? effectiveCostCategoryId : ''}
+          />
+        </>
+      ) : null}
+      {!isMobile && isTransfer && isCrossCurrencyTransfer ? (
         <div className="rounded-2xl border bg-muted/30 p-3">
           <div className="flex items-center justify-between">
             <Label
@@ -2778,7 +3386,7 @@ export function TransactionForm({
       ) : null}
 
       {/* ── Same-currency: optional explicit fee (a real cash charge) ──── */}
-      {isTransfer && !isEdit && !isCrossCurrencyTransfer && selectedFromAccount && selectedToAccount ? (
+      {!isMobile && sameCurrencyFeeVisible && selectedFromAccount ? (
         <div className="rounded-2xl border bg-muted/30 p-3">
           <div className="flex items-center justify-between">
             <Label
@@ -2849,15 +3457,14 @@ export function TransactionForm({
       )}
 
       {/* ── Actions ──────────────────────────────────────────────────── */}
-      {/* One row, not three stacked buttons, and no row at all while typing.
+      {/* One row, not three stacked buttons.
 
-          With the keyboard up, the sheet is a few hundred pixels tall and this
-          bar was taking a chunk of it to offer "Create transaction" at the exact
-          moment nobody wants it: you have just entered the amount and cannot see
-          a single field below it. So it hides for the duration — the same trade
-          the dialog already makes with its title — and the space goes to the
-          form. Dismissing the keyboard brings it straight back, and while it is
-          gone the keyboard's own Next carries the entry forward.
+          Always mounted. It used to unmount while the keyboard was up, to give
+          the lifted sheet that space. The sheet is no longer lifted, so the
+          keyboard simply covers the row, and the keyboard's own Next carries
+          the entry forward. Unmounting it also reflowed the form every time the
+          keyboard opened, which was part of the jump onto Description (device
+          run, 2026-10-22).
 
           The rest of the row:
           - **Cancel is gone** wherever the form is dismissable on its own. In a
@@ -2865,9 +3472,9 @@ export function TransactionForm({
             X and the backdrop all already cancel, so a fourth way to do it was
             only costing height. `cancelHref` still renders one, because a form
             reached as a plain page has no other way out.
-          - **Save & add next** keeps its full label on desktop and shrinks to
-            its icon on mobile, where it sits directly beside the primary submit
-            and reads as "…and another". */}
+          - **Save & add next** keeps its full label on desktop and a short
+            "+ Add next" on mobile, where it sits directly beside the primary
+            submit as the second half of one split button. */}
       {/* Unmounted rather than `hidden`: this row is a `flex` container, and a
           `display` utility beats the UA stylesheet's `[hidden] { display: none }`,
           so the attribute alone would leave the bar on screen. */}
@@ -2876,8 +3483,15 @@ export function TransactionForm({
           which would fight `space-y-3`'s own margin on the same side. */}
       <div aria-hidden="true" className="hidden max-sm:block max-sm:flex-1" />
 
-      {keyboardInset > 0 ? null : (
-      <div className="sticky bottom-0 z-10 flex items-center gap-2 border-t bg-popover pb-1 pt-3 sm:static sm:flex-wrap sm:border-t-0 sm:bg-transparent sm:p-0">
+      {saveError ? (
+        <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {saveError}
+        </p>
+      ) : null}
+
+      {/* A soft fade into the form above instead of a hard rule: the fields
+          scrolling under the bar dissolve rather than being cut by a line. */}
+      <div className="sticky bottom-0 z-10 flex items-center gap-2 bg-popover pb-1 pt-3 before:pointer-events-none before:absolute before:inset-x-0 before:-top-5 before:h-5 before:bg-linear-to-t before:from-popover before:to-transparent sm:static sm:flex-wrap sm:bg-transparent sm:p-0 sm:before:hidden">
         {/* One split button on mobile, not a wide primary next to an orphaned
             square. "Save" and "save and start another" are the same action with
             one difference, so they read as one control divided in two: shared
@@ -2916,15 +3530,21 @@ export function TransactionForm({
               aria-label={t('transactionForm.saveAndAddNext')}
               title={t('transactionForm.saveAndAddNext')}
               className={cn(
-                'h-11 w-14 shrink-0 rounded-none border-l border-primary-foreground/25 p-0',
-                'sm:h-9 sm:w-auto sm:rounded-lg sm:border-l-0 sm:px-3',
+                'h-11 shrink-0 gap-1 rounded-none border-l border-primary-foreground/25 px-3 text-sm font-semibold',
+                'sm:h-9 sm:rounded-lg sm:border-l-0 sm:font-medium',
                 // Desktop keeps the quieter outline treatment it had; on mobile
                 // it is the same solid as its other half.
                 'sm:border sm:border-border sm:bg-background sm:text-foreground sm:hover:bg-muted'
               )}
               pendingText={t('transactionForm.saving')}
             >
-              <Plus className="size-4.5 sm:hidden" aria-hidden="true" />
+              {/* Worded on mobile too: the bare "+" read as "add a field" or
+                  "new transaction" rather than "save this, then another", and
+                  AndroMoney's labelled ADD NEXT was the easier one to find in
+                  the 2026-10-14 recordings. Short, so "Create transaction"
+                  still fits beside it at 320px. */}
+              <Plus className="size-4 sm:hidden" aria-hidden="true" />
+              <span className="sm:hidden">{t('transactionForm.addNext')}</span>
               <span className="hidden sm:inline">{t('transactionForm.saveAndAddNext')}</span>
             </SubmitButton>
           ) : null}
@@ -2941,7 +3561,6 @@ export function TransactionForm({
           </Link>
         ) : null}
       </div>
-      )}
     </form>
   )
 }

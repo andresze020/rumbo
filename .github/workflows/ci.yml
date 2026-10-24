@@ -80,3 +80,41 @@ jobs:
       # Only node built-ins and psql are needed — no npm ci.
       - name: Ledger invariants (local Postgres + fixtures)
         run: npm run db:local -- --bench
+
+  # The transaction entry dialog in a real browser (e2e/entry/): the scenarios
+  # each pin down something a phone run found broken — the form not fitting
+  # one screen, the keyboard moving it, a double tap saving twice, the batch
+  # confirmation, the exchange-rate screen. The app is built against the
+  # Supabase stand-in in e2e/entry/mock-supabase.mjs, so nothing here touches
+  # a database or needs a secret. See docs/testing.md.
+  entry-e2e:
+    name: entry form in a browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Not a project dependency (docs/testing.md), so installed for this job only.
+      - name: Install Playwright + Chromium
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      # NEXT_PUBLIC_* is baked in at build time: this build talks to the
+      # stand-in that `e2e:entry` starts on port 54321.
+      - name: Build against the Supabase stand-in
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: e2e
+
+      - name: Entry scenarios
+        run: npm run e2e:entry

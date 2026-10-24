@@ -159,6 +159,7 @@ export function SegmentedField({
   onChange,
   options,
   size = 'default',
+  fit = 'equal',
 }: {
   label?: ReactNode
   name?: string
@@ -166,6 +167,12 @@ export function SegmentedField({
   onChange: (value: string) => void
   options: SegmentedOption[]
   size?: 'default' | 'sm'
+  /**
+   * `equal`: same-width columns. `content`: each option as wide as its label,
+   * the spare width shared out, so one long label ("Transferencia") does not
+   * truncate while a short one ("Gasto") keeps room it does not need.
+   */
+  fit?: 'equal' | 'content'
 }) {
   return (
     <div className={label ? 'space-y-1.5' : undefined}>
@@ -173,8 +180,12 @@ export function SegmentedField({
       {name ? <input type="hidden" name={name} value={value} /> : null}
       <div
         role="group"
-        className="grid gap-1 rounded-xl bg-muted p-1"
-        style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+        className={cn('gap-1 rounded-xl bg-muted p-1', fit === 'content' ? 'flex' : 'grid')}
+        style={
+          fit === 'content'
+            ? undefined
+            : { gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }
+        }
       >
         {options.map((option) => {
           const isActive = value === option.value
@@ -186,6 +197,7 @@ export function SegmentedField({
               onClick={() => onChange(option.value)}
               className={cn(
                 'flex items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-all',
+                fit === 'content' && 'min-w-0 flex-auto px-2',
                 size === 'sm' ? 'h-8' : 'h-9',
                 isActive
                   ? cn('bg-background text-foreground shadow-sm', option.activeCls)

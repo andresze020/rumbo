@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { pushToast, type QueuedToast } from '@/lib/toast-queue'
 import { cn } from '@/lib/utils'
 
 const TOAST_DURATION_MS = 5000
@@ -21,9 +22,7 @@ type ToastInput = {
   action?: ToastAction
 }
 
-type ToastItem = ToastInput & {
-  id: number
-}
+type ToastItem = QueuedToast<ToastAction>
 
 type ToastContextValue = {
   toast: (input: ToastInput) => void
@@ -41,7 +40,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const toast = useCallback(
     (input: ToastInput) => {
       const id = Date.now() + Math.random()
-      setToasts((current) => [...current, { ...input, id }])
+      // A repeat of a message already showing replaces it under the new id, so
+      // the earlier timer finds nothing to dismiss and this one restarts the
+      // five seconds (see `pushToast`).
+      setToasts((current) => pushToast(current, input, id))
       setTimeout(() => dismiss(id), TOAST_DURATION_MS)
     },
     [dismiss]
@@ -60,7 +62,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               'animate-in slide-in-from-bottom-2 fade-in-0 duration-150'
             )}
           >
-            <span className="text-card-foreground">{item.message}</span>
+            <span className="text-card-foreground">
+              {item.message}
+              {item.count > 1 ? (
+                <span className="ml-1.5 tabular-nums text-muted-foreground">×{item.count}</span>
+              ) : null}
+            </span>
             <div className="flex shrink-0 items-center gap-2">
               {item.action ? (
                 <button

@@ -411,3 +411,314 @@ zoom del navegador sigue funcionando.
   producción; el clip no controla red, sesión, espera humana ni rehidratación.
 - Ajustar objetivos de latencia si el dispositivo/red de QA no permite cumplir
   los umbrales iniciales; registrar baseline y razón antes de optimizar.
+
+---
+
+## Implementación — 2026-10-22 (rama `ccr-95b39f19-3w7kyn`)
+
+> **Estado: código listo, T4 medido en dispositivo (cumplido); QA de T5 pendiente.**
+> Todo lo de abajo se razonó desde el código y los hallazgos ya anotados de
+> las grabaciones; los videos no están en el repositorio, así que no se
+> agregaron timestamps nuevos. Sin migración, sin RPC, sin cambio de RLS.
+
+### T0 — Mapa del flujo, con la capa de cada demora
+
+Leído del código vigente, de tocar «+» a ver el resultado:
+
+| Paso | Qué pasa | Capa | Antes | Ahora |
+|---|---|---|---|---|
+| 1. Tocar «+» (primera vez, o pestaña recargada) | `openDialog` → `getQuickAddFormData()` (Server Action) | Consulta de datos | `auth.getUser` → `profiles` → `auth.getUser` → `profiles` → 6 listas en paralelo → memoria por categoría: **5–6 viajes en serie** | `getRequestProfile` (caché por request) → 6 listas + memoria en un solo lote: **3 viajes en serie** |
+| 2. Espera de esa primera apertura | El diálogo a pantalla completa | Apertura/render | Una línea gris «Loading form…» en una pantalla vacía | Esqueleto con la forma del formulario (tipo, monto, fechas, filas, acción) y `role="status"` |
+| 3. Aperturas siguientes | Datos en memoria (MQ-009) + refresco en segundo plano | — | Inmediatas (sin cambio) | Igual |
+| 4. Categoría | `SelectorSheet` con chips «Frequently used» | Interacción | Top 4 por **cantidad** de usos en el dispositivo, sin recencia | Top 6 por **frecuencia + recencia** (vida media 21 días); las subcategorías entran como chip, así que una hija frecuente es un toque |
+| 5. Tags | `TagMultiSelect` | Interacción | Lista alfabética completa; en el video hubo scroll largo | Chips «Frequently used» arriba (mismo ranking, hasta 6, sin los ya elegidos) |
+| 6. Guardar y siguiente | Server Action → `redirect` con `created=1&next_*` | Acción de servidor + navegación | Tras el redirect, **dos `router.replace()` más** (toast y provider) para limpiar los flags: dos renders completos de la página en el servidor mientras se escribe la siguiente | En Transactions los flags se limpian con `history.replaceState` (`replaceUrlInPlace`): cero viajes extra. Accounts, Debts y el asistente leen `created=1` en el servidor (sus avisos «… created»), así que ahí sigue la navegación |
+| 7. Botón de alta consecutiva | Split button | Interacción | `+` sin texto en móvil | «+ Add next» / «+ Agregar otra» / «+ Une autre» con texto (cabe a 320 px junto a «Create transaction», medido) |
+| 8. Confirmación | `TransactionToasts` | Feedback | Un toast de 5 s por guardado; en una racha se apilaban 3 sobre la fila de acciones | Un solo toast por mensaje, con contador (`×3`), que reinicia sus 5 s; los que tienen Undo nunca se unen |
+
+**Defecto previo corregido de paso (revisión `ledger-guard`):** tras un
+«Copy» (BR-034) o un «share» (BR-028), «Save & Add Next» volvía a sembrar el
+monto, la descripción y las notas de la entrada original en el siguiente
+borrador. Ahora el efecto de add-next limpia esos prefills; el siguiente
+borrador solo conserva lo que llevan los parámetros `next_*`.
+
+**Segundo defecto previo (visto al medir desde Accounts, 2026-10-22):** el
+guardado aterrizaba con `created=1`, el mismo flag que Accounts, Payees,
+Goals, Tags, Categories, Debts y otras pantallas usan para *sus* altas. Como
+el «+» es global, guardar una transacción desde Accounts mostraba «Cuenta
+creada.», y la confirmación real solo existía en Transactions. Ahora el
+guardado usa su propio flag (`txn_created`, con un valor único por guardado),
+el provider muestra «Transacción creada.» en cualquier pantalla y Transactions
+dejó de mostrarlo por su cuenta. Con eso la limpieza del flag es un
+`replaceState` en todas partes salvo en el asistente, que conserva su aviso.
+
+**Aceptado sin cambio:** los contadores de uso (`af_category_usage`,
+`af_tag_usage`) son por dispositivo, no por hogar. No muestran nada ajeno —
+solo se ordenan las categorías y tags del hogar activo—, pero dos hogares en
+el mismo teléfono comparten el tope de 200 entradas.
+
+**Hipótesis que el código descartó:** el toast duplicado. Hay exactamente
+un `toast()` por redirect (`hasRun` lo protege). Lo que el video mostró eran
+toasts de guardados consecutivos apilados, no dos por guardado.
+
+**Hipótesis que siguen abiertas (necesitan la medición en el teléfono):**
+- La espera de varios segundos en la primera apertura de la grabación es
+  mucho más que 5–6 viajes de ~50 ms. Lo más probable es un arranque en frío
+  de la función de Vercel o una pestaña descartada por Android al cambiar a
+  AndroMoney (vuelve sin datos en memoria). La medición `open.cold` lo dirá.
+- El guardado incluye renderizar en el servidor la página de destino entera
+  (Dashboard o Transactions) dentro de la respuesta del Server Action. Si
+  `save.next` sigue por encima de la meta, el siguiente paso es que «Add next»
+  responda sin redirect y refresque la lista en segundo plano. Es un cambio de
+  contrato de la acción, así que no se hizo sin medir.
+
+**No se hizo, a propósito:**
+- Precargar los datos del formulario al montar el dashboard: el Server Action
+  pasaría por la cola del router y podría retrasar la primera navegación
+  (el tipo de clic perdido que fue B-7).
+- Escribir el monto antes de que lleguen las listas: la moneda sale de la
+  cuenta, y la cuenta es justo lo que no cargó.
+- Un acceso extra a fechas de la semana anterior: el doc pide medirlo antes
+  de ocupar espacio, y los chips Today/Yesterday/2 days ago + calendario ya
+  cubren el caso; queda para después de la medición.
+
+### T4 — Cómo medir en el teléfono
+
+1. Abrir cualquier pantalla del dashboard con `?entry_timing=on` (por ejemplo
+   `/dashboard?entry_timing=on`). Aparece una franja «Entry timing» arriba.
+2. Hacer la lista de altas acordada (3 aperturas en frío recargando la
+   pestaña, 3 en caliente, 3 «Add next», 3 «Create»).
+3. «Copy results» copia p50/p75 por evento; pegarlos en la tabla de abajo.
+4. `?entry_timing=off` la apaga.
+
+Cada muestra guarda solo evento, variante, milisegundos y hora — nada de la
+transacción, ni UUID, ni hogar — en `sessionStorage` de esa pestaña.
+
+| Evento | Qué mide | Meta p75 | Antes (main) | Después (esta rama) |
+|---|---|---|---|---|
+| `open.cold` | «+» → formulario pintado, sin datos en memoria | ≤ 1,5 s | — | 615–869 ms ✅ |
+| `open.warm` | «+» → formulario pintado, con datos en memoria | ≤ 0,7 s | — | 44–49 ms ✅ |
+| `save.next` | «Add next» → siguiente borrador listo | ≤ 1,2 s | 1,23–1,66 s (redirect) | 1,01 s p50 · 1,24 s p75 — en el límite |
+| `save.close` | «Create» → resultado en pantalla | ≤ 1,2 s | 1,26–1,60 s (redirect) | 0,66–0,99 s p50 · 0,90–1,16 s p75 ✅ |
+
+Primeras mediciones en el teléfono del usuario, 2026-10-22, cuenta real, desde
+Dashboard y desde Accounts (las dos primeras rondas perdieron los `save` por
+un error de la propia medición, ya corregido).
+
+Segunda ronda (2026-10-22, guardado en línea, cuenta real, Dashboard y
+Accounts): guardar bajó 20–40 %. Lo que queda (~0,7–1 s) es el propio
+guardado: teléfono → Vercel → 4–5 consultas en serie a Supabase → vuelta. Se
+podría recortar ~100 ms juntando consultas; con 1–2 muestras por caso no se
+persigue ahora. **T4 se da por cumplido.**
+
+**Guardado en línea (decidido con esos números, aprobado por el usuario).**
+El guardado ya no redirige: el diálogo llama a `saveManualTransaction` /
+`saveTransferTransaction`, que hacen exactamente las mismas validaciones,
+escrituras e invalidaciones que antes y devuelven el resultado. El aviso y el
+siguiente borrador aparecen al llegar la respuesta; la pantalla de atrás se
+refresca con el `revalidatePath` de la misma respuesta, en segundo plano.
+Experimento en navegador antes de hacerlo (página que tarda 1,5 s en
+renderizarse): la acción en línea devolvió su resultado en **53–85 ms** y la
+página se refrescó ~1,5 s después; la misma acción con redirect tardó
+**~1,6 s**. De paso: un error de validación ya no te saca a Transactions con
+`?error=`; se muestra dentro del formulario con el borrador intacto, y desde
+el Dashboard te quedas en el Dashboard. Las acciones con redirect siguen para
+el asistente y los formularios de página.
+
+El «antes» solo se puede tomar con un build que ya tenga la medición, así que
+la comparación honesta es: medir esta rama en preview, y comparar contra la
+misma rama con los cambios de rendimiento revertidos si hace falta aislar
+cuánto aportó cada uno.
+
+### Tercera ronda en dispositivo (2026-10-22) — hallazgos y arreglos
+
+Reportados por el usuario en Brave/Android con su cuenta real, y reproducidos
+antes de tocar código con una réplica local: la app real contra un Supabase
+falso (auth + PostgREST + RPC con latencia simulada) y Playwright en viewport
+de teléfono. Los números de abajo son de esa réplica.
+
+| Síntoma | Causa | Arreglo | Verificado |
+|---|---|---|---|
+| Después de abrir Tags, un espacio abajo en ese y los demás selectores, con los botones del formulario asomando | Los selectores se posicionan contra el diálogo (su `translate` lo hace bloque contenedor de `fixed`), y el diálogo era el que hacía scroll: el selector quedaba corrido hacia arriba lo mismo que se había bajado el formulario (88 px reproducidos) | El scroll pasa a un contenedor interior; el diálogo no hace scroll en móvil | Con el formulario bajado 100 px, el selector cubre 0→640 de 640 |
+| «Agregar otra» → «falta el monto» → el formulario se cerró | Un toque extra sobre el borrador nuevo (monto vacío) dispara la validación nativa, que enfoca el monto y abre el teclado. En Brave el diálogo subía de más (su cálculo contaba la barra inferior que el teclado esconde) y dejaba una franja de fondo entre el formulario y el teclado: el siguiente toque caía ahí y cerraba el diálogo | (1) En móvil, tocar fuera ya no cierra (`disablePointerDismissal`); X, Escape y Atrás sí. (2) El diálogo sube con la medición de `ViewportPin` (`.entry-sheet`), la de los otros formularios, que ya excluía iOS | Teclado simulado con 60 px de desfase tipo Brave: borde del diálogo = tope del teclado, sin franja |
+| La racha no daba señal de guardado | El aviso «Transacción creada» queda detrás de la hoja a pantalla completa | «✓ Transacción creada ×N» dentro del diálogo, junto a la X (`role="status"`); el aviso global sale al cerrar | ×2 tras dos «Agregar otra» |
+| `save.next` p75 de 2 s | Tras cada «Agregar otra» se recargaban las listas del formulario; las Server Actions van de a una, así que la recarga se ponía delante del siguiente guardado (+~200 ms) | Recargar solo si el guardado trajo algo nuevo (`nextDraftNeedsFreshLists`) | Guardados seguidos 862/1083/1075 ms → 811/830/811 ms; 0 recargas en una racha |
+| Atrás no hacía nada la primera vez tras cerrar una racha | El refresco de la página (la revalidación del guardado) reescribe el estado de la entrada de historial y borra la marca del diálogo; al cerrar, la entrada no se reclamaba | `useBackDismiss` reconoce su entrada sin marca en la misma URL | Tras racha + X, un Atrás sale de la pantalla |
+| El borrador siguiente abría a media altura | El contenedor de scroll sobrevive al formulario remontado | Volver arriba al preparar el borrador siguiente | 156 px → 0, monto visible |
+| «Flick» al saltar a Descripción | Varias cosas en ~300 ms: cierra el selector, se expande la fila, sube el teclado, el diálogo se elevaba de más y había un scroll extra | Sin la sobre-elevación queda un ajuste suave (~60 ms) y un scroll suave | Solo en simulación; **confirmar en el teléfono** |
+
+Se descartaron con la réplica: el doble toque (una sola escritura), Enter
+enviando el formulario (Enter avanza al siguiente campo) y una redirección de
+la página de atrás durante el refresco.
+
+### Cuarta ronda en dispositivo (2026-10-22)
+
+| Síntoma | Causa | Arreglo | Verificado en la réplica |
+|---|---|---|---|
+| La franja sobre el teclado seguía igual | La hipótesis de la ronda anterior (Brave desfasa `innerHeight`) era falsa: con la medición de `ViewportPin` la franja no cambió, así que Brave reporta un área visible ~50px más baja de lo que muestra, y ningún cálculo encuentra el borde real | Detrás de la hoja de alta, en el teléfono, el fondo es del color de la hoja (`[data-slot=dialog-overlay]:has(~ .entry-sheet)`): la franja queda del mismo color que el formulario | Fondo `--popover`, sin `backdrop-filter` |
+| Formulario lleno sin descripción → Gasto a Ingreso → elegir categoría → salto con teclado a Descripción | El cambio de tipo vacía la categoría; la cadena trataba la nueva elección como avance y saltaba la cuenta y el payee (llenos) hasta Descripción. Su propio comentario decía que corregir un campo no debía arrastrar | Corregir (el campo tenía valor, o el usuario ya lo había elegido en este formulario) solo lleva a un campo **obligatorio** vacío; avanzar sigue igual | Antes: foco en Descripción. Después: sin salto. Primer llenado y Enter en el monto siguen llegando a Descripción; cambiar la categoría en un borrador de «Add next» tampoco salta |
+| Al saltar a Descripción desaparecía la X y el campo quedaba pegado arriba | `scrollIntoView({ block: 'start' })` también hace scroll del contenedor del diálogo (aunque tenga `overflow: hidden`): la fila de la X subía 119px fuera de la pantalla | Se hace scroll solo del contenedor del formulario, calculado a mano | X a 24px del borde (antes −119px); Descripción visible sobre el teclado |
+| No se vio el ×3 | El texto verde sin fondo pasaba desapercibido (y con el arrastre anterior la fila salía de la pantalla) | Píldora verde con un destello en cada guardado | «✓ Transacción creada. ×3» visible a 18px del borde |
+
+Mediciones de la ronda (LTE, n pequeño): `open.cold` 1.798 ms (red móvil + arranque en frío; sobre la meta, en WiFi 615–869 ms), `open.warm` 109–165 ms, `save.next` 762 ms p50 · 958 ms p75 ✅, `save.close` 688 ms ✅.
+
+### Quinta ronda en dispositivo (2026-10-22) — dejar de medir el teclado
+
+Con el teclado abierto, el formulario quedaba reducido a una tira de unos 150 px entre la X y el teclado, con un hueco vacío debajo. Al saltar a Descripción seguía el «flick».
+
+| Síntoma | Causa | Arreglo | Verificado en la réplica |
+|---|---|---|---|
+| Formulario encogido, hueco entre la hoja y el teclado | Brave reporta el área visible unos 100 px más corta de lo que muestra: es la altura de su barra inferior, que esconde al abrir el teclado. Las rondas 3 y 4 tomaban esa medida como verdadera y subían y encogían la hoja de más | La hoja ya no se sube: queda a pantalla completa y el teclado tapa su parte de abajo. Se quitó `.entry-sheet` del CSS, se borró `useSoftKeyboardInset` y ya nada lee el tamaño del teclado | La hoja queda en 0→780 con el teclado abierto, y su alto no cambia en ningún momento (`sheetResized: false`) con un teclado simulado que Brave reporta 100 px más alto |
+| «Flick» al saltar a Descripción | Al abrir el teclado pasaban tres cosas a la vez: la hoja cambiaba de alto, la fila de botones se desmontaba y el campo se volvía a desplazar | `usePlaceFieldsAboveKeyboard`: al recibir foco, el campo sube a la parte de arriba del formulario en un solo movimiento de 160 ms, antes de que llegue el teclado. Los botones ya no se desmontan. Cerca del final, un espaciador vacío bajo el formulario da el recorrido que falta | Descripción queda a 92 px y Notas a 133 px (bajo la X, que sigue a 16 px), con un solo movimiento. «Amount received» de una transferencia pasa de 344 a 76 px. El monto, que ya está arriba, no se mueve |
+
+**Sexta ronda (2026-10-23).** Descripción mejoró, pero al tocar Notas con el teclado abierto toda la pantalla se fue hacia arriba: desaparecieron la X y el campo. La causa es que, justo después del foco, el navegador desplaza el campo a lo que cree visible. El movimiento animado aún no había empezado, así que encontró Notas bajo el teclado y desplazó la pantalla entera. Arreglo:
+- Con el teclado ya abierto, el campo se coloca al instante, dentro del mismo evento de foco.
+- El espacio extra sobrevive 500 ms al toque intermedio sobre el botón de la fila.
+- La hoja usa `overflow: clip`, así que ya no es un contenedor que el navegador pueda desplazar.
+
+Réplica, con un simulador que hace el desplazamiento del navegador tras el foco: monto (teclado arriba) → Notas pasó de «el navegador intervino» a «no hizo falta». Notas queda en 112 px, bajo la X, que sigue en 16 px.
+
+**Séptima ronda (2026-10-23): buenas prácticas del teclado.** Notas quedó bien. Pero al pasar a la tasa de cambio con el teclado abierto, toda la pantalla volvió a desplazarse (sin X). De vuelta en Notas y Descripción, el campo quedaba arriba sin su título.
+
+Las herramientas estándar de Chrome Android para el teclado son dos:
+- **`interactive-widget`** en la meta etiqueta `viewport`: con `resizes-content` el teclado encoge el layout. Afecta a toda la app y depende de la misma medición que Brave reporta mal.
+- **VirtualKeyboard API:** con `navigator.virtualKeyboard.overlaysContent = true`, el teclado queda encima del contenido. El navegador ya no encoge ni desplaza la pantalla para perseguir el campo, y la app decide dónde va.
+
+Se usa la segunda, solo mientras la hoja de alta está abierta en el teléfono; al cerrarla se restaura el valor anterior. Donde la API no existe, todo sigue como antes.
+
+Otros cambios:
+- **Se mueve la fila, no solo el recuadro.** El ancla es `[data-entry-row]` (las filas del formulario), si no un `<label for>` visible justo encima, si no el campo mismo. Así «Notes», «Description» o «Exchange rate» se ven sobre el campo.
+- **El espacio extra bajo el formulario se mide de nuevo tras crecer.** Con un formulario largo (una cuenta en COP, con la tasa de cambio), el formulario se encoge como hijo flex y el espaciador no aportaba toda su altura. Descripción se quedaba a media pantalla.
+
+Réplica con tu secuencia (cuenta COP; Descripción → Notas → tasa → Notas → tasa → Descripción) y un simulador del desplazamiento del navegador tras el foco y al abrir el teclado:
+- En cada paso la X sigue a 16 px y el título de la fila queda a 68–69 px.
+- El campo queda sobre el teclado, y el navegador nunca tuvo que intervenir.
+- `overlaysContent` vale `true` con la hoja abierta y `false` al cerrarla.
+
+**«+» directo al formulario (2026-10-24, pedido del usuario).** El «+» de la barra inferior del teléfono abría antes un menú con cinco opciones: gasto, ingreso, transferencia, pago de deuda e importar CSV. Eso costaba un toque en cada alta. Ahora abre el formulario directamente, en Gasto, igual que el botón de escritorio. El tipo se cambia con el selector del propio formulario. Pago de deuda e Importar CSV siguen en «Más» (Deudas e Importar CSV). Se quitaron las seis traducciones del menú, que quedaron sin uso.
+
+**Sin scroll al abrir + diseño más premium (2026-10-24, pedido del usuario).** Al abrir, el formulario se desplazaba un poco en el teléfono: no cabía por unos píxeles.
+- **La X ya no ocupa una fila propia.** Flota arriba a la derecha, translúcida (`backdrop-blur`), y el selector de tipo le deja espacio (`[data-entry-type]`). El formulario gana 48 px de alto útil: el contenedor pasa de 665 a 713 px en 412 × 741. Los campos que se acomodan sobre el teclado quedan justo debajo de la X: X en 20–56 px, título de la fila en 60–61 px.
+- **«✓ Transacción creada ×N» pasa a la cabecera de la tarjeta del monto,** donde se mira al empezar la siguiente. El anuncio para lectores de pantalla queda en una región `sr-only` del diálogo, que sobrevive al remontaje del formulario.
+- **Toques premium:**
+  - La tarjeta del monto lleva un tinte suave del tipo elegido: rosa en Gasto, verde en Ingreso, azul en Transferencia.
+  - La caja de etiquetas usa el fondo de las demás tarjetas.
+  - Sobre los botones, un desvanecido reemplaza la línea dura.
+- **El selector usa anchos según el texto** (`SegmentedField fit="content"`), así «Transferencia» no se corta. Con menos de 380 px de ancho se ocultan sus íconos. Verificado sin cortes en es/fr/en a 360 px y en es a 393 px.
+
+**Descripción y Notas en pantalla propia, estilo AndroMoney (2026-10-24, pedido del usuario).** Al cerrar el teclado, el formulario quedaba desplazado sobre el espaciador vacío.
+- **En el teléfono, Descripción y Notas abren la misma hoja a pantalla completa de los selectores** (`PickerField` suma `description` y `notes`). La hoja trae el campo arriba con foco, el botón «Listo» y las sugerencias de descripción como chips. Atrás, Escape y la X cierran sin perder lo escrito.
+- **Enter en Descripción sigue la cadena** (a Tags). En Notas, Enter es salto de línea y «Listo» cierra.
+- **Viniendo de Payee por la cadena, la hoja no se cierra:** solo cambia de contenido, así que el teclado no parpadea.
+- **Los valores viajan en inputs ocultos,** porque los campos de la hoja solo existen mientras está abierta. Escritorio no cambia.
+- **Campos que siguen dentro del formulario** (monto, tasa de cambio, monto recibido): al terminar de escribir, el formulario vuelve a donde estaba antes del toque y luego se quita el espaciador. Si el teclado se cierra con Atrás sin quitar el foco, el evento `geometrychange` de la VirtualKeyboard API quita el foco y cierra la sesión igual.
+
+Réplica:
+- La cadena monto → categoría → cuenta → payee abre la hoja de Descripción con el foco en el campo. Enter pasa a Tags.
+- Notas acepta dos líneas y «Listo» la cierra.
+- El guardado lleva la descripción y las notas.
+- El formulario nunca se desplazó (`scrollTop` 0 en todo el recorrido).
+- La tasa de cambio sube al recibir el foco (616 px) y vuelve a 0 al cerrar el teclado, sin espaciador.
+
+**Contexto, descripción que crece y tasa de cambio en pantalla propia (2026-10-24, pedido del usuario).**
+- **Línea de contexto** arriba en Descripción y Notas, por ejemplo «COP 50,000.00 · 🛒 Groceries · Bancolombia». En transferencias muestra «origen → destino». Así se sabe qué entrada se está describiendo.
+- **Descripción crece hacia abajo** al ajustar el texto (`textarea` de una fila con `field-sizing: content`) en vez de correrse de lado. No admite saltos de línea: uno pegado se vuelve espacio, y Enter sigue la cadena. Notas sigue siendo multilínea.
+- **Tasa de cambio en el teléfono:** una fila del grupo de campos, justo bajo Cuenta, con el valor «1 CAD = 2900 COP». En ámbar si falta; en rojo si falló la descarga. Abre su propia pantalla con el campo con foco, Actualizar, avisos, vista previa de la conversión y «Listo». El valor viaja en el input oculto de siempre. En escritorio sigue en «Opciones avanzadas».
+- **Lo que queda en línea con el teclado:** solo el monto, arriba (el teclado nunca lo tapa), y los montos de las transferencias. El mecanismo de colocación sigue para esos casos.
+
+Réplica (cuenta COP):
+- La fila abre la hoja con el foco en la tasa, y «Listo» guarda `1/2900`.
+- La descripción larga pasa de 50 a 74 px de alto, y el salto pegado se vuelve espacio.
+- El guardado lleva la descripción.
+- En escritorio la tasa sigue en línea.
+
+**Todo en una pantalla, siempre (2026-10-24, pedido del usuario).** Con la fila de tipo de cambio, el formulario pedía un poco de scroll.
+- **Densidad según el espacio** (`useFitEntryForm`): al abrir y ante cada cambio del formulario, el diálogo prueba tres pasos de espaciado, `normal`, `compact` y `tight` (`data-entry-fit` en el contenedor, reglas en `globals.css`). Se queda con el primero en el que el formulario cabe. Todo ocurre dentro de un mismo cuadro, antes de pintar, así que nunca se ve un paso intermedio.
+  - Mide el formulario, no el contenedor, porque el espaciador del teclado no es contenido.
+  - Las filas nunca bajan de 36 px. `tight` saca el espacio del campo del monto y de los chips de fecha.
+- **El equivalente en la moneda base** («≈ CA$0.01») pasa a la cabecera de la tarjeta del monto en el teléfono: una línea menos. Si falta la tasa, ya lo dice su fila en ámbar.
+- **El botón de calendario abre directamente el selector de fecha del teléfono** (`showPicker`) en vez de desplegar una fila con el campo. La fecha elegida ya se ve en el botón. El panel queda como respaldo, oculto visualmente (`sr-only`, no `display: none`) para que `showPicker` funcione.
+
+Réplica en build de producción, con la fila Status de más que el formulario real no tiene:
+
+| Pantalla | CAD | COP | COP + calendario |
+|---|---|---|---|
+| 412 × 741 | normal | normal | normal |
+| 412 × 680 | compact | compact | compact |
+| 360 × 640 | compact | tight | tight |
+
+En todos los casos sin scroll y con filas de 36 px o más.
+
+**Editar con el mismo formulario y transferencia más compacta (2026-10-24, pedido del usuario).**
+- **Editar abre la misma hoja que crear.** El contenedor —pantalla completa, X flotante, ajuste a una pantalla y manejo del teclado— salió del proveedor a `EntrySheet` (`src/components/entry-sheet.tsx`). La Agregar y la edición (`EditTransactionSheet`, en la página de Transacciones) lo usan igual; antes la edición abría el `FormDialog` genérico, una hoja inferior sin nada de eso.
+  - La edición muestra su título en la fila de la X.
+  - Abre con el foco en la hoja: no sube el teclado y la X no muestra el anillo de foco.
+- **Transferencia en el teléfono:**
+  - La cuenta de cada lado es un chip en la cabecera de su monto («DESDE [Checking ›] CAD», «HACIA [Visa ›]»), no una fila aparte. Se fueron la flecha divisoria y los textos de ayuda.
+  - La comisión y el costo de la transferencia son una fila del grupo de campos que abre su propia pantalla (campo, categoría, avisos, «Listo»). Los valores viajan en inputs ocultos. En escritorio no cambia.
+- **Datos de prueba:** las cuentas y categorías de prueba pasaron a `e2e/entry/fixtures.json`. Los comparten el doble de Supabase y la página `/e2e/entry`, que ahora tiene modo edición (`?edit=expense|transfer`).
+- **Escenarios nuevos:**
+  - Transferencia con comisión a 412×741 y 360×640.
+  - Comisión en su pantalla.
+  - Transferencia entre monedas a 360×640.
+  - Edición de gasto y de transferencia en la misma hoja, en una pantalla.
+  - Con estos, son 19 de 19.
+
+**Cambiar el tipo al editar (2026-10-24, pedido del usuario).**
+- **Problema:** al editar no se podía cambiar entre Gasto, Ingreso y Transferencia. Las RPC de actualización lo bloquean a propósito, porque cada tipo tiene otra forma en el ledger (1 entry + 1 allocation, frente a las 2 entries de una transferencia).
+- **Solución:** la migración `20261012120000_change_transaction_type.sql` agrega la RPC atómica `change_transaction_type`.
+  - Bloquea la original y aplica las mismas reglas de edición que las RPC de actualización.
+  - Crea el reemplazo con `create_manual_transaction` o `create_transfer_transaction`, aplica las etiquetas y la hora, y anula la original con `void_transaction`. Todo pasa en una sola transacción de base de datos.
+  - No borra nada físicamente: la original queda anulada en el historial.
+  - Su prueba está en `supabase/tests/rum_change_transaction_type.sql`.
+- **En el formulario:**
+  - La edición muestra el selector de tipo. Si el tipo elegido difiere del guardado, el guardado va por `changeTransactionTypeAction` y un aviso en ámbar lo dice antes de guardar.
+  - Volver al tipo guardado restaura los valores guardados.
+  - Una transferencia que pasa a gasto o ingreso conserva la cuenta de origen.
+  - Una edición con cambio de tipo pide la tasa de cambio, porque crea una transacción nueva.
+- **Ajustes tras la revisión del ledger** (migración `20261012120100_change_transaction_type_links.sql`, con la misma firma y `create or replace`, así que funciona se haya corrido o no la primera):
+  - Rechaza cambiar el tipo de un gasto con reembolsos vivos, porque sus asignaciones negativas quedarían sin nada que compensar.
+  - Rechaza cambiar el tipo de una cuota, porque el plan cuenta sus filas no anuladas.
+  - Copia de la original el beneficiario, las etiquetas y la hora cuando el formulario no los envió (campo oculto). Un valor vacío sí borra.
+  - El motivo de anulación nombra la transacción que la reemplaza.
+  - El formulario vuelve a pedir la tasa de cambio al cambiar el tipo en una cuenta en otra moneda.
+  - Las pruebas SQL pasan en el Postgres local: `npm run db:local`, 288 de 288.
+- **Fuera de alcance:**
+  - La comisión aparte (solo al crear) no se ofrece al cambiar de tipo.
+  - Las etiquetas no pasan a una transferencia, que no las maneja.
+  - Los conteos de uso de beneficiarios y etiquetas también cuentan las transacciones anuladas. Ya pasaba con cualquier anulación.
+- **Escenarios nuevos:** gasto → transferencia, y transferencia → gasto con ida y vuelta. Cada uno hace una sola llamada de reemplazo y cabe en una pantalla. Con estos, son 21 de 21.
+- **Manual:** `npx supabase db push` (aplica las dos migraciones). Sin aplicarlas, guardar con otro tipo falla con un error y la transacción original queda intacta.
+
+### T5 — QA pendiente en dispositivo (lo llena el usuario)
+
+| # | Caso | Qué confirmar | Resultado |
+|---|---|---|---|
+| 1 | Gasto simple, categoría hija frecuente | Un toque en el chip la elige; monto, signo y cuenta correctos en Transactions | |
+| 2 | Ingreso | Signo correcto; la categoría de gasto no aparece como chip | |
+| 3 | 3× «Add next» seguidos | Cada uno guarda una sola vez; un solo toast con `×2`, `×3`; el siguiente borrador conserva fecha, cuenta, categoría, payee y tags, y llega con monto, descripción y notas vacíos | |
+| 4 | Doble toque en «Add next» | Una sola transacción | |
+| 5 | Transferencia y edición | Sin «Add next»; nada distinto a antes | |
+| 5b | «Copy» de una transacción y luego «Add next» | El segundo borrador llega **sin** el monto, la descripción ni las notas copiados | |
+| 6 | Cuenta en otra moneda | Prefijo de moneda y vista previa FX como antes | |
+| 7 | Tags | Chips frecuentes arriba; tocar uno lo agrega y desaparece del grupo; la búsqueda los oculta | |
+| 8 | Primera apertura con red lenta | Esqueleto, nunca una pantalla vacía; luego el formulario sin salto | |
+| 9 | Cambiar de hogar con el diálogo abierto | Ninguna lista ni chip del hogar anterior | |
+| 10 | Back con el diálogo abierto tras «Add next» | Cierra el diálogo, no sale de la pantalla | |
+| 11 | 320 px, 375 px, escritorio | «Create transaction» y «Add next» completos; zoom sigue funcionando | |
+| 11b | Guardar desde Accounts, Payees o el Dashboard | Sale «Transacción creada.» una vez; nunca «Cuenta creada.» u otro aviso ajeno | |
+| 11c | Error de validación (p. ej. monto 0 forzado, o frecuencia siendo miembro sin permiso) | El mensaje sale dentro del formulario y el borrador queda intacto; no te saca de la pantalla | |
+| 11d | Guardar desde Budgets o Reports | La pantalla de atrás se actualiza sola tras el aviso | |
+| 11e | Bajar hasta Tags, abrirlo, cerrarlo y abrir Cuenta | Los dos selectores cubren la pantalla entera; no asoman los botones del formulario | |
+| 11f | Con el teclado abierto en el monto o la descripción | El formulario ocupa toda la pantalla y el teclado tapa solo su parte de abajo, sin hueco ni franja. El campo que escribes queda justo bajo la X | |
+| 11g | Racha de 3 «Agregar otra» y luego X, y luego Atrás | Arriba se ve «✓ Transacción creada ×3»; un solo Atrás sale de la pantalla | |
+| 11h | Formulario lleno sin descripción → Ingreso → elegir categoría | No salta a Descripción ni abre el teclado | |
+| 11i | Saltar a Descripción por la cadena (monto → categoría → cuenta → payee); tocar Notas, la tasa de cambio (cuenta en otra moneda) o «Amount received» de una transferencia, e ir y volver entre ellos con el teclado abierto | Un solo movimiento suave hacia arriba antes del teclado, sin «flick». Cada campo queda con su título justo bajo la X; la X nunca sale de la pantalla | |
+| 11j | Tocar «+» en la barra inferior del teléfono | Abre el formulario directo en Gasto, sin menú intermedio; Deudas e Importar CSV siguen en «Más» | |
+| 11k | Abrir el formulario en el teléfono y arrastrar | No se desplaza: todo cabe; la X flota arriba a la derecha y «Transferencia» no se corta | |
+| 11l | Tocar Descripción o Notas (o llegar por la cadena), escribir y cerrar con Listo, Enter o Atrás | Pantalla propia con el campo arriba; al volver el formulario está igual que antes, sin desplazamiento ni espacio vacío | |
+| 11m | Cuenta en otra moneda: tocar «Tipo de cambio», escribir y «Listo»; luego una descripción larga | La tasa abre su propia pantalla y la fila muestra el valor; la descripción crece hacia abajo con el contexto arriba | |
+| 11n | Cuenta en otra moneda (fila de tipo de cambio), tocar el calendario | Todo cabe en una pantalla sin scroll; el calendario abre el selector del teléfono directo | |
+| 11o | Editar una transacción y una transferencia; crear una transferencia con comisión | La edición abre la misma hoja a pantalla completa; la transferencia (con comisión o entre monedas) cabe sin scroll | |
+| 11p | Tras `db push`: editar un gasto y cambiarlo a transferencia, y una transferencia a ingreso | El aviso ámbar aparece; tras guardar, la original sale anulada y la nueva tiene el tipo, las cuentas y el monto correctos; los saldos cuadran | |
+| 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |
