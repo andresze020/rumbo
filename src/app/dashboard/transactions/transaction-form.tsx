@@ -163,6 +163,8 @@ type TransactionFormProps = {
    * on the server. Edit mode always keeps the redirecting actions.
    */
   onSaved?: (outcome: TransactionSavedOutcome) => void
+  /** Shown in the amount card's header: the dialog's "created ×N" pill. */
+  batchNotice?: ReactNode
   categories: TransactionFormCategory[]
   payees: PayeeOption[]
   /** Active household tags for the tag multi-select (income/expense only). */
@@ -255,6 +257,7 @@ export function TransactionForm({
   cancelHref,
   onCancel,
   onSaved,
+  batchNotice,
   categories,
   payees,
   tags = [],
@@ -2276,6 +2279,13 @@ export function TransactionForm({
   // other. So they belong in one card, each directly above the account it
   // applies to, instead of an amount at the top and "amount received" pushed
   // below the date, description and notes.
+  // The amount card wears the type picked above it: a faint wash of the same
+  // colour as the selector's active option, so the two read as one control.
+  const AMOUNT_CARD_TINT = {
+    expense: 'border-rose-500/20 bg-linear-to-b from-rose-500/[0.07] to-muted/30',
+    income: 'border-emerald-500/20 bg-linear-to-b from-emerald-500/[0.07] to-muted/30',
+    transfer: 'border-sky-500/20 bg-linear-to-b from-sky-500/[0.07] to-muted/30',
+  } as const
   const AMOUNT_LABEL_CLS =
     'text-xs font-medium uppercase tracking-wider text-muted-foreground'
   const CURRENCY_CHIP_CLS =
@@ -2342,7 +2352,7 @@ export function TransactionForm({
   }
 
   const transferAmountsCard = (
-    <div className="space-y-2.5 rounded-2xl border bg-muted/30 p-3">
+    <div className={cn('space-y-2.5 rounded-2xl border p-3', AMOUNT_CARD_TINT.transfer)}>
       <div>
         <div className="flex items-center justify-between">
           <Label htmlFor="amount" className={AMOUNT_LABEL_CLS}>
@@ -2569,8 +2579,11 @@ export function TransactionForm({
       {/* ── Type: segmented control ──────────────────────────────────── */}
       {/* A recorded transaction keeps its type: the dialog title says which one
           it is, and switching would mean a different set of ledger entries. */}
+      {/* `data-entry-type`: the dialog keeps it clear of its floating X. */}
       {isEdit ? null : (
+        <div data-entry-type>
         <SegmentedField
+          fit="content"
           name="transaction_type"
           value={transactionType}
           onChange={(value) => handleTransactionTypeChange(value as TransactionType)}
@@ -2585,18 +2598,27 @@ export function TransactionForm({
             ),
           }))}
         />
+        </div>
       )}
 
       {/* ── Amount: one hero for expense/income, a paired card for transfers ── */}
       {isTransfer ? (
         transferAmountsCard
       ) : (
-        <div className="rounded-2xl border bg-muted/30 p-3">
+        <div
+          className={cn(
+            'rounded-2xl border p-3 transition-colors duration-300',
+            AMOUNT_CARD_TINT[transactionType === 'income' ? 'income' : 'expense']
+          )}
+        >
           <div className="flex items-center justify-between">
             <Label htmlFor="amount" className={AMOUNT_LABEL_CLS}>
               {t('transactionForm.amount')}
             </Label>
-            <span className={CURRENCY_CHIP_CLS}>{amountCurrencyCode}</span>
+            <div className="flex min-w-0 items-center gap-2">
+              {batchNotice}
+              <span className={CURRENCY_CHIP_CLS}>{amountCurrencyCode}</span>
+            </div>
           </div>
           <AmountInput
             id="amount"
@@ -2995,7 +3017,9 @@ export function TransactionForm({
         </p>
       ) : null}
 
-      <div className="sticky bottom-0 z-10 flex items-center gap-2 border-t bg-popover pb-1 pt-3 sm:static sm:flex-wrap sm:border-t-0 sm:bg-transparent sm:p-0">
+      {/* A soft fade into the form above instead of a hard rule: the fields
+          scrolling under the bar dissolve rather than being cut by a line. */}
+      <div className="sticky bottom-0 z-10 flex items-center gap-2 bg-popover pb-1 pt-3 before:pointer-events-none before:absolute before:inset-x-0 before:-top-5 before:h-5 before:bg-linear-to-t before:from-popover before:to-transparent sm:static sm:flex-wrap sm:bg-transparent sm:p-0 sm:before:hidden">
         {/* One split button on mobile, not a wide primary next to an orphaned
             square. "Save" and "save and start another" are the same action with
             one difference, so they read as one control divided in two: shared

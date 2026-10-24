@@ -597,6 +597,15 @@ Réplica con tu secuencia (cuenta COP; Descripción → Notas → tasa → Notas
 
 **«+» directo al formulario (2026-10-24, pedido del usuario).** El «+» de la barra inferior del teléfono abría antes un menú con cinco opciones: gasto, ingreso, transferencia, pago de deuda e importar CSV. Eso costaba un toque en cada alta. Ahora abre el formulario directamente, en Gasto, igual que el botón de escritorio. El tipo se cambia con el selector del propio formulario. Pago de deuda e Importar CSV siguen en «Más» (Deudas e Importar CSV). Se quitaron las seis traducciones del menú, que quedaron sin uso.
 
+**Sin scroll al abrir + diseño más premium (2026-10-24, pedido del usuario).** Al abrir, el formulario se desplazaba un poco en el teléfono: no cabía por unos píxeles.
+- **La X ya no ocupa una fila propia.** Flota arriba a la derecha, translúcida (`backdrop-blur`), y el selector de tipo le deja espacio (`[data-entry-type]`). El formulario gana 48 px de alto útil: el contenedor pasa de 665 a 713 px en 412 × 741. Los campos que se acomodan sobre el teclado quedan justo debajo de la X: X en 20–56 px, título de la fila en 60–61 px.
+- **«✓ Transacción creada ×N» pasa a la cabecera de la tarjeta del monto,** donde se mira al empezar la siguiente. El anuncio para lectores de pantalla queda en una región `sr-only` del diálogo, que sobrevive al remontaje del formulario.
+- **Toques premium:**
+  - La tarjeta del monto lleva un tinte suave del tipo elegido: rosa en Gasto, verde en Ingreso, azul en Transferencia.
+  - La caja de etiquetas usa el fondo de las demás tarjetas.
+  - Sobre los botones, un desvanecido reemplaza la línea dura.
+- **El selector usa anchos según el texto** (`SegmentedField fit="content"`), así «Transferencia» no se corta. Con menos de 380 px de ancho se ocultan sus íconos. Verificado sin cortes en es/fr/en a 360 px y en es a 393 px.
+
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 
 | # | Caso | Qué confirmar | Resultado |
@@ -622,4 +631,5 @@ Réplica con tu secuencia (cuenta COP; Descripción → Notas → tasa → Notas
 | 11h | Formulario lleno sin descripción → Ingreso → elegir categoría | No salta a Descripción ni abre el teclado | |
 | 11i | Saltar a Descripción por la cadena (monto → categoría → cuenta → payee); tocar Notas, la tasa de cambio (cuenta en otra moneda) o «Amount received» de una transferencia, e ir y volver entre ellos con el teclado abierto | Un solo movimiento suave hacia arriba antes del teclado, sin «flick». Cada campo queda con su título justo bajo la X; la X nunca sale de la pantalla | |
 | 11j | Tocar «+» en la barra inferior del teléfono | Abre el formulario directo en Gasto, sin menú intermedio; Deudas e Importar CSV siguen en «Más» | |
+| 11k | Abrir el formulario en el teléfono y arrastrar | No se desplaza: todo cabe; la X flota arriba a la derecha y «Transferencia» no se corta | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |

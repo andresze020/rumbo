@@ -225,9 +225,15 @@ function usePlaceFieldsAboveKeyboard(
       const box = scroller.getBoundingClientRect()
       const rect = field.getBoundingClientRect()
       const top = anchorTop(field, rect.top)
-      if (top >= box.top && rect.bottom <= box.top + box.height * KEYBOARD_FREE_BAND) return
+      // Below the floating X, which sits over the scroller's top edge.
+      const close = scroller
+        .closest('[data-slot="dialog-content"]')
+        ?.querySelector('[data-entry-close]')
+        ?.getBoundingClientRect()
+      const clear = close ? Math.max(0, close.bottom - box.top) + 4 : 4
+      if (top >= box.top + clear && rect.bottom <= box.top + box.height * KEYBOARD_FREE_BAND) return
 
-      const target = Math.max(0, Math.round(scroller.scrollTop + top - box.top - 4))
+      const target = Math.max(0, Math.round(scroller.scrollTop + top - box.top - clear))
       // Room is only ever added during a typing session, never taken away:
       // shrinking it under a scrolled form would clamp the scroll and jump.
       // Measured again after each top-up: a taller form shrinks as a flex
@@ -979,6 +985,10 @@ export function TransactionDialogProvider({
             // and pin its actions to the bottom edge; the desktop grid is
             // untouched.
             'max-sm:flex max-sm:flex-col max-sm:gap-3 ' +
+            // Room for the floating X beside the type selector. Under 380px
+            // wide the selector's icons go, or "Transferencia" truncates; the
+            // active option's colour still says which type it is.
+            'max-sm:[&_[data-entry-type]]:mr-12 max-[380px]:[&_[data-entry-type]_svg]:hidden ' +
             'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 ' +
             'max-sm:h-dvh max-sm:max-h-dvh max-sm:rounded-none ' +
             'max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] ' +
@@ -989,38 +999,31 @@ export function TransactionDialogProvider({
               screen now — nothing to drag it down by, and this X is the way
               out. Desktop never showed the handle. */}
 
-          {/* A row of its own on mobile, not a corner overlay: absolutely
-              positioned it sat on top of the type selector and clipped
-              "Transfer". On desktop it goes back to the corner, where there is
-              a title bar to sit beside and nothing to collide with. */}
-          <div className="flex shrink-0 items-center justify-end gap-3 sm:absolute sm:top-2 sm:right-2 sm:z-10">
-            {/* The batch's running confirmation, beside the X so it costs no
-                height. A tinted pill that pops on every save: as plain green
-                text it went unnoticed on the phone (device run, 2026-10-22).
-                Always mounted, so a screen reader hears each change. */}
-            <p role="status" aria-live="polite" className="mr-auto flex min-w-0">
-              {savedInBatch > 0 ? (
-                <span
-                  key={savedInBatch}
-                  className="flex min-w-0 items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1.5 text-sm font-medium text-emerald-700 duration-300 animate-in fade-in-0 zoom-in-90 dark:text-emerald-300"
-                >
-                  <Check className="size-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{t('transactionsList.toastCreated')}</span>
-                  {savedInBatch > 1 ? (
-                    <span className="shrink-0 tabular-nums opacity-80">×{savedInBatch}</span>
-                  ) : null}
-                </span>
-              ) : null}
-            </p>
-            <button
-              type="button"
-              onClick={closeDialog}
-              aria-label={ui('Close')}
-              className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground transition-colors active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-7 sm:bg-transparent sm:text-muted-foreground sm:hover:bg-muted"
-            >
-              <X className="size-5 sm:size-4" aria-hidden="true" />
-            </button>
-          </div>
+          {/* The X floats over the top-right corner on every screen size. On a
+              phone it used to take a row of its own above the type selector:
+              ~56px of a full-screen form that then no longer fit and scrolled
+              a little (device run, 2026-10-24). The selector keeps clear of
+              it (`[data-entry-type]` margin above), and fields placed above
+              the keyboard land below it (`usePlaceFieldsAboveKeyboard`).
+              Translucent, so content scrolling under it stays legible. */}
+          <button
+            type="button"
+            data-entry-close
+            onClick={closeDialog}
+            aria-label={ui('Close')}
+            className="absolute top-5 right-4 z-20 flex size-9 items-center justify-center rounded-full bg-muted/80 text-foreground shadow-sm ring-1 ring-border/60 backdrop-blur-md transition-colors active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:top-2 sm:right-2 sm:size-7 sm:bg-transparent sm:text-muted-foreground sm:shadow-none sm:ring-0 sm:backdrop-blur-none sm:hover:bg-muted"
+          >
+            <X className="size-5 sm:size-4" aria-hidden="true" />
+          </button>
+          {/* The batch's running count, for screen readers. The visible pill is
+              in the form's amount card (`batchNotice`), where the eye is when
+              the next entry starts; this region outlives the form remounting
+              between entries, so every save is announced. */}
+          <p role="status" aria-live="polite" className="sr-only">
+            {savedInBatch > 0
+              ? `${t('transactionsList.toastCreated')}${savedInBatch > 1 ? ` ×${savedInBatch}` : ''}`
+              : ''}
+          </p>
           {/* Screen-reader-only on every phone, not just under a keyboard: the
               title and its subtitle spend ~70px describing something the user
               just tapped a button to do, and the segmented control plus the
@@ -1086,6 +1089,21 @@ export function TransactionDialogProvider({
                 returnTo={returnTo}
                 onCancel={closeDialog}
                 onSaved={handleSaved}
+                batchNotice={
+                  savedInBatch > 0 ? (
+                    <span
+                      key={savedInBatch}
+                      aria-hidden="true"
+                      className="flex min-w-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-700 duration-300 animate-in fade-in-0 zoom-in-90 dark:text-emerald-300"
+                    >
+                      <Check className="size-3.5 shrink-0" />
+                      <span className="truncate">{t('transactionsList.toastCreated')}</span>
+                      {savedInBatch > 1 ? (
+                        <span className="shrink-0 tabular-nums opacity-80">×{savedInBatch}</span>
+                      ) : null}
+                    </span>
+                  ) : null
+                }
               />
             )
           ) : null}

@@ -323,7 +323,7 @@ export function TagMultiSelect({
         </Link>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border bg-background p-2">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border bg-transparent p-2">
         {removableChips}
         <button
           type="button"
