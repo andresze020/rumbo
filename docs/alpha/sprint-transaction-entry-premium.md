@@ -620,6 +620,18 @@ Réplica:
 - El formulario nunca se desplazó (`scrollTop` 0 en todo el recorrido).
 - La tasa de cambio sube al recibir el foco (616 px) y vuelve a 0 al cerrar el teclado, sin espaciador.
 
+**Contexto, descripción que crece y tasa de cambio en pantalla propia (2026-10-24, pedido del usuario).**
+- **Línea de contexto** arriba en Descripción y Notas, por ejemplo «COP 50,000.00 · 🛒 Groceries · Bancolombia». En transferencias muestra «origen → destino». Así se sabe qué entrada se está describiendo.
+- **Descripción crece hacia abajo** al ajustar el texto (`textarea` de una fila con `field-sizing: content`) en vez de correrse de lado. No admite saltos de línea: uno pegado se vuelve espacio, y Enter sigue la cadena. Notas sigue siendo multilínea.
+- **Tasa de cambio en el teléfono:** una fila del grupo de campos, justo bajo Cuenta, con el valor «1 CAD = 2900 COP». En ámbar si falta; en rojo si falló la descarga. Abre su propia pantalla con el campo con foco, Actualizar, avisos, vista previa de la conversión y «Listo». El valor viaja en el input oculto de siempre. En escritorio sigue en «Opciones avanzadas».
+- **Lo que queda en línea con el teclado:** solo el monto, arriba (el teclado nunca lo tapa), y los montos de las transferencias. El mecanismo de colocación sigue para esos casos.
+
+Réplica (cuenta COP):
+- La fila abre la hoja con el foco en la tasa, y «Listo» guarda `1/2900`.
+- La descripción larga pasa de 50 a 74 px de alto, y el salto pegado se vuelve espacio.
+- El guardado lleva la descripción.
+- En escritorio la tasa sigue en línea.
+
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 
 | # | Caso | Qué confirmar | Resultado |
@@ -647,4 +659,5 @@ Réplica:
 | 11j | Tocar «+» en la barra inferior del teléfono | Abre el formulario directo en Gasto, sin menú intermedio; Deudas e Importar CSV siguen en «Más» | |
 | 11k | Abrir el formulario en el teléfono y arrastrar | No se desplaza: todo cabe; la X flota arriba a la derecha y «Transferencia» no se corta | |
 | 11l | Tocar Descripción o Notas (o llegar por la cadena), escribir y cerrar con Listo, Enter o Atrás | Pantalla propia con el campo arriba; al volver el formulario está igual que antes, sin desplazamiento ni espacio vacío | |
+| 11m | Cuenta en otra moneda: tocar «Tipo de cambio», escribir y «Listo»; luego una descripción larga | La tasa abre su propia pantalla y la fila muestra el valor; la descripción crece hacia abajo con el contexto arriba | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |

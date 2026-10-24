@@ -90,7 +90,16 @@ type TransactionType = 'income' | 'expense' | 'transfer'
  * scrolled after the keyboard closed (device runs, 2026-10-22…24). On a screen
  * of their own, nothing behind them has to move.
  */
-type PickerField = null | 'account' | 'from' | 'to' | 'category' | 'payee' | 'description' | 'notes'
+type PickerField =
+  | null
+  | 'account'
+  | 'from'
+  | 'to'
+  | 'category'
+  | 'payee'
+  | 'description'
+  | 'notes'
+  | 'rate'
 
 /**
  * The fields the fill-fast chain walks, in the order it walks them. Everything
@@ -838,17 +847,52 @@ export function TransactionForm({
   // Exchange-rate block, shared by the transfer and single-account paths. Stays
   // outside the "More details" collapse because the rate is required to submit a
   // non-base-currency entry, so it must always be visible.
-  function fxFields(account: TransactionFormAccount | undefined, defaultOpen = true) {
+  /**
+   * Mobile: the exchange rate as a row of the fields card, right under the
+   * account whose currency asks for it. It opens the rate on its own screen,
+   * like description and notes: typed inside the form, the field sat at the end
+   * of a long form, under the keyboard (device run, 2026-10-23).
+   */
+  function mobileRateRowFor(account: TransactionFormAccount | undefined) {
     if (!account) return null
+    const missing = !rateIsValid
     return (
-      <AdvancedFields
-        defaultOpen={defaultOpen}
-        summary={
-          rateIsValid
-            ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${account.currency_code}`
-            : undefined
-        }
-      >
+      <div className="border-t first:border-t-0">
+        <button
+          type="button"
+          onClick={() => {
+            setExpandedField(null)
+            resetPickerState()
+            setSheetField('rate')
+          }}
+          className="flex w-full items-center gap-3 px-1 py-2.5 text-left"
+        >
+          <ArrowLeftRight className="size-4.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="shrink-0 text-sm font-medium">{ui('Exchange rate')}</span>
+          <span
+            className={cn(
+              'ml-auto truncate text-sm tabular-nums',
+              fxError
+                ? 'text-destructive'
+                : missing && !fetchingRate
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-foreground'
+            )}
+          >
+            {fetchingRate
+              ? ui('Fetching…')
+              : `1 ${baseCurrency} = ${missing ? '?' : userRate} ${account.currency_code}`}
+          </span>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </button>
+      </div>
+    )
+  }
+
+  /** The rate's label, help, field and status: inline on desktop, the sheet's content on mobile. */
+  function fxBody(account: TransactionFormAccount, autoFocus = false) {
+    return (
+      <>
         <Label htmlFor="user_rate">
           Exchange rate: 1 {baseCurrency} = ? {account.currency_code}
           <InfoTooltip term="exchangeRate" label="Exchange rate" />
@@ -865,6 +909,7 @@ export function TransactionForm({
         <div className="flex gap-2">
           <Input
             id="user_rate"
+            autoFocus={autoFocus}
             type="text"
             inputMode="decimal"
             placeholder={fetchingRate ? 'Fetching…' : 'e.g. 2690'}
@@ -901,7 +946,27 @@ export function TransactionForm({
             <span className="font-normal text-muted-foreground">at this rate</span>
           </p>
         ) : null}
-        <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
+      </>
+    )
+  }
+
+  function fxFields(account: TransactionFormAccount | undefined, defaultOpen = true) {
+    if (!account) return null
+    const hidden = <input type="hidden" name="exchange_rate_to_base" value={exchangeRateToBase} />
+    // Mobile: the field lives on its own screen, opened from a row in the
+    // fields card (`mobileRateRow`); only the value is submitted from here.
+    if (isMobile) return hidden
+    return (
+      <AdvancedFields
+        defaultOpen={defaultOpen}
+        summary={
+          rateIsValid
+            ? `Exchange rate: 1 ${baseCurrency} = ${userRate} ${account.currency_code}`
+            : undefined
+        }
+      >
+        {fxBody(account)}
+        {hidden}
       </AdvancedFields>
     )
   }
@@ -2026,14 +2091,20 @@ export function TransactionForm({
     onOpen: syncCategoryDrillToSelection,
   })
 
+  const mobileRateRow = mobileRateRowFor(
+    isTransfer ? (needsFromRate ? selectedFromAccount : undefined) : isMultiCurrency ? selectedAccount : undefined
+  )
+
   const orderedPickerRows = categoryFirst ? (
     <>
       {categoryPickerRow}
       {accountPickerRow}
+      {mobileRateRow}
     </>
   ) : (
     <>
       {accountPickerRow}
+      {mobileRateRow}
       {categoryPickerRow}
     </>
   )
@@ -2163,6 +2234,7 @@ export function TransactionForm({
 
       {/* A transfer's From/To selectors live in the amounts card above, beside
           the figure each one applies to — they are deliberately absent here. */}
+      {isTransfer ? mobileRateRow : null}
       {isTransfer ? repeatRow : null}
       {isTransfer ? null : (
         <>
@@ -2420,22 +2492,40 @@ export function TransactionForm({
       {ui('Done')}
     </Button>
   )
+  // Which entry this is, above the field: on its own screen the amount and
+  // category are out of sight, and the description is written for them.
+  const entryContext = [
+    amountIsValid ? formatCurrency(parsedAmount, amountCurrencyCode, locale) : null,
+    isTransfer
+      ? [selectedFromAccount?.name, selectedToAccount?.name].filter(Boolean).join(' → ') || null
+      : categoryValue || null,
+    isTransfer ? null : (selectedAccount?.name ?? null),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const entryContextLine = entryContext ? (
+    <p className="mb-2 truncate text-sm text-muted-foreground">{entryContext}</p>
+  ) : null
   const descriptionSheetField = (
     <div>
-      <Input
+      {entryContextLine}
+      {/* One line of meaning, several of display: it grows downward as it
+          wraps (`field-sizing: content`) instead of scrolling sideways out of
+          sight, and takes no line breaks — Enter moves the entry on. */}
+      <Textarea
         aria-label={t('transactionForm.description')}
         autoFocus
-        autoComplete="off"
+        rows={1}
         enterKeyHint="next"
         value={description}
-        onChange={(e) => setDescription(e.target.value)}
+        onChange={(e) => setDescription(e.target.value.replace(/[\r\n]+/g, ' '))}
         onKeyDown={(e) => {
-          // Without preventDefault, Enter would submit the half-filled form.
+          // Without preventDefault, Enter would add a line break.
           if (e.key !== 'Enter') return
           e.preventDefault()
           finishDescription()
         }}
-        className="h-12 rounded-xl text-base"
+        className="min-h-12 resize-none rounded-xl py-3 text-base"
       />
       {doneButton(finishDescription)}
     </div>
@@ -2465,6 +2555,7 @@ export function TransactionForm({
     ) : null
   const notesSheetField = (
     <div>
+      {entryContextLine}
       <Textarea
         aria-label={t('transactionForm.notes')}
         autoFocus
@@ -2505,6 +2596,8 @@ export function TransactionForm({
       ? t('transactionForm.description')
       : sheetField === 'notes'
         ? t('transactionForm.notes')
+        : sheetField === 'rate'
+          ? ui('Exchange rate')
         : sheetField === 'category'
       ? 'Category'
       : sheetField === 'payee'
@@ -2530,6 +2623,14 @@ export function TransactionForm({
     sheetBody = descriptionSheetBody
   } else if (sheetField === 'notes') {
     sheetSearch = notesSheetField
+  } else if (sheetField === 'rate') {
+    const rateAccount = isTransfer ? selectedFromAccount : selectedAccount
+    sheetSearch = rateAccount ? (
+      <div className="space-y-3">
+        {fxBody(rateAccount, true)}
+        {doneButton(() => setSheetField(null))}
+      </div>
+    ) : null
   } else if (sheetField === 'category') {
     sheetBody = categoryPickerBody(false)
     sheetSearch = categoryDrillParentId ? subcategorySearchField : categorySearchField
