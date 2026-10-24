@@ -10,10 +10,14 @@ export const dynamic = 'force-dynamic'
  * Test harness for `npm run e2e:entry`: the transaction entry dialog on an
  * otherwise empty page, so the browser scenarios exercise the real form
  * without the dashboard around it. It exists only when the server runs with
- * `RUMBO_E2E=1`; everywhere else, production included, it is a 404.
+ * `RUMBO_E2E=1` outside Vercel; everywhere else, production included, it is a
+ * 404.
  */
 export default async function EntryHarnessPage() {
-  if (process.env.RUMBO_E2E !== '1') notFound()
+  // Never on a Vercel deployment (preview or production), even if the flag
+  // leaked into its environment. Not NODE_ENV: the scenarios run against a
+  // production build on purpose.
+  if (process.env.RUMBO_E2E !== '1' || process.env.VERCEL) notFound()
   const locale = await getLocale()
   return (
     <LanguageProvider locale={locale}>
