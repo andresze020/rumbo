@@ -595,6 +595,8 @@ Réplica con tu secuencia (cuenta COP; Descripción → Notas → tasa → Notas
 - El campo queda sobre el teclado, y el navegador nunca tuvo que intervenir.
 - `overlaysContent` vale `true` con la hoja abierta y `false` al cerrarla.
 
+**«+» directo al formulario (2026-10-24, pedido del usuario).** El «+» de la barra inferior del teléfono abría antes un menú con cinco opciones: gasto, ingreso, transferencia, pago de deuda e importar CSV. Eso costaba un toque en cada alta. Ahora abre el formulario directamente, en Gasto, igual que el botón de escritorio. El tipo se cambia con el selector del propio formulario. Pago de deuda e Importar CSV siguen en «Más» (Deudas e Importar CSV). Se quitaron las seis traducciones del menú, que quedaron sin uso.
+
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 
 | # | Caso | Qué confirmar | Resultado |
@@ -619,4 +621,5 @@ Réplica con tu secuencia (cuenta COP; Descripción → Notas → tasa → Notas
 | 11g | Racha de 3 «Agregar otra» y luego X, y luego Atrás | Arriba se ve «✓ Transacción creada ×3»; un solo Atrás sale de la pantalla | |
 | 11h | Formulario lleno sin descripción → Ingreso → elegir categoría | No salta a Descripción ni abre el teclado | |
 | 11i | Saltar a Descripción por la cadena (monto → categoría → cuenta → payee); tocar Notas, la tasa de cambio (cuenta en otra moneda) o «Amount received» de una transferencia, e ir y volver entre ellos con el teclado abierto | Un solo movimiento suave hacia arriba antes del teclado, sin «flick». Cada campo queda con su título justo bajo la X; la X nunca sale de la pantalla | |
+| 11j | Tocar «+» en la barra inferior del teléfono | Abre el formulario directo en Gasto, sin menú intermedio; Deudas e Importar CSV siguen en «Más» | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |
