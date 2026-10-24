@@ -346,6 +346,10 @@ scenario('the transfer fee opens on its own screen and travels in the form', asy
   assert.equal(fee, '2')
   const row = await page.getByRole('button', { name: /^Fee|Transfer fee/ }).first().textContent()
   assert.match(row, /2\.00/)
+  // No fee-like category in the fixtures: the row says why Save is waiting,
+  // and the hint still fits the screen.
+  assert.match(row, /Choose a category/)
+  assert.equal((await formState(page)).scrollable, false, 'the hint pushed the form past one screen')
   await context.close()
 })
 

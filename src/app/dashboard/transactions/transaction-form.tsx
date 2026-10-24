@@ -611,6 +611,7 @@ export function TransactionForm({
       /fee|comis|charg|bank|banc|cargo|surcharg/i.test(c.label)
     )?.id ?? ''
   const effectiveCostCategoryId = costCategoryId || defaultCostCategoryId
+  const costNeedsCategory = costIsPositive && !effectiveCostCategoryId
   // Which cost field the transfer shows: the unified cost (fees + exchange)
   // when the currencies differ, an optional cash fee when they match (new
   // transfers only, both accounts picked).
@@ -684,7 +685,7 @@ export function TransactionForm({
       Boolean(toAccountId) &&
       (!isCrossCurrencyTransfer || toAmountValid) &&
       (!needsFromRate || rateIsValid) &&
-      (!isTransfer || !costIsPositive || Boolean(effectiveCostCategoryId)) &&
+      !costNeedsCategory &&
       (!isCrossCurrencyTransfer || !costExceedsSent)
     : compatibleCategories.length > 0 &&
       Boolean(categoryId) &&
@@ -2137,12 +2138,23 @@ export function TransactionForm({
         <Receipt className="size-4.5 shrink-0 text-muted-foreground" aria-hidden="true" />
         {/* The label gives way, not the value: "Transfer cost (fees +
             exchange)" is long enough to push the figure off the row. */}
-        <span className="min-w-0 truncate text-sm font-medium">{costLabel}</span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-sm font-medium">{costLabel}</span>
+          {/* Save stays disabled until a positive cost has a category, and the
+              picker lives on the cost screen: say so on the row. */}
+          {costNeedsCategory ? (
+            <span className="truncate text-xs text-amber-600 dark:text-amber-400">
+              {t('transactionForm.transferCostCategory')}
+            </span>
+          ) : null}
+        </span>
         <span
           className={cn(
             'ml-auto shrink-0 text-sm tabular-nums',
             costExceedsSent
               ? 'text-destructive'
+              : costNeedsCategory
+                ? 'text-amber-600 dark:text-amber-400'
               : costLooksOff
                 ? 'text-amber-600 dark:text-amber-400'
                 : costIsPositive
