@@ -170,6 +170,16 @@ function usePlaceFieldsAboveKeyboard(
     let frame = 0
     let extra = 0
     let unpadTimer = 0
+    // Where the form was before this typing session moved it; restored when
+    // the session ends, so closing the keyboard does not leave the form
+    // scrolled up over an empty spacer (device run, 2026-10-24).
+    let restoreTop: number | null = null
+    // The scroll at the last touch, before the browser's own focus scrolling
+    // (which runs ahead of `focusin`) moves anything.
+    let touchTop: number | null = null
+    const onPointerDown = () => {
+      if (restoreTop === null) touchTop = scrollerRef.current?.scrollTop ?? null
+    }
 
     const keyboard = (navigator as Navigator & { virtualKeyboard?: VirtualKeyboardLike })
       .virtualKeyboard
@@ -202,12 +212,12 @@ function usePlaceFieldsAboveKeyboard(
       return node
     }
 
-    const scrollTo = (scroller: HTMLElement, to: number, instant: boolean) => {
+    const scrollTo = (scroller: HTMLElement, to: number, instant: boolean, done?: () => void) => {
       window.cancelAnimationFrame(frame)
       const from = scroller.scrollTop
-      if (Math.abs(to - from) < 2) return
-      if (instant || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      if (Math.abs(to - from) < 2 || instant || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         scroller.scrollTop = to
+        done?.()
         return
       }
       const start = performance.now()
@@ -215,6 +225,7 @@ function usePlaceFieldsAboveKeyboard(
         const t = Math.min(1, (now - start) / PLACE_MS)
         scroller.scrollTop = from + (to - from) * (1 - (1 - t) ** 3)
         if (t < 1) frame = window.requestAnimationFrame(step)
+        else done?.()
       }
       frame = window.requestAnimationFrame(step)
     }
@@ -234,6 +245,7 @@ function usePlaceFieldsAboveKeyboard(
       if (top >= box.top + clear && rect.bottom <= box.top + box.height * KEYBOARD_FREE_BAND) return
 
       const target = Math.max(0, Math.round(scroller.scrollTop + top - box.top - clear))
+      if (restoreTop === null) restoreTop = touchTop ?? scroller.scrollTop
       // Room is only ever added during a typing session, never taken away:
       // shrinking it under a scrolled form would clamp the scroll and jump.
       // Measured again after each top-up: a taller form shrinks as a flex
@@ -249,10 +261,20 @@ function usePlaceFieldsAboveKeyboard(
       scrollTo(scroller, target, keyboardUp())
     }
 
-    const unpad = () => {
-      if (!extra) return
-      extra = 0
-      if (roomRef.current) roomRef.current.style.height = ''
+    // Ends the typing session: back to where the form was, then the spacer
+    // goes. In that order, so removing it never clamps the scroll mid-way.
+    const unpad = (animate = true) => {
+      const scroller = scrollerRef.current
+      const back = restoreTop
+      restoreTop = null
+      touchTop = null
+      const dropRoom = () => {
+        if (!extra) return
+        extra = 0
+        if (roomRef.current) roomRef.current.style.height = ''
+      }
+      if (scroller && back !== null) scrollTo(scroller, back, !animate, dropRoom)
+      else dropRoom()
     }
 
     const onFocusIn = (event: FocusEvent) => {
@@ -271,6 +293,17 @@ function usePlaceFieldsAboveKeyboard(
     }
     // Tapping a field that already has focus reopens a keyboard that Back
     // dismissed, with no new focus event.
+    // Back closes the keyboard but leaves the field focused, which would keep
+    // the session (and the moved form) open. When the keyboard reports it has
+    // gone, end the typing: the blur ends the session like any other.
+    const onGeometry = () => {
+      if ((keyboard?.boundingRect.height ?? 1) > 0) return
+      const active = ownField(document.activeElement)
+      if (active) active.blur()
+    }
+    const keyboardEvents = keyboard as unknown as EventTarget | undefined
+    keyboardEvents?.addEventListener('geometrychange', onGeometry)
+
     const onClick = (event: MouseEvent) => {
       const field = ownField(event.target)
       if (field && field === document.activeElement) place(field)
@@ -279,6 +312,7 @@ function usePlaceFieldsAboveKeyboard(
     document.addEventListener('focusin', onFocusIn)
     document.addEventListener('focusout', onFocusOut)
     document.addEventListener('click', onClick)
+    document.addEventListener('pointerdown', onPointerDown, true)
     return () => {
       window.cancelAnimationFrame(frame)
       window.clearTimeout(unpadTimer)
@@ -286,7 +320,9 @@ function usePlaceFieldsAboveKeyboard(
       document.removeEventListener('focusin', onFocusIn)
       document.removeEventListener('focusout', onFocusOut)
       document.removeEventListener('click', onClick)
-      unpad()
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      keyboardEvents?.removeEventListener('geometrychange', onGeometry)
+      unpad(false)
     }
     // The ref is stable.
   }, [enabled, scrollerRef, roomRef])

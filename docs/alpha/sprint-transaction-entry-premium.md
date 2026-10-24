@@ -606,6 +606,20 @@ Réplica con tu secuencia (cuenta COP; Descripción → Notas → tasa → Notas
   - Sobre los botones, un desvanecido reemplaza la línea dura.
 - **El selector usa anchos según el texto** (`SegmentedField fit="content"`), así «Transferencia» no se corta. Con menos de 380 px de ancho se ocultan sus íconos. Verificado sin cortes en es/fr/en a 360 px y en es a 393 px.
 
+**Descripción y Notas en pantalla propia, estilo AndroMoney (2026-10-24, pedido del usuario).** Al cerrar el teclado, el formulario quedaba desplazado sobre el espaciador vacío.
+- **En el teléfono, Descripción y Notas abren la misma hoja a pantalla completa de los selectores** (`PickerField` suma `description` y `notes`). La hoja trae el campo arriba con foco, el botón «Listo» y las sugerencias de descripción como chips. Atrás, Escape y la X cierran sin perder lo escrito.
+- **Enter en Descripción sigue la cadena** (a Tags). En Notas, Enter es salto de línea y «Listo» cierra.
+- **Viniendo de Payee por la cadena, la hoja no se cierra:** solo cambia de contenido, así que el teclado no parpadea.
+- **Los valores viajan en inputs ocultos,** porque los campos de la hoja solo existen mientras está abierta. Escritorio no cambia.
+- **Campos que siguen dentro del formulario** (monto, tasa de cambio, monto recibido): al terminar de escribir, el formulario vuelve a donde estaba antes del toque y luego se quita el espaciador. Si el teclado se cierra con Atrás sin quitar el foco, el evento `geometrychange` de la VirtualKeyboard API quita el foco y cierra la sesión igual.
+
+Réplica:
+- La cadena monto → categoría → cuenta → payee abre la hoja de Descripción con el foco en el campo. Enter pasa a Tags.
+- Notas acepta dos líneas y «Listo» la cierra.
+- El guardado lleva la descripción y las notas.
+- El formulario nunca se desplazó (`scrollTop` 0 en todo el recorrido).
+- La tasa de cambio sube al recibir el foco (616 px) y vuelve a 0 al cerrar el teclado, sin espaciador.
+
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 
 | # | Caso | Qué confirmar | Resultado |
@@ -632,4 +646,5 @@ Réplica con tu secuencia (cuenta COP; Descripción → Notas → tasa → Notas
 | 11i | Saltar a Descripción por la cadena (monto → categoría → cuenta → payee); tocar Notas, la tasa de cambio (cuenta en otra moneda) o «Amount received» de una transferencia, e ir y volver entre ellos con el teclado abierto | Un solo movimiento suave hacia arriba antes del teclado, sin «flick». Cada campo queda con su título justo bajo la X; la X nunca sale de la pantalla | |
 | 11j | Tocar «+» en la barra inferior del teléfono | Abre el formulario directo en Gasto, sin menú intermedio; Deudas e Importar CSV siguen en «Más» | |
 | 11k | Abrir el formulario en el teléfono y arrastrar | No se desplaza: todo cabe; la X flota arriba a la derecha y «Transferencia» no se corta | |
+| 11l | Tocar Descripción o Notas (o llegar por la cadena), escribir y cerrar con Listo, Enter o Atrás | Pantalla propia con el campo arriba; al volver el formulario está igual que antes, sin desplazamiento ni espacio vacío | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |

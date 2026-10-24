@@ -83,7 +83,14 @@ import { cn } from '@/lib/utils'
 type TransactionType = 'income' | 'expense' | 'transfer'
 
 /** Which selector surface is open (mobile sheet or desktop popover). */
-type PickerField = null | 'account' | 'from' | 'to' | 'category' | 'payee'
+/**
+ * What the mobile full-screen sheet is showing. Description and notes are not
+ * pickers, but they open in the same sheet: typing in a row inside the form
+ * meant the keyboard covering it, the form scrolling to make room and staying
+ * scrolled after the keyboard closed (device runs, 2026-10-22…24). On a screen
+ * of their own, nothing behind them has to move.
+ */
+type PickerField = null | 'account' | 'from' | 'to' | 'category' | 'payee' | 'description' | 'notes'
 
 /**
  * The fields the fill-fast chain walks, in the order it walks them. Everything
@@ -954,6 +961,15 @@ export function TransactionForm({
    * The row still expands, so the field is visible and one tap from typing.
    */
   const openDescription = (quiet = false) => {
+    // Mobile: its own screen, in the sheet that may already be open (the chain
+    // arrives from the payee picker), so the keyboard just stays up. Quiet
+    // (after an autofill the user still has to read) opens nothing.
+    if (isMobile) {
+      setExpandedField(null)
+      resetPickerState()
+      setSheetField(quiet ? null : 'description')
+      return
+    }
     setSheetField(null)
     // On mobile the row has to expand first; expanding it focuses the input on
     // its own (see the `expandedField` effect) unless told not to. Only armed on
@@ -1295,7 +1311,7 @@ export function TransactionForm({
     placeholder,
     onOpen,
   }: {
-    id: 'account' | 'from' | 'to' | 'category' | 'payee'
+    id: Exclude<PickerField, null>
     icon: ReactNode
     label: string
     value?: string
@@ -2172,93 +2188,29 @@ export function TransactionForm({
         </>
       )}
 
-      {editRow({
+      {/* Description and notes open the full-screen sheet (see PickerField).
+          Hidden inputs carry their values, since the sheet's fields only exist
+          while it is open. */}
+      <input type="hidden" name="description" value={description} />
+      {pickerRow({
         id: 'description',
         icon: <FileText className="size-4.5" />,
         label: t('transactionForm.description'),
         value: description,
         placeholder: '—',
-        children: (
-          <div className="space-y-1.5">
-            <Label htmlFor="description">{t('transactionForm.description')}</Label>
-            {/* BR-046: the descriptions this category has carried before, as
-                one-tap chips. The browser offers the same thing from its own
-                cache of submitted values, but that list is per field name
-                across every site, sits in a keyboard strip nobody styled, and
-                knows nothing about which category you just picked. This does.
-                Offered, never filled: unlike the account or the payee, a
-                description really is different most times. */}
-            {descriptionSuggestions.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5 pb-0.5">
-                {descriptionSuggestions.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    onClick={() => setDescription(suggestion)}
-                    className={cn(
-                      'flex h-8 max-w-full items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors',
-                      description === suggestion
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    <Sparkles className="size-3 shrink-0" aria-hidden="true" />
-                    <span className="truncate">{suggestion}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            <Input
-              id="description"
-              name="description"
-              // The chips above are this field's suggestions now. The browser's
-              // own list came from its cache of submitted values, keyed on the
-              // field name across every site, and it knew nothing about the
-              // category — so it sat in a keyboard strip nobody styled, offering
-              // worse answers than the row right above it.
-              autoComplete="off"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onKeyDown={(e) => {
-                // A text field has no "chosen" moment a picker can hook into,
-                // so the keyboard's Enter/Done is the one: it closes the row and
-                // hands the chain on to tags. Without preventDefault this would
-                // submit the half-filled form instead.
-                if (e.key !== 'Enter') return
-                e.preventDefault()
-                const next = quickEntry.autoAdvance
-                  ? nextInChain('description', {
-                      description: Boolean(description.trim()),
-                    })
-                  : null
-                setExpandedField(null)
-                if (next) goTo(next)
-              }}
-            />
-          </div>
-        ),
       })}
-      {showField('notes')
-        ? editRow({
-            id: 'note',
+      {showField('notes') ? (
+        <>
+          <input type="hidden" name="notes" value={notes} />
+          {pickerRow({
+            id: 'notes',
             icon: <StickyNote className="size-4.5" />,
             label: t('transactionForm.notes'),
             value: notes,
             placeholder: '—',
-            children: (
-              <div className="space-y-1.5">
-                <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-                <Textarea
-                  id="notes"
-                  name="notes"
-                  rows={3}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </div>
-            ),
-          })
-        : null}
+          })}
+        </>
+      ) : null}
       {showField('status')
         ? editRow({
             id: 'status',
@@ -2453,6 +2405,78 @@ export function TransactionForm({
     </div>
   )
 
+  // ── Description / notes on their own screen (mobile) ───────────────────
+  // Enter (or Done) on the description hands the chain on, as the inline field
+  // did; notes are free text, so Enter is a new line and Done closes.
+  const finishDescription = () => {
+    const next = quickEntry.autoAdvance
+      ? nextInChain('description', { description: Boolean(description.trim()) })
+      : null
+    if (next) goTo(next)
+    else setSheetField(null)
+  }
+  const doneButton = (onDone: () => void) => (
+    <Button type="button" className="mt-2 h-11 w-full rounded-xl text-sm font-semibold" onClick={onDone}>
+      {ui('Done')}
+    </Button>
+  )
+  const descriptionSheetField = (
+    <div>
+      <Input
+        aria-label={t('transactionForm.description')}
+        autoFocus
+        autoComplete="off"
+        enterKeyHint="next"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        onKeyDown={(e) => {
+          // Without preventDefault, Enter would submit the half-filled form.
+          if (e.key !== 'Enter') return
+          e.preventDefault()
+          finishDescription()
+        }}
+        className="h-12 rounded-xl text-base"
+      />
+      {doneButton(finishDescription)}
+    </div>
+  )
+  // BR-046: the descriptions this category has carried before, as one-tap
+  // chips. Offered, never filled: a description really is different most times.
+  const descriptionSheetBody =
+    descriptionSuggestions.length > 0 ? (
+      <div className="flex flex-wrap gap-2 p-3">
+        {descriptionSuggestions.map((suggestion) => (
+          <button
+            key={suggestion}
+            type="button"
+            onClick={() => setDescription(suggestion)}
+            className={cn(
+              'flex h-9 max-w-full items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors',
+              description === suggestion
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground active:bg-muted'
+            )}
+          >
+            <Sparkles className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{suggestion}</span>
+          </button>
+        ))}
+      </div>
+    ) : null
+  const notesSheetField = (
+    <div>
+      <Textarea
+        aria-label={t('transactionForm.notes')}
+        autoFocus
+        rows={5}
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        className="rounded-xl text-base"
+      />
+      {doneButton(() => setSheetField(null))}
+    </div>
+  )
+
   // ── Mobile full-screen selector sheet ──────────────────────────────────
   // A single sheet instance drives every sheet-backed row; its title and body
   // switch on which row opened it. The picker bodies are the same ones the
@@ -2477,7 +2501,11 @@ export function TransactionForm({
       : undefined
 
   const baseSheetTitle =
-    sheetField === 'category'
+    sheetField === 'description'
+      ? t('transactionForm.description')
+      : sheetField === 'notes'
+        ? t('transactionForm.notes')
+        : sheetField === 'category'
       ? 'Category'
       : sheetField === 'payee'
         ? t(transactionType === 'income' ? 'transactionForm.payer' : 'transactionForm.payee')
@@ -2497,7 +2525,12 @@ export function TransactionForm({
   // top of the list, so it stays under the header while the list scrolls.
   let sheetBody: ReactNode = null
   let sheetSearch: ReactNode = null
-  if (sheetField === 'category') {
+  if (sheetField === 'description') {
+    sheetSearch = descriptionSheetField
+    sheetBody = descriptionSheetBody
+  } else if (sheetField === 'notes') {
+    sheetSearch = notesSheetField
+  } else if (sheetField === 'category') {
     sheetBody = categoryPickerBody(false)
     sheetSearch = categoryDrillParentId ? subcategorySearchField : categorySearchField
   } else if (sheetField === 'payee') {
