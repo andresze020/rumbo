@@ -16,11 +16,12 @@ import {
   FileText,
   ListChecks,
   Plus,
+  Receipt,
   Repeat,
   Shapes,
   Sparkles,
-  Store,
   StickyNote,
+  Store,
   Wallet,
 } from 'lucide-react'
 import {
@@ -101,6 +102,7 @@ type PickerField =
   | 'description'
   | 'notes'
   | 'rate'
+  | 'cost'
 
 /**
  * The fields the fill-fast chain walks, in the order it walks them. Everything
@@ -609,6 +611,13 @@ export function TransactionForm({
       /fee|comis|charg|bank|banc|cargo|surcharg/i.test(c.label)
     )?.id ?? ''
   const effectiveCostCategoryId = costCategoryId || defaultCostCategoryId
+  // Which cost field the transfer shows: the unified cost (fees + exchange)
+  // when the currencies differ, an optional cash fee when they match (new
+  // transfers only, both accounts picked).
+  const sameCurrencyFeeVisible =
+    isTransfer && !isEdit && !isCrossCurrencyTransfer && Boolean(selectedFromAccount && selectedToAccount)
+  const costVisible = (isTransfer && isCrossCurrencyTransfer) || sameCurrencyFeeVisible
+  const costCurrency = isCrossCurrencyTransfer ? baseCurrency : (selectedFromAccount?.currency_code ?? baseCurrency)
   const submitAction = isTransfer
     ? isEdit
       ? updateTransferTransactionAction
@@ -2108,6 +2117,45 @@ export function TransactionForm({
     onOpen: syncCategoryDrillToSelection,
   })
 
+  // Mobile: the transfer's fee / cost as a row of the fields card, opening its
+  // own screen like the exchange rate. The card it replaces (field, category
+  // select, help) took ~180px and pushed the transfer past one screen.
+  const costLabel = isCrossCurrencyTransfer
+    ? t('transactionForm.transferCost')
+    : t('transactionForm.transferFee')
+  const mobileCostRow = costVisible ? (
+    <div data-entry-row className="border-t first:border-t-0">
+      <button
+        type="button"
+        onClick={() => {
+          setExpandedField(null)
+          resetPickerState()
+          setSheetField('cost')
+        }}
+        className="flex w-full items-center gap-3 px-1 py-2.5 text-left"
+      >
+        <Receipt className="size-4.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        {/* The label gives way, not the value: "Transfer cost (fees +
+            exchange)" is long enough to push the figure off the row. */}
+        <span className="min-w-0 truncate text-sm font-medium">{costLabel}</span>
+        <span
+          className={cn(
+            'ml-auto shrink-0 text-sm tabular-nums',
+            costExceedsSent
+              ? 'text-destructive'
+              : costLooksOff
+                ? 'text-amber-600 dark:text-amber-400'
+                : costIsPositive
+                  ? 'text-foreground'
+                  : 'text-muted-foreground'
+          )}
+        >
+          {costIsPositive ? formatCurrency(parsedCost, costCurrency, locale) : '—'}
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </button>
+    </div>
+  ) : null
   const mobileRateRow = mobileRateRowFor(
     isTransfer ? (needsFromRate ? selectedFromAccount : undefined) : isMultiCurrency ? selectedAccount : undefined
   )
@@ -2270,6 +2318,7 @@ export function TransactionForm({
       {/* A transfer's From/To selectors live in the amounts card above, beside
           the figure each one applies to — they are deliberately absent here. */}
       {isTransfer ? mobileRateRow : null}
+      {isTransfer ? mobileCostRow : null}
       {isTransfer ? repeatRow : null}
       {isTransfer ? null : (
         <>
@@ -2386,11 +2435,14 @@ export function TransactionForm({
         body,
       })
     }
+    // One row on a phone, the label inside it: a label above plus a full-size
+    // button was ~70px per account, and with the fee the transfer no longer
+    // fit one screen (user request, 2026-10-24).
     return (
-      <div className="space-y-1.5">
-        <Label>{label}</Label>
+      <div>
         <button
           type="button"
+          aria-label={`${label}: ${valueText || placeholder}`}
           onClick={() => {
             setExpandedField(null)
             resetPickerState()
@@ -2398,6 +2450,9 @@ export function TransactionForm({
           }}
           className="flex h-11 w-full items-center gap-2 rounded-xl border bg-background px-3 text-left text-sm"
         >
+          <span className="w-[4.5rem] shrink-0 truncate text-xs font-medium text-muted-foreground">
+            {label}
+          </span>
           {accountLeading(account) ? (
             <span className="shrink-0 text-muted-foreground">{accountLeading(account)}</span>
           ) : null}
@@ -2410,15 +2465,92 @@ export function TransactionForm({
     )
   }
 
+  // Mobile: a transfer leg's account as a chip in its amount's header row,
+  // "FROM [Checking ›]  CAD", instead of a separate row under the amount.
+  // Two rows of ~52px each were what kept a transfer from fitting one screen
+  // (user request, 2026-10-24). Desktop keeps its comboboxes.
+  const transferAccountChip = ({
+    id,
+    shortLabel,
+    label,
+    account,
+    placeholder,
+    currencyCode,
+  }: {
+    id: 'from' | 'to'
+    shortLabel: string
+    label: string
+    account: TransactionFormAccount | undefined
+    placeholder: string
+    currencyCode: string | undefined
+  }) => {
+    const valueText = account ? formatAccountLabel(account) : ''
+    return (
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={AMOUNT_LABEL_CLS}>{shortLabel}</span>
+          <button
+            type="button"
+            aria-label={`${label}: ${valueText || placeholder}`}
+            onClick={() => {
+              setExpandedField(null)
+              resetPickerState()
+              setSheetField(id)
+            }}
+            className={cn(
+              'flex h-8 min-w-0 items-center gap-1.5 rounded-full border bg-background/60 pl-2.5 pr-2 text-sm font-medium transition-colors active:bg-muted',
+              !valueText && 'border-dashed text-muted-foreground'
+            )}
+          >
+            {accountLeading(account) ? (
+              <span className="shrink-0 text-muted-foreground [&_svg]:size-3.5">
+                {accountLeading(account)}
+              </span>
+            ) : null}
+            <span className="truncate">{valueText || placeholder}</span>
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </button>
+        </div>
+        {currencyCode ? <span className={CURRENCY_CHIP_CLS}>{currencyCode}</span> : null}
+      </div>
+    )
+  }
+
+  const fromAccountChip = transferAccountChip({
+    id: 'from',
+    shortLabel: t('transactionForm.fromShort'),
+    label: t('transactionForm.fromAccount'),
+    account: selectedFromAccount,
+    placeholder: t('transactionForm.selectSource'),
+    currencyCode: amountCurrencyCode,
+  })
+  const toAccountChip = transferAccountChip({
+    id: 'to',
+    shortLabel: t('transactionForm.toShort'),
+    label: t('transactionForm.toAccount'),
+    account: selectedToAccount,
+    placeholder: t('transactionForm.selectDestination'),
+    currencyCode: isCrossCurrencyTransfer ? selectedToAccount?.currency_code : undefined,
+  })
+
   const transferAmountsCard = (
     <div data-entry-amount className={cn('space-y-2.5 rounded-2xl border p-3', AMOUNT_CARD_TINT.transfer)}>
       <div>
-        <div className="flex items-center justify-between">
-          <Label htmlFor="amount" className={AMOUNT_LABEL_CLS}>
-            {t('transactionForm.amountSent')}
-          </Label>
-          <span className={CURRENCY_CHIP_CLS}>{amountCurrencyCode}</span>
-        </div>
+        {isMobile ? (
+          <>
+            {fromAccountChip}
+            <Label htmlFor="amount" className="sr-only">
+              {t('transactionForm.amountSent')}
+            </Label>
+          </>
+        ) : (
+          <div className="flex items-center justify-between">
+            <Label htmlFor="amount" className={AMOUNT_LABEL_CLS}>
+              {t('transactionForm.amountSent')}
+            </Label>
+            <span className={CURRENCY_CHIP_CLS}>{amountCurrencyCode}</span>
+          </div>
+        )}
         <AmountInput
           id="amount"
           name="amount"
@@ -2438,7 +2570,7 @@ export function TransactionForm({
           required
           className="mt-1.5"
         />
-        <div className="mt-2">
+        <div className="mt-2 max-sm:hidden">
           {transferAccountField({
             id: 'from',
             label: t('transactionForm.fromAccount'),
@@ -2451,7 +2583,9 @@ export function TransactionForm({
         </div>
       </div>
 
-      <div className="flex items-center gap-2" aria-hidden="true">
+      {/* The From/To rows read top to bottom on a phone; the arrow between
+          them only cost a row of height there. */}
+      <div className="flex items-center gap-2 max-sm:hidden" aria-hidden="true">
         <span className="h-px flex-1 bg-border" />
         <ArrowDown className="size-3.5 text-muted-foreground" />
         <span className="h-px flex-1 bg-border" />
@@ -2461,14 +2595,21 @@ export function TransactionForm({
         {/* Only a cross-currency transfer has a second amount to enter. When both
             legs share a currency the same figure arrives, so the destination
             block is just the account. */}
+        {isMobile ? toAccountChip : null}
         {isCrossCurrencyTransfer ? (
           <>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="to_amount" className={AMOUNT_LABEL_CLS}>
+            {isMobile ? (
+              <Label htmlFor="to_amount" className="sr-only">
                 {t('transactionForm.amountReceived')}
               </Label>
-              <span className={CURRENCY_CHIP_CLS}>{selectedToAccount?.currency_code}</span>
-            </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <Label htmlFor="to_amount" className={AMOUNT_LABEL_CLS}>
+                  {t('transactionForm.amountReceived')}
+                </Label>
+                <span className={CURRENCY_CHIP_CLS}>{selectedToAccount?.currency_code}</span>
+              </div>
+            )}
             <AmountInput
               id="to_amount"
               name="to_amount"
@@ -2486,7 +2627,7 @@ export function TransactionForm({
             />
           </>
         ) : null}
-        <div className={isCrossCurrencyTransfer ? 'mt-2' : undefined}>
+        <div className={cn(isCrossCurrencyTransfer && 'mt-2', 'max-sm:hidden')}>
           {transferAccountField({
             id: 'to',
             label: t('transactionForm.toAccount'),
@@ -2497,7 +2638,14 @@ export function TransactionForm({
             body: accountPickerBody(toAccountId, selectToAccount, fromAccountId),
           })}
         </div>
-        <p className="mt-1.5 text-xs text-muted-foreground">
+        {/* "The same amount arrives" is self-evident with one amount on screen;
+            on a phone it only cost height. */}
+        <p
+          // Hidden on a phone either way: the same-currency note is
+          // self-evident, and the cross-currency one is what the transfer
+          // cost row (and its screen) already explain.
+          className="mt-1.5 text-xs text-muted-foreground max-sm:hidden"
+        >
           {isCrossCurrencyTransfer
             ? t('transactionForm.amountReceivedHelp')
             : t('transactionForm.amountArrivesSame')}
@@ -2606,6 +2754,65 @@ export function TransactionForm({
     </div>
   )
 
+  const costSheetField = (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className={AMOUNT_LABEL_CLS}>{costLabel}</span>
+        <span className={CURRENCY_CHIP_CLS}>{costCurrency}</span>
+      </div>
+      <Input
+        aria-label={costLabel}
+        autoFocus
+        inputMode="decimal"
+        enterKeyHint="done"
+        value={costValue}
+        onChange={(e) => {
+          setCostInput(e.target.value)
+          setCostTouched(true)
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return
+          e.preventDefault()
+          setSheetField(null)
+        }}
+        placeholder="0.00"
+        className="h-12 rounded-xl text-base"
+      />
+      <select
+        aria-label={t('transactionForm.transferCostCategory')}
+        value={effectiveCostCategoryId}
+        onChange={(e) => setCostCategoryId(e.target.value)}
+        className={cn(nativeSelectCls, 'h-11 w-full rounded-xl')}
+        disabled={!costIsPositive}
+      >
+        <option value="" disabled>
+          {t('transactionForm.transferCostCategory')}
+        </option>
+        {expenseCategoryOptions.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+      {costExceedsSent ? (
+        <p className="text-xs text-destructive">{t('transactionForm.transferCostTooLarge')}</p>
+      ) : costLooksOff && suggestedCost != null ? (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          {t('transactionForm.transferCostLooksOff', {
+            amount: formatCurrency(suggestedCost, baseCurrency),
+          })}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          {isCrossCurrencyTransfer
+            ? t('transactionForm.transferCostHelp')
+            : t('transactionForm.transferFeeHelp')}
+        </p>
+      )}
+      {doneButton(() => setSheetField(null))}
+    </div>
+  )
+
   // ── Mobile full-screen selector sheet ──────────────────────────────────
   // A single sheet instance drives every sheet-backed row; its title and body
   // switch on which row opened it. The picker bodies are the same ones the
@@ -2636,6 +2843,8 @@ export function TransactionForm({
         ? t('transactionForm.notes')
         : sheetField === 'rate'
           ? ui('Exchange rate')
+          : sheetField === 'cost'
+            ? costLabel
         : sheetField === 'category'
       ? 'Category'
       : sheetField === 'payee'
@@ -2661,6 +2870,8 @@ export function TransactionForm({
     sheetBody = descriptionSheetBody
   } else if (sheetField === 'notes') {
     sheetSearch = notesSheetField
+  } else if (sheetField === 'cost') {
+    sheetSearch = costSheetField
   } else if (sheetField === 'rate') {
     const rateAccount = isTransfer ? selectedFromAccount : selectedAccount
     sheetSearch = rateAccount ? (
@@ -3047,7 +3258,24 @@ export function TransactionForm({
       ) : null}
 
       {/* ── Cross-currency: unified transfer cost (fees + exchange) ────── */}
-      {isTransfer && isCrossCurrencyTransfer ? (
+      {/* Desktop only: on a phone it is a row of the fields card that opens
+          its own screen (`mobileCostRow`), and these values travel in the
+          hidden inputs below. */}
+      {isMobile && costVisible ? (
+        <>
+          <input
+            type="hidden"
+            name={isCrossCurrencyTransfer ? 'cost_base' : 'fee_amount'}
+            value={costValue}
+          />
+          <input
+            type="hidden"
+            name={isCrossCurrencyTransfer ? 'cost_category_id' : 'fee_category_id'}
+            value={costIsPositive ? effectiveCostCategoryId : ''}
+          />
+        </>
+      ) : null}
+      {!isMobile && isTransfer && isCrossCurrencyTransfer ? (
         <div className="rounded-2xl border bg-muted/30 p-3">
           <div className="flex items-center justify-between">
             <Label
@@ -3114,7 +3342,7 @@ export function TransactionForm({
       ) : null}
 
       {/* ── Same-currency: optional explicit fee (a real cash charge) ──── */}
-      {isTransfer && !isEdit && !isCrossCurrencyTransfer && selectedFromAccount && selectedToAccount ? (
+      {!isMobile && sameCurrencyFeeVisible && selectedFromAccount ? (
         <div className="rounded-2xl border bg-muted/30 p-3">
           <div className="flex items-center justify-between">
             <Label

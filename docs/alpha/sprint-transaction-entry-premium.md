@@ -649,6 +649,21 @@ Réplica en build de producción, con la fila Status de más que el formulario r
 
 En todos los casos sin scroll y con filas de 36 px o más.
 
+**Editar con el mismo formulario y transferencia más compacta (2026-10-24, pedido del usuario).**
+- **Editar abre la misma hoja que crear.** El contenedor —pantalla completa, X flotante, ajuste a una pantalla y manejo del teclado— salió del proveedor a `EntrySheet` (`src/components/entry-sheet.tsx`). La Agregar y la edición (`EditTransactionSheet`, en la página de Transacciones) lo usan igual; antes la edición abría el `FormDialog` genérico, una hoja inferior sin nada de eso.
+  - La edición muestra su título en la fila de la X.
+  - Abre con el foco en la hoja: no sube el teclado y la X no muestra el anillo de foco.
+- **Transferencia en el teléfono:**
+  - La cuenta de cada lado es un chip en la cabecera de su monto («DESDE [Checking ›] CAD», «HACIA [Visa ›]»), no una fila aparte. Se fueron la flecha divisoria y los textos de ayuda.
+  - La comisión y el costo de la transferencia son una fila del grupo de campos que abre su propia pantalla (campo, categoría, avisos, «Listo»). Los valores viajan en inputs ocultos. En escritorio no cambia.
+- **Datos de prueba:** las cuentas y categorías de prueba pasaron a `e2e/entry/fixtures.json`. Los comparten el doble de Supabase y la página `/e2e/entry`, que ahora tiene modo edición (`?edit=expense|transfer`).
+- **Escenarios nuevos:**
+  - Transferencia con comisión a 412×741 y 360×640.
+  - Comisión en su pantalla.
+  - Transferencia entre monedas a 360×640.
+  - Edición de gasto y de transferencia en la misma hoja, en una pantalla.
+  - Con estos, son 19 de 19.
+
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 
 | # | Caso | Qué confirmar | Resultado |
@@ -678,4 +693,5 @@ En todos los casos sin scroll y con filas de 36 px o más.
 | 11l | Tocar Descripción o Notas (o llegar por la cadena), escribir y cerrar con Listo, Enter o Atrás | Pantalla propia con el campo arriba; al volver el formulario está igual que antes, sin desplazamiento ni espacio vacío | |
 | 11m | Cuenta en otra moneda: tocar «Tipo de cambio», escribir y «Listo»; luego una descripción larga | La tasa abre su propia pantalla y la fila muestra el valor; la descripción crece hacia abajo con el contexto arriba | |
 | 11n | Cuenta en otra moneda (fila de tipo de cambio), tocar el calendario | Todo cabe en una pantalla sin scroll; el calendario abre el selector del teléfono directo | |
+| 11o | Editar una transacción y una transferencia; crear una transferencia con comisión | La edición abre la misma hoja a pantalla completa; la transferencia (con comisión o entre monedas) cabe sin scroll | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |

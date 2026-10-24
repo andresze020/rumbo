@@ -308,6 +308,78 @@ scenario('a transfer amount moves above the keyboard without moving the X', asyn
   await context.close()
 })
 
+async function startTransfer(page, destination) {
+  await page.locator('[role=dialog]').getByText(/^Transfer$/).first().tap()
+  await page.waitForTimeout(400)
+  await page.getByRole('button', { name: /Select source/ }).first().tap()
+  await page.waitForTimeout(400)
+  await page.getByRole('button', { name: /^Checking/ }).first().tap()
+  await page.waitForTimeout(400)
+  await page.getByRole('button', { name: destination }).first().tap()
+  await page.waitForTimeout(600)
+  await page.evaluate(() => document.activeElement?.blur())
+}
+
+for (const [width, height] of [[412, 741], [360, 640]]) {
+  scenario(`a same-currency transfer with its fee fits one screen at ${width}×${height}`, async () => {
+    const { context, page } = await phone({ width, height })
+    await openForm(page)
+    await startTransfer(page, /^Visa/)
+    const state = await formState(page)
+    assert.equal(state.scrollable, false, `overflows by ${state.formOverflow}px`)
+    assert.ok(state.minRow >= 36, `a row is ${state.minRow}px tall`)
+    await context.close()
+  })
+}
+
+scenario('the transfer fee opens on its own screen and travels in the form', async () => {
+  const { context, page } = await phone()
+  await openForm(page)
+  await startTransfer(page, /^Visa/)
+  await page.getByRole('button', { name: /^Fee|Transfer fee/ }).first().tap()
+  await page.waitForTimeout(300)
+  assert.ok(await sheetTitle(page), 'no fee screen')
+  await page.keyboard.type('2')
+  await page.getByRole('button', { name: /^Done$/ }).first().tap()
+  await page.waitForTimeout(300)
+  const fee = await page.evaluate(() => document.querySelector('input[type=hidden][name=fee_amount]')?.value)
+  assert.equal(fee, '2')
+  const row = await page.getByRole('button', { name: /^Fee|Transfer fee/ }).first().textContent()
+  assert.match(row, /2\.00/)
+  await context.close()
+})
+
+scenario('a cross-currency transfer fits one screen at 360×640', async () => {
+  const { context, page } = await phone({ width: 360, height: 640 })
+  await openForm(page)
+  await startTransfer(page, /Bancolombia/)
+  const state = await formState(page)
+  assert.equal(state.scrollable, false, `overflows by ${state.formOverflow}px`)
+  await context.close()
+})
+
+for (const kind of ['expense', 'transfer']) {
+  scenario(`editing a${kind === 'expense' ? 'n expense' : ' transfer'} opens the same full-screen sheet, on one screen`, async () => {
+    const { context, page } = await phone()
+    await page.goto(`${BASE}/e2e/entry?edit=${kind}`)
+    await page.waitForSelector('[data-entry-close]', { timeout: 30_000 })
+    await page.waitForTimeout(600)
+    const sheet = await page.evaluate(() => {
+      const box = document.querySelector('[data-slot=dialog-content]').getBoundingClientRect()
+      return { top: box.top, height: box.height, viewport: window.innerHeight, title: document.querySelector('[data-slot=dialog-title]')?.textContent }
+    })
+    assert.equal(Math.round(sheet.top), 0, 'not full screen')
+    assert.equal(Math.round(sheet.height), sheet.viewport, 'not full screen')
+    assert.match(sheet.title ?? '', /Edit (transaction|transfer)/)
+    const state = await formState(page)
+    assert.equal(state.scrollable, false, `overflows by ${state.formOverflow}px`)
+    await page.getByRole('button', { name: /^Description/ }).first().tap()
+    await page.waitForTimeout(300)
+    assert.equal(await sheetTitle(page), 'Description')
+    await context.close()
+  })
+}
+
 scenario('desktop: a rejected save keeps the description and notes', async () => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
   await context.addCookies([sessionCookie()])

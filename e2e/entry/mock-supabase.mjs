@@ -11,6 +11,9 @@
 import http from 'node:http'
 import fs from 'node:fs'
 
+// Accounts and categories are shared with the /e2e/entry harness page.
+const shared = JSON.parse(fs.readFileSync(new URL('./fixtures.json', import.meta.url), 'utf8'))
+
 const PORT = Number(process.env.PORT ?? 54321)
 const LOG = process.env.LOG ?? 'e2e/entry/.mock-supabase.log'
 const LATENCY = Number(process.env.LATENCY ?? 40) // ms per request (network)
@@ -29,17 +32,8 @@ const user = {
 const fixtures = {
   profiles: [{ id: 'u1', default_household_id: 'h1', display_name: 'QA', ui_preferences: null }],
   households: [{ id: 'h1', name: 'QA', base_currency: 'CAD' }],
-  accounts: [
-    { id: 'a1', name: 'Checking', currency_code: 'CAD', institution_name: null, account_type: 'checking', icon: null, color: null, private_owner_id: null },
-    { id: 'a2', name: 'Visa', currency_code: 'CAD', institution_name: null, account_type: 'credit_card', icon: null, color: null, private_owner_id: null },
-    { id: 'a3', name: 'Bancolombia', currency_code: 'COP', institution_name: null, account_type: 'checking', icon: null, color: null, private_owner_id: null },
-  ],
-  categories: [
-    { id: 'c1', name: 'Groceries', category_type: 'expense', reporting_type: 'expense', parent_category_id: null, icon: '🛒', color: null, is_system: false },
-    { id: 'c2', name: 'Transporte', category_type: 'expense', reporting_type: 'expense', parent_category_id: null, icon: '🚇', color: null, is_system: false },
-    { id: 'c2a', name: 'Subway', category_type: 'expense', reporting_type: 'expense', parent_category_id: 'c2', icon: '🚇', color: null, is_system: false },
-    { id: 'c3', name: 'Salary', category_type: 'income', reporting_type: 'income', parent_category_id: null, icon: '💼', color: null, is_system: false },
-  ],
+  accounts: shared.accounts,
+  categories: shared.categories,
   payees: [{ id: 'p1', name: 'High Point' }],
   tags: Array.from({ length: 14 }, (_, i) => ({ id: `t${i}`, name: `tag-${String(i).padStart(2, '0')}`, color: null })),
   currencies: [{ code: 'CAD' }, { code: 'COP' }, { code: 'USD' }],

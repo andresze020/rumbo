@@ -1,0 +1,76 @@
+{
+  "accounts": [
+    {
+      "id": "a1",
+      "name": "Checking",
+      "currency_code": "CAD",
+      "institution_name": null,
+      "account_type": "checking",
+      "icon": null,
+      "color": null,
+      "private_owner_id": null
+    },
+    {
+      "id": "a2",
+      "name": "Visa",
+      "currency_code": "CAD",
+      "institution_name": null,
+      "account_type": "credit_card",
+      "icon": null,
+      "color": null,
+      "private_owner_id": null
+    },
+    {
+      "id": "a3",
+      "name": "Bancolombia",
+      "currency_code": "COP",
+      "institution_name": null,
+      "account_type": "checking",
+      "icon": null,
+      "color": null,
+      "private_owner_id": null
+    }
+  ],
+  "categories": [
+    {
+      "id": "c1",
+      "name": "Groceries",
+      "category_type": "expense",
+      "reporting_type": "expense",
+      "parent_category_id": null,
+      "icon": "🛒",
+      "color": null,
+      "is_system": false
+    },
+    {
+      "id": "c2",
+      "name": "Transporte",
+      "category_type": "expense",
+      "reporting_type": "expense",
+      "parent_category_id": null,
+      "icon": "🚇",
+      "color": null,
+      "is_system": false
+    },
+    {
+      "id": "c2a",
+      "name": "Subway",
+      "category_type": "expense",
+      "reporting_type": "expense",
+      "parent_category_id": "c2",
+      "icon": "🚇",
+      "color": null,
+      "is_system": false
+    },
+    {
+      "id": "c3",
+      "name": "Salary",
+      "category_type": "income",
+      "reporting_type": "income",
+      "parent_category_id": null,
+      "icon": "💼",
+      "color": null,
+      "is_system": false
+    }
+  ]
+}
