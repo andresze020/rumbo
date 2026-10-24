@@ -676,9 +676,19 @@ En todos los casos sin scroll y con filas de 36 px o más.
   - Volver al tipo guardado restaura los valores guardados.
   - Una transferencia que pasa a gasto o ingreso conserva la cuenta de origen.
   - Una edición con cambio de tipo pide la tasa de cambio, porque crea una transacción nueva.
-- **Fuera de alcance:** la comisión aparte (solo al crear) no se ofrece al cambiar de tipo. Las etiquetas no pasan a una transferencia, que no las maneja.
+- **Ajustes tras la revisión del ledger** (migración `20261012120100_change_transaction_type_links.sql`, con la misma firma y `create or replace`, así que funciona se haya corrido o no la primera):
+  - Rechaza cambiar el tipo de un gasto con reembolsos vivos, porque sus asignaciones negativas quedarían sin nada que compensar.
+  - Rechaza cambiar el tipo de una cuota, porque el plan cuenta sus filas no anuladas.
+  - Copia de la original el beneficiario, las etiquetas y la hora cuando el formulario no los envió (campo oculto). Un valor vacío sí borra.
+  - El motivo de anulación nombra la transacción que la reemplaza.
+  - El formulario vuelve a pedir la tasa de cambio al cambiar el tipo en una cuenta en otra moneda.
+  - Las pruebas SQL pasan en el Postgres local: `npm run db:local`, 288 de 288.
+- **Fuera de alcance:**
+  - La comisión aparte (solo al crear) no se ofrece al cambiar de tipo.
+  - Las etiquetas no pasan a una transferencia, que no las maneja.
+  - Los conteos de uso de beneficiarios y etiquetas también cuentan las transacciones anuladas. Ya pasaba con cualquier anulación.
 - **Escenarios nuevos:** gasto → transferencia, y transferencia → gasto con ida y vuelta. Cada uno hace una sola llamada de reemplazo y cabe en una pantalla. Con estos, son 21 de 21.
-- **Manual:** `npx supabase db push`. Sin aplicar la migración, guardar con otro tipo falla con un error y la transacción original queda intacta.
+- **Manual:** `npx supabase db push` (aplica las dos migraciones). Sin aplicarlas, guardar con otro tipo falla con un error y la transacción original queda intacta.
 
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 

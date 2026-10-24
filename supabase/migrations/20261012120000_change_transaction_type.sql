@@ -230,8 +230,9 @@ grant execute on function public.change_transaction_type(
 
 -- ------------------------------------------------------------
 -- Rollback (manual; voided originals and their replacements are ordinary
--- transactions and stay as they are — use unvoid_transaction / void_transaction
--- if a specific change must be undone):
+-- transactions and stay as they are). To undo one type change, void the
+-- replacement BEFORE unvoid_transaction on the original — unvoiding alone
+-- leaves both live and the amount counts twice:
 --
 -- drop function if exists public.change_transaction_type(
 --   uuid, text, date, numeric, text, text, text,

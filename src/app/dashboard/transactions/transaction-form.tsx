@@ -704,14 +704,16 @@ export function TransactionForm({
   useEffect(() => {
     if (!isMultiCurrency || !selectedAccount || !transactionDate) return
     void autoFetch(selectedAccount.currency_code, transactionDate)
+    // The type is a dependency too: switching it clears the rate
+    // (`handleTransactionTypeChange`), and in edit it is what turns the rate on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountId, transactionDate])
+  }, [accountId, transactionDate, isMultiCurrency, transactionType])
 
   useEffect(() => {
     if (!needsFromRate || !selectedFromAccount || !transactionDate) return
     void autoFetch(selectedFromAccount.currency_code, transactionDate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromAccountId, transactionDate])
+  }, [fromAccountId, transactionDate, transactionType])
 
   // Fetch each cross-currency leg's market rate to base to suggest the cost.
   useEffect(() => {

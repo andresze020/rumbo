@@ -76,7 +76,7 @@ begin
     p_amount => 12, p_status => 'posted', p_from_account_id => v_a, p_to_account_id => v_b);
 
   select t.status, t.void_reason into r from public.transactions t where t.id = v_orig;
-  if r.status <> 'voided' or r.void_reason <> 'Type changed to transfer' then
+  if r.status <> 'voided' or r.void_reason <> 'Type changed to transfer (replaced by ' || v_xfer || ')' then
     raise exception 'original was not voided with the reason (status %, reason %)', r.status, r.void_reason;
   end if;
   if not exists (select 1 from public.transaction_entries e where e.transaction_id = v_orig) then
@@ -191,5 +191,87 @@ begin
   exception when others then
     if sqlerrm <> 'Voided or deleted transactions cannot be edited' then raise; end if;
   end;
+end $$;
+rollback;
+
+-- check: change_transaction_type carries over payee, tags and time the form did not send, and keeps refunded expenses
+begin;
+do $$
+declare
+  hh constant uuid := '__HOUSEHOLD_ID__';
+  ccy text := (select h.base_currency from public.households h where h.id = hh);
+  v_cat_exp uuid;
+  v_cat_inc uuid;
+  v_a uuid;
+  v_tag uuid;
+  v_orig uuid;
+  v_new uuid;
+  v_cleared uuid;
+  v_refunded uuid;
+begin
+  select c.id into v_cat_exp from public.categories c
+  where c.household_id = hh and c.reporting_type = 'expense' and c.deleted_at is null and not c.is_archived
+  order by c.sort_order limit 1;
+  select c.id into v_cat_inc from public.categories c
+  where c.household_id = hh and c.reporting_type = 'income' and c.deleted_at is null and not c.is_archived
+  order by c.sort_order limit 1;
+  select a.id into v_a from public.accounts a
+  where a.household_id = hh and a.private_owner_id is null and a.deleted_at is null and not a.is_archived
+    and a.currency_code = ccy
+  order by a.created_at limit 1;
+  if v_cat_exp is null or v_cat_inc is null or v_a is null then
+    raise exception 'setup: need a shared base-currency account plus an income and an expense category';
+  end if;
+
+  insert into public.tags (household_id, name) values (hh, 'retype probe tag ' || gen_random_uuid())
+  returning id into v_tag;
+
+  v_orig := public.create_manual_transaction(hh, 'expense', current_date, v_a, v_cat_exp, 7,
+    'retype carry probe', null, null, 'posted', 1, 'Retype Probe Payee');
+  perform public.set_transaction_tags(v_orig, array[v_tag]);
+  update public.transactions set transaction_time = '07:15' where id = v_orig and household_id = hh;
+
+  -- Payee, tags and time left out (fields hidden in the form): carried over.
+  v_new := public.change_transaction_type(
+    p_transaction_id => v_orig, p_new_type => 'income', p_transaction_date => current_date,
+    p_amount => 7, p_status => 'posted', p_account_id => v_a, p_category_id => v_cat_inc);
+  if not exists (select 1 from public.transaction_tags tt where tt.transaction_id = v_new and tt.tag_id = v_tag) then
+    raise exception 'the tags did not carry over';
+  end if;
+  if (select t.transaction_time from public.transactions t where t.id = v_new) is distinct from '07:15'::time then
+    raise exception 'the time did not carry over';
+  end if;
+  if (select t.payee_id from public.transactions t where t.id = v_new)
+     is distinct from (select t.payee_id from public.transactions t where t.id = v_orig) then
+    raise exception 'the payee did not carry over';
+  end if;
+
+  -- Sent empty: a deliberate clear.
+  v_cleared := public.change_transaction_type(
+    p_transaction_id => v_new, p_new_type => 'expense', p_transaction_date => current_date,
+    p_amount => 7, p_status => 'posted', p_account_id => v_a, p_category_id => v_cat_exp,
+    p_payee_name => '', p_tag_ids => '{}');
+  if exists (select 1 from public.transaction_tags tt where tt.transaction_id = v_cleared) then
+    raise exception 'an empty tag list still copied the tags';
+  end if;
+  if (select t.payee_id from public.transactions t where t.id = v_cleared) is not null then
+    raise exception 'an empty payee still copied the payee';
+  end if;
+
+  -- An expense with a live refund keeps its type.
+  v_refunded := public.create_manual_transaction(hh, 'expense', current_date, v_a, v_cat_exp, 30,
+    'retype refund probe', null, null, 'posted', 1, null);
+  perform public.create_refund_transaction(hh, v_a, v_cat_exp, 10, current_date,
+    'retype refund probe refund', v_refunded, null, null, 1);
+  begin
+    perform public.change_transaction_type(v_refunded, 'income', current_date, 30, 'posted',
+      p_account_id => v_a, p_category_id => v_cat_inc);
+    raise exception 'LEAK: an expense with a live refund was retyped';
+  exception when others then
+    if sqlerrm <> 'A transaction with refunds keeps its type. Void its refunds first.' then raise; end if;
+  end;
+  if (select t.status from public.transactions t where t.id = v_refunded) <> 'posted' then
+    raise exception 'the refused change touched the refunded expense';
+  end if;
 end $$;
 rollback;

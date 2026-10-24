@@ -1042,7 +1042,10 @@ export async function changeTransactionTypeAction(formData: FormData) {
   const accountId = String(formData.get('account_id') ?? '').trim()
   const categoryId = String(formData.get('category_id') ?? '').trim()
   const merchantName = String(formData.get('merchant_name') ?? '').trim()
-  const payeeName = String(formData.get('payee_name') ?? '').trim()
+  // Absent (field hidden) → null, and the RPC keeps the original's payee;
+  // present but empty → '' , a deliberate clear. Same split for tags below.
+  const rawPayee = formData.get('payee_name')
+  const payeeName = rawPayee === null ? null : String(rawPayee).trim()
   const tagsProvided = formData.get('tags_present') !== null
   const tagIds = formData
     .getAll('tag_id')
@@ -1136,7 +1139,7 @@ export async function changeTransactionTypeAction(formData: FormData) {
             p_account_id: accountId,
             p_category_id: categoryId,
             p_merchant_name: merchantName || null,
-            p_payee_name: payeeName || null,
+            p_payee_name: payeeName,
             p_exchange_rate_to_base: manualRateToBase,
             p_tag_ids: tagsProvided ? tagIds : null,
           }),
