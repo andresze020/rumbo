@@ -858,7 +858,7 @@ export function TransactionForm({
     if (!account) return null
     const missing = !rateIsValid
     return (
-      <div className="border-t first:border-t-0">
+      <div data-entry-row className="border-t first:border-t-0">
         <button
           type="button"
           onClick={() => {
@@ -1384,7 +1384,7 @@ export function TransactionForm({
     placeholder: string
     onOpen?: () => void
   }) => (
-    <div key={id} className="border-t first:border-t-0">
+    <div key={id} data-entry-row className="border-t first:border-t-0">
       <button
         type="button"
         onClick={() => {
@@ -2188,7 +2188,7 @@ export function TransactionForm({
           carry the answer for the dates that cover most manual entry. The
           calendar button is the escape hatch to any other date, and it shows
           that date once it is off-chip, so nothing became unreadable. */}
-      <div className="flex items-center gap-1.5 px-1 py-2">
+      <div data-entry-dates className="flex items-center gap-1.5 px-1 py-2">
         <RelativeDateChips
           value={transactionDate}
           onSelect={changeTransactionDate}
@@ -2200,6 +2200,21 @@ export function TransactionForm({
           aria-expanded={expandedField === 'date'}
           onClick={() => {
             resetPickerState()
+            // The phone's own date picker, straight away: the inline panel
+            // added a whole row (the form then no longer fit one screen) to
+            // show a field whose only job is to open that picker. The chosen
+            // date already shows on this button. The panel stays as the
+            // fallback where `showPicker` is missing or refuses.
+            const input = document.getElementById('transaction_date') as HTMLInputElement | null
+            if (expandedField !== 'date' && input?.showPicker) {
+              try {
+                input.showPicker()
+                setExpandedField(null)
+                return
+              } catch {
+                // Fall through to the panel.
+              }
+            }
             setExpandedField(expandedField === 'date' ? null : 'date')
           }}
           className={cn(
@@ -2215,7 +2230,10 @@ export function TransactionForm({
       </div>
       <div
         data-field-panel="date"
-        className={cn('px-1 pb-3 [&_label]:sr-only', expandedField === 'date' ? 'block' : 'hidden')}
+        // Visually hidden rather than `display: none` while closed, so the
+        // calendar button can open its picker (`showPicker` wants a rendered
+        // field).
+        className={cn('px-1 pb-3 [&_label]:sr-only', expandedField === 'date' ? 'block' : 'sr-only')}
       >
         {dateField}
       </div>
@@ -2377,7 +2395,7 @@ export function TransactionForm({
   }
 
   const transferAmountsCard = (
-    <div className={cn('space-y-2.5 rounded-2xl border p-3', AMOUNT_CARD_TINT.transfer)}>
+    <div data-entry-amount className={cn('space-y-2.5 rounded-2xl border p-3', AMOUNT_CARD_TINT.transfer)}>
       <div>
         <div className="flex items-center justify-between">
           <Label htmlFor="amount" className={AMOUNT_LABEL_CLS}>
@@ -2694,6 +2712,9 @@ export function TransactionForm({
         }
         rememberEntryUsage()
       }}
+      // `data-entry-form` & co.: hooks for the dialog's fit-to-screen density
+      // (`useFitEntryForm`, globals.css).
+      data-entry-form
       className="space-y-3 max-sm:flex max-sm:min-h-full max-sm:flex-1 max-sm:flex-col"
     >
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
@@ -2741,6 +2762,7 @@ export function TransactionForm({
         transferAmountsCard
       ) : (
         <div
+          data-entry-amount
           className={cn(
             'rounded-2xl border p-3 transition-colors duration-300',
             AMOUNT_CARD_TINT[transactionType === 'income' ? 'income' : 'expense']
@@ -2752,6 +2774,11 @@ export function TransactionForm({
             </Label>
             <div className="flex min-w-0 items-center gap-2">
               {batchNotice}
+              {isMobile && isMultiCurrency && baseEquivalent ? (
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                  ≈ {baseEquivalent}
+                </span>
+              ) : null}
               <span className={CURRENCY_CHIP_CLS}>{amountCurrencyCode}</span>
             </div>
           </div>
@@ -2779,7 +2806,9 @@ export function TransactionForm({
               only value the user has is the one in the account's currency —
               nobody records a COP purchase by typing CAD — so this reads out the
               conversion instead of asking for it. */}
-          {isMultiCurrency ? (
+          {/* Mobile shows the equivalent in the card's header instead (one
+              line less), and a missing rate already shows on its own row. */}
+          {isMultiCurrency && !isMobile ? (
             <p className="mt-2 text-xs text-muted-foreground">
               {baseEquivalent
                 ? t('transactionForm.amountInBasePreview', {

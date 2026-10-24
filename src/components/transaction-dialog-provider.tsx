@@ -113,6 +113,73 @@ const PLACE_MS = 160
  */
 const ROOM_GRACE_MS = 500
 
+/** Spacing steps for the entry form on a phone, loosest first (globals.css). */
+const FIT_LEVELS = ['', 'compact', 'tight'] as const
+
+/**
+ * Phone only: the entry form always fits one screen, like a native form. When
+ * its content would make the sheet scroll (a foreign-currency account adds the
+ * exchange-rate row, a small phone has less height), the spacing tightens a
+ * step at a time until it fits (`data-entry-fit` on the scroller).
+ *
+ * Measured, not guessed per field: which rows show depends on the account,
+ * the type and the user's field settings. Every step is tried inside one frame,
+ * before paint, so no in-between density is ever seen. A form taller than the
+ * tightest step simply scrolls.
+ */
+function useFitEntryForm(enabled: boolean, scrollerRef: { current: HTMLDivElement | null }) {
+  useEffect(() => {
+    if (!enabled) return
+    let frame = 0
+    let cleanup: (() => void) | null = null
+    // The sheet's DOM can land a frame after `open` flips; wait for it.
+    const attach = (attempt: number) => {
+      frame = 0
+      const scroller = scrollerRef.current
+      if (scroller) cleanup = watch(scroller)
+      else if (attempt < 30) frame = window.requestAnimationFrame(() => attach(attempt + 1))
+    }
+
+    const watch = (scroller: HTMLDivElement) => {
+      const fit = () => {
+        frame = 0
+        const form = scroller.querySelector<HTMLElement>('[data-entry-form]')
+        if (!form) return
+        // The form, not the scroller: while a field is typed into, the scroller
+        // also holds the keyboard spacer, which is not content.
+        for (const level of FIT_LEVELS) {
+          if (level) scroller.dataset.entryFit = level
+          else delete scroller.dataset.entryFit
+          if (form.scrollHeight <= scroller.clientHeight + 1) return
+        }
+      }
+      const schedule = () => {
+        if (!frame) frame = window.requestAnimationFrame(fit)
+      }
+
+      // Size changes of the sheet (toolbars, rotation), and any change inside
+      // the form: a row appearing, a panel opening, the next draft remounting.
+      const resize = new ResizeObserver(schedule)
+      resize.observe(scroller)
+      const mutations = new MutationObserver(schedule)
+      mutations.observe(scroller, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] })
+      schedule()
+
+      return () => {
+        resize.disconnect()
+        mutations.disconnect()
+        delete scroller.dataset.entryFit
+      }
+    }
+
+    attach(0)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      cleanup?.()
+    }
+  }, [enabled, scrollerRef])
+}
+
 /** The part of the VirtualKeyboard API used here (Chromium only). */
 type VirtualKeyboardLike = { overlaysContent: boolean; boundingRect: DOMRect }
 
@@ -528,6 +595,7 @@ export function TransactionDialogProvider({
   // remounts this layout) opens pre-filled instead of starting empty.
   const [open, setOpen] = useState(() => readAddNextDefaults(searchParams) !== null)
   usePlaceFieldsAboveKeyboard(isMobile && open, scrollerRef, keyboardRoomRef)
+  useFitEntryForm(isMobile && open, scrollerRef)
   const [formData, setFormData] = useState<QuickAddFormData | null>(null)
   // Mirrors `formData` for `refreshFormData`, which must see the latest value
   // from inside an async call started by an earlier render.

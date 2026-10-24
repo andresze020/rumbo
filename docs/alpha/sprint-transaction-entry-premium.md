@@ -632,6 +632,23 @@ Réplica (cuenta COP):
 - El guardado lleva la descripción.
 - En escritorio la tasa sigue en línea.
 
+**Todo en una pantalla, siempre (2026-10-24, pedido del usuario).** Con la fila de tipo de cambio, el formulario pedía un poco de scroll.
+- **Densidad según el espacio** (`useFitEntryForm`): al abrir y ante cada cambio del formulario, el diálogo prueba tres pasos de espaciado, `normal`, `compact` y `tight` (`data-entry-fit` en el contenedor, reglas en `globals.css`). Se queda con el primero en el que el formulario cabe. Todo ocurre dentro de un mismo cuadro, antes de pintar, así que nunca se ve un paso intermedio.
+  - Mide el formulario, no el contenedor, porque el espaciador del teclado no es contenido.
+  - Las filas nunca bajan de 36 px. `tight` saca el espacio del campo del monto y de los chips de fecha.
+- **El equivalente en la moneda base** («≈ CA$0.01») pasa a la cabecera de la tarjeta del monto en el teléfono: una línea menos. Si falta la tasa, ya lo dice su fila en ámbar.
+- **El botón de calendario abre directamente el selector de fecha del teléfono** (`showPicker`) en vez de desplegar una fila con el campo. La fecha elegida ya se ve en el botón. El panel queda como respaldo, oculto visualmente (`sr-only`, no `display: none`) para que `showPicker` funcione.
+
+Réplica en build de producción, con la fila Status de más que el formulario real no tiene:
+
+| Pantalla | CAD | COP | COP + calendario |
+|---|---|---|---|
+| 412 × 741 | normal | normal | normal |
+| 412 × 680 | compact | compact | compact |
+| 360 × 640 | compact | tight | tight |
+
+En todos los casos sin scroll y con filas de 36 px o más.
+
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 
 | # | Caso | Qué confirmar | Resultado |
@@ -660,4 +677,5 @@ Réplica (cuenta COP):
 | 11k | Abrir el formulario en el teléfono y arrastrar | No se desplaza: todo cabe; la X flota arriba a la derecha y «Transferencia» no se corta | |
 | 11l | Tocar Descripción o Notas (o llegar por la cadena), escribir y cerrar con Listo, Enter o Atrás | Pantalla propia con el campo arriba; al volver el formulario está igual que antes, sin desplazamiento ni espacio vacío | |
 | 11m | Cuenta en otra moneda: tocar «Tipo de cambio», escribir y «Listo»; luego una descripción larga | La tasa abre su propia pantalla y la fila muestra el valor; la descripción crece hacia abajo con el contexto arriba | |
+| 11n | Cuenta en otra moneda (fila de tipo de cambio), tocar el calendario | Todo cabe en una pantalla sin scroll; el calendario abre el selector del teléfono directo | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |
