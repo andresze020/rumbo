@@ -48,6 +48,24 @@ function joinAllowingWrapBeforeTrailingCurrency(parts: Intl.NumberFormatPart[]):
     .join('')
 }
 
+/**
+ * An exchange rate for reading, not for storing: rounded to what matters at
+ * its size. Large rates (2271.224242 COP per CAD) keep 2 decimals, rates near
+ * 1 keep 4, and small ones (0.000441) keep 4 significant digits. The full
+ * value is still what gets saved.
+ */
+export function formatRate(value: number, locale: Locale = 'en'): string {
+  if (!Number.isFinite(value)) return ''
+  const abs = Math.abs(value)
+  const options: Intl.NumberFormatOptions =
+    abs >= 100
+      ? { maximumFractionDigits: 2 }
+      : abs >= 1
+        ? { maximumFractionDigits: 4 }
+        : { maximumSignificantDigits: 4 }
+  return new Intl.NumberFormat(localeToBcp47(locale), options).format(value)
+}
+
 export function formatCurrency(value: number | string, currencyCode: string, locale: Locale = 'en') {
   const formatter = new Intl.NumberFormat(localeToBcp47(locale), {
     style: 'currency',

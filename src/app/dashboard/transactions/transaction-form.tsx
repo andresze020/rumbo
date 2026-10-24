@@ -68,6 +68,7 @@ import {
   currentTimeLocal,
   formatCurrency,
   formatIsoDate,
+  formatRate,
   shiftIsoDate,
   todayIsoDateLocal,
 } from '@/lib/format'
@@ -881,7 +882,7 @@ export function TransactionForm({
           >
             {fetchingRate
               ? ui('Fetching…')
-              : `1 ${baseCurrency} = ${missing ? '?' : userRate} ${account.currency_code}`}
+              : `1 ${baseCurrency} = ${missing ? '?' : formatRate(parsedRate, locale)} ${account.currency_code}`}
           </span>
           <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         </button>
