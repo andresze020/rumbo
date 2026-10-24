@@ -18,7 +18,9 @@
 > añadido con su configuración manual pendiente; el sprint «Ingreso de
 > transacciones Premium» desglosado en T0–T5; el seguimiento de zona horaria
 > del cron (MQ-001) añadido. Lo entregado vive en `AGENTS.md` → Current
-> status y en [SPRINT-LOG.md](./SPRINT-LOG.md). Mantenido por el skill
+> status y en [SPRINT-LOG.md](./SPRINT-LOG.md). Actualizado el 2026-10-24 al
+> cerrar el sprint «Ingreso de transacciones Premium» (PR #122, sin mergear).
+> Mantenido por el skill
 > `rumbo-state-sync` al cerrar cada sprint.
 
 ---
@@ -27,7 +29,7 @@
 
 | # | Qué | Prioridad | Tipo | Sección |
 |---|---|---|---|---|
-| 1 | Sprint «Ingreso de transacciones Premium»: código listo y medido; falta QA T5 y merge (PR #122) | P0–P1 | QA | §1 |
+| 1 | Sprint «Ingreso de transacciones Premium»: T0–T4 hechos, QA de dispositivo hecha por el usuario; falta merge (PR #122) y seguimientos TE-err / TE-cold / TE-brave | P1–P3 | Seguimiento | §1 |
 | 2 | QA manual de household sharing con dos cuentas (HH-6) | Gate | QA manual | §4.1 |
 | 3 | Configuración de Supabase para emails de invitación (HH-7) + leaked-password protection | Gate | Config manual | §3 |
 | 4 | QA en vivo de Tier-3/4 (BR-030, BR-043, BR-037, BR-036, BR-045, BR-031) | Gate | QA manual | §4.5 |
@@ -44,9 +46,12 @@
 
 | ID | Prio | Área | Qué falta | Detalle |
 |---|---:|---|---|---|
-| **TE-T0…T4** | P0–P1 | Captura | **Código entregado 2026-10-22** (rama `ccr-95b39f19-3w7kyn`): mapa del flujo, esqueleto de carga, `getQuickAddFormData` de 5–6 a 3 viajes en serie, sin renders extra tras «Add next», «+ Add next» con texto, toasts unidos, chips por frecuencia + recencia (categorías y tags), medición `?entry_timing=on`. Medido en el teléfono 2026-10-22: abrir 0,6 s en frío / 50 ms en caliente; guardar 0,7–1,0 s tras quitar el redirect del diálogo (antes 1,2–1,6 s). T4 cumplido. | [alpha/sprint-transaction-entry-premium.md](./alpha/sprint-transaction-entry-premium.md#implementación--2026-10-22-rama-ccr-95b39f19-3w7kyn) |
-| **TE-T5** | P0 | QA | QA en dispositivo: 12 casos (montos, signos, monedas, doble toque, hogar, Back, 320 px, Undo). | idem, «T5 — QA pendiente en dispositivo» |
-| TE-pend | — | Medición | Comparación cronometrada con AndroMoney sobre la misma lista de altas, sin alternar apps. | idem, «Pendientes para cerrar implementación» |
+| **TE-T0…T4** | — | Captura | **Hechos** (código 2026-10-22 → 10-24, rama `ccr-95b39f19-3w7kyn`, PR #122 abierto, pendiente de merge): mapa del flujo, esqueleto de carga, `getQuickAddFormData` de 5–6 a 3 viajes, guardado en línea sin redirect (`saveManualTransaction` / `saveTransferTransaction`), teclado por VirtualKeyboard `overlaysContent` + `usePlaceFieldsAboveKeyboard`, `useFitEntryForm` (todo en una pantalla), Descripción / Notas / tipo de cambio como hojas a pantalla completa en el teléfono, «+» de la barra inferior abre el formulario directo, chips por frecuencia + recencia, medición `?entry_timing=on`, pruebas de navegador `npm run e2e:entry` + job de CI. T4 cumplido en el teléfono (guardar 0,7–1,0 s, abrir 50 ms en caliente). | [alpha/sprint-transaction-entry-premium.md](./alpha/sprint-transaction-entry-premium.md#implementación--2026-10-22-rama-ccr-95b39f19-3w7kyn) · [SPRINT-LOG.md](./SPRINT-LOG.md) |
+| TE-T5 | P1 | QA | **QA en dispositivo hecha por el usuario** (según el usuario, 2026-10-24). Salvedad: la tabla «T5 — QA pendiente en dispositivo» del doc del sprint sigue con la columna *Resultado* vacía en las 26 filas y no tiene filas marcadas como «cuenta de prueba», así que el doc no registra el resultado fila por fila. Pendiente: que el usuario confirme qué filas quedan sin hacer (en particular las de cuenta de prueba, si las hay) y las anote en el doc. | idem, «T5 — QA pendiente en dispositivo» |
+| TE-err | P2 | Captura | Los mensajes de error de `create_transfer_transaction` (RPC) llegan sin traducir: `cleanSupabaseActionError` deja pasar mensajes cortos en inglés (≤ 180 caracteres que no parezcan internos). Las acciones de transacción ya traducen sus mensajes estáticos (es/fr), pero no los de la RPC. Mapear los mensajes conocidos de la RPC a claves i18n, o devolver códigos desde la RPC. | `src/lib/supabase/errors.ts` · `src/app/dashboard/transactions/actions.ts` |
+| TE-cold | P3 | Captura / perf | `open.cold` midió 615–869 ms en WiFi y 1,8 s en LTE **antes** del prefetch en reposo de los datos del formulario. El prefetch debería cubrirlo; verificar en el teléfono con `?entry_timing=on` (3 aperturas en frío) y, si sigue sobre 1,5 s p75, decidir si es el arranque en frío de Vercel. | doc del sprint, «T4 — Cómo medir en el teléfono» |
+| TE-brave | P3 | Captura / teclado | Brave (Android) reporta el área visible ~100 px más corta de lo real con el teclado abierto. Esquivado, no corregido: la app ya no mide el teclado (`overlaysContent` + colocación del campo). No reintroducir cálculos con `visualViewport`/`innerHeight` para este formulario. Revisar si cambia el comportamiento upstream; si no, no hay nada que hacer. | doc del sprint, rondas 4–7 |
+| TE-pend | — | Medición | Comparación cronometrada con AndroMoney sobre la misma lista de altas, sin alternar apps (sin cambios; no se hizo). | idem, «Pendientes para cerrar implementación» |
 | Asistente-Cancel | P2 | Asistente | Regresión de PR #64: el diálogo «Review transaction» de `assistant-chat.tsx` no usa `useBackDismiss` (Back sale de la página) y `onCancel` solo oculta el link Cancel. Elegir: cablear `useBackDismiss`, o que `TransactionForm` invoque `onCancel` desde un botón visible. Sigue cerrable por X, Escape y backdrop. | [SPRINT-LOG.md](./SPRINT-LOG.md) → «Ask for the category first…» |
 | MQ-001-cron | P2 | Recurrentes | `run_recurring_autopost` corre a las 06:00 UTC con `current_date`. La columna `households.timezone` ya existe (migración `20261001120000_mq_001_household_timezone.sql`) pero nada la lee ni la escribe. Falta: el job postea por household con `(now() at time zone h.timezone)::date` y la app escribe la columna. Hoy no afecta a Toronto/Montréal; sí a zonas UTC-7 o más al oeste. | [mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md#mq-001--today-y-el-mes-actual-se-calculan-en-utc) |
 | BF-022 | P3 | Transacciones | Flujo de reconciliación («cleared» contra extracto). Requiere migración (`reconciled_at`). Diferido a Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
@@ -188,7 +193,7 @@ No «arreglar» sin reabrir la decisión.
 | Ítem | Qué lo cierra |
 |---|---|
 | **Dos invariantes necesitan una columna inexistente.** (a) `installment_plans` no guarda el `p_as_of` de `cancel_installment_plan`; (b) `recurring_autopost_log` no guarda las dos monedas. | (a) `installment_plans.cancelled_as_of date` + check; (b) `source_currency_code` / `destination_currency_code` en el log, escritos en `run_recurring_autopost()`. Migraciones aditivas pequeñas; hacerlas cuando otro cambio entre en esas funciones (MQ-001-cron toca la segunda). |
-| **Sprints que mergean directo a `main` sin cierre.** Pasó con #48–#61 y otra vez con los MQ (#87–#108) y HH-7 (#120), que no tienen entrada en `SPRINT-LOG.md`. | Correr `/cerrar-sprint` sobre el rango cuando se asiente una racha de PRs sueltos. Lo peligroso no es la historia faltante sino docs de estado *incorrectos*. |
+| **Sprints que mergean directo a `main` sin cierre.** Pasó con #48–#61 y otra vez con los MQ (#87–#108) y HH-7 (#120); estos dos ya tienen entrada en `SPRINT-LOG.md` (reconstruida el 2026-10-24 desde los mensajes de merge). #48–#61 siguen sin ella. | Correr `/cerrar-sprint` sobre el rango cuando se asiente una racha de PRs sueltos. Lo peligroso no es la historia faltante sino docs de estado *incorrectos*. |
 
 ---
 
