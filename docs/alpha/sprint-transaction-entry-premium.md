@@ -664,6 +664,22 @@ En todos los casos sin scroll y con filas de 36 px o más.
   - Edición de gasto y de transferencia en la misma hoja, en una pantalla.
   - Con estos, son 19 de 19.
 
+**Cambiar el tipo al editar (2026-10-24, pedido del usuario).**
+- **Problema:** al editar no se podía cambiar entre Gasto, Ingreso y Transferencia. Las RPC de actualización lo bloquean a propósito, porque cada tipo tiene otra forma en el ledger (1 entry + 1 allocation, frente a las 2 entries de una transferencia).
+- **Solución:** la migración `20261012120000_change_transaction_type.sql` agrega la RPC atómica `change_transaction_type`.
+  - Bloquea la original y aplica las mismas reglas de edición que las RPC de actualización.
+  - Crea el reemplazo con `create_manual_transaction` o `create_transfer_transaction`, aplica las etiquetas y la hora, y anula la original con `void_transaction`. Todo pasa en una sola transacción de base de datos.
+  - No borra nada físicamente: la original queda anulada en el historial.
+  - Su prueba está en `supabase/tests/rum_change_transaction_type.sql`.
+- **En el formulario:**
+  - La edición muestra el selector de tipo. Si el tipo elegido difiere del guardado, el guardado va por `changeTransactionTypeAction` y un aviso en ámbar lo dice antes de guardar.
+  - Volver al tipo guardado restaura los valores guardados.
+  - Una transferencia que pasa a gasto o ingreso conserva la cuenta de origen.
+  - Una edición con cambio de tipo pide la tasa de cambio, porque crea una transacción nueva.
+- **Fuera de alcance:** la comisión aparte (solo al crear) no se ofrece al cambiar de tipo. Las etiquetas no pasan a una transferencia, que no las maneja.
+- **Escenarios nuevos:** gasto → transferencia, y transferencia → gasto con ida y vuelta. Cada uno hace una sola llamada de reemplazo y cabe en una pantalla. Con estos, son 21 de 21.
+- **Manual:** `npx supabase db push`. Sin aplicar la migración, guardar con otro tipo falla con un error y la transacción original queda intacta.
+
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 
 | # | Caso | Qué confirmar | Resultado |
@@ -694,4 +710,5 @@ En todos los casos sin scroll y con filas de 36 px o más.
 | 11m | Cuenta en otra moneda: tocar «Tipo de cambio», escribir y «Listo»; luego una descripción larga | La tasa abre su propia pantalla y la fila muestra el valor; la descripción crece hacia abajo con el contexto arriba | |
 | 11n | Cuenta en otra moneda (fila de tipo de cambio), tocar el calendario | Todo cabe en una pantalla sin scroll; el calendario abre el selector del teléfono directo | |
 | 11o | Editar una transacción y una transferencia; crear una transferencia con comisión | La edición abre la misma hoja a pantalla completa; la transferencia (con comisión o entre monedas) cabe sin scroll | |
+| 11p | Tras `db push`: editar un gasto y cambiarlo a transferencia, y una transferencia a ingreso | El aviso ámbar aparece; tras guardar, la original sale anulada y la nueva tiene el tipo, las cuentas y el monto correctos; los saldos cuadran | |
 | 12 | Undo tras anular una transacción | El toast de Undo sigue siendo uno por anulación y funciona | |

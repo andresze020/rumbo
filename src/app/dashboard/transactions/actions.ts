@@ -1018,6 +1018,146 @@ export async function updateTransferTransactionAction(formData: FormData) {
   redirectWithTransactionInfo('updated', returnTo)
 }
 
+/**
+ * Edit with a type switch (expense ↔ income ↔ transfer). The ledger shape
+ * differs per type (one entry + one allocation vs a transfer's entries), so the
+ * original is not mutated: `change_transaction_type` voids it and creates the
+ * replacement in one database transaction, through the same create RPCs and
+ * editability guards as the regular paths. The edit form posts here only when
+ * the picked type differs from the saved one.
+ */
+export async function changeTransactionTypeAction(formData: FormData) {
+  const transactionId = String(formData.get('transaction_id') ?? '').trim()
+  const newType = String(formData.get('transaction_type') ?? '').trim()
+  const transactionDate = String(formData.get('transaction_date') ?? '').trim()
+  const transactionTime = parseOptionalTime(formData.get('transaction_time'))
+  const amount = parsePositiveNumber(formData.get('amount'))
+  const description = String(formData.get('description') ?? '').trim()
+  const notes = String(formData.get('notes') ?? '').trim()
+  const status = String(formData.get('status') ?? '').trim()
+  const returnTo = String(formData.get('return_to') ?? '').trim()
+  const isTransfer = newType === 'transfer'
+
+  // Income / expense fields (same parsing as the create path).
+  const accountId = String(formData.get('account_id') ?? '').trim()
+  const categoryId = String(formData.get('category_id') ?? '').trim()
+  const merchantName = String(formData.get('merchant_name') ?? '').trim()
+  const payeeName = String(formData.get('payee_name') ?? '').trim()
+  const tagsProvided = formData.get('tags_present') !== null
+  const tagIds = formData
+    .getAll('tag_id')
+    .map((value) => String(value).trim())
+    .filter(Boolean)
+  const rateBaseToAccount = parsePositiveNumber(formData.get('rate_base_to_account'))
+  const legacyRate = parsePositiveNumber(formData.get('exchange_rate_to_base'))
+  const manualRateToBase =
+    rateBaseToAccount !== null ? 1 / rateBaseToAccount : (legacyRate ?? 1)
+
+  // Transfer fields (same parsing as the create path).
+  const fromAccountId = String(formData.get('from_account_id') ?? '').trim()
+  const toAccountId = String(formData.get('to_account_id') ?? '').trim()
+  const toAmount = parsePositiveNumber(formData.get('to_amount'))
+  const costBase = parseNonNegativeNumber(formData.get('cost_base'))
+  const costCategoryId = String(formData.get('cost_category_id') ?? '').trim() || null
+
+  if (!transactionId) {
+    redirectWithTransactionError('Transaction id is required.', returnTo)
+  }
+
+  if (!isTransfer && !isTransactionType(newType)) {
+    redirectWithTransactionError('Select income or expense.', returnTo)
+  }
+
+  if (!transactionDate) {
+    redirectWithTransactionError('Transaction date is required.', returnTo)
+  }
+
+  if (amount === null) {
+    redirectWithTransactionError('Amount must be greater than 0.', returnTo)
+  }
+
+  if (!isStatus(status)) {
+    redirectWithTransactionError('Select posted or pending status.', returnTo)
+  }
+
+  if (isTransfer) {
+    if (!fromAccountId) {
+      redirectWithTransactionError('Select the source account.', returnTo)
+    }
+    if (!toAccountId) {
+      redirectWithTransactionError('Select the destination account.', returnTo)
+    }
+    if (fromAccountId === toAccountId) {
+      redirectWithTransactionError(
+        'Source and destination accounts must be different.',
+        returnTo
+      )
+    }
+  } else {
+    if (!accountId) {
+      redirectWithTransactionError('Select an account.', returnTo)
+    }
+    if (!categoryId) {
+      redirectWithTransactionError('Select a category.', returnTo)
+    }
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    redirect('/login')
+  }
+
+  const { data: newTransactionId, error: changeError } = await supabase.rpc(
+    'change_transaction_type',
+    {
+      p_transaction_id: transactionId,
+      p_new_type: newType,
+      p_transaction_date: transactionDate,
+      p_amount: amount,
+      p_status: status,
+      p_description: description || null,
+      p_notes: notes || null,
+      ...(isTransfer
+        ? {
+            p_from_account_id: fromAccountId,
+            p_to_account_id: toAccountId,
+            p_to_amount: toAmount,
+            p_exchange_rate_to_base: legacyRate ?? 1,
+            p_cost_base: costBase,
+            p_cost_category_id: costCategoryId,
+          }
+        : {
+            p_account_id: accountId,
+            p_category_id: categoryId,
+            p_merchant_name: merchantName || null,
+            p_payee_name: payeeName || null,
+            p_exchange_rate_to_base: manualRateToBase,
+            p_tag_ids: tagsProvided ? tagIds : null,
+          }),
+      p_transaction_time: transactionTime,
+    }
+  )
+
+  if (changeError || !newTransactionId) {
+    redirectWithTransactionError(
+      cleanRpcError(
+        changeError?.message ?? '',
+        'Could not change the transaction type. Please check the form and try again.'
+      ),
+      returnTo
+    )
+  }
+
+  revalidatePath('/dashboard', 'layout')
+  redirectWithTransactionInfo('updated', returnTo)
+}
+
 export async function voidTransactionAction(formData: FormData) {
   const transactionId = String(formData.get('transaction_id') ?? '').trim()
   const voidReason = String(formData.get('void_reason') ?? '').trim()

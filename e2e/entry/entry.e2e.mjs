@@ -47,6 +47,17 @@ function sessionCookie() {
   return { name: 'sb-127-auth-token', value: 'base64-' + b64url(JSON.stringify(session)), domain: 'localhost', path: '/' }
 }
 
+function rpcCalls(fn) {
+  if (!fs.existsSync(LOG)) return []
+  return fs
+    .readFileSync(LOG, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+    .filter((entry) => entry.kind === 'rpc' && entry.fn === fn)
+    .map((entry) => JSON.parse(entry.body))
+}
+
 function writes() {
   if (!fs.existsSync(LOG)) return []
   return fs
@@ -383,6 +394,72 @@ for (const kind of ['expense', 'transfer']) {
     await context.close()
   })
 }
+
+scenario('editing an expense can turn it into a transfer: one atomic replace call', async () => {
+  const { context, page } = await phone()
+  await page.goto(`${BASE}/e2e/entry?edit=expense`)
+  await page.waitForSelector('[data-entry-close]', { timeout: 30_000 })
+  await page.waitForTimeout(600)
+  const before = rpcCalls('change_transaction_type').length
+  await page.locator('[role=dialog]').getByText(/^Transfer$/).first().tap()
+  await page.waitForTimeout(400)
+  assert.ok(await page.locator('[data-entry-type-hint]').isVisible(), 'no replace hint')
+  await page.getByRole('button', { name: /Select destination/ }).first().tap()
+  await page.waitForTimeout(400)
+  await page.getByRole('button', { name: /^Visa/ }).first().tap()
+  await page.waitForTimeout(600)
+  await page.evaluate(() => document.activeElement?.blur())
+  const state = await formState(page)
+  assert.equal(state.scrollable, false, `overflows by ${state.formOverflow}px`)
+  await page.getByRole('button', { name: /^Save transfer$/ }).first().tap()
+  await page.waitForURL(/updated=1/, { timeout: 15_000 })
+  const calls = rpcCalls('change_transaction_type').slice(before)
+  assert.equal(calls.length, 1, `${calls.length} replace calls`)
+  assert.equal(calls[0].p_transaction_id, 'tx-1')
+  assert.equal(calls[0].p_new_type, 'transfer')
+  assert.equal(calls[0].p_from_account_id, 'a1')
+  assert.equal(calls[0].p_to_account_id, 'a2')
+  assert.equal(calls[0].p_amount, 25)
+  await context.close()
+})
+
+scenario('editing a transfer can turn it into an expense; back to Transfer restores it', async () => {
+  const { context, page } = await phone()
+  await page.goto(`${BASE}/e2e/entry?edit=transfer`)
+  await page.waitForSelector('[data-entry-close]', { timeout: 30_000 })
+  await page.waitForTimeout(600)
+  const dialog = page.locator('[role=dialog]')
+  // Out and back: the saved accounts return, and the hint goes away.
+  await dialog.getByText(/^Expense$/).first().tap()
+  await page.waitForTimeout(300)
+  await dialog.getByText(/^Transfer$/).first().tap()
+  await page.waitForTimeout(300)
+  assert.equal(await page.locator('[data-entry-type-hint]').count(), 0, 'hint on the saved type')
+  const restored = await page.evaluate(() => ({
+    from: document.querySelector('input[type=hidden][name=from_account_id]')?.value,
+    to: document.querySelector('input[type=hidden][name=to_account_id]')?.value,
+  }))
+  assert.deepEqual(restored, { from: 'a1', to: 'a3' })
+
+  const before = rpcCalls('change_transaction_type').length
+  await dialog.getByText(/^Expense$/).first().tap()
+  await page.waitForTimeout(400)
+  await page.getByRole('button', { name: /^Category/ }).first().tap()
+  await page.waitForTimeout(400)
+  await page.getByRole('button', { name: /Groceries/ }).first().tap()
+  await page.waitForTimeout(600)
+  await page.evaluate(() => document.activeElement?.blur())
+  const state = await formState(page)
+  assert.equal(state.scrollable, false, `overflows by ${state.formOverflow}px`)
+  await page.getByRole('button', { name: /^Save transaction$/ }).first().tap()
+  await page.waitForURL(/updated=1/, { timeout: 15_000 })
+  const calls = rpcCalls('change_transaction_type').slice(before)
+  assert.equal(calls.length, 1, `${calls.length} replace calls`)
+  assert.equal(calls[0].p_new_type, 'expense')
+  assert.equal(calls[0].p_account_id, 'a1')
+  assert.equal(calls[0].p_category_id, 'c1')
+  await context.close()
+})
 
 scenario('desktop: a rejected save keeps the description and notes', async () => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })

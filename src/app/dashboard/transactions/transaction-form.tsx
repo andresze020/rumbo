@@ -32,6 +32,7 @@ import {
   updateManualTransactionAction,
   type TransactionNextDefaults,
   updateTransferTransactionAction,
+  changeTransactionTypeAction,
 } from './actions'
 import { PayeePicker, type PayeeOption } from './payee-picker'
 import { RelativeDateChips } from './relative-date-chips'
@@ -227,9 +228,9 @@ type TransactionFormProps = {
    * Edit mode: the id of the transaction being edited. The same form then saves
    * through the update actions instead of the create ones, so Add and Edit can
    * never drift apart. What it switches off is what only makes sense for a new
-   * entry — the type switch (a transaction's type is fixed once recorded),
-   * recurrence, "Save & add next", the category autofill and the exchange-rate
+   * entry — recurrence, "Save & add next", the category autofill and the exchange-rate
    * entry on a single-account transaction (the update RPC keeps the saved rate).
+   * The type switch stays: a new type saves as a replacement (void + recreate).
    */
   editTransactionId?: string
   /** Edit mode: `HH:MM`, or empty for an untimed transaction (BR-045). */
@@ -307,6 +308,10 @@ export function TransactionForm({
   const { t, locale } = useLanguage()
   const ui = useUiTranslation()
   const isEdit = Boolean(editTransactionId)
+  // Edit can switch the type too. The saved type is `defaultType`; picking
+  // another one saves through `changeTransactionTypeAction` (void + recreate,
+  // atomically), so only a same-type edit keeps the in-place update's limits.
+  const originalType: TransactionType = defaultType ?? 'expense'
   // Editing keeps the field order but not the fill-fast behaviours: an existing
   // entry is already complete, so auto-advancing would open a picker behind
   // every correction and the autofill would overwrite what was saved.
@@ -320,6 +325,8 @@ export function TransactionForm({
   const categoryName = (category: TransactionFormCategory) =>
     localizeSystemCategoryName(category.name, Boolean(category.is_system), locale)
   const [transactionType, setTransactionType] = useState<TransactionType>(defaultType ?? 'expense')
+  const typeChanged = isEdit && transactionType !== originalType
+  const updatesInPlace = isEdit && !typeChanged
   const [transactionDate, setTransactionDate] = useState(defaultDate)
   // BR-045: optional time of day. Seeded from the *viewer's* clock — same
   // reasoning as RelativeDateChips' `useState(() => todayIsoDateLocal())`, and
@@ -465,10 +472,11 @@ export function TransactionForm({
   // *offered* as one-tap chips, which suggests without deciding.
 
   const selectedAccount = availableAccounts.find((a) => a.id === accountId)
-  // Not in edit mode: the update RPC takes no rate, so asking for one would
-  // block a save over a figure that is then thrown away.
+  // Not in a same-type edit: the update RPC takes no rate, so asking for one
+  // would block a save over a figure that is then thrown away. A type change
+  // creates a new transaction, which does need it.
   const isMultiCurrency =
-    !isEdit && Boolean(selectedAccount && selectedAccount.currency_code !== baseCurrency)
+    !updatesInPlace && Boolean(selectedAccount && selectedAccount.currency_code !== baseCurrency)
   const parsedRate = Number(userRate)
   const rateIsValid =
     userRate.trim() !== '' && Number.isFinite(parsedRate) && parsedRate > 0
@@ -619,7 +627,9 @@ export function TransactionForm({
     isTransfer && !isEdit && !isCrossCurrencyTransfer && Boolean(selectedFromAccount && selectedToAccount)
   const costVisible = (isTransfer && isCrossCurrencyTransfer) || sameCurrencyFeeVisible
   const costCurrency = isCrossCurrencyTransfer ? baseCurrency : (selectedFromAccount?.currency_code ?? baseCurrency)
-  const submitAction = isTransfer
+  const submitAction = typeChanged
+    ? changeTransactionTypeAction
+    : isTransfer
     ? isEdit
       ? updateTransferTransactionAction
       : createTransferTransactionAction
@@ -769,7 +779,23 @@ export function TransactionForm({
   }
 
   function handleTransactionTypeChange(value: TransactionType) {
+    const previousType = transactionType
     setTransactionType(value)
+    if (isEdit && value === originalType) {
+      // Back to the saved type: back to the saved values, not a blank form.
+      setAccountId(defaultAccountId ?? '')
+      setFromAccountId(defaultFromAccountId ?? '')
+      setToAccountId(defaultToAccountId ?? '')
+      setCategoryId(defaultCategoryId ?? '')
+      setUserRate('')
+      setFxNote('')
+      setFxError('')
+      return
+    }
+    if (previousType === 'transfer' && value !== 'transfer' && fromAccountId) {
+      // A transfer turned into an expense/income keeps the account it left from.
+      setAccountId(fromAccountId)
+    }
     if (value === 'transfer') {
       // Carry current account over as the transfer source — unless it is the
       // autofill's guess rather than the user's pick, in which case it goes
@@ -2975,11 +3001,11 @@ export function TransactionForm({
       </SelectorSheet>
 
       {/* ── Type: segmented control ──────────────────────────────────── */}
-      {/* A recorded transaction keeps its type: the dialog title says which one
-          it is, and switching would mean a different set of ledger entries. */}
+      {/* Edit offers it too: a different type saves as a replacement (the
+          original is voided, see `changeTransactionTypeAction`), and the hint
+          below says so before the save. */}
       {/* `data-entry-type`: the dialog keeps it clear of its floating X. */}
-      {isEdit ? null : (
-        <div data-entry-type>
+      <div data-entry-type>
         <SegmentedField
           fit="content"
           name="transaction_type"
@@ -2996,8 +3022,12 @@ export function TransactionForm({
             ),
           }))}
         />
-        </div>
-      )}
+        {typeChanged ? (
+          <p data-entry-type-hint className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+            {ui('Saving replaces it: the original stays voided in the history.')}
+          </p>
+        ) : null}
+      </div>
 
       {/* ── Amount: one hero for expense/income, a paired card for transfers ── */}
       {isTransfer ? (

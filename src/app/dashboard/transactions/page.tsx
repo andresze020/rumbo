@@ -1688,6 +1688,8 @@ export default async function TransactionsPage({
               accounts={activeAccounts}
               categories={activeCategories}
               payees={payeeOptions}
+              // Offered if the transfer is switched to an expense or income.
+              tags={editFormTags}
               baseCurrency={household.base_currency}
               quickEntry={preferences.quickEntry}
               cancelHref={returnTo}

@@ -79,13 +79,14 @@ const server = http.createServer(async (req, res) => {
   const rpc = /^\/rest\/v1\/rpc\/([a-z0-9_]+)$/.exec(url.pathname)
   if (rpc) {
     const fn = rpc[1]
-    log({ kind: 'rpc', fn, body: body.slice(0, 300) })
+    log({ kind: 'rpc', fn, body: body.slice(0, 800) })
     if (fn === 'create_manual_transaction') {
       await sleep(RPC_LATENCY)
       if (/"p_amount":999\b/.test(body)) return send(400, { message: 'forced failure', code: 'P0001' })
       txCounter += 1
       return send(200, `tx-${txCounter}`)
     }
+    if (fn === 'change_transaction_type') return send(200, 'tx-retyped')
     if (fn === 'is_household_admin') return send(200, true)
     if (fn === 'get_or_create_payee') return send(200, 'p1')
     return send(200, null)
