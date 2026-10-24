@@ -2884,7 +2884,12 @@ export function TransactionForm({
               id="description"
               name="description"
               autoComplete="off"
-              defaultValue={defaultDescription}
+              // Controlled, like every field of the draft: React resets
+              // uncontrolled fields when a form action finishes, so a
+              // rejected inline save wiped the description (Codex review on
+              // #122).
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
             />
           </div>
         </div>
@@ -2945,7 +2950,12 @@ export function TransactionForm({
               id="description"
               name="description"
               autoComplete="off"
-              defaultValue={defaultDescription}
+              // Controlled, like every field of the draft: React resets
+              // uncontrolled fields when a form action finishes, so a
+              // rejected inline save wiped the description (Codex review on
+              // #122).
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
             />
           </div>
 
@@ -2998,7 +3008,14 @@ export function TransactionForm({
         {showField('notes') ? (
           <div className={cn('space-y-1.5 sm:block', showMoreDetails ? 'block' : 'hidden')}>
             <Label htmlFor="notes">{t('transactionForm.notes')}</Label>
-            <Textarea id="notes" name="notes" rows={2} defaultValue={defaultNotes} />
+            {/* Controlled for the same reason as the description above. */}
+            <Textarea
+              id="notes"
+              name="notes"
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
           </div>
         ) : null}
       </div>

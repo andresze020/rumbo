@@ -308,6 +308,36 @@ scenario('a transfer amount moves above the keyboard without moving the X', asyn
   await context.close()
 })
 
+scenario('desktop: a rejected save keeps the description and notes', async () => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+  await context.addCookies([sessionCookie()])
+  const page = await context.newPage()
+  await page.goto(`${BASE}/e2e/entry`)
+  await page.click('#open-entry')
+  await page.waitForSelector('#amount', { timeout: 30_000 })
+  await page.locator('#amount').fill('999')
+  await page.locator('[role=dialog] button', { hasText: /Select category/ }).first().click()
+  await page.getByRole('option', { name: /Groceries/ }).or(page.getByRole('button', { name: /Groceries/ })).first().click()
+  await page.waitForTimeout(300)
+  await page.keyboard.press('Escape').catch(() => {})
+  const account = page.locator('[role=dialog] button', { hasText: /Select account/ }).first()
+  if (await account.count()) {
+    await account.click()
+    await page.getByRole('option', { name: /^Checking/ }).or(page.getByRole('button', { name: /^Checking/ })).first().click()
+    await page.waitForTimeout(300)
+  }
+  await page.locator('#description').fill('Kept after an error')
+  const more = page.getByRole('button', { name: /More details/ }).first()
+  if (await more.count()) await more.click()
+  await page.locator('#notes').fill('Notes too')
+  await page.getByRole('button', { name: /^Create transaction$/ }).first().click()
+  await page.waitForSelector('[role=dialog] [role=alert]', { timeout: 15_000 })
+  await page.waitForTimeout(300)
+  assert.equal(await page.locator('#description').inputValue(), 'Kept after an error')
+  assert.equal(await page.locator('#notes').inputValue(), 'Notes too')
+  await context.close()
+})
+
 scenario('desktop: a centred dialog that a backdrop click still closes', async () => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
   await context.addCookies([sessionCookie()])

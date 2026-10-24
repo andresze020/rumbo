@@ -613,6 +613,9 @@ export function TransactionDialogProvider({
   // render so a freshly mounted provider (e.g. after a server-action redirect
   // remounts this layout) opens pre-filled instead of starting empty.
   const [open, setOpen] = useState(() => readAddNextDefaults(searchParams) !== null)
+  // For async work that must not act on a dialog closed while it waited.
+  const openRef = useRef(open)
+  openRef.current = open
   usePlaceFieldsAboveKeyboard(isMobile && open, scrollerRef, keyboardRoomRef)
   useFitEntryForm(isMobile && open, scrollerRef)
   const [formData, setFormData] = useState<QuickAddFormData | null>(null)
@@ -626,6 +629,9 @@ export function TransactionDialogProvider({
   // background, so the first "+" opens like every later one (it measured
   // 1.8s on LTE while it waited). Skipped when the data is already here.
   const prefetchRef = useRef<Promise<void> | null>(null)
+  // The refresh in flight, if any, so a caller that needs fresh lists can wait
+  // for it instead of being turned away.
+  const refreshPromiseRef = useRef<Promise<void> | null>(null)
   const prefetchedAt = useRef(0)
   useEffect(() => {
     if (!householdId) return
@@ -963,7 +969,13 @@ export function TransactionDialogProvider({
    * a moment ago on the Categories screen is in the picker as soon as it
    * lands. A failed background refresh keeps the data already on screen.
    */
-  async function refreshFormData() {
+  /**
+   * `force`: the caller knows the lists are missing something it just
+   * created (an account, a category or a tag made inline before "Add next"),
+   * so neither a fresh prefetch nor a refresh already running — both may
+   * predate that save — can stand in for a fetch made now.
+   */
+  async function refreshFormData(force = false): Promise<void> {
     // An open during the idle prefetch waits for it rather than racing it, and
     // a prefetch that just landed is fresh enough to skip the refetch.
     if (prefetchRef.current) {
@@ -974,13 +986,27 @@ export function TransactionDialogProvider({
       await prefetchRef.current
     }
     if (
+      !force &&
       formDataRef.current?.householdId === householdId &&
       Date.now() - prefetchedAt.current < PREFETCH_FRESH_MS
     ) {
       setLoading(false)
       return
     }
-    if (formFetchInFlight.current) return
+    if (refreshPromiseRef.current) {
+      await refreshPromiseRef.current
+      if (!force) return
+    }
+    const run = fetchFormDataNow()
+    refreshPromiseRef.current = run
+    try {
+      await run
+    } finally {
+      if (refreshPromiseRef.current === run) refreshPromiseRef.current = null
+    }
+  }
+
+  async function fetchFormDataNow() {
     formFetchInFlight.current = true
     // Another household's lists are not a cache for this one: switching
     // households waits for fresh data like a first open.
@@ -1026,7 +1052,7 @@ export function TransactionDialogProvider({
    * own `revalidatePath` in the same response, so the dialog does not wait for
    * it: the toast and the next draft come first.
    */
-  function handleSaved({ addNext, next, warning }: TransactionSavedOutcome) {
+  async function handleSaved({ addNext, next, warning }: TransactionSavedOutcome) {
     afterPaint(finishPendingSave)
     // A short tick on a phone that supports it (Android; iOS ignores it): the
     // save is confirmed in the hand as well as on screen. Not on a warning,
@@ -1035,6 +1061,17 @@ export function TransactionDialogProvider({
 
     if (addNext && next) {
       setSavedInBatch((count) => count + 1)
+      // When the entry brought something the lists do not have yet (an
+      // account, category or tag made inline), fetch them *before* the next
+      // draft mounts: the form drops a seeded account, category or tag it
+      // cannot find in its lists, and only reads its seeds once (Codex review
+      // on #122). The confirmation pill is already up meanwhile. Otherwise the
+      // lists in memory are right, and the next draft is immediate.
+      if (nextDraftNeedsFreshLists(formDataRef.current, next)) {
+        await refreshFormData(true)
+        // Closed while the lists loaded: nothing to seed any more.
+        if (!openRef.current) return
+      }
       // Same carry-over as the redirect path's `next_*` params: date, type,
       // account, status, category, payee and tags. Never the amount,
       // description or notes — and not a Copy's or a share's either.
@@ -1060,9 +1097,6 @@ export function TransactionDialogProvider({
         scroller?.scrollTo({ top: 0 })
         scroller?.closest<HTMLElement>('[data-slot="dialog-content"]')?.scrollTo({ top: 0 })
       })
-      // Only when the entry brought something the pickers do not have yet (a
-      // new payee, a tag made on the spot): see `nextDraftNeedsFreshLists`.
-      if (nextDraftNeedsFreshLists(formDataRef.current, next)) void refreshFormData()
       return
     }
 
