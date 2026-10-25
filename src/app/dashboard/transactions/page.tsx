@@ -22,6 +22,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import { transactionsEmptyState } from '@/lib/transactions/empty-state'
 import { FormDialog } from '@/components/form-dialog'
+import { EditTransactionSheet } from './edit-transaction-sheet'
 import { Callout } from '@/components/callout'
 import { createClient } from '@/lib/supabase/server'
 import { getRequestProfile, getRequestUser } from '@/lib/supabase/request'
@@ -1614,7 +1615,9 @@ export default async function TransactionsPage({
 
       {/* ── Edit dialogs ───────────────────────────────────────────────── */}
       {selectedEditRow ? (
-        <FormDialog
+        // The same sheet as a new entry (`EditTransactionSheet`), not the
+        // generic FormDialog: full screen, one screen, keyboard-safe.
+        <EditTransactionSheet
           title={selectedEditRow.canEditTransfer ? 'Edit transfer' : 'Edit transaction'}
           description={`Update ${selectedEditRow.title}. Existing safe edit rules still apply.`}
           cancelHref={returnTo}
@@ -1685,13 +1688,15 @@ export default async function TransactionsPage({
               accounts={activeAccounts}
               categories={activeCategories}
               payees={payeeOptions}
+              // Offered if the transfer is switched to an expense or income.
+              tags={editFormTags}
               baseCurrency={household.base_currency}
               quickEntry={preferences.quickEntry}
               cancelHref={returnTo}
               returnTo={returnTo}
             />
           ) : null}
-        </FormDialog>
+        </EditTransactionSheet>
       ) : null}
 
       {/* ── Filtered totals (base currency) ───────────────────────────── */}

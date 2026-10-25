@@ -15,6 +15,90 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
 - Follow-ups / known gaps:
 -->
 
+## Premium transaction entry, T0…T5 (2026-10-22 → 2026-10-24, PR #122 open at close)
+- Goal: make logging a frequent expense or income feel immediate and reliable
+  on a phone and on desktop. Source: the 2026-10-14 AndroMoney and Rumbo
+  recordings. Sprint doc:
+  [`docs/alpha/sprint-transaction-entry-premium.md`](alpha/sprint-transaction-entry-premium.md)
+  (implementation notes and the device rounds under "Implementación —
+  2026-10-22"). UI, UX and performance only: no migration, no RPC, no RLS.
+- Shipped:
+  - **T0/T3/T4 (flow and speed):** `getQuickAddFormData` from 5-6 to 3 serial
+    round trips; a skeleton instead of "Loading form…"; no extra router renders
+    after Add next; one toast per repeated message with a count (`×3`); the
+    form's data prefetched when the screen is idle; the next draft reuses the
+    lists and reloads them only if the save brought something new
+    (`nextDraftNeedsFreshLists`). Timing readout behind `?entry_timing=on`
+    (`src/lib/perf/entry-timing.ts`; stores event, variant, ms and time only).
+  - **Inline save, no redirect:** the dialog calls `saveManualTransaction` /
+    `saveTransferTransaction` (same validation, writes and `revalidatePath` as
+    before) and gets the result back; a validation error stays inside the form
+    with the draft intact. Redirecting actions remain for the assistant and the
+    page forms. The save flag is its own `txn_created`, so saving from Accounts
+    no longer shows "Cuenta creada.".
+  - **T1/T2 (phone form):** category and tag chips ranked by frequency + recency
+    (`src/lib/quick-entry/usage-ranking.ts`); "+ Add next" with text; the "+" in
+    the bottom bar opens the form directly in Gasto, with no menu. Description,
+    Notes and the exchange rate open as full-screen sheets on a phone (the
+    `PickerField` pattern); amount-tinted card by type; floating close button.
+  - **Keyboard:** no more measuring it. While the sheet is open on a phone,
+    `navigator.virtualKeyboard.overlaysContent = true` (restored on close) and
+    `usePlaceFieldsAboveKeyboard` moves the focused field's row to the top in
+    one move; `useSoftKeyboardInset` was removed. `useFitEntryForm` tries three
+    spacing steps (`normal`, `compact`, `tight`) so the form always fits one
+    screen, rows never under 36 px.
+  - **Fixes found on the way:** after Copy/share, Add next re-seeded the
+    amount, description and notes of the original entry; corrections no longer
+    chain the keyboard jump to Description; Back after a batch; one save per
+    draft (two taps in the same instant saved twice, caught by the browser
+    scenario).
+  - **Tests:** `e2e/entry/` (`npm run e2e:entry`, Playwright against a Supabase
+    stand-in in `mock-supabase.mjs`; `/e2e/entry` is a 404 unless
+    `RUMBO_E2E=1`) and a new CI job `entry form in a browser`. Unit tests for
+    usage ranking, toast queue, next draft, entry timing and `format`.
+    Documented in `docs/testing.md`.
+- Measured on the user's phone (Brave/Android, real account, 2026-10-22):
+  `open.cold` 615-869 ms on WiFi (1.8 s on LTE), `open.warm` 44-165 ms,
+  `save.close` 0.66-0.99 s p50 (was 1.26-1.60 s with the redirect),
+  `save.next` 0.76-1.01 s p50 and 0.96-1.24 s p75. T4 recorded as met.
+- Migrations added: none.
+- Tables changed: none.
+- Follow-ups / known gaps: (1) RPC messages from `create_transfer_transaction`
+  that are short English strings pass through `cleanSupabaseActionError`
+  untranslated. (2) The cold-open number predates the idle prefetch; verify on
+  the device. (3) Brave under-reports its visible area while the keyboard is
+  open (about 100 px); worked around by not measuring it, not fixed upstream.
+  (4) Timed comparison against AndroMoney on a common list is still not done.
+  (5) The T5 device checklist results are not recorded in the sprint doc; see
+  `docs/pending-work.md`. Detail in `docs/pending-work.md` §1.
+
+## HH-7: Household section and invitation emails (2026-10-11, #120)
+- Goal: take household management out of Settings dialogs into a proper
+  section, and email every invitation. Spec:
+  [`docs/features/household-sharing.md`](features/household-sharing.md) → HH-7.
+- Shipped (from the merge commit):
+  - `/dashboard/household`: details moved from Settings, members, invitations,
+    recent activity and former households. Inviting (`/invite`), a member
+    (`/members/<id>`) and leaving (`/leave`) are full pages instead of dialogs;
+    confirmations stay alert dialogs. Settings keeps a link card.
+  - Invitation email: after `create_household_invitation`, the action asks
+    Supabase Auth (`signInWithOtp`, publishable key, no service-role key) to
+    email the invited address a sign-in link to `/invite/<token>`. A mail
+    failure never fails the invitation; the page says so and shows the link.
+  - `/auth/confirm` is a page whose Continue button verifies the token hash
+    (`confirmEmailAction`, a POST), so a mail scanner cannot use up the
+    one-time token. It forwards only to an invite path
+    (`inviteReturnPathFromNext`, unit-tested). A dead emailed link lands back on
+    the invitation, whose signed-out view can email a fresh link
+    (`emailInviteSignInLinkAction`). Leaving the household confirms in an alert
+    dialog.
+- Migrations added: none.
+- Tables changed: none.
+- Follow-ups / known gaps: needs manual Supabase configuration that code cannot
+  do — custom SMTP, the Confirm signup and Magic Link templates pointing at
+  `/auth/confirm`, Site URL, and Email OTP expiration of 24 h. Status unknown at
+  this close; tracked in `docs/pending-work.md` §3.
+
 ## Household sharing: members, invitations and private accounts, HH-0…HH-6 (2026-10-08 → 2026-10-11)
 - Goal: real multi-member households — invitations by single-use link, member
   management, and per-member private accounts inside the same household. Seven
@@ -70,6 +154,61 @@ History before this log (Sprints 2.x–12.x) lives in `docs/alpha/` and
   production: the database switch `household_sharing` since 2026-10-11 13:01
   UTC, and `RUMBO_HOUSEHOLD_SHARING` in Vercel. (3) Enable leaked-password
   protection in Supabase Auth.
+
+## Mobile walkthrough backlog MQ-001…MQ-020 (2026-10-01)
+- Goal: close the twenty items of
+  [`docs/mobile-walkthrough-backlog.md`](mobile-walkthrough-backlog.md), taken
+  from the 2026-09-30 phone screen recording (backlog itself added in #87/#88).
+  One PR per item, all merged to `main` on 2026-10-01 with no sprint close at
+  the time; this entry is reconstructed afterwards from the merge commit
+  messages.
+- Shipped (PR, item):
+  - **#89, MQ-001:** "today" and the current month computed in the user's time
+    zone (`rumbo-tz` cookie, `getRequestToday()`), not UTC. Adds
+    `households.timezone` for the auto-post cron (nothing reads it yet).
+  - **#90, MQ-002:** the dashboard document no longer scrolls.
+  - **#91, MQ-003:** stable empty state on Transactions and a tab that keeps the
+    period.
+  - **#92, MQ-004:** open the assistant from the top bar on phones.
+  - **#93, MQ-005:** Dashboard compares the open month with the same day last
+    month.
+  - **#94, MQ-006:** goals count every currency in "Total saved"; goals link to
+    accounts by account class.
+  - **#95, MQ-007:** no browser autofill on the app's own fields.
+  - **#96, MQ-008:** searchable pickers for long lists on a phone.
+  - **#97, MQ-009:** no skeleton for More, a truthful one for Budgets, instant
+    re-opens of the add form.
+  - **#98, MQ-010:** phone form sheets open without the keyboard and keep Save
+    in view.
+  - **#99, MQ-011:** Debts offers to track existing liability accounts.
+  - **#100, MQ-012:** one typeface for figures across the app.
+  - **#101, MQ-013:** amount fields name their currency; dates are spelled out.
+  - **#102, MQ-014:** one "new month" card on the Dashboard instead of five
+    empty ones.
+  - **#103, MQ-015:** Payees: one tappable zone per row, the rest behind ⋯ on a
+    phone.
+  - **#104, MQ-016:** Categories: filtered KPIs, swipeable tabs, collapse vs.
+    details.
+  - **#105, MQ-017:** long account names use the full row width on a phone.
+  - **#106, MQ-018:** More: sections with headings, no duplicates of the bottom
+    nav.
+  - **#107, MQ-019:** Budgets: readable line rows, 2x2 detail, save toasts
+    (`FlashToast`).
+  - **#108, MQ-020:** Recurring: what Auto means, chips on their own row,
+    collapsed occurrences.
+  - Merged in the same window, outside the MQ list: #109 (a new transfer can
+    repeat like income and expense), #110 (desktop row columns aligned,
+    light-theme contrast), #111 (edit dialogs reuse the Add form in edit mode),
+    #112 (recurring: keep past start dates and catch up every due occurrence),
+    and a CSV import change to choose which valid rows to import.
+- Migrations added: `20261001120000_mq_001_household_timezone.sql` (#89) and
+  `20261002120000_br_014_recurring_autopost_catchup.sql` (#112). Both are inside
+  the 76/76 applied count recorded in `AGENTS.md` on 2026-10-11.
+- Tables changed: `households` gains `timezone` (default `'UTC'`, validated by
+  trigger against `pg_timezone_names`).
+- Follow-ups / known gaps: MQ-001-cron — `run_recurring_autopost` still uses
+  `current_date` (06:00 UTC) and nothing reads or writes `households.timezone`
+  (see `docs/pending-work.md` §1).
 
 ## BR-030 / BR-043 desk audit: two refund bugs fixed, QA subagents added (2026-09-30)
 - Goal: desk audit of BR-030 (card statement cycle) and BR-043 (budget

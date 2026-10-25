@@ -5,14 +5,15 @@ import { ServerPageHeader as PageHeader } from '@/components/server-page-header'
 import { createClient } from '@/lib/supabase/server'
 import { getOwnPrivateAccountIds } from '@/lib/privacy/server'
 import { markPrivateAccounts } from '@/lib/privacy/account-label'
+import { TRANSACTION_CREATED_PARAM } from '@/lib/transactions/landing-flags'
 
 type AssistantPageProps = {
-  searchParams: Promise<{ created?: string }>
+  searchParams: Promise<{ [TRANSACTION_CREATED_PARAM]?: string }>
 }
 
 export default async function AssistantPage({ searchParams }: AssistantPageProps) {
   const params = await searchParams
-  const created = params.created === '1'
+  const created = Boolean(params[TRANSACTION_CREATED_PARAM])
 
   const supabase = await createClient()
 

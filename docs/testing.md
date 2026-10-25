@@ -15,6 +15,11 @@ on every pull request — and `npm run perf:nav` times the §3.1 navigation flow
 a real browser. What a release must pass is in
 [`release-checklist.md`](./release-checklist.md).
 
+**Extended (transaction entry sprint, 2026-10-24).** `npm run e2e:entry` drives
+the real transaction entry dialog in Chromium against a Supabase stand-in, in CI
+on every pull request (job `entry form in a browser`). See
+[Browser scenarios for the entry form](#browser-scenarios-for-the-entry-form).
+
 ---
 
 ## Context
@@ -162,3 +167,34 @@ request, and — since RUM-010b — a second job, `ledger invariants on fixtures
 (`npm run db:local -- --bench`). `npm run db:test` is still **not** in CI: it
 needs credentials for the live project, and there is no staging copy of that
 database. It is step 3 of [`release-checklist.md`](./release-checklist.md).
+
+---
+
+## Browser scenarios for the entry form
+
+`e2e/entry/` holds the only browser tests in the repo. They exist because the
+entry dialog's worst bugs only showed on a phone — the keyboard pushing the form
+around, the form not fitting one screen, a double tap saving twice — and each
+took a device round to find. Each scenario pins one of them down.
+
+| File | Role |
+|---|---|
+| `mock-supabase.mjs` | Answers auth, the PostgREST reads the form makes and its RPCs from fixtures. Logs every request, so a scenario can count writes. An amount of exactly 999 fails on purpose (the rejected-save case). |
+| `src/app/e2e/entry/page.tsx` | The dialog on an empty page. A 404 unless the server runs with `RUMBO_E2E=1`, so it never exists in production. |
+| `entry.e2e.mjs` | The scenarios (Playwright, `node:assert`). Phone viewport, dark mode, plus one desktop check. |
+| `run.mjs` | Starts the stand-in and `next start`, runs the scenarios, stops both. |
+
+Run it locally:
+
+```bash
+npm install --no-save playwright@1.56.1 && npx playwright install chromium
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=e2e npm run build
+npm run e2e:entry
+```
+
+The build must point at the stand-in: `NEXT_PUBLIC_*` values are baked in at
+build time, so the CI `verify` build (placeholder URL) cannot be reused. With
+Playwright installed elsewhere, set `PLAYWRIGHT_MODULE` to its `index.mjs`.
+
+A new scenario belongs here when a device run finds a bug in the entry flow:
+reproduce it in a scenario first, watch it fail, then fix it.

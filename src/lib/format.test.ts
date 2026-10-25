@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatCurrency, formatCurrencyCompact, getCurrencyPrefix } from './format'
+import { formatCurrency, formatCurrencyCompact, formatRate, getCurrencyPrefix } from './format'
 
 const NBSP = ' '
 
@@ -47,5 +47,18 @@ describe('getCurrencyPrefix (MQ-013)', () => {
     expect(getCurrencyPrefix('EUR')).toBe('€')
     expect(getCurrencyPrefix('GBP')).toBe('£')
     expect(getCurrencyPrefix('XYZ1')).toBe('XYZ1')
+  })
+})
+
+describe('formatRate', () => {
+  it('rounds to what matters at each size', () => {
+    expect(formatRate(2271.224242)).toBe('2,271.22')
+    expect(formatRate(2900)).toBe('2,900')
+    expect(formatRate(1.356789)).toBe('1.3568')
+    expect(formatRate(0.000440286)).toBe('0.0004403')
+  })
+
+  it('is empty for a non-number', () => {
+    expect(formatRate(Number.NaN)).toBe('')
   })
 })

@@ -50,3 +50,4 @@ next-env.d.ts
 
 # Cache del hook Stop (.claude/hooks/verify-gate.mjs)
 .claude/hooks/.cache/
+e2e/entry/.mock-supabase.log

@@ -10,24 +10,32 @@ import {
   type ReactNode,
 } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { EntrySheet } from '@/components/entry-sheet'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { TransactionForm } from '@/app/dashboard/transactions/transaction-form'
+  TransactionForm,
+  type TransactionSavedOutcome,
+} from '@/app/dashboard/transactions/transaction-form'
 import type { TransactionCopyPayload } from '@/app/dashboard/transactions/transaction-list'
 import {
   getQuickAddFormData,
   type QuickAddFormData,
 } from '@/app/dashboard/quick-add-actions'
-import { X } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { useUiTranslation } from '@/lib/i18n/use-ui-translation'
 import { useBackDismiss } from '@/lib/use-back-dismiss'
-import { useSoftKeyboardInset } from '@/lib/use-soft-keyboard'
+import { useToast } from '@/components/toast-provider'
+import { TRANSACTION_CREATED_PARAM } from '@/lib/transactions/landing-flags'
+import { EntryTimingReadout } from '@/components/entry-timing-readout'
+import {
+  finishPendingSave,
+  isEntryTimingEnabled,
+  recordEntrySample,
+  setEntryTimingEnabled,
+  type EntryVariant,
+} from '@/lib/perf/entry-timing'
+import { useIsMobile } from '@/lib/use-is-mobile'
+import { nextDraftNeedsFreshLists } from '@/lib/quick-entry/next-draft'
 import { todayIsoDateLocal } from '@/lib/format'
 
 type TransactionType = 'income' | 'expense'
@@ -76,60 +84,12 @@ function todayIsoDate() {
   return todayIsoDateLocal()
 }
 
-/**
- * Scroll whatever field is being typed into back into view once the keyboard
- * is up.
- *
- * Lifting the sheet above the keyboard leaves very little sheet, and the
- * browser's own "scroll the focused input into view" runs before the sheet has
- * been resized and lands in the wrong place, so redo it against the final
- * geometry.
- */
-function useKeepFocusedFieldVisible(keyboardOpen: boolean) {
-  useEffect(() => {
-    if (!keyboardOpen) return
+/** How long a background prefetch of the form's data counts as fresh. */
+const PREFETCH_FRESH_MS = 15_000
 
-    const reveal = () => {
-      const active = document.activeElement
-      if (!(active instanceof HTMLElement)) return
-      if (!active.matches('input, select, textarea')) return
+/** The longest the prefetch waits for an idle moment after the screen loads. */
+const PREFETCH_IDLE_TIMEOUT_MS = 4_000
 
-      // Only when the field is actually out of the way. Scrolling a field that
-      // is already on screen is what made a deliberate scroll snap back: the
-      // user drags, this fires, and the page yanks itself home.
-      const rect = active.getBoundingClientRect()
-      const visibleBottom = window.visualViewport
-        ? window.visualViewport.height
-        : window.innerHeight
-      if (rect.top >= 0 && rect.bottom <= visibleBottom) return
-
-      // Top, not centre. Centring was there to keep the field clear of the
-      // sticky action bar, which now hides itself while the keyboard is up —
-      // and centring spent the whole sheet on the one field you are already
-      // looking at. Anchoring it to the top spends the rest on the fields that
-      // come *after* it, which is what you need to see next.
-      active.scrollIntoView({ block: 'start', behavior: 'smooth' })
-    }
-
-    // The sheet resizes a frame or two behind the keyboard animation; wait for
-    // the new height before deciding where the top is.
-    const timer = window.setTimeout(reveal, 150)
-    // Moving between fields while the keyboard is already up does not reopen
-    // it, so this effect would not re-run on its own.
-    document.addEventListener('focusin', reveal)
-
-    return () => {
-      window.clearTimeout(timer)
-      document.removeEventListener('focusin', reveal)
-    }
-    // Deliberately the *boolean*, not the pixel inset. Scrolling with the
-    // keyboard up hides and shows the browser's URL bar, which changes
-    // `window.innerHeight` and so the measured inset — and keying this effect
-    // on that number meant every one of those wobbles re-ran it and dragged the
-    // page back to the focused field mid-scroll. Only opening the keyboard
-    // should reveal anything; the guard above handles the rest.
-  }, [keyboardOpen])
-}
 
 /**
  * Params that describe *this* navigation rather than the view behind the
@@ -139,6 +99,7 @@ function useKeepFocusedFieldVisible(keyboardOpen: boolean) {
  * the user was working in.
  */
 const TRANSIENT_RETURN_PARAMS = [
+  TRANSACTION_CREATED_PARAM,
   'created',
   'updated',
   'voided',
@@ -213,6 +174,81 @@ function readAddNextDefaults(searchParams: URLSearchParams): AddNextDefaults | n
   }
 }
 
+/**
+ * Runs `fn` once the browser has painted (two frames) — used to end the
+ * entry-timing samples on what the user actually sees.
+ *
+ * Deliberately not cancelled by the effect that schedules it: landing a save
+ * re-renders the provider straight away, and an effect cleanup that cancelled
+ * the pending frame threw samples away (first device run, 2026-10-22). Each
+ * caller consumes its timer before scheduling, so nothing records twice.
+ */
+function afterPaint(fn: () => void) {
+  window.requestAnimationFrame(() => window.requestAnimationFrame(fn))
+}
+
+/**
+ * Strip one-shot flags (`txn_created`, `next_*`) from the address bar without
+ * a server round trip.
+ *
+ * A `router.replace()` here was a full navigation: after every "Save & Add
+ * Next" the destination page was rendered on the server twice more (once for
+ * the toast's cleanup, once for the dialog's) while the next entry was being
+ * typed. The App Router integrates `history.replaceState`, so
+ * `useSearchParams` still sees the cleaned URL. `history.state` is passed
+ * through so the router's entry, and `useBackDismiss`'s overlay marker on it,
+ * survive. See `stripOneShotFlags` for the one screen that still navigates.
+ */
+export function replaceUrlInPlace(href: string) {
+  window.history.replaceState(window.history.state, '', href)
+}
+
+/**
+ * What the first open shows while the form's lists load (T1 of the premium
+ * entry sprint). It used to be one line of grey text, "Loading form…", on an
+ * otherwise empty full-screen sheet — in the 2026-10-14 recording it sat
+ * there for several seconds and read as a blank screen. This is the form's
+ * own outline instead: type switch, the large amount, the field rows and the
+ * action bar at the bottom edge, so the eye lands where the amount will be.
+ *
+ * Nothing in it is interactive. Typing before the lists arrive was considered
+ * and left out: the amount's currency comes from the account, and the account
+ * is exactly what has not loaded yet.
+ */
+function TransactionFormSkeleton({ label }: { label: string }) {
+  return (
+    <div role="status" aria-live="polite" data-entry-skeleton className="flex flex-1 flex-col gap-3">
+      <span className="sr-only">{label}</span>
+      <div aria-hidden="true" className="flex flex-1 flex-col gap-3">
+        {/* Type switch */}
+        <div className="h-11 w-full animate-pulse rounded-2xl bg-muted" />
+        {/* Amount card */}
+        <div className="space-y-3 rounded-2xl border p-3">
+          <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+          <div className="h-14 w-full animate-pulse rounded-xl bg-muted/70" />
+        </div>
+        {/* Date chips + field rows, one card like the form's own list */}
+        <div className="rounded-2xl border px-3">
+          <div className="flex gap-2 py-3">
+            {[0, 1, 2].map((chip) => (
+              <div key={chip} className="h-10 flex-1 animate-pulse rounded-xl bg-muted" />
+            ))}
+          </div>
+          {[0, 1, 2, 3, 4].map((row) => (
+            <div key={row} className="flex h-11 items-center gap-3 border-t">
+              <div className="size-4 shrink-0 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-20 animate-pulse rounded bg-muted" />
+              <div className="ml-auto h-3 w-16 animate-pulse rounded bg-muted" />
+            </div>
+          ))}
+        </div>
+        <div className="hidden max-sm:block max-sm:flex-1" />
+        <div className="h-11 w-full animate-pulse rounded-xl bg-muted sm:h-9 sm:w-48" />
+      </div>
+    </div>
+  )
+}
+
 export function TransactionDialogProvider({
   children,
   householdId,
@@ -223,21 +259,94 @@ export function TransactionDialogProvider({
 }) {
   const pathname = usePathname()
   const router = useRouter()
+
+  /**
+   * Strips `txn_created` / `next_*` once they have done their job, as a plain
+   * history update (`replaceUrlInPlace`): no screen's server render reads
+   * them, so a navigation only re-rendered the page for nothing. The one
+   * exception is the assistant, whose page shows its own "created from the
+   * assistant" banner from the flag; there the cleanup stays a navigation,
+   * which also takes the banner away.
+   */
+  function stripOneShotFlags(href: string) {
+    if (pathname === '/dashboard/assistant') router.replace(href)
+    else replaceUrlInPlace(href)
+  }
   const searchParams = useSearchParams()
   const { t } = useLanguage()
   const ui = useUiTranslation()
-  const keyboardInset = useSoftKeyboardInset()
-  useKeepFocusedFieldVisible(keyboardInset > 0)
+  // The form's scroller (the wrapper on a phone, the sheet itself on desktop).
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  // Set on open and on every "Add next": the next render that has the amount
+  // field focuses it, so an entry starts by typing the figure — no tap on the
+  // field first. Programmatic, so it only raises the phone's keyboard when it
+  // lands close enough to the tap that opened the form (a warm open, the next
+  // draft); a cold open still waits for its data and may need the tap.
+  const focusAmountRef = useRef(false)
+  useEffect(() => {
+    if (!open || !focusAmountRef.current) return
+    const amount = document.getElementById('amount')
+    if (!(amount instanceof HTMLInputElement)) return
+    focusAmountRef.current = false
+    amount.focus({ preventScroll: true })
+  })
+  const isMobile = useIsMobile()
+  // Entries saved with "Save & Add Next" since this dialog opened. Shown in
+  // the dialog itself: on a phone the full-screen sheet covers the toast stack,
+  // so a batch had no visible confirmation at all — the next draft simply
+  // appeared, looking like the last one minus its amount.
+  const [savedInBatch, setSavedInBatch] = useState(0)
 
   // Read pending "Save and Add Next" defaults straight from the URL on first
   // render so a freshly mounted provider (e.g. after a server-action redirect
   // remounts this layout) opens pre-filled instead of starting empty.
   const [open, setOpen] = useState(() => readAddNextDefaults(searchParams) !== null)
+  // For async work that must not act on a dialog closed while it waited.
+  const openRef = useRef(open)
+  openRef.current = open
   const [formData, setFormData] = useState<QuickAddFormData | null>(null)
   // Mirrors `formData` for `refreshFormData`, which must see the latest value
   // from inside an async call started by an earlier render.
   const formDataRef = useRef<QuickAddFormData | null>(null)
   const formFetchInFlight = useRef(false)
+
+  // T4 follow-up: the first open of a session no longer waits on the form's
+  // data. Once the screen behind is idle, the lists are fetched in the
+  // background, so the first "+" opens like every later one (it measured
+  // 1.8s on LTE while it waited). Skipped when the data is already here.
+  const prefetchRef = useRef<Promise<void> | null>(null)
+  // The refresh in flight, if any, so a caller that needs fresh lists can wait
+  // for it instead of being turned away.
+  const refreshPromiseRef = useRef<Promise<void> | null>(null)
+  const prefetchedAt = useRef(0)
+  useEffect(() => {
+    if (!householdId) return
+    const run = () => {
+      if (formDataRef.current?.householdId === householdId || formFetchInFlight.current) return
+      formFetchInFlight.current = true
+      prefetchRef.current = getQuickAddFormData()
+        .then((data) => {
+          if (!data || formDataRef.current?.householdId === householdId) return
+          formDataRef.current = data
+          prefetchedAt.current = Date.now()
+          setFormData(data)
+        })
+        .catch(() => {
+          // A failed prefetch costs nothing: the open fetches as it always did.
+        })
+        .finally(() => {
+          formFetchInFlight.current = false
+          prefetchRef.current = null
+        })
+    }
+    // Safari has no requestIdleCallback; a short timeout stands in for it.
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(run, { timeout: PREFETCH_IDLE_TIMEOUT_MS })
+      return () => window.cancelIdleCallback(id)
+    }
+    const id = globalThis.setTimeout(run, 1500)
+    return () => globalThis.clearTimeout(id)
+  }, [householdId])
   // A background refresh is running (the form may already be on screen).
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(() => readAddNextDefaults(searchParams) !== null)
@@ -253,6 +362,11 @@ export function TransactionDialogProvider({
   const [sharedDescription, setSharedDescription] = useState<string | undefined>()
   // BR-034: the source transaction a "Copy" is seeded from.
   const [copyDefaults, setCopyDefaults] = useState<TransactionCopyPayload | undefined>()
+
+  // T4 entry timing (opt-in, `?entry_timing=on`; see lib/perf/entry-timing).
+  // Only a start time and a variant are held — never anything about the entry.
+  const [entryTimingOn, setEntryTimingOn] = useState(false)
+  const openTimer = useRef<{ start: number; variant: EntryVariant } | null>(null)
 
   const returnTo = useMemo(
     () => buildReturnTo(pathname, new URLSearchParams(searchParams.toString())),
@@ -346,7 +460,8 @@ export function TransactionDialogProvider({
   const nextAccount = searchParams.get('next_account')
   const nextStatus = searchParams.get('next_status')
   const nextSeq = searchParams.get('next_seq')
-  const created = searchParams.get('created')
+  // Unique per save (a timestamp), so two landings in a row are two values.
+  const txnCreated = searchParams.get(TRANSACTION_CREATED_PARAM)
   const hasPendingNext = !!(nextDate || nextType || nextAccount || nextSeq)
 
   // Tracks which "next_seq" (or fallback key) has already been applied, so a
@@ -366,16 +481,24 @@ export function TransactionDialogProvider({
 
     const frame = window.requestAnimationFrame(() => {
       setAddNextDefaults(readAddNextDefaults(searchParams))
+      // The entry just saved may have been a Copy (BR-034) or a share
+      // (BR-028). Their amount, description and notes belonged to *that*
+      // entry; left in place they were seeded again into the next draft,
+      // which is the carried-over amount "Save & Add Next" promises never to
+      // make. The add-next params carry everything the next entry keeps.
+      setCopyDefaults(undefined)
+      setSharedDescription(undefined)
       setFormKey((k) => k + 1)
       setOpen(true)
       setLoading(true)
 
-      // Fully sequence the fetch and the URL cleanup: starting router.replace()
-      // while getQuickAddFormData() is still in flight can hang that server
-      // action indefinitely (it never resolves nor rejects), leaving the
-      // dialog stuck on "Loading form...". Only replace the URL once the
-      // fetch has settled, and back it with a timeout so a hang (whatever its
-      // cause) still surfaces a "try again" message instead of spinning
+      // Fully sequence the fetch and the URL cleanup. The cleanup used to be a
+      // router.replace(), and starting one while getQuickAddFormData() was
+      // still in flight could hang that server action indefinitely, leaving
+      // the dialog stuck on "Loading form...". On Transactions it is a plain
+      // history update now (`stripOneShotFlags`); elsewhere it still
+      // navigates, so the order and the timeout stay: a hang, whatever its
+      // cause, still surfaces a "try again" message instead of spinning
       // forever.
       let settled = false
       const timeoutId = window.setTimeout(() => {
@@ -389,9 +512,9 @@ export function TransactionDialogProvider({
       function cleanNextParams() {
         const cleaned = new URLSearchParams(searchParams.toString())
         for (const key of ADD_NEXT_PARAMS) cleaned.delete(key)
-        cleaned.delete('created') // prevent the auto-close effect from firing after the URL is cleaned
+        cleaned.delete(TRANSACTION_CREATED_PARAM) // prevent the auto-close effect from firing after the URL is cleaned
         const qs = cleaned.toString()
-        router.replace(qs ? `${pathname}?${qs}` : pathname)
+        stripOneShotFlags(qs ? `${pathname}?${qs}` : pathname)
       }
 
       getQuickAddFormData()
@@ -423,19 +546,45 @@ export function TransactionDialogProvider({
 
   // Auto-close the dialog after the final "Create transaction" in an add-next session.
   useEffect(() => {
-    if (created !== '1' || hasPendingNext || !addNextDefaults) return
+    if (!txnCreated || hasPendingNext || !addNextDefaults) return
     const frame = window.requestAnimationFrame(() => {
       setOpen(false)
       setAddNextDefaults(null)
       const cleaned = new URLSearchParams(searchParams.toString())
-      cleaned.delete('created')
+      cleaned.delete(TRANSACTION_CREATED_PARAM)
       const qs = cleaned.toString()
-      router.replace(qs ? `${pathname}?${qs}` : pathname)
+      stripOneShotFlags(qs ? `${pathname}?${qs}` : pathname)
     })
 
     return () => window.cancelAnimationFrame(frame)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [created, hasPendingNext, addNextDefaults])
+  }, [txnCreated, hasPendingNext, addNextDefaults])
+
+  // "Transaction created." on whichever screen the save landed on. It used to
+  // come from the Transactions screen alone, so a save from Accounts or the
+  // Dashboard got no confirmation (or another screen's "… created" banner).
+  // The assistant page keeps its own banner instead. A plain create is
+  // stripped here; an add-next landing is stripped by the effects above once
+  // the next draft is up.
+  const { toast } = useToast()
+  const toastedLanding = useRef<string | null>(null)
+  useEffect(() => {
+    if (!txnCreated || toastedLanding.current === txnCreated) return
+    const frame = window.requestAnimationFrame(() => {
+      toastedLanding.current = txnCreated
+      if (pathname !== '/dashboard/assistant') {
+        toast({ message: t('transactionsList.toastCreated') })
+      }
+      if (!hasPendingNext && !addNextDefaults) {
+        const cleaned = new URLSearchParams(searchParams.toString())
+        cleaned.delete(TRANSACTION_CREATED_PARAM)
+        const qs = cleaned.toString()
+        stripOneShotFlags(qs ? `${pathname}?${qs}` : pathname)
+      }
+    })
+    return () => window.cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [txnCreated])
 
   // Opens the dialog when landing on a `?quick_add=income|expense|transfer`
   // link (e.g. a PWA manifest shortcut) or a Web Share Target GET (BR-028),
@@ -458,7 +607,9 @@ export function TransactionDialogProvider({
     cleaned.delete('share_text')
     cleaned.delete('share_url')
     const qs = cleaned.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname)
+    // In place: this runs while `openDialog`'s fetch is in flight, which is
+    // exactly when a router navigation could stall it (see below).
+    replaceUrlInPlace(qs ? `${pathname}?${qs}` : pathname)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -473,6 +624,12 @@ export function TransactionDialogProvider({
   }, [householdId])
 
   async function openDialog(options?: OpenDialogOptions) {
+    focusAmountRef.current = true
+    openTimer.current = {
+      start: performance.now(),
+      variant: formDataRef.current?.householdId === householdId ? 'warm' : 'cold',
+    }
+    setSavedInBatch(0)
     setTriggerAccountId(options?.accountId)
     setTriggerType(options?.type)
     setSharedDescription(options?.description)
@@ -498,8 +655,44 @@ export function TransactionDialogProvider({
    * a moment ago on the Categories screen is in the picker as soon as it
    * lands. A failed background refresh keeps the data already on screen.
    */
-  async function refreshFormData() {
-    if (formFetchInFlight.current) return
+  /**
+   * `force`: the caller knows the lists are missing something it just
+   * created (an account, a category or a tag made inline before "Add next"),
+   * so neither a fresh prefetch nor a refresh already running — both may
+   * predate that save — can stand in for a fetch made now.
+   */
+  async function refreshFormData(force = false): Promise<void> {
+    // An open during the idle prefetch waits for it rather than racing it, and
+    // a prefetch that just landed is fresh enough to skip the refetch.
+    if (prefetchRef.current) {
+      if (formDataRef.current?.householdId !== householdId) {
+        setLoading(true)
+        setLoadError(false)
+      }
+      await prefetchRef.current
+    }
+    if (
+      !force &&
+      formDataRef.current?.householdId === householdId &&
+      Date.now() - prefetchedAt.current < PREFETCH_FRESH_MS
+    ) {
+      setLoading(false)
+      return
+    }
+    if (refreshPromiseRef.current) {
+      await refreshPromiseRef.current
+      if (!force) return
+    }
+    const run = fetchFormDataNow()
+    refreshPromiseRef.current = run
+    try {
+      await run
+    } finally {
+      if (refreshPromiseRef.current === run) refreshPromiseRef.current = null
+    }
+  }
+
+  async function fetchFormDataNow() {
     formFetchInFlight.current = true
     // Another household's lists are not a cache for this one: switching
     // households waits for fresh data like a first open.
@@ -535,8 +728,106 @@ export function TransactionDialogProvider({
 
   function closeDialog() {
     setOpen(false)
+    setSavedInBatch(0)
     clearPrefills()
   }
+
+  /**
+   * A save from the dialog, reported directly (no redirect; see
+   * `saveManualTransaction`). The screen behind is refreshed by the action's
+   * own `revalidatePath` in the same response, so the dialog does not wait for
+   * it: the toast and the next draft come first.
+   */
+  async function handleSaved({ addNext, next, warning }: TransactionSavedOutcome) {
+    afterPaint(finishPendingSave)
+    // A short tick on a phone that supports it (Android; iOS ignores it): the
+    // save is confirmed in the hand as well as on screen. Not on a warning,
+    // which asks for a look rather than a tick.
+    if (isMobile && !warning) navigator.vibrate?.(12)
+
+    if (addNext && next) {
+      setSavedInBatch((count) => count + 1)
+      // When the entry brought something the lists do not have yet (an
+      // account, category or tag made inline), fetch them *before* the next
+      // draft mounts: the form drops a seeded account, category or tag it
+      // cannot find in its lists, and only reads its seeds once (Codex review
+      // on #122). The confirmation pill is already up meanwhile. Otherwise the
+      // lists in memory are right, and the next draft is immediate.
+      if (nextDraftNeedsFreshLists(formDataRef.current, next)) {
+        await refreshFormData(true)
+        // Closed while the lists loaded: nothing to seed any more.
+        if (!openRef.current) return
+      }
+      // Same carry-over as the redirect path's `next_*` params: date, type,
+      // account, status, category, payee and tags. Never the amount,
+      // description or notes — and not a Copy's or a share's either.
+      setAddNextDefaults({
+        date: next.date,
+        type: next.type === 'income' || next.type === 'expense' ? next.type : undefined,
+        accountId: next.accountId,
+        status: next.status,
+        categoryId: next.categoryId,
+        payeeName: next.payeeName ?? undefined,
+        tagIds: next.tagIds.length > 0 ? next.tagIds : undefined,
+      })
+      setCopyDefaults(undefined)
+      setSharedDescription(undefined)
+      focusAmountRef.current = true
+      setFormKey((key) => key + 1)
+      // The next entry starts where the last one did: at the amount, with the
+      // confirmation above it. The scroller outlives the remounted form, so
+      // without this a long form opened the next draft still scrolled down
+      // to the buttons — amount off-screen on a small phone and on desktop.
+      window.requestAnimationFrame(() => {
+        const scroller = scrollerRef.current
+        scroller?.scrollTo({ top: 0 })
+        scroller?.closest<HTMLElement>('[data-slot="dialog-content"]')?.scrollTo({ top: 0 })
+      })
+      return
+    }
+
+    // The sheet is about to close, so the toast stack is visible again.
+    toast({ message: warning ? ui(warning) : t('transactionsList.toastCreated') })
+    closeDialog()
+  }
+
+  // `?entry_timing=on|off` switches the timing readout for this device, then
+  // leaves the address bar.
+  useEffect(() => {
+    const requested = searchParams.get('entry_timing')
+    if (requested === 'on' || requested === 'off') {
+      setEntryTimingEnabled(requested === 'on')
+      const cleaned = new URLSearchParams(searchParams.toString())
+      cleaned.delete('entry_timing')
+      const qs = cleaned.toString()
+      replaceUrlInPlace(qs ? `${pathname}?${qs}` : pathname)
+    }
+    // A frame later, like the provider's other URL-driven state.
+    const frame = window.requestAnimationFrame(() => setEntryTimingOn(isEntryTimingEnabled()))
+    return () => window.cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get('entry_timing')])
+
+  // open: the form is on screen. Recorded after the next paint (two frames),
+  // not when React committed it.
+  const formOnScreen = open && !!usableFormData && !awaitingSeededAccount
+  useEffect(() => {
+    if (!formOnScreen || !openTimer.current) return
+    const timer = openTimer.current
+    openTimer.current = null
+    afterPaint(() =>
+      recordEntrySample('open', timer.variant, performance.now() - timer.start)
+    )
+  }, [formOnScreen, formKey])
+
+  // save: the redirect has landed (`txn_created`), with the next draft up when
+  // it was "Save & Add Next". The start was stamped by the form at submit, in
+  // the tab's storage (`markSaveStart`), so it survives whatever the redirect
+  // does to this component.
+  useEffect(() => {
+    if (!txnCreated) return
+    afterPaint(finishPendingSave)
+  }, [txnCreated])
 
   // Back dismisses the entry sheet instead of leaving the screen behind it.
   // A picker sheet opened on top of this one owns its own history entry, so it
@@ -550,81 +841,39 @@ export function TransactionDialogProvider({
     <TransactionDialogContext.Provider value={{ openDialog }}>
       {children}
 
-      <Dialog
+      <EntrySheet
         open={open}
         onOpenChange={(value) => {
           setOpen(value)
-          if (!value) clearPrefills()
+          if (!value) {
+            setSavedInBatch(0)
+            clearPrefills()
+          }
         }}
+        onClose={closeDialog}
+        // The amount, not the X, gets the opening focus (see focusAmountRef);
+        // before the form has loaded there is nothing to take it yet.
+        initialFocus={() => document.getElementById('amount') ?? false}
+        title={t('transactionForm.dialogTitle')}
+        description={t('transactionForm.dialogDescription')}
+        // The batch's running count, for screen readers. The visible pill is
+        // in the form's amount card (`batchNotice`), where the eye is when the
+        // next entry starts; this region outlives the form remounting between
+        // entries, so every save is announced.
+        status={
+          savedInBatch > 0
+            ? `${t('transactionsList.toastCreated')}${savedInBatch > 1 ? ` ×${savedInBatch}` : ''}`
+            : ''
+        }
+        scrollerRef={scrollerRef}
       >
-        <DialogContent
-          // Own close button: the built-in one is absolutely positioned in the
-          // corner, where on a phone it lands on top of the type selector's
-          // "Transfer". Ours gets its own row instead (see below).
-          showCloseButton={false}
-          // Lift the mobile bottom sheet above the on-screen keyboard so its
-          // footer buttons stay reachable; no-op on desktop (inset is 0).
-          style={
-            keyboardInset
-              ? { bottom: keyboardInset, maxHeight: `calc(100dvh - ${keyboardInset}px - 0.5rem)` }
-              : undefined
-          }
-          className={
-            // Centered dialog on desktop; a full screen on mobile. It used to be
-            // a 92dvh bottom sheet, which left a strip of dashboard above it and
-            // spent the remaining 8% on nothing — while the form below still had
-            // to scroll. A phone entering a transaction is doing one thing, so it
-            // gets the whole screen: `h-dvh`, square corners, and the actions
-            // pushed to the bottom edge by the spacer inside the form.
-            'max-h-[90dvh] overflow-y-auto sm:max-w-xl ' +
-            // Flex column on mobile so the form can claim the leftover height
-            // and pin its actions to the bottom edge; the desktop grid is
-            // untouched.
-            'max-sm:flex max-sm:flex-col max-sm:gap-3 ' +
-            'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 ' +
-            'max-sm:h-dvh max-sm:max-h-dvh max-sm:rounded-none ' +
-            'max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] ' +
-            'max-sm:data-open:slide-in-from-bottom-10 max-sm:data-closed:slide-out-to-bottom-10'
-          }
-        >
-          {/* The drag handle was a bottom-sheet affordance, and this is a full
-              screen now — nothing to drag it down by, and this X is the way
-              out. Desktop never showed the handle. */}
-
-          {/* A row of its own on mobile, not a corner overlay: absolutely
-              positioned it sat on top of the type selector and clipped
-              "Transfer". On desktop it goes back to the corner, where there is
-              a title bar to sit beside and nothing to collide with. */}
-          <div className="flex shrink-0 justify-end sm:absolute sm:top-2 sm:right-2 sm:z-10">
-            <button
-              type="button"
-              onClick={closeDialog}
-              aria-label={ui('Close')}
-              className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground transition-colors active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-7 sm:bg-transparent sm:text-muted-foreground sm:hover:bg-muted"
-            >
-              <X className="size-5 sm:size-4" aria-hidden="true" />
-            </button>
-          </div>
-          {/* Screen-reader-only on every phone, not just under a keyboard: the
-              title and its subtitle spend ~70px describing something the user
-              just tapped a button to do, and the segmented control plus the
-              AMOUNT label below say it anyway. `sr-only` rather than unmounted,
-              so the dialog keeps its accessible name — and `DialogContent`
-              draws its own close X, so nothing here is the way out. */}
-          <DialogHeader className="max-sm:sr-only">
-            <DialogTitle>{t('transactionForm.dialogTitle')}</DialogTitle>
-            <DialogDescription>
-              {t('transactionForm.dialogDescription')}
-            </DialogDescription>
-          </DialogHeader>
-
           {/* Only the very first open waits: later ones render the last data
               while it revalidates (MQ-009, `refreshFormData`). */}
           {(loading && !usableFormData) || awaitingSeededAccount ? (
-            <p className="py-4 text-sm text-muted-foreground">Loading form…</p>
+            <TransactionFormSkeleton label={ui('Loading form…')} />
           ) : loadError && !usableFormData ? (
             <p className="py-4 text-sm text-destructive">
-              Could not load form data. Please refresh and try again.
+              {ui('Could not load form data. Please refresh and try again.')}
             </p>
           ) : usableFormData ? (
             usableFormData.accounts.length === 0 ? (
@@ -663,11 +912,28 @@ export function TransactionDialogProvider({
                 // unfiltered list.
                 returnTo={returnTo}
                 onCancel={closeDialog}
+                onSaved={handleSaved}
+                batchNotice={
+                  savedInBatch > 0 ? (
+                    <span
+                      key={savedInBatch}
+                      aria-hidden="true"
+                      className="flex min-w-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-700 duration-300 animate-in fade-in-0 zoom-in-90 dark:text-emerald-300"
+                    >
+                      <Check className="size-3.5 shrink-0" />
+                      <span className="truncate">{t('transactionsList.toastCreated')}</span>
+                      {savedInBatch > 1 ? (
+                        <span className="shrink-0 tabular-nums opacity-80">×{savedInBatch}</span>
+                      ) : null}
+                    </span>
+                  ) : null
+                }
               />
             )
           ) : null}
-        </DialogContent>
-      </Dialog>
+      </EntrySheet>
+      {/* Never over the form: it covered the form's own controls. */}
+      {entryTimingOn && !open ? <EntryTimingReadout /> : null}
     </TransactionDialogContext.Provider>
   )
 }
