@@ -688,7 +688,7 @@ En todos los casos sin scroll y con filas de 36 px o más.
   - Las etiquetas no pasan a una transferencia, que no las maneja.
   - Los conteos de uso de beneficiarios y etiquetas también cuentan las transacciones anuladas. Ya pasaba con cualquier anulación.
 - **Escenarios nuevos:** gasto → transferencia, y transferencia → gasto con ida y vuelta. Cada uno hace una sola llamada de reemplazo y cabe en una pantalla. Con estos, son 21 de 21.
-- **Manual:** `npx supabase db push` (aplica las dos migraciones). Sin aplicarlas, guardar con otro tipo falla con un error y la transacción original queda intacta.
+- **Aplicadas** el 2026-10-25 con `node scripts/db-push.mjs push --apply`, a pedido del usuario: 78 de 78 migraciones, sin pendientes. Antes de aplicarlas, guardar con otro tipo falla con un error y la transacción original queda intacta.
 
 ### T5 — QA pendiente en dispositivo (lo llena el usuario)
 
