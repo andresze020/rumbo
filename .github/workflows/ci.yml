@@ -105,7 +105,7 @@ jobs:
       # Not a project dependency (docs/testing.md), so installed for this job only.
       - name: Install Playwright + Chromium
         run: |
-          npm install --no-save playwright@1.56.1
+          npm install --no-save playwright@1.64.1
           npx playwright install --with-deps chromium
 
       # NEXT_PUBLIC_* is baked in at build time: this build talks to the
