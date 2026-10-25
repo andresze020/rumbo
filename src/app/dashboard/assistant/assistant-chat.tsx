@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Callout } from '@/components/callout'
+import { useBackDismiss } from '@/lib/use-back-dismiss'
 import { formatCurrency, todayIsoDateLocal } from '@/lib/format'
 import {
   TransactionForm,
@@ -134,6 +135,12 @@ export function AssistantChat({ baseCurrency, accounts, categories, payees, retu
       appendItem({ id: newId(), kind: 'draft', sourceLabel: 'From your voice note', draft: result.draft })
     })
   }
+
+  // Back closes the review dialog instead of leaving the assistant page.
+  useBackDismiss(dialogOpen, () => {
+    setDialogOpen(false)
+    return false
+  })
 
   function openDraftReview(draft: TransactionDraft) {
     setReviewDraft(draft)

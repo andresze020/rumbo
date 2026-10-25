@@ -23,7 +23,7 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
-- **Premium transaction entry, T0…T5 done, PR #122 pending merge**
+- **Premium transaction entry, T0…T5 done, merged to `main` (PR #122, `4583bb8`)**
   (2026-10-22 → 10-24, no migration). Mechanisms to know before touching the
   Add dialog (`transaction-dialog-provider.tsx`, `transaction-form.tsx`):
   - The dialog saves **inline, no redirect**: `saveManualTransaction` /
