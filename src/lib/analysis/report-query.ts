@@ -8,6 +8,9 @@ import {
   type MonthlyPoint,
 } from './server'
 import { scopeByOwner, scopeByTransaction, type PrivacyScope } from '@/lib/privacy/scope'
+import { buildSubPeriods, type SubPeriodBreakdown } from './sub-periods'
+
+export type { SubPeriod, SubPeriodBreakdown } from './sub-periods'
 
 /**
  * Filter-aware reporting for /dashboard/reports.
@@ -33,17 +36,6 @@ export type ReportFilters = {
 /** BR-039: one account that has opted into "transfers in count as expense". */
 export type TransferExpenseAccount = { id: string; name: string }
 
-/** BR-042: one week inside the selected month. */
-export type SubPeriod = {
-  /** ISO start/end of the week, already clipped to the selected month. */
-  dateFrom: string
-  dateTo: string
-  income: number
-  expenses: number
-  net: number
-  txCount: number
-}
-
 export type ReportData = {
   income: number
   expenses: number
@@ -56,11 +48,10 @@ export type ReportData = {
   merchants: MerchantSlice[]
   trend: MonthlyPoint[]
   /**
-   * Week-by-week rollup of the selected range, or `null` when the range isn't a
-   * single month (BR-042's first slice is weeks-within-month only —
-   * months-within-year comes later).
+   * BR-042: week rows for a month-long range, month rows for a longer one up
+   * to a year, or `null` (see `buildSubPeriods`).
    */
-  subPeriods: SubPeriod[] | null
+  subPeriods: SubPeriodBreakdown | null
   /**
    * BR-039: how much of `expenses` came from transfers into accounts flagged
    * "count transfers in as expense". Already included in `expenses`, `net`,
@@ -368,87 +359,6 @@ async function fetchTransferExpenseRows(
   return rows
 }
 
-/** Adds whole days to a `YYYY-MM-DD` date, staying on the calendar grid. */
-function addDays(iso: string, days: number) {
-  const [year, month, day] = iso.split('-').map(Number)
-  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10)
-}
-
-/** Whole days from `from` to `to` (both `YYYY-MM-DD`), exclusive of `from`. */
-function daysBetween(from: string, to: string) {
-  const [fy, fm, fd] = from.split('-').map(Number)
-  const [ty, tm, td] = to.split('-').map(Number)
-  const msPerDay = 24 * 60 * 60 * 1000
-  return Math.round(
-    (Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / msPerDay
-  )
-}
-
-/**
- * BR-042 — splits a single-month range into ISO weeks (Monday-start) clipped to
- * the month, and totals each one. Clipping is what guarantees the invariant
- * that matters: the weeks partition the month exactly, so their totals always
- * sum back to the month totals shown above them. Weeks with no activity are
- * kept, rendering as zero rows rather than silently disappearing.
- *
- * Returns null unless the range is one calendar month — a multi-month range
- * would want month rows instead, which is a later slice.
- */
-function buildSubPeriods(
-  rows: FilteredRow[],
-  dateFrom: string,
-  dateTo: string
-): SubPeriod[] | null {
-  // BR-042 shipped this as "only when the range is exactly one calendar month".
-  // BR-036 lets a household's period start on any day, so that test would switch
-  // the week rows off for every such household — a silent regression rather than
-  // a decision. The rows only ever needed the range to be *about* a month long:
-  // the weeks below are ISO weeks clipped to the range, so they partition it
-  // exactly and sum to its totals whatever the boundaries are.
-  //
-  // 28–31 days covers a calendar month and every BR-036 period, and excludes the
-  // multi-month presets, which is the distinction that actually matters.
-  const spanDays = daysBetween(dateFrom, dateTo) + 1
-  if (spanDays < 28 || spanDays > 31) return null
-
-  const monthStart = dateFrom
-  const monthEnd = dateTo
-
-  const periods: SubPeriod[] = []
-  let cursor = monthStart
-  while (cursor <= monthEnd) {
-    // 0 = Sunday … 6 = Saturday; shift so Monday is the start of the week.
-    const [y, m, d] = cursor.split('-').map(Number)
-    const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
-    const daysToSunday = (7 - ((weekday + 6) % 7)) - 1
-    const weekEnd = addDays(cursor, daysToSunday)
-    const periodEnd = weekEnd > monthEnd ? monthEnd : weekEnd
-
-    periods.push({
-      dateFrom: cursor,
-      dateTo: periodEnd,
-      income: 0,
-      expenses: 0,
-      net: 0,
-      txCount: 0,
-    })
-    cursor = addDays(periodEnd, 1)
-  }
-
-  for (const row of rows) {
-    const period = periods.find((p) => row.date >= p.dateFrom && row.date <= p.dateTo)
-    if (!period) continue
-    if (row.type === 'income') period.income += row.baseSigned
-    else period.expenses += Math.abs(row.baseSigned)
-    period.txCount += 1
-  }
-  for (const period of periods) {
-    period.net = period.income - period.expenses
-  }
-
-  return periods
-}
-
 /** BR-037: one calendar day of a month grid. */
 export type CalendarDay = {
   /** `YYYY-MM-DD`. Every day of the month is present, including empty ones. */
@@ -671,7 +581,12 @@ export async function getReportData(
     categories,
     merchants,
     trend,
-    subPeriods: buildSubPeriods(rangeRows, filters.dateFrom, filters.dateTo),
+    subPeriods: buildSubPeriods(
+      rangeRows,
+      filters.dateFrom,
+      filters.dateTo,
+      ctx.household.month_start_day
+    ),
     transferExpenses: transferRangeRows.reduce(
       (sum, row) => sum + Math.abs(row.baseSigned),
       0

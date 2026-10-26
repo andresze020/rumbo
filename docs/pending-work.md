@@ -21,7 +21,7 @@
 > status y en [SPRINT-LOG.md](./SPRINT-LOG.md). Actualizado el 2026-10-24 al
 > cerrar el sprint «Ingreso de transacciones Premium» (PR #122). Actualizado
 > el 2026-10-25: PR #122 mergeado a `main` (`4583bb8`); Asistente-Cancel
-> y TE-err cerrados.
+> TE-err y BR-042 s2 cerrados.
 > Mantenido por el skill
 > `rumbo-state-sync` al cerrar cada sprint.
 
@@ -37,7 +37,7 @@
 | 4 | QA en vivo de Tier-3/4 (BR-030, BR-043, BR-037, BR-036, BR-045, BR-031) | Gate | QA manual | §4.5 |
 | 5 | Verificación en iPhone real del app shell y PWA instalada | Gate | QA en dispositivo | §4.3–4.4 |
 | 6 | Cron de auto-post por zona horaria del household (MQ-001) | P2 | Código + migración | §1 |
-| 7 | Slices 2: BR-030 Pay, BR-036 RPC mensuales, BR-031 FX en edición, BR-042 meses | P2–P3 | Código | §2 |
+| 7 | Slices 2: BR-030 Pay, BR-036 RPC mensuales, BR-031 FX en edición | P2–P3 | Código | §2 |
 | 8 | BF-022 reconciliación (Beta) · captura por tap (gated) | P3 | Código | §1 |
 | 9 | Decisiones de producto abiertas | — | Decisión | §6 |
 
@@ -65,7 +65,6 @@ Diferidas a propósito, no olvidadas.
 | BR-030 s2 | Tarjetas de crédito | Acción **`Pay`** (liquidación). El ciclo de estado de cuenta ya está vivo (`get_card_cycle_summaries`). | Un pago es una escritura real en el ledger; merece su propio slice. | [features/card-statement-cycle.md](./features/card-statement-cycle.md) |
 | BR-036 s2 | Periodos / presupuestos | Budgets, cierres de mes y Dashboard siguen en mes **calendario**; Reports respeta `month_start_day`. Hay que mover las RPC mensuales (alto radio de impacto). Depende de la decisión de §6. | Slice 1 probó el resolver sin tocar RPC. | [features/month-start-day.md](./features/month-start-day.md) |
 | BR-031 s2 | Multimoneda | Los formularios de **edición** (`transaction-edit-form.tsx`, `transfer-edit-form.tsx`) no tienen FX: ni vista previa en moneda base ni montos pareados. | Separado al entregar BR-031. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-042 s2 | Reports | Filas de **meses dentro de un año** (las semanas dentro de un mes ya existen). | Diferido al entregar BR-042. | idem |
 
 ## 3. Configuración manual (Supabase / Vercel)
 
@@ -198,7 +197,7 @@ No «arreglar» sin reabrir la decisión.
 
 ## Ya cerrado (para que no se vuelva a proponer)
 
-- **BR-001 … BR-048**: cerrado salvo los cuatro slices 2 de §2. Todos los BF
+- **BR-001 … BR-048**: cerrado salvo los tres slices 2 de §2. Todos los BF
   salvo BF-022 están arreglados.
 - **MQ-001 … MQ-020** (recorrido móvil, 2026-10-01, #87–#108) — detalle en
   [mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md). Único
@@ -217,5 +216,10 @@ No «arreglar» sin reabrir la decisión.
   de las RPC de transferencias que una persona puede provocar, esconde los que
   nombran columnas o funciones (snake_case) detrás del mensaje genérico de la
   acción, y todos tienen es/fr en `legacy-ui-translations.ts`.
+- **BR-042 s2** (2026-10-26): Reports muestra «Month by month» para rangos
+  de 32 a 366 días (Year to date, Last 3/6 months, rangos a medida): los
+  periodos del household (respeta `month_start_day`) recortados al rango, que
+  suman los totales de arriba; cada fila abre Transactions filtrado. Más de un
+  año («All time») no muestra filas. `src/lib/analysis/sub-periods.ts`.
 - **Tier-4, Tier-3, Mobile-capture parity** (merge 2026-08-12) y anteriores —
   ver `AGENTS.md` → Current status y [SPRINT-LOG.md](./SPRINT-LOG.md).
