@@ -21,7 +21,7 @@
 > status y en [SPRINT-LOG.md](./SPRINT-LOG.md). Actualizado el 2026-10-24 al
 > cerrar el sprint «Ingreso de transacciones Premium» (PR #122). Actualizado
 > el 2026-10-25: PR #122 mergeado a `main` (`4583bb8`); Asistente-Cancel
-> cerrado.
+> y TE-err cerrados.
 > Mantenido por el skill
 > `rumbo-state-sync` al cerrar cada sprint.
 
@@ -31,7 +31,7 @@
 
 | # | Qué | Prioridad | Tipo | Sección |
 |---|---|---|---|---|
-| 1 | Sprint «Ingreso de transacciones Premium»: T0–T4 hechos y mergeados (PR #122), QA de dispositivo hecha por el usuario; faltan anotar T5 en el doc y los seguimientos TE-err / TE-cold / TE-brave | P1–P3 | Seguimiento | §1 |
+| 1 | Sprint «Ingreso de transacciones Premium»: T0–T4 hechos y mergeados (PR #122), QA de dispositivo hecha por el usuario; faltan anotar T5 en el doc y los seguimientos TE-cold / TE-brave | P1–P3 | Seguimiento | §1 |
 | 2 | QA manual de household sharing con dos cuentas (HH-6) | Gate | QA manual | §4.1 |
 | 3 | Configuración de Supabase para emails de invitación (HH-7) + leaked-password protection | Gate | Config manual | §3 |
 | 4 | QA en vivo de Tier-3/4 (BR-030, BR-043, BR-037, BR-036, BR-045, BR-031) | Gate | QA manual | §4.5 |
@@ -49,7 +49,6 @@
 |---|---:|---|---|---|
 | **TE-T0…T4** | — | Captura | **Hechos** (código 2026-10-22 → 10-24, rama `ccr-95b39f19-3w7kyn`, PR #122 mergeado a `main` en `4583bb8`): mapa del flujo, esqueleto de carga, `getQuickAddFormData` de 5–6 a 3 viajes, guardado en línea sin redirect (`saveManualTransaction` / `saveTransferTransaction`), teclado por VirtualKeyboard `overlaysContent` + `usePlaceFieldsAboveKeyboard`, `useFitEntryForm` (todo en una pantalla), Descripción / Notas / tipo de cambio como hojas a pantalla completa en el teléfono, «+» de la barra inferior abre el formulario directo, chips por frecuencia + recencia, medición `?entry_timing=on`, pruebas de navegador `npm run e2e:entry` + job de CI. T4 cumplido en el teléfono (guardar 0,7–1,0 s, abrir 50 ms en caliente). | [alpha/sprint-transaction-entry-premium.md](./alpha/sprint-transaction-entry-premium.md#implementación--2026-10-22-rama-ccr-95b39f19-3w7kyn) · [SPRINT-LOG.md](./SPRINT-LOG.md) |
 | TE-T5 | P1 | QA | **QA en dispositivo hecha por el usuario** (según el usuario, 2026-10-24). Salvedad: la tabla «T5 — QA pendiente en dispositivo» del doc del sprint sigue con la columna *Resultado* vacía en las 26 filas y no tiene filas marcadas como «cuenta de prueba», así que el doc no registra el resultado fila por fila. Pendiente: que el usuario confirme qué filas quedan sin hacer (en particular las de cuenta de prueba, si las hay) y las anote en el doc. | idem, «T5 — QA pendiente en dispositivo» |
-| TE-err | P2 | Captura | Los mensajes de error de `create_transfer_transaction` (RPC) llegan sin traducir: `cleanSupabaseActionError` deja pasar mensajes cortos en inglés (≤ 180 caracteres que no parezcan internos). Las acciones de transacción ya traducen sus mensajes estáticos (es/fr), pero no los de la RPC. Mapear los mensajes conocidos de la RPC a claves i18n, o devolver códigos desde la RPC. | `src/lib/supabase/errors.ts` · `src/app/dashboard/transactions/actions.ts` |
 | TE-cold | P3 | Captura / perf | `open.cold` midió 615–869 ms en WiFi y 1,8 s en LTE **antes** del prefetch en reposo de los datos del formulario. El prefetch debería cubrirlo; verificar en el teléfono con `?entry_timing=on` (3 aperturas en frío) y, si sigue sobre 1,5 s p75, decidir si es el arranque en frío de Vercel. | doc del sprint, «T4 — Cómo medir en el teléfono» |
 | TE-brave | P3 | Captura / teclado | Brave (Android) reporta el área visible ~100 px más corta de lo real con el teclado abierto. Esquivado, no corregido: la app ya no mide el teclado (`overlaysContent` + colocación del campo). No reintroducir cálculos con `visualViewport`/`innerHeight` para este formulario. Revisar si cambia el comportamiento upstream; si no, no hay nada que hacer. | doc del sprint, rondas 4–7 |
 | TE-pend | — | Medición | Comparación cronometrada con AndroMoney sobre la misma lista de altas, sin alternar apps (sin cambios; no se hizo). | idem, «Pendientes para cerrar implementación» |
@@ -214,5 +213,9 @@ No «arreglar» sin reabrir la decisión.
   `assistant-chat.tsx` usa `useBackDismiss`, así que Back lo cierra en vez de
   salir de la página. Se mantiene sin link Cancel visible (X, Escape y
   backdrop lo cierran).
+- **TE-err** (2026-10-26): `cleanSupabaseActionError` reescribe los mensajes
+  de las RPC de transferencias que una persona puede provocar, esconde los que
+  nombran columnas o funciones (snake_case) detrás del mensaje genérico de la
+  acción, y todos tienen es/fr en `legacy-ui-translations.ts`.
 - **Tier-4, Tier-3, Mobile-capture parity** (merge 2026-08-12) y anteriores —
   ver `AGENTS.md` → Current status y [SPRINT-LOG.md](./SPRINT-LOG.md).
