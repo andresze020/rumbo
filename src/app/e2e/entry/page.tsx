@@ -54,6 +54,7 @@ export default async function EntryHarnessPage({
               defaultType={editKind}
               defaultDate="2026-10-20"
               defaultAccountId="a1"
+              defaultCurrencyCode="CAD"
               defaultCategoryId="c1"
               defaultFromAccountId="a1"
               defaultToAccountId="a3"

@@ -21,7 +21,8 @@
 > status y en [SPRINT-LOG.md](./SPRINT-LOG.md). Actualizado el 2026-10-24 al
 > cerrar el sprint «Ingreso de transacciones Premium» (PR #122). Actualizado
 > el 2026-10-25: PR #122 mergeado a `main` (`4583bb8`); Asistente-Cancel
-> TE-err y BR-042 s2 cerrados.
+> TE-err, BR-042 s2 y BR-031 s2 cerrados;
+> EDIT-FX añadido.
 > Mantenido por el skill
 > `rumbo-state-sync` al cerrar cada sprint.
 
@@ -37,7 +38,8 @@
 | 4 | QA en vivo de Tier-3/4 (BR-030, BR-043, BR-037, BR-036, BR-045, BR-031) | Gate | QA manual | §4.5 |
 | 5 | Verificación en iPhone real del app shell y PWA instalada | Gate | QA en dispositivo | §4.3–4.4 |
 | 6 | Cron de auto-post por zona horaria del household (MQ-001) | P2 | Código + migración | §1 |
-| 7 | Slices 2: BR-030 Pay, BR-036 RPC mensuales, BR-031 FX en edición | P2–P3 | Código | §2 |
+| 6b | EDIT-FX: editar un gasto/ingreso hacia una cuenta de otra moneda (bloqueado en la UI; falta arreglo en la RPC) | P2 | Migración | §1 |
+| 7 | Slices 2: BR-030 Pay, BR-036 RPC mensuales | P2–P3 | Código | §2 |
 | 8 | BF-022 reconciliación (Beta) · captura por tap (gated) | P3 | Código | §1 |
 | 9 | Decisiones de producto abiertas | — | Decisión | §6 |
 
@@ -53,6 +55,7 @@
 | TE-brave | P3 | Captura / teclado | Brave (Android) reporta el área visible ~100 px más corta de lo real con el teclado abierto. Esquivado, no corregido: la app ya no mide el teclado (`overlaysContent` + colocación del campo). No reintroducir cálculos con `visualViewport`/`innerHeight` para este formulario. Revisar si cambia el comportamiento upstream; si no, no hay nada que hacer. | doc del sprint, rondas 4–7 |
 | TE-pend | — | Medición | Comparación cronometrada con AndroMoney sobre la misma lista de altas, sin alternar apps (sin cambios; no se hizo). | idem, «Pendientes para cerrar implementación» |
 | MQ-001-cron | P2 | Recurrentes | `run_recurring_autopost` corre a las 06:00 UTC con `current_date`. La columna `households.timezone` ya existe (migración `20261001120000_mq_001_household_timezone.sql`) pero nada la lee ni la escribe. Falta: el job postea por household con `(now() at time zone h.timezone)::date` y la app escribe la columna. Hoy no afecta a Toronto/Montréal; sí a zonas UTC-7 o más al oeste. | [mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md#mq-001--today-y-el-mes-actual-se-calculan-en-utc) |
+| EDIT-FX | P2 | Ledger / multimoneda | `update_manual_transaction` conserva la tasa guardada de la entrada y la allocation aunque la cuenta nueva tenga **otra moneda**: mover un gasto de una cuenta CAD (tasa 1) a una COP guardaría 50.000 COP como 50.000 CAD de base. Desde 2026-10-26 la UI lo bloquea (`editCurrencyChanged` en `transaction-form.tsx`) y pide anular y volver a registrar. Arreglo de fondo (migración): que la RPC rechace el cambio de moneda, o que acepte `p_exchange_rate_to_base` cuando la moneda cambia. Cualquier otro cliente de la RPC sigue expuesto hasta entonces. | `supabase/migrations/20261009150000_hh_001_private_write_guards.sql` (`update_manual_transaction`) |
 | BF-022 | P3 | Transacciones | Flujo de reconciliación («cleared» contra extracto). Requiere migración (`reconciled_at`). Diferido a Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
 | Tap capture | — | Captura / automatización | Solo diseño, **sin código**. Gate duro: el spike de Fase 0 debe probar que un tap real emite un evento legible en el teléfono y la tarjeta del usuario. | [features/tap-payment-capture.md](./features/tap-payment-capture.md) · [spike](./alpha/tap-capture-phase-0-spike.md) |
 
@@ -64,7 +67,6 @@ Diferidas a propósito, no olvidadas.
 |---|---|---|---|---|
 | BR-030 s2 | Tarjetas de crédito | Acción **`Pay`** (liquidación). El ciclo de estado de cuenta ya está vivo (`get_card_cycle_summaries`). | Un pago es una escritura real en el ledger; merece su propio slice. | [features/card-statement-cycle.md](./features/card-statement-cycle.md) |
 | BR-036 s2 | Periodos / presupuestos | Budgets, cierres de mes y Dashboard siguen en mes **calendario**; Reports respeta `month_start_day`. Hay que mover las RPC mensuales (alto radio de impacto). Depende de la decisión de §6. | Slice 1 probó el resolver sin tocar RPC. | [features/month-start-day.md](./features/month-start-day.md) |
-| BR-031 s2 | Multimoneda | Los formularios de **edición** (`transaction-edit-form.tsx`, `transfer-edit-form.tsx`) no tienen FX: ni vista previa en moneda base ni montos pareados. | Separado al entregar BR-031. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
 
 ## 3. Configuración manual (Supabase / Vercel)
 
@@ -197,7 +199,7 @@ No «arreglar» sin reabrir la decisión.
 
 ## Ya cerrado (para que no se vuelva a proponer)
 
-- **BR-001 … BR-048**: cerrado salvo los tres slices 2 de §2. Todos los BF
+- **BR-001 … BR-048**: cerrado salvo los dos slices 2 de §2. Todos los BF
   salvo BF-022 están arreglados.
 - **MQ-001 … MQ-020** (recorrido móvil, 2026-10-01, #87–#108) — detalle en
   [mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md). Único
@@ -221,5 +223,10 @@ No «arreglar» sin reabrir la decisión.
   periodos del household (respeta `month_start_day`) recortados al rango, que
   suman los totales de arriba; cada fila abre Transactions filtrado. Más de un
   año («All time») no muestra filas. `src/lib/analysis/sub-periods.ts`.
+- **BR-031 s2** (2026-10-26): la edición ya usa el mismo `TransactionForm` que
+  la alta (#122), con montos pareados y tasa en transferencias. Faltaba el
+  gasto/ingreso: ahora muestra el equivalente en moneda base con la tasa
+  guardada (la que conserva la RPC) y bloquea mover la entrada a una cuenta de
+  otra moneda (ver EDIT-FX). Escenario de navegador nuevo (22/22).
 - **Tier-4, Tier-3, Mobile-capture parity** (merge 2026-08-12) y anteriores —
   ver `AGENTS.md` → Current status y [SPRINT-LOG.md](./SPRINT-LOG.md).
