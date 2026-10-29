@@ -187,7 +187,7 @@ took a device round to find. Each scenario pins one of them down.
 Run it locally:
 
 ```bash
-npm install --no-save playwright@1.56.1 && npx playwright install chromium
+npm install --no-save playwright@1.64.1 && npx playwright install chromium
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=e2e npm run build
 npm run e2e:entry
 ```

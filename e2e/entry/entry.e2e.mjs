@@ -423,6 +423,23 @@ scenario('editing an expense can turn it into a transfer: one atomic replace cal
   await context.close()
 })
 
+scenario('editing an expense cannot move it to an account in another currency', async () => {
+  const { context, page } = await phone()
+  await page.goto(`${BASE}/e2e/entry?edit=expense`)
+  await page.waitForSelector('[data-entry-close]', { timeout: 30_000 })
+  await page.waitForTimeout(600)
+  const submit = page.locator('[role=dialog] button[type=submit]').first()
+  assert.equal(await submit.isDisabled(), false, 'save disabled before any change')
+  await page.locator('[role=dialog] button', { hasText: /Checking/ }).first().tap()
+  await page.waitForTimeout(400)
+  await page.getByRole('button', { name: /Bancolombia/ }).first().tap()
+  await page.waitForTimeout(600)
+  const alert = page.locator('[role=dialog] [role=alert]', { hasText: /different currency/ })
+  assert.ok(await alert.isVisible(), 'no currency-change warning')
+  assert.equal(await submit.isDisabled(), true, 'save still enabled')
+  await context.close()
+})
+
 scenario('editing a transfer can turn it into an expense; back to Transfer restores it', async () => {
   const { context, page } = await phone()
   await page.goto(`${BASE}/e2e/entry?edit=transfer`)

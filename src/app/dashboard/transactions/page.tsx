@@ -1537,7 +1537,7 @@ export default async function TransactionsPage({
 
       {/* ── Notifications ──────────────────────────────────────────────── */}
       <TransactionToasts />
-      {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
+      {errorMessage ? <Callout variant="error">{ui(errorMessage)}</Callout> : null}
 
       {/* ── Payee focus chip ───────────────────────────────────────────── */}
       {selectedPayeeName ? (
@@ -1640,6 +1640,10 @@ export default async function TransactionsPage({
                 selectedEditRow.transaction.transaction_time?.slice(0, 5) ?? ''
               }
               defaultAccountId={selectedEditRow.entry.account_id}
+              defaultCurrencyCode={selectedEditRow.entry.currency_code}
+              savedRateToBase={Number(
+                selectedEditRow.entry.exchange_rate_to_base ?? 1
+              )}
               defaultCategoryId={selectedEditRow.allocation.category_id}
               defaultAmount={Math.abs(
                 Number(selectedEditRow.entry.amount_account_currency)

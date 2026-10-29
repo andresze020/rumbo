@@ -237,6 +237,18 @@ type TransactionFormProps = {
   defaultTime?: string
   /** Edit mode, transfers: the saved rate to base, to prefill the rate field. */
   defaultExchangeRateToBase?: number
+  /**
+   * Edit only: the currency of the account the transaction was saved on. The
+   * update RPC keeps the saved rate, so a same-type edit cannot move the entry
+   * to an account in another currency (BR-031 s2).
+   */
+  defaultCurrencyCode?: string
+  /**
+   * Edit only: the entry's saved rate to base. Read-only — it only feeds the
+   * base-currency preview, never the rate field, so a type change that needs a
+   * new rate cannot inherit one that belongs to the old currency.
+   */
+  savedRateToBase?: number
   /** Edit mode, transfers: the saved transfer cost (base currency) + category. */
   defaultCost?: number
   defaultCostCategoryId?: string | null
@@ -302,6 +314,8 @@ export function TransactionForm({
   editTransactionId,
   defaultTime,
   defaultExchangeRateToBase,
+  defaultCurrencyCode,
+  savedRateToBase,
   defaultCost,
   defaultCostCategoryId: savedCostCategoryId,
 }: TransactionFormProps) {
@@ -496,9 +510,31 @@ export function TransactionForm({
   // a second input. (An editable base field shipped first and was wrong: nobody
   // records a COP purchase by typing CAD.) The two-real-amounts case is the
   // transfer, and it is handled by the transfer card further down.
-  const baseEquivalent =
-    isMultiCurrency && rateIsValid && amountIsValid
+  // BR-031 s2: a same-type edit keeps the saved rate (the update RPC takes
+  // none), so the equivalent is read out with that rate — the figure the save
+  // will actually store. Moving the entry to an account in another currency
+  // would keep a rate that belongs to the old currency, so it is blocked.
+  const editCurrencyChanged =
+    updatesInPlace &&
+    transactionType !== 'transfer' &&
+    Boolean(defaultCurrencyCode && selectedAccount) &&
+    selectedAccount?.currency_code !== defaultCurrencyCode
+  const storedRatePreview =
+    updatesInPlace &&
+    transactionType !== 'transfer' &&
+    !editCurrencyChanged &&
+    Boolean(selectedAccount && selectedAccount.currency_code !== baseCurrency) &&
+    Boolean(savedRateToBase && savedRateToBase > 0)
+  const baseEquivalent = isMultiCurrency
+    ? rateIsValid && amountIsValid
       ? formatCurrency(roundToCents(parsedAmount / parsedRate), baseCurrency, locale)
+      : null
+    : storedRatePreview && amountIsValid
+      ? formatCurrency(
+          roundToCents(Math.abs(parsedAmount) * (savedRateToBase ?? 1)),
+          baseCurrency,
+          locale
+        )
       : null
 
   const compatibleCategories = useMemo(
@@ -699,7 +735,8 @@ export function TransactionForm({
       (!isCrossCurrencyTransfer || !costExceedsSent)
     : compatibleCategories.length > 0 &&
       Boolean(categoryId) &&
-      (!isMultiCurrency || rateIsValid)
+      (!isMultiCurrency || rateIsValid) &&
+      !editCurrencyChanged
 
   useEffect(() => {
     if (!isMultiCurrency || !selectedAccount || !transactionDate) return
@@ -3048,7 +3085,7 @@ export function TransactionForm({
             </Label>
             <div className="flex min-w-0 items-center gap-2">
               {batchNotice}
-              {isMobile && isMultiCurrency && baseEquivalent ? (
+              {isMobile && (isMultiCurrency || storedRatePreview) && baseEquivalent ? (
                 <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                   ≈ {baseEquivalent}
                 </span>
@@ -3090,6 +3127,19 @@ export function TransactionForm({
                     currency: baseCurrency,
                   })
                 : t('transactionForm.amountInBaseNeedsRate')}
+            </p>
+          ) : null}
+          {storedRatePreview && !isMobile && baseEquivalent ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {t('transactionForm.amountInBaseSavedRate', {
+                amount: baseEquivalent,
+                currency: baseCurrency,
+              })}
+            </p>
+          ) : null}
+          {editCurrencyChanged ? (
+            <p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400">
+              {t('transactionForm.editCurrencyChangeBlocked')}
             </p>
           ) : null}
         </div>

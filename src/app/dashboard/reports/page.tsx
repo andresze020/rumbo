@@ -8,7 +8,7 @@ import { LineTrendChart } from '@/components/analysis/charts'
 import { ReportFilters } from './report-filters'
 import { buttonVariants } from '@/components/ui/button'
 import type { MultiSelectOption } from '@/components/multi-select-chip'
-import { formatCurrency, formatCurrencyCompact, formatIsoDateRange, formatPercent } from '@/lib/format'
+import { formatCurrency, formatCurrencyCompact, formatIsoDateRange, formatMonthLabel, formatPercent } from '@/lib/format'
 import { getLocale } from '@/lib/i18n/server'
 import type { Locale } from '@/lib/i18n/dictionaries'
 import { cn } from '@/lib/utils'
@@ -204,6 +204,8 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     categoryLookup,
     transferExpenseAccounts
   )
+
+  const weeklyBreakdown = report.subPeriods?.unit === 'week'
 
   // ── Filter options ──────────────────────────────────────────────────────
   // HH-3 (PRV-2): a private account's name carries the lock everywhere below.
@@ -457,16 +459,27 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         />
       </div>
 
-      {/* BR-042: week-by-week rollup, shown only when the range is one month.
-          Each row links to the transactions list filtered to that week. */}
+      {/* BR-042: week rows for a month-long range, month rows for a longer one
+          (up to a year). Each row links to the transactions list filtered to it. */}
       {report.subPeriods ? (
         <div className={cn(CARD, 'p-4 sm:p-5')}>
-          <h2 className="mb-1 text-sm font-bold">Week by week</h2>
-          <p className="mb-3 text-xs text-muted-foreground">
-            Each week of the selected month. Weeks add up to the month totals above.
-          </p>
+          {weeklyBreakdown ? (
+            <>
+              <h2 className="mb-1 text-sm font-bold">Week by week</h2>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Each week of the selected month. Weeks add up to the month totals above.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className="mb-1 text-sm font-bold">Month by month</h2>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Each month of the selected range. Months add up to the totals above.
+              </p>
+            </>
+          )}
           <ul className="divide-y">
-            {report.subPeriods.map((period) => (
+            {report.subPeriods.periods.map((period) => (
               <li key={period.dateFrom}>
                 <Link
                   href={`/dashboard/transactions?date_from=${period.dateFrom}&date_to=${period.dateTo}`}
@@ -474,7 +487,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-medium">
-                      {formatIsoDateRange(period.dateFrom, period.dateTo, locale)}
+                      {period.fullPeriodLabel && !customMonthStart
+                        ? formatMonthLabel(period.fullPeriodLabel, locale)
+                        : formatIsoDateRange(period.dateFrom, period.dateTo, locale)}
                     </span>
                     <span className="block text-[11.5px] text-muted-foreground">
                       {period.txCount === 1

@@ -19,7 +19,10 @@
 > transacciones Premium» desglosado en T0–T5; el seguimiento de zona horaria
 > del cron (MQ-001) añadido. Lo entregado vive en `AGENTS.md` → Current
 > status y en [SPRINT-LOG.md](./SPRINT-LOG.md). Actualizado el 2026-10-24 al
-> cerrar el sprint «Ingreso de transacciones Premium» (PR #122, sin mergear).
+> cerrar el sprint «Ingreso de transacciones Premium» (PR #122). Actualizado
+> el 2026-10-25: PR #122 mergeado a `main` (`4583bb8`); Asistente-Cancel
+> TE-err, BR-042 s2, BR-031 s2 y EDIT-FX
+> cerrados (migración aplicada el 2026-10-29, 79/79).
 > Mantenido por el skill
 > `rumbo-state-sync` al cerrar cada sprint.
 
@@ -29,16 +32,15 @@
 
 | # | Qué | Prioridad | Tipo | Sección |
 |---|---|---|---|---|
-| 1 | Sprint «Ingreso de transacciones Premium»: T0–T4 hechos, QA de dispositivo hecha por el usuario; falta merge (PR #122) y seguimientos TE-err / TE-cold / TE-brave | P1–P3 | Seguimiento | §1 |
+| 1 | Sprint «Ingreso de transacciones Premium»: T0–T4 hechos y mergeados (PR #122), QA de dispositivo hecha por el usuario; faltan anotar T5 en el doc y los seguimientos TE-cold / TE-brave | P1–P3 | Seguimiento | §1 |
 | 2 | QA manual de household sharing con dos cuentas (HH-6) | Gate | QA manual | §4.1 |
 | 3 | Configuración de Supabase para emails de invitación (HH-7) + leaked-password protection | Gate | Config manual | §3 |
 | 4 | QA en vivo de Tier-3/4 (BR-030, BR-043, BR-037, BR-036, BR-045, BR-031) | Gate | QA manual | §4.5 |
 | 5 | Verificación en iPhone real del app shell y PWA instalada | Gate | QA en dispositivo | §4.3–4.4 |
-| 6 | Regresión: el diálogo «Review transaction» del asistente perdió Cancel | P2 | Código | §1 |
-| 7 | Cron de auto-post por zona horaria del household (MQ-001) | P2 | Código + migración | §1 |
-| 8 | Slices 2: BR-030 Pay, BR-036 RPC mensuales, BR-031 FX en edición, BR-042 meses | P2–P3 | Código | §2 |
-| 9 | BF-022 reconciliación (Beta) · captura por tap (gated) | P3 | Código | §1 |
-| 10 | Decisiones de producto abiertas | — | Decisión | §6 |
+| 6 | Cron de auto-post por zona horaria del household (MQ-001) | P2 | Código + migración | §1 |
+| 7 | Slices 2: BR-030 Pay, BR-036 RPC mensuales | P2–P3 | Código | §2 |
+| 8 | BF-022 reconciliación (Beta) · captura por tap (gated) | P3 | Código | §1 |
+| 9 | Decisiones de producto abiertas | — | Decisión | §6 |
 
 ---
 
@@ -46,13 +48,11 @@
 
 | ID | Prio | Área | Qué falta | Detalle |
 |---|---:|---|---|---|
-| **TE-T0…T4** | — | Captura | **Hechos** (código 2026-10-22 → 10-24, rama `ccr-95b39f19-3w7kyn`, PR #122 abierto, pendiente de merge): mapa del flujo, esqueleto de carga, `getQuickAddFormData` de 5–6 a 3 viajes, guardado en línea sin redirect (`saveManualTransaction` / `saveTransferTransaction`), teclado por VirtualKeyboard `overlaysContent` + `usePlaceFieldsAboveKeyboard`, `useFitEntryForm` (todo en una pantalla), Descripción / Notas / tipo de cambio como hojas a pantalla completa en el teléfono, «+» de la barra inferior abre el formulario directo, chips por frecuencia + recencia, medición `?entry_timing=on`, pruebas de navegador `npm run e2e:entry` + job de CI. T4 cumplido en el teléfono (guardar 0,7–1,0 s, abrir 50 ms en caliente). | [alpha/sprint-transaction-entry-premium.md](./alpha/sprint-transaction-entry-premium.md#implementación--2026-10-22-rama-ccr-95b39f19-3w7kyn) · [SPRINT-LOG.md](./SPRINT-LOG.md) |
+| **TE-T0…T4** | — | Captura | **Hechos** (código 2026-10-22 → 10-24, rama `ccr-95b39f19-3w7kyn`, PR #122 mergeado a `main` en `4583bb8`): mapa del flujo, esqueleto de carga, `getQuickAddFormData` de 5–6 a 3 viajes, guardado en línea sin redirect (`saveManualTransaction` / `saveTransferTransaction`), teclado por VirtualKeyboard `overlaysContent` + `usePlaceFieldsAboveKeyboard`, `useFitEntryForm` (todo en una pantalla), Descripción / Notas / tipo de cambio como hojas a pantalla completa en el teléfono, «+» de la barra inferior abre el formulario directo, chips por frecuencia + recencia, medición `?entry_timing=on`, pruebas de navegador `npm run e2e:entry` + job de CI. T4 cumplido en el teléfono (guardar 0,7–1,0 s, abrir 50 ms en caliente). | [alpha/sprint-transaction-entry-premium.md](./alpha/sprint-transaction-entry-premium.md#implementación--2026-10-22-rama-ccr-95b39f19-3w7kyn) · [SPRINT-LOG.md](./SPRINT-LOG.md) |
 | TE-T5 | P1 | QA | **QA en dispositivo hecha por el usuario** (según el usuario, 2026-10-24). Salvedad: la tabla «T5 — QA pendiente en dispositivo» del doc del sprint sigue con la columna *Resultado* vacía en las 26 filas y no tiene filas marcadas como «cuenta de prueba», así que el doc no registra el resultado fila por fila. Pendiente: que el usuario confirme qué filas quedan sin hacer (en particular las de cuenta de prueba, si las hay) y las anote en el doc. | idem, «T5 — QA pendiente en dispositivo» |
-| TE-err | P2 | Captura | Los mensajes de error de `create_transfer_transaction` (RPC) llegan sin traducir: `cleanSupabaseActionError` deja pasar mensajes cortos en inglés (≤ 180 caracteres que no parezcan internos). Las acciones de transacción ya traducen sus mensajes estáticos (es/fr), pero no los de la RPC. Mapear los mensajes conocidos de la RPC a claves i18n, o devolver códigos desde la RPC. | `src/lib/supabase/errors.ts` · `src/app/dashboard/transactions/actions.ts` |
 | TE-cold | P3 | Captura / perf | `open.cold` midió 615–869 ms en WiFi y 1,8 s en LTE **antes** del prefetch en reposo de los datos del formulario. El prefetch debería cubrirlo; verificar en el teléfono con `?entry_timing=on` (3 aperturas en frío) y, si sigue sobre 1,5 s p75, decidir si es el arranque en frío de Vercel. | doc del sprint, «T4 — Cómo medir en el teléfono» |
 | TE-brave | P3 | Captura / teclado | Brave (Android) reporta el área visible ~100 px más corta de lo real con el teclado abierto. Esquivado, no corregido: la app ya no mide el teclado (`overlaysContent` + colocación del campo). No reintroducir cálculos con `visualViewport`/`innerHeight` para este formulario. Revisar si cambia el comportamiento upstream; si no, no hay nada que hacer. | doc del sprint, rondas 4–7 |
 | TE-pend | — | Medición | Comparación cronometrada con AndroMoney sobre la misma lista de altas, sin alternar apps (sin cambios; no se hizo). | idem, «Pendientes para cerrar implementación» |
-| Asistente-Cancel | P2 | Asistente | Regresión de PR #64: el diálogo «Review transaction» de `assistant-chat.tsx` no usa `useBackDismiss` (Back sale de la página) y `onCancel` solo oculta el link Cancel. Elegir: cablear `useBackDismiss`, o que `TransactionForm` invoque `onCancel` desde un botón visible. Sigue cerrable por X, Escape y backdrop. | [SPRINT-LOG.md](./SPRINT-LOG.md) → «Ask for the category first…» |
 | MQ-001-cron | P2 | Recurrentes | `run_recurring_autopost` corre a las 06:00 UTC con `current_date`. La columna `households.timezone` ya existe (migración `20261001120000_mq_001_household_timezone.sql`) pero nada la lee ni la escribe. Falta: el job postea por household con `(now() at time zone h.timezone)::date` y la app escribe la columna. Hoy no afecta a Toronto/Montréal; sí a zonas UTC-7 o más al oeste. | [mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md#mq-001--today-y-el-mes-actual-se-calculan-en-utc) |
 | BF-022 | P3 | Transacciones | Flujo de reconciliación («cleared» contra extracto). Requiere migración (`reconciled_at`). Diferido a Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
 | Tap capture | — | Captura / automatización | Solo diseño, **sin código**. Gate duro: el spike de Fase 0 debe probar que un tap real emite un evento legible en el teléfono y la tarjeta del usuario. | [features/tap-payment-capture.md](./features/tap-payment-capture.md) · [spike](./alpha/tap-capture-phase-0-spike.md) |
@@ -65,8 +65,6 @@ Diferidas a propósito, no olvidadas.
 |---|---|---|---|---|
 | BR-030 s2 | Tarjetas de crédito | Acción **`Pay`** (liquidación). El ciclo de estado de cuenta ya está vivo (`get_card_cycle_summaries`). | Un pago es una escritura real en el ledger; merece su propio slice. | [features/card-statement-cycle.md](./features/card-statement-cycle.md) |
 | BR-036 s2 | Periodos / presupuestos | Budgets, cierres de mes y Dashboard siguen en mes **calendario**; Reports respeta `month_start_day`. Hay que mover las RPC mensuales (alto radio de impacto). Depende de la decisión de §6. | Slice 1 probó el resolver sin tocar RPC. | [features/month-start-day.md](./features/month-start-day.md) |
-| BR-031 s2 | Multimoneda | Los formularios de **edición** (`transaction-edit-form.tsx`, `transfer-edit-form.tsx`) no tienen FX: ni vista previa en moneda base ni montos pareados. | Separado al entregar BR-031. | [alpha/benchmark-follow-up-issues.md](./alpha/benchmark-follow-up-issues.md) |
-| BR-042 s2 | Reports | Filas de **meses dentro de un año** (las semanas dentro de un mes ya existen). | Diferido al entregar BR-042. | idem |
 
 ## 3. Configuración manual (Supabase / Vercel)
 
@@ -199,7 +197,7 @@ No «arreglar» sin reabrir la decisión.
 
 ## Ya cerrado (para que no se vuelva a proponer)
 
-- **BR-001 … BR-048**: cerrado salvo los cuatro slices 2 de §2. Todos los BF
+- **BR-001 … BR-048**: cerrado salvo los dos slices 2 de §2. Todos los BF
   salvo BF-022 están arreglados.
 - **MQ-001 … MQ-020** (recorrido móvil, 2026-10-01, #87–#108) — detalle en
   [mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md). Único
@@ -210,5 +208,28 @@ No «arreglar» sin reabrir la decisión.
   Remanentes en §4.8 y §6.
 - **HH-0 … HH-7** (household sharing, 2026-10-08 → #120): construido y
   aplicado. Remanentes en §3 y §4.1.
+- **Asistente-Cancel** (2026-10-25): el diálogo «Review transaction» de
+  `assistant-chat.tsx` usa `useBackDismiss`, así que Back lo cierra en vez de
+  salir de la página. Se mantiene sin link Cancel visible (X, Escape y
+  backdrop lo cierran).
+- **TE-err** (2026-10-26): `cleanSupabaseActionError` reescribe los mensajes
+  de las RPC de transferencias que una persona puede provocar, esconde los que
+  nombran columnas o funciones (snake_case) detrás del mensaje genérico de la
+  acción, y todos tienen es/fr en `legacy-ui-translations.ts`.
+- **BR-042 s2** (2026-10-26): Reports muestra «Month by month» para rangos
+  de 32 a 366 días (Year to date, Last 3/6 months, rangos a medida): los
+  periodos del household (respeta `month_start_day`) recortados al rango, que
+  suman los totales de arriba; cada fila abre Transactions filtrado. Más de un
+  año («All time») no muestra filas. `src/lib/analysis/sub-periods.ts`.
+- **BR-031 s2** (2026-10-26): la edición ya usa el mismo `TransactionForm` que
+  la alta (#122), con montos pareados y tasa en transferencias. Faltaba el
+  gasto/ingreso: ahora muestra el equivalente en moneda base con la tasa
+  guardada (la que conserva la RPC) y bloquea mover la entrada a una cuenta de
+  otra moneda (ver EDIT-FX). Escenario de navegador nuevo (22/22).
+- **EDIT-FX** (2026-10-29): `update_manual_transaction` rechaza mover un
+  gasto/ingreso a una cuenta de otra moneda (antes conservaba la tasa vieja).
+  Migración `20261029120000_edit_fx_block_currency_change.sql`, aplicada en
+  producción el 2026-10-29 (79/79). Probe `rum_edit_fx_currency_change.sql`.
+  Las filas ya corrompidas por ediciones anteriores no se repararon.
 - **Tier-4, Tier-3, Mobile-capture parity** (merge 2026-08-12) y anteriores —
   ver `AGENTS.md` → Current status y [SPRINT-LOG.md](./SPRINT-LOG.md).

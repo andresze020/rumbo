@@ -23,7 +23,7 @@ The product is household-first. All financial data must belong to a household.
 
 ## Current status
 
-- **Premium transaction entry, T0…T5 done, PR #122 pending merge**
+- **Premium transaction entry, T0…T5 done, merged to `main` (PR #122, `4583bb8`)**
   (2026-10-22 → 10-24, no migration). Mechanisms to know before touching the
   Add dialog (`transaction-dialog-provider.tsx`, `transaction-form.tsx`):
   - The dialog saves **inline, no redirect**: `saveManualTransaction` /
@@ -123,6 +123,8 @@ Applied since RUM-006: RUM-004 RLS (2026-09-24), B-8 (2026-09-25) and
 current count.
 76/76 applied on 2026-10-11 (through `20261011140000_hh_006_rls_initplan.sql`,
 the end of the household-sharing work), checked with `npm run db:status`.
+79/79 applied on 2026-10-29 (through `20261029120000_edit_fx_block_currency_change.sql`,
+EDIT-FX), checked with `npm run db:status`.
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 

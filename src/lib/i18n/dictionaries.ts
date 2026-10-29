@@ -342,6 +342,10 @@ export const en = {
     amount: 'Amount',
     amountInBasePreview: '≈ {amount} {currency} at the exchange rate below.',
     amountInBaseNeedsRate: 'Enter an exchange rate below to see the equivalent.',
+    amountInBaseSavedRate:
+      '≈ {amount} {currency} at the exchange rate this transaction was saved with.',
+    editCurrencyChangeBlocked:
+      'This account uses a different currency. To move the transaction there, void it and record it again.',
     amountSent: 'Amount sent',
     amountArrivesSame:
       'Both accounts use the same currency, so the same amount arrives.',
@@ -1231,6 +1235,10 @@ export const es: DeepStringify<typeof en> = {
     amountInBasePreview: '≈ {amount} {currency} al tipo de cambio de abajo.',
     amountInBaseNeedsRate:
       'Introduce un tipo de cambio abajo para ver el equivalente.',
+    amountInBaseSavedRate:
+      '≈ {amount} {currency} al tipo de cambio con el que se guardó esta transacción.',
+    editCurrencyChangeBlocked:
+      'Esta cuenta usa otra moneda. Para mover la transacción allí, anúlala y regístrala de nuevo.',
     amountSent: 'Monto enviado',
     amountArrivesSame:
       'Ambas cuentas usan la misma moneda, así que llega el mismo monto.',
@@ -2120,6 +2128,10 @@ export const fr: DeepStringify<typeof en> = {
     amountInBasePreview: '≈ {amount} {currency} au taux de change ci-dessous.',
     amountInBaseNeedsRate:
       'Saisissez un taux de change ci-dessous pour voir l’équivalent.',
+    amountInBaseSavedRate:
+      '≈ {amount} {currency} au taux de change avec lequel cette transaction a été enregistrée.',
+    editCurrencyChangeBlocked:
+      'Ce compte utilise une autre devise. Pour y déplacer la transaction, annulez-la et enregistrez-la à nouveau.',
     amountSent: 'Montant envoyé',
     amountArrivesSame:
       'Les deux comptes utilisent la même devise : le même montant arrive donc.',
