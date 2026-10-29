@@ -1537,7 +1537,7 @@ export default async function TransactionsPage({
 
       {/* ── Notifications ──────────────────────────────────────────────── */}
       <TransactionToasts />
-      {errorMessage ? <Callout variant="error">{errorMessage}</Callout> : null}
+      {errorMessage ? <Callout variant="error">{ui(errorMessage)}</Callout> : null}
 
       {/* ── Payee focus chip ───────────────────────────────────────────── */}
       {selectedPayeeName ? (

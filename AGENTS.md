@@ -123,6 +123,8 @@ Applied since RUM-006: RUM-004 RLS (2026-09-24), B-8 (2026-09-25) and
 current count.
 76/76 applied on 2026-10-11 (through `20261011140000_hh_006_rls_initplan.sql`,
 the end of the household-sharing work), checked with `npm run db:status`.
+**Pending manual apply:** `20261029120000_edit_fx_block_currency_change.sql`
+(EDIT-FX, `npx supabase db push`).
 
 Migrations live in `supabase/migrations/` (timestamped `YYYYMMDDHHmmss_*.sql`).
 

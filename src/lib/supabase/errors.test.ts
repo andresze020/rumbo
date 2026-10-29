@@ -20,6 +20,14 @@ describe('cleanSupabaseActionError', () => {
     expect(
       cleanSupabaseActionError('Pick a category for the transfer cost.', FALLBACK)
     ).toBe('Pick a category for the transfer cost.')
+    expect(
+      cleanSupabaseActionError(
+        'This account uses a different currency. To move the transaction there, void it and record it again.',
+        FALLBACK
+      )
+    ).toBe(
+      'This account uses a different currency. To move the transaction there, void it and record it again.'
+    )
   })
 
   it('hides messages that name a column or function', () => {
