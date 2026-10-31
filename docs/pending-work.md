@@ -39,8 +39,9 @@
 | 5 | Verificación en iPhone real del app shell y PWA instalada | Gate | QA en dispositivo | §4.3–4.4 |
 | 6 | Cron de auto-post por zona horaria del household (MQ-001) | P2 | Código + migración | §1 |
 | 7 | Slices 2: BR-030 Pay, BR-036 RPC mensuales | P2–P3 | Código | §2 |
-| 8 | BF-022 reconciliación (Beta) · captura por tap (gated) | P3 | Código | §1 |
-| 9 | Decisiones de producto abiertas | — | Decisión | §6 |
+| 8 | Import CSV: dejar confirmar filas marcadas como duplicado (IMP-dup) | P2 | Código | §1 |
+| 9 | BF-022 reconciliación (Beta) · captura por tap (gated) | P3 | Código | §1 |
+| 10 | Decisiones de producto abiertas | — | Decisión | §6 |
 
 ---
 
@@ -54,6 +55,7 @@
 | TE-brave | P3 | Captura / teclado | Brave (Android) reporta el área visible ~100 px más corta de lo real con el teclado abierto. Esquivado, no corregido: la app ya no mide el teclado (`overlaysContent` + colocación del campo). No reintroducir cálculos con `visualViewport`/`innerHeight` para este formulario. Revisar si cambia el comportamiento upstream; si no, no hay nada que hacer. | doc del sprint, rondas 4–7 |
 | TE-pend | — | Medición | Comparación cronometrada con AndroMoney sobre la misma lista de altas, sin alternar apps (sin cambios; no se hizo). | idem, «Pendientes para cerrar implementación» |
 | MQ-001-cron | P2 | Recurrentes | `run_recurring_autopost` corre a las 06:00 UTC con `current_date`. La columna `households.timezone` ya existe (migración `20261001120000_mq_001_household_timezone.sql`) pero nada la lee ni la escribe. Falta: el job postea por household con `(now() at time zone h.timezone)::date` y la app escribe la columna. Hoy no afecta a Toronto/Montréal; sí a zonas UTC-7 o más al oeste. | [mobile-walkthrough-backlog.md](./mobile-walkthrough-backlog.md#mq-001--today-y-el-mes-actual-se-calculan-en-utc) |
+| IMP-dup | P2 | Import CSV | Una fila marcada como «Possible duplicate in this CSV file» queda con la casilla deshabilitada y no hay forma de incluirla. La clave de duplicado (`src/lib/imports/csv-validation.ts`, `duplicateKey` = fecha + cuenta + descripción + monto) solo mira el propio archivo, y una tarjeta puede cobrar legítimamente dos veces lo mismo el mismo día (dos rondas de 16,67 en el mismo bar, dos viajes de Bixi de 1,84). Visto el 2026-10-31 al importar un extracto CIBC: el segundo cargo se perdió y el saldo no cuadró hasta ingresarlo a mano. Falta: dejar el duplicado como **advertencia** que el usuario puede confirmar (casilla habilitada, desmarcada por defecto) en vez de bloquearlo. Sin migración: `import_rows` ya guarda el estado. | `src/app/dashboard/transactions/import/csv-import-client.tsx` (casilla `disabled={row.status !== 'valid'}`) |
 | BF-022 | P3 | Transacciones | Flujo de reconciliación («cleared» contra extracto). Requiere migración (`reconciled_at`). Diferido a Beta v0.13. | [alpha/bug-friction-log.md](./alpha/bug-friction-log.md) |
 | Tap capture | — | Captura / automatización | Solo diseño, **sin código**. Gate duro: el spike de Fase 0 debe probar que un tap real emite un evento legible en el teléfono y la tarjeta del usuario. | [features/tap-payment-capture.md](./features/tap-payment-capture.md) · [spike](./alpha/tap-capture-phase-0-spike.md) |
 
